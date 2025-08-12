@@ -1,6 +1,6 @@
-import { useState } from "react";
-import ScoreEntry from "@/components/ScoreEntry";
+import { useState, useEffect } from "react";
 import LeaderboardEntry from "@/components/LeaderboardEntry";
+import QRCodeDisplay from "@/components/QRCodeDisplay";
 
 
 const GAMES = [
@@ -20,34 +20,49 @@ interface Score {
 }
 
 const Index = () => {
-  
   const [scores, setScores] = useState<Score[]>([
     { id: 1, name: "ASH", score: 100000, gameId: "pacman", timestamp: new Date() },
     { id: 2, name: "ZAK", score: 95000, gameId: "pacman", timestamp: new Date() },
     { id: 3, name: "MEG", score: 90000, gameId: "pacman", timestamp: new Date() },
   ]);
 
-  const makeSubmitHandler = (gameId: string) => (name: string, score: number) => {
-    const newScore = {
-      id: scores.length + 1,
-      name: name.toUpperCase(),
-      score,
-      gameId,
-      timestamp: new Date(),
-      isNew: true,
+  // Load scores from localStorage on mount and listen for updates
+  useEffect(() => {
+    const loadScores = () => {
+      const savedScores = localStorage.getItem('arcade-scores');
+      if (savedScores) {
+        const parsed = JSON.parse(savedScores);
+        // Merge with default scores, avoiding duplicates
+        const merged = [...scores];
+        parsed.forEach((savedScore: Score) => {
+          if (!merged.find(s => s.id === savedScore.id)) {
+            merged.push({
+              ...savedScore,
+              timestamp: new Date(savedScore.timestamp)
+            });
+          }
+        });
+        setScores(merged.sort((a, b) => b.score - a.score));
+      }
     };
+
+    loadScores();
     
-    setScores(prev => [...prev, newScore].sort((a, b) => b.score - a.score));
+    // Listen for storage changes (when mobile form submits)
+    const handleStorageChange = () => {
+      loadScores();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
     
-    // Remove the isNew flag after 5 seconds
-    setTimeout(() => {
-      setScores(prev => 
-        prev.map(score => 
-          score.id === newScore.id ? { ...score, isNew: false } : score
-        )
-      );
-    }, 5000);
-  };
+    // Also check for updates periodically
+    const interval = setInterval(loadScores, 2000);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
 
 
   return (
@@ -82,7 +97,7 @@ const Index = () => {
                   )}
                 </div>
 
-                <ScoreEntry onSubmit={makeSubmitHandler(game.id)} />
+                <QRCodeDisplay gameId={game.id} gameName={game.name} />
               </section>
             );
           })}
