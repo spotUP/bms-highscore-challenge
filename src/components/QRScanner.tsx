@@ -10,17 +10,16 @@ interface QRScannerProps {
 }
 
 const QRScanner = ({ isOpen, onClose, onScan }: QRScannerProps) => {
-  const handleScan = (result: any) => {
+  const handleScan = (result: any, error: any) => {
     if (result?.text) {
       onScan(result.text);
       onClose();
       toast.success("QR Code scanned successfully!");
     }
-  };
-
-  const handleError = (error: any) => {
-    console.error(error);
-    toast.error("Error scanning QR code");
+    if (error) {
+      console.error(error);
+      toast.error("Error scanning QR code");
+    }
   };
 
   return (
@@ -33,7 +32,7 @@ const QRScanner = ({ isOpen, onClose, onScan }: QRScannerProps) => {
           <QrReader
             constraints={{ facingMode: 'environment' }}
             onResult={handleScan}
-            onError={handleError}
+            
             className="w-full h-full"
           />
         </div>
