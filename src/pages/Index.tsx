@@ -1,13 +1,16 @@
 import { useState, useEffect } from "react";
 import LeaderboardEntry from "@/components/LeaderboardEntry";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
-
+import pacmanLogo from "@/assets/pacman-logo.png";
+import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
+import tetrisLogo from "@/assets/tetris-logo.png";
+import donkeyKongLogo from "@/assets/donkey-kong-logo.png";
 
 const GAMES = [
-  { id: "pacman", name: "Pac-Man" },
-  { id: "spaceinvaders", name: "Space Invaders" },
-  { id: "tetris", name: "Tetris" },
-  { id: "donkeykong", name: "Donkey Kong" },
+  { id: "pacman", name: "Pac-Man", logo: pacmanLogo },
+  { id: "spaceinvaders", name: "Space Invaders", logo: spaceInvadersLogo },
+  { id: "tetris", name: "Tetris", logo: tetrisLogo },
+  { id: "donkeykong", name: "Donkey Kong", logo: donkeyKongLogo },
 ];
 
 interface Score {
@@ -79,7 +82,13 @@ const Index = () => {
               .sort((a, b) => b.score - a.score);
             return (
               <section key={game.id} className="space-y-4">
-                <h2 className="text-2xl font-bold text-arcade-neonCyan">{game.name}</h2>
+                <div className="flex justify-center">
+                  <img 
+                    src={game.logo} 
+                    alt={game.name} 
+                    className="h-16 w-auto object-contain"
+                  />
+                </div>
                 <div className="space-y-2">
                   {filtered.map((score, index) => (
                     <LeaderboardEntry
