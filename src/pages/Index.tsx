@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
 import LeaderboardEntry from "@/components/LeaderboardEntry";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import pacmanLogo from "@/assets/pacman-logo.png";
@@ -23,6 +26,8 @@ interface Score {
 }
 
 const Index = () => {
+  const { user, loading, signOut, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [scores, setScores] = useState<Score[]>([
     { id: 1, name: "ASH", score: 100000, gameId: "pacman", timestamp: new Date() },
     { id: 2, name: "ZAK", score: 95000, gameId: "pacman", timestamp: new Date() },
@@ -67,13 +72,49 @@ const Index = () => {
     };
   }, []);
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-arcade-background flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-arcade-background text-white p-4 md:p-8">
+        <div className="max-w-4xl mx-auto space-y-8 text-center">
+          <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-arcade-neonPink via-arcade-neonCyan to-arcade-neonYellow text-transparent bg-clip-text">
+            Arcade High Scores
+          </h1>
+          <p className="text-xl text-gray-300">Please sign in to view and manage scores</p>
+          <Button onClick={() => navigate('/auth')} size="lg">
+            Sign In
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-arcade-background text-white p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-8">
-        <h1 className="text-4xl md:text-6xl font-bold text-center bg-gradient-to-r from-arcade-neonPink via-arcade-neonCyan to-arcade-neonYellow text-transparent bg-clip-text">
-          Arcade High Scores
-        </h1>
+        <div className="flex justify-between items-center">
+          <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-arcade-neonPink via-arcade-neonCyan to-arcade-neonYellow text-transparent bg-clip-text">
+            Arcade High Scores
+          </h1>
+          <div className="flex gap-4 items-center">
+            <span className="text-gray-300">Welcome, {user.email}</span>
+            {isAdmin && (
+              <Button variant="outline" onClick={() => navigate('/admin')}>
+                Admin Panel
+              </Button>
+            )}
+            <Button variant="ghost" onClick={signOut}>
+              Sign Out
+            </Button>
+          </div>
+        </div>
         
         <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
           {GAMES.map((game) => {
