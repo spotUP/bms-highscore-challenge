@@ -28,11 +28,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
         setLoading(false);
 
-        // Check if user is admin
+        // Check if user is admin (defer to prevent deadlock)
         if (session?.user) {
           setTimeout(() => {
             checkAdminRole(session.user.id);
-          }, 0);
+          }, 100);
         } else {
           setIsAdmin(false);
         }
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user) {
         setTimeout(() => {
           checkAdminRole(session.user.id);
-        }, 0);
+        }, 100);
       }
     });
 
@@ -98,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'global' });
     setIsAdmin(false);
   };
 
