@@ -100,7 +100,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_public_username: {
+        Args: { user_uuid: string }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "user"
