@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import LeaderboardEntry from "@/components/LeaderboardEntry";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
@@ -9,12 +10,23 @@ import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
 import donkeyKongLogo from "@/assets/donkey-kong-logo.png";
 
-const GAMES = [
-  { id: "pacman", name: "Pac-Man", logo: pacmanLogo },
-  { id: "spaceinvaders", name: "Space Invaders", logo: spaceInvadersLogo },
-  { id: "tetris", name: "Tetris", logo: tetrisLogo },
-  { id: "donkeykong", name: "Donkey Kong", logo: donkeyKongLogo },
-];
+// Fallback logo mapping for backwards compatibility
+const LOGO_MAP: Record<string, string> = {
+  "pacman": pacmanLogo,
+  "pac-man": pacmanLogo,
+  "spaceinvaders": spaceInvadersLogo,
+  "space invaders": spaceInvadersLogo,
+  "tetris": tetrisLogo,
+  "donkeykong": donkeyKongLogo,
+  "donkey kong": donkeyKongLogo,
+};
+
+interface Game {
+  id: string;
+  name: string;
+  logo_url: string | null;
+  is_active: boolean;
+}
 
 interface Score {
   id: number;
@@ -28,11 +40,42 @@ interface Score {
 const Index = () => {
   const { user, loading, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const [games, setGames] = useState<Game[]>([]);
+  const [gamesLoading, setGamesLoading] = useState(true);
   const [scores, setScores] = useState<Score[]>([
     { id: 1, name: "ASH", score: 100000, gameId: "pacman", timestamp: new Date() },
     { id: 2, name: "ZAK", score: 95000, gameId: "pacman", timestamp: new Date() },
     { id: 3, name: "MEG", score: 90000, gameId: "pacman", timestamp: new Date() },
   ]);
+
+  // Load games from database
+  const loadGames = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setGames(data || []);
+    } catch (error) {
+      console.error('Error loading games:', error);
+      // Fallback to hardcoded games if database fails
+      setGames([
+        { id: "pacman", name: "Pac-Man", logo_url: null, is_active: true },
+        { id: "spaceinvaders", name: "Space Invaders", logo_url: null, is_active: true },
+        { id: "tetris", name: "Tetris", logo_url: null, is_active: true },
+        { id: "donkeykong", name: "Donkey Kong", logo_url: null, is_active: true },
+      ]);
+    } finally {
+      setGamesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadGames();
+  }, []);
 
   // Load scores from localStorage on mount and listen for updates
   useEffect(() => {
@@ -72,7 +115,7 @@ const Index = () => {
     };
   }, []);
 
-  if (loading) {
+  if (loading || gamesLoading) {
     return (
       <div className="min-h-screen bg-arcade-background flex items-center justify-center">
         <div className="text-white text-xl">Loading...</div>
@@ -117,18 +160,27 @@ const Index = () => {
         </div>
         
         <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
-          {GAMES.map((game) => {
+          {games.map((game) => {
+            // Get logo URL - either from database, fallback mapping, or null
+            const logoUrl = game.logo_url || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
+            
             const filtered = scores
               .filter((score) => score.gameId === game.id)
               .sort((a, b) => b.score - a.score);
             return (
               <section key={game.id} className="space-y-4">
                 <div className="flex justify-center">
-                  <img 
-                    src={game.logo} 
-                    alt={game.name} 
-                    className="h-16 w-auto object-contain"
-                  />
+                  {logoUrl ? (
+                    <img 
+                      src={logoUrl} 
+                      alt={game.name} 
+                      className="h-16 w-auto object-contain"
+                    />
+                  ) : (
+                    <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4">
+                      <span className="text-white font-bold text-lg">{game.name}</span>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   {filtered.map((score, index) => (
@@ -151,6 +203,11 @@ const Index = () => {
               </section>
             );
           })}
+          {games.length === 0 && (
+            <div className="col-span-full text-center py-8 text-gray-400">
+              No active games found. Please contact an administrator.
+            </div>
+          )}
         </div>
       </div>
     </div>
