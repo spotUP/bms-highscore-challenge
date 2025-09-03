@@ -26,21 +26,59 @@ export default function Auth() {
 
   // Check if this is a password reset flow
   useEffect(() => {
+    // Check both URL search params and hash fragment
     const type = searchParams.get('type');
     const accessToken = searchParams.get('access_token');
     const refreshToken = searchParams.get('refresh_token');
     
+    // Also check hash fragment for error information
+    const hash = window.location.hash.substring(1);
+    const hashParams = new URLSearchParams(hash);
+    const hashType = hashParams.get('type');
+    const hashAccessToken = hashParams.get('access_token');
+    const hashRefreshToken = hashParams.get('refresh_token');
+    const error = hashParams.get('error');
+    const errorCode = hashParams.get('error_code');
+    const errorDescription = hashParams.get('error_description');
+    
     // Debug logging
     console.log('URL params:', { type, accessToken: !!accessToken, refreshToken: !!refreshToken });
+    console.log('Hash params:', { type: hashType, accessToken: !!hashAccessToken, refreshToken: !!hashRefreshToken, error, errorCode });
     console.log('Full URL:', window.location.href);
 
-    if (type === 'recovery' && accessToken && refreshToken) {
+    // Handle error cases from hash
+    if (error) {
+      if (errorCode === 'otp_expired') {
+        toast({
+          variant: "destructive",
+          title: "Reset link expired",
+          description: "This password reset link has expired. Please request a new one."
+        });
+        setShowForgotPassword(true);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Reset link error",
+          description: errorDescription || "There was an error with the password reset link."
+        });
+      }
+      // Clean up the URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return;
+    }
+
+    // Check for valid reset tokens (from either search params or hash)
+    const finalType = type || hashType;
+    const finalAccessToken = accessToken || hashAccessToken;
+    const finalRefreshToken = refreshToken || hashRefreshToken;
+
+    if (finalType === 'recovery' && finalAccessToken && finalRefreshToken) {
       console.log('Setting password reset mode');
       setIsPasswordReset(true);
       // Set the session with the tokens from the URL
       supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken
+        access_token: finalAccessToken,
+        refresh_token: finalRefreshToken
       }).then(({ data, error }) => {
         if (error) {
           console.error('Error setting session:', error);
@@ -52,6 +90,8 @@ export default function Auth() {
           setIsPasswordReset(false);
         } else {
           console.log('Session set successfully for password reset');
+          // Clean up the URL
+          window.history.replaceState({}, document.title, window.location.pathname);
         }
       });
     } else {
