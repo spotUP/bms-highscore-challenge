@@ -36,9 +36,19 @@ export default function Auth() {
       supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken
+      }).then(({ data, error }) => {
+        if (error) {
+          console.error('Error setting session:', error);
+          toast({
+            variant: "destructive",
+            title: "Invalid reset link",
+            description: "This password reset link is invalid or has expired."
+          });
+          setIsPasswordReset(false);
+        }
       });
     }
-  }, [searchParams]);
+  }, [searchParams, toast]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
