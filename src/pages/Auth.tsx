@@ -29,8 +29,13 @@ export default function Auth() {
     const type = searchParams.get('type');
     const accessToken = searchParams.get('access_token');
     const refreshToken = searchParams.get('refresh_token');
+    
+    // Debug logging
+    console.log('URL params:', { type, accessToken: !!accessToken, refreshToken: !!refreshToken });
+    console.log('Full URL:', window.location.href);
 
     if (type === 'recovery' && accessToken && refreshToken) {
+      console.log('Setting password reset mode');
       setIsPasswordReset(true);
       // Set the session with the tokens from the URL
       supabase.auth.setSession({
@@ -45,8 +50,12 @@ export default function Auth() {
             description: "This password reset link is invalid or has expired."
           });
           setIsPasswordReset(false);
+        } else {
+          console.log('Session set successfully for password reset');
         }
       });
+    } else {
+      console.log('Not a password reset flow or missing parameters');
     }
   }, [searchParams, toast]);
 
