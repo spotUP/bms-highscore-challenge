@@ -36,7 +36,6 @@ const Admin = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
-    description: "",
     logo_url: "",
     is_active: true
   });
@@ -80,7 +79,6 @@ const Admin = () => {
   const resetForm = () => {
     setFormData({
       name: "",
-      description: "",
       logo_url: "",
       is_active: true
     });
@@ -92,7 +90,6 @@ const Admin = () => {
     setEditingGame(game);
     setFormData({
       name: game.name,
-      description: game.description || "",
       logo_url: game.logo_url || "",
       is_active: game.is_active
     });
@@ -117,7 +114,6 @@ const Admin = () => {
           .from('games')
           .update({
             name: formData.name,
-            description: formData.description || null,
             logo_url: formData.logo_url || null,
             is_active: formData.is_active
           })
@@ -135,7 +131,6 @@ const Admin = () => {
           .from('games')
           .insert({
             name: formData.name,
-            description: formData.description || null,
             logo_url: formData.logo_url || null,
             is_active: formData.is_active
           });
@@ -243,18 +238,6 @@ const Admin = () => {
                           className="bg-black/50 border-white/20 text-white w-full"
                         />
                       </div>
-                    <div className="w-full">
-                      <Label htmlFor="description">Description</Label>
-                      <Textarea
-                        id="description"
-                        value={formData.description}
-                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                        placeholder="Enter game description"
-                        className="bg-black/50 border-white/20 text-white resize-none min-h-[80px] w-full"
-                        rows={3}
-                        style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}
-                      />
-                    </div>
                     <div className="w-full">
                       <div className="overflow-hidden">
                         <ImagePasteUpload
