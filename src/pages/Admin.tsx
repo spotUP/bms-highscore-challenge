@@ -226,31 +226,31 @@ const Admin = () => {
                     Add Game
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-gray-900 text-white border-white/20 max-w-2xl w-full max-h-[90vh] overflow-y-auto mx-4">
+                <DialogContent className="bg-gray-900 text-white border-white/20 max-w-2xl w-[95vw] max-h-[90vh] overflow-hidden mx-auto">
                   <DialogHeader>
                     <DialogTitle className="text-lg font-semibold break-words">
                       {editingGame ? 'Edit Game' : 'Add New Game'}
                     </DialogTitle>
                   </DialogHeader>
-                  <div className="space-y-4 max-w-full">
-                    <div>
-                      <Label htmlFor="name">Game Name *</Label>
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                        placeholder="Enter game name"
-                        className="bg-black/50 border-white/20 text-white"
-                      />
-                    </div>
-                    <div>
+                  <div className="space-y-4 overflow-y-auto max-h-[70vh] px-1">
+                      <div className="w-full">
+                        <Label htmlFor="name">Game Name *</Label>
+                        <Input
+                          id="name"
+                          value={formData.name}
+                          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="Enter game name"
+                          className="bg-black/50 border-white/20 text-white w-full"
+                        />
+                      </div>
+                    <div className="w-full">
                       <Label htmlFor="description">Description</Label>
                       <Textarea
                         id="description"
                         value={formData.description}
                         onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                         placeholder="Enter game description"
-                        className="bg-black/50 border-white/20 text-white resize-none min-h-[80px] w-full break-words"
+                        className="bg-black/50 border-white/20 text-white resize-none min-h-[80px] w-full"
                         rows={3}
                         style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}
                       />

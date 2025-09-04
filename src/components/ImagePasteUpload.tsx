@@ -120,18 +120,18 @@ const ImagePasteUpload = ({ value, onChange, label, placeholder }: ImagePasteUpl
             value={value}
             onChange={(e) => onChange(e.target.value)}
             placeholder={placeholder}
-            className="bg-black/50 border-white/20 text-white"
+            className="bg-black/50 border-white/20 text-white w-full min-w-0"
           />
         </div>
         
         {value && (
-          <div className="flex items-center gap-2 p-2 bg-black/30 rounded border border-white/20 max-w-full">
+          <div className="flex items-center gap-2 p-2 bg-black/30 rounded border border-white/20 w-full min-w-0">
             <img 
               src={value} 
               alt="Logo preview" 
               className="w-12 h-12 object-contain bg-white/10 rounded flex-shrink-0"
             />
-            <span className="text-sm text-gray-300 flex-1 truncate min-w-0 break-all">{value}</span>
+            <span className="text-sm text-gray-300 flex-1 truncate min-w-0 max-w-[200px] overflow-hidden">{value}</span>
             <Button
               type="button"
               size="sm"
