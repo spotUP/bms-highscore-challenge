@@ -33,9 +33,6 @@ const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
           className="border-2 border-arcade-neonCyan/30 rounded-lg bg-black/40 p-4"
         />
       </div>
-      <p className="text-sm text-gray-300">
-        Scan with your phone to submit a score for <span className="text-arcade-neonCyan font-semibold">{gameName}</span>
-      </p>
     </div>
   );
 };
