@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LeaderboardEntry from "@/components/LeaderboardEntry";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import OverallLeaderboard from "@/components/OverallLeaderboard";
@@ -210,24 +211,29 @@ const Index = () => {
                     </div>
                     
                     {/* Scores section - scrollable if needed */}
-                    <div className="flex-1 overflow-y-auto">
-                      <div className="space-y-2">
-                        {filtered.map((score, index) => (
-                          <LeaderboardEntry
-                            key={score.id}
-                            rank={index + 1}
-                            name={score.player_name}
-                            score={score.score}
-                            isNewScore={score.isNew}
-                          />
-                        ))}
-                        {filtered.length === 0 && (
-                          <div className="text-center py-8 text-gray-400">
-                            No scores yet. Be the first to submit!
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    <Card className="bg-black/50 border-white/20 flex-1 flex flex-col">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-white text-lg">{game.name}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="flex-1 overflow-y-auto">
+                        <div className="space-y-2">
+                          {filtered.map((score, index) => (
+                            <LeaderboardEntry
+                              key={score.id}
+                              rank={index + 1}
+                              name={score.player_name}
+                              score={score.score}
+                              isNewScore={score.isNew}
+                            />
+                          ))}
+                          {filtered.length === 0 && (
+                            <div className="text-center py-8 text-gray-400">
+                              No scores yet. Be the first to submit!
+                            </div>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
                   </div>
 
                   {/* QR Code - fixed at bottom */}
