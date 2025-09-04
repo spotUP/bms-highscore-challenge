@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,26 @@ const ImagePasteUpload = ({ value, onChange, label, placeholder }: ImagePasteUpl
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Global paste event listener
+  useEffect(() => {
+    const handleGlobalPaste = async (e: ClipboardEvent) => {
+      const items = Array.from(e.clipboardData?.items || []);
+      const imageItem = items.find(item => item.type.startsWith('image/'));
+      
+      if (imageItem) {
+        e.preventDefault();
+        e.stopPropagation();
+        const file = imageItem.getAsFile();
+        if (file) {
+          await uploadImage(file);
+        }
+      }
+    };
+
+    document.addEventListener('paste', handleGlobalPaste);
+    return () => document.removeEventListener('paste', handleGlobalPaste);
+  }, []);
 
   const uploadImage = async (file: File) => {
     setIsUploading(true);
@@ -188,10 +208,7 @@ const ImagePasteUpload = ({ value, onChange, label, placeholder }: ImagePasteUpl
               {' or drag and drop an image'}
             </div>
             <div className="text-xs text-gray-400">
-              You can also paste an image here (Ctrl+V)
-            </div>
-            <div className="text-xs text-gray-500">
-              Click this area first, then paste your image
+              You can also paste an image anywhere in this dialog (Ctrl+V)
             </div>
           </div>
           
