@@ -23,12 +23,12 @@ serve(async (req) => {
       )
     }
 
-    // Mock image URLs for demonstration - using working placeholder services
+    // Mock image URLs for demonstration - using reliable image sources
     const mockImages = [
-      `https://picsum.photos/200/200?random=1&text=${encodeURIComponent(gameName)}`,
-      `https://picsum.photos/200/200?random=2&text=${encodeURIComponent(gameName)}`,
-      `https://picsum.photos/200/200?random=3&text=${encodeURIComponent(gameName)}`,
-      `https://picsum.photos/200/200?random=4&text=${encodeURIComponent(gameName)}`
+      `https://dummyimage.com/200x200/333333/ffffff&text=${encodeURIComponent(gameName)}+1`,
+      `https://dummyimage.com/200x200/555555/ffffff&text=${encodeURIComponent(gameName)}+2`,
+      `https://dummyimage.com/200x200/777777/ffffff&text=${encodeURIComponent(gameName)}+3`,
+      `https://dummyimage.com/200x200/999999/ffffff&text=${encodeURIComponent(gameName)}+4`
     ];
 
     // For a real implementation, you would:
