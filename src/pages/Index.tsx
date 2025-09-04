@@ -216,7 +216,7 @@ const Index = () => {
                   .filter((score) => score.game_id === game.id)
                   .sort((a, b) => b.score - a.score);
               return (
-                <section key={game.id} className="flex flex-col h-full min-w-[280px] max-w-[320px] flex-shrink-0">
+                <section key={game.id} className="flex flex-col h-full min-w-[250px] max-w-[280px] flex-shrink-0">
                   {/* Card containing logo, scores and QR code */}
                   <Card className="bg-black/50 border-white/20 flex-1 flex flex-col">
                     <CardHeader className="pb-3">
