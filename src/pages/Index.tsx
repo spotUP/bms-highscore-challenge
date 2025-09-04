@@ -55,6 +55,7 @@ const Index = () => {
         .from('games')
         .select('*')
         .eq('is_active', true)
+        .eq('include_in_challenge', true)
         .order('name', { ascending: true });
 
       if (error) throw error;
