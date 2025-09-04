@@ -75,7 +75,7 @@ const HyperspaceEffect = () => {
       const cos = Math.cos;
       const sin = Math.sin;
 
-      context.fillStyle = 'rgb(255, 255, 255)';
+      context.fillStyle = 'rgba(255, 255, 255, 0.3)'; // Reduced opacity from 1.0 to 0.3
       context.beginPath();
 
       for (let i = 0; i < PARTICLE_NUM; i++) {
