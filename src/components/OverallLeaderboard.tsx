@@ -116,14 +116,14 @@ const OverallLeaderboard = () => {
   }
 
   return (
-    <Card className="bg-black/50 border-white/20">
+    <Card className="bg-black/50 border-white/20 h-full flex flex-col">
       <CardHeader>
         <CardTitle className="text-white flex items-center gap-2">
           <Trophy className="w-5 h-5 text-arcade-neonYellow" />
           Overall Leaders
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex-1 overflow-y-auto">
         <div className="space-y-3">
           {leaders.map((player, index) => (
             <div
