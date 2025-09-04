@@ -170,9 +170,9 @@ const Index = () => {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 h-[calc(100vh-12rem)]">
           {/* Left column - Overall Leaderboard (smaller) */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 h-full">
             <OverallLeaderboard />
           </div>
           
