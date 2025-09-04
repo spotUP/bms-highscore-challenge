@@ -169,15 +169,15 @@ const Index = () => {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-[calc(100vh-12rem)]">
           {/* Left column - Overall Leaderboard (narrower) */}
           <div className="lg:col-span-1">
             <OverallLeaderboard />
           </div>
           
           {/* Right column - Game content (more space) */}
-          <div className="lg:col-span-4">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          <div className="lg:col-span-4 h-full">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 h-full">
               {games.map((game) => {
                 // Get logo URL - either from database, fallback mapping, or null
                 const logoUrl = game.logo_url || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
@@ -186,45 +186,55 @@ const Index = () => {
                   .filter((score) => score.game_id === game.id)
                   .sort((a, b) => b.score - a.score);
               return (
-                <section key={game.id} className="space-y-4">
-                  <div className="flex justify-center">
-                    <div 
-                      className="cursor-pointer hover:scale-105 transition-transform duration-200 hover:shadow-lg hover:shadow-arcade-neonCyan/30"
-                      onClick={() => handleGameLogoClick(game)}
-                      title={`Click to submit score for ${game.name}`}
-                    >
-                      {logoUrl ? (
-                        <img 
-                          src={logoUrl} 
-                          alt={game.name} 
-                          className="h-16 w-auto object-contain"
-                        />
-                      ) : (
-                        <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4 hover:bg-black/50 transition-colors">
-                          <span className="text-white font-bold text-lg">{game.name}</span>
-                        </div>
-                      )}
+                <section key={game.id} className="flex flex-col h-full">
+                  {/* Game logo and scores - takes available space */}
+                  <div className="flex-1 flex flex-col">
+                    <div className="flex justify-center mb-4">
+                      <div 
+                        className="cursor-pointer hover:scale-105 transition-transform duration-200 hover:shadow-lg hover:shadow-arcade-neonCyan/30"
+                        onClick={() => handleGameLogoClick(game)}
+                        title={`Click to submit score for ${game.name}`}
+                      >
+                        {logoUrl ? (
+                          <img 
+                            src={logoUrl} 
+                            alt={game.name} 
+                            className="h-16 w-auto object-contain"
+                          />
+                        ) : (
+                          <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4 hover:bg-black/50 transition-colors">
+                            <span className="text-white font-bold text-lg">{game.name}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Scores section - scrollable if needed */}
+                    <div className="flex-1 overflow-y-auto">
+                      <div className="space-y-2">
+                        {filtered.map((score, index) => (
+                          <LeaderboardEntry
+                            key={score.id}
+                            rank={index + 1}
+                            name={score.player_name}
+                            score={score.score}
+                            isNewScore={score.isNew}
+                          />
+                        ))}
+                        {filtered.length === 0 && (
+                          <div className="text-center py-8 text-gray-400">
+                            No scores yet. Be the first to submit!
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                    <div className="space-y-2">
-                      {filtered.map((score, index) => (
-                        <LeaderboardEntry
-                          key={score.id}
-                          rank={index + 1}
-                          name={score.player_name}
-                          score={score.score}
-                          isNewScore={score.isNew}
-                        />
-                      ))}
-                      {filtered.length === 0 && (
-                        <div className="text-center py-8 text-gray-400">
-                          No scores yet. Be the first to submit!
-                        </div>
-                      )}
-                    </div>
 
+                  {/* QR Code - fixed at bottom */}
+                  <div className="mt-4">
                     <QRCodeDisplay gameId={game.id} gameName={game.name} />
-                  </section>
+                  </div>
+                </section>
                 );
               })}
               {games.length === 0 && (
