@@ -18,8 +18,8 @@ const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
         width: 200,
         margin: 2,
         color: {
-          dark: '#00FFFF', // arcade-neonCyan
-          light: '#0000' // transparent
+          dark: '#FFFFFF', // white QR code pattern
+          light: '#00000000' // transparent background
         }
       });
     }
@@ -28,16 +28,20 @@ const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
   return (
     <div className="space-y-4 p-6 bg-black/20 rounded-lg backdrop-blur-sm text-center">
       <div className="flex justify-center">
-        <canvas 
-          ref={canvasRef}
-          className="border-2 border-arcade-neonCyan/30 rounded-lg bg-black/40 p-4 animated-gradient-border"
+        <div 
+          className="rounded-lg p-4 animated-gradient"
           style={{
             background: 'linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff00ff, #00ffff, #ffff00)',
             backgroundSize: '300% 300%',
-            animation: 'gradientShift 4s ease-in-out infinite',
-            padding: '4px'
+            animation: 'gradientShift 4s ease-in-out infinite'
           }}
-        />
+        >
+          <canvas 
+            ref={canvasRef}
+            className="rounded-lg"
+            style={{ background: 'transparent' }}
+          />
+        </div>
       </div>
     </div>
   );
