@@ -192,7 +192,7 @@ const Index = () => {
                   <Card className="bg-black/30 border-white/15 flex-1 flex flex-col">
                     <CardHeader className="pb-3">
                       {/* Game logo inside card header */}
-                      <div className="flex justify-center mb-2">
+                      <div className="flex justify-center">
                         <div 
                           className="cursor-pointer hover:scale-105 transition-transform duration-200 hover:shadow-lg hover:shadow-arcade-neonCyan/30"
                           onClick={() => handleGameLogoClick(game)}
@@ -211,7 +211,6 @@ const Index = () => {
                           )}
                         </div>
                       </div>
-                      <CardTitle className="text-white text-lg text-center">{game.name}</CardTitle>
                     </CardHeader>
                     <CardContent className="flex-1 flex flex-col">
                       {/* Scores section - scrollable if needed */}
