@@ -18,6 +18,9 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        'arcade': ['Arcade Classic', 'monospace'],
+      },
       colors: {
         arcade: {
           background: "#1a1025",

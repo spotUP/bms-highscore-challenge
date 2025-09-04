@@ -121,7 +121,7 @@ const OverallLeaderboard = () => {
               <div className="flex items-center gap-3">
                 {getRankIcon(index)}
                 <div>
-                  <div className="text-white font-mono font-bold text-sm">
+                  <div className="text-white font-arcade font-bold text-sm">
                     {player.player_name}
                   </div>
                   <div className="text-xs text-gray-400">
@@ -137,7 +137,7 @@ const OverallLeaderboard = () => {
                   : index === 2
                   ? 'text-orange-400'
                   : 'text-white'
-              } font-bold`}>
+               } font-bold font-arcade`}>
                 {player.total_score.toLocaleString()}
               </div>
             </div>

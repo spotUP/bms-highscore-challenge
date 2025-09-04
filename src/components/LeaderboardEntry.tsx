@@ -23,10 +23,10 @@ const LeaderboardEntry = ({ rank, name, score, isNewScore }: LeaderboardEntryPro
         `}>
           #{rank}
         </span>
-        <span className="text-white text-xl">{name}</span>
+        <span className="text-white text-xl font-arcade">{name}</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-arcade-neonCyan text-xl font-bold">{score.toLocaleString()}</span>
+        <span className="text-arcade-neonCyan text-xl font-bold font-arcade">{score.toLocaleString()}</span>
         {isNewScore && <Star className="text-arcade-neonYellow animate-glow" />}
       </div>
     </div>
