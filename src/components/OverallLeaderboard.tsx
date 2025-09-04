@@ -17,7 +17,12 @@ const OverallLeaderboard = () => {
     try {
       const { data: scores, error } = await supabase
         .from('scores')
-        .select('player_name, score');
+        .select(`
+          player_name, 
+          score,
+          games!inner(include_in_challenge)
+        `)
+        .eq('games.include_in_challenge', true);
 
       if (error) throw error;
 
@@ -52,8 +57,8 @@ const OverallLeaderboard = () => {
   useEffect(() => {
     loadOverallLeaders();
     
-    // Set up real-time subscription for score changes
-    const channel = supabase
+    // Set up real-time subscriptions for score and game changes
+    const scoresChannel = supabase
       .channel('overall-leaderboard-scores')
       .on('postgres_changes', 
         { 
@@ -67,8 +72,23 @@ const OverallLeaderboard = () => {
       )
       .subscribe();
 
+    const gamesChannel = supabase
+      .channel('overall-leaderboard-games')
+      .on('postgres_changes', 
+        { 
+          event: 'UPDATE', 
+          schema: 'public', 
+          table: 'games' 
+        }, 
+        () => {
+          loadOverallLeaders(); // Reload leaders when game challenge status changes
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(scoresChannel);
+      supabase.removeChannel(gamesChannel);
     };
   }, []);
 

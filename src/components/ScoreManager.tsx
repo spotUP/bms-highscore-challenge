@@ -48,20 +48,23 @@ const ScoreManager = () => {
         .from('games')
         .select('id, name')
         .eq('is_active', true)
+        .eq('include_in_challenge', true)
         .order('name');
 
       if (gamesError) throw gamesError;
       setGames(gamesData || []);
 
-      // Load scores with game names
+      // Load scores with game names (only from games included in challenge)
       const { data: scoresData, error: scoresError } = await supabase
         .from('scores')
         .select(`
           *,
-          games (
-            name
+          games!inner (
+            name,
+            include_in_challenge
           )
         `)
+        .eq('games.include_in_challenge', true)
         .order('score', { ascending: false });
 
       if (scoresError) throw scoresError;
