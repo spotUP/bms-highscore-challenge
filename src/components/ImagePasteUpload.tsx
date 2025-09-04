@@ -112,13 +112,11 @@ const ImagePasteUpload = ({ value, onChange, label, placeholder }: ImagePasteUpl
     <div className="space-y-2">
       <Label>{label}</Label>
       <div className="space-y-2">
-        <div 
-          className="relative"
-          onPaste={handlePaste}
-        >
+        <div className="relative">
           <Input
             value={value}
             onChange={(e) => onChange(e.target.value)}
+            onPaste={handlePaste}
             placeholder={placeholder}
             className="bg-black/50 border-white/20 text-white w-full min-w-0"
           />
