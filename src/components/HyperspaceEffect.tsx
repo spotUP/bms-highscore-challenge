@@ -21,10 +21,7 @@ const HyperspaceEffect = () => {
     let canvasHeight = window.innerHeight;
     let centerX = canvasWidth * 0.5;
     let centerY = canvasHeight * 0.5;
-    let mouseX = centerX;
-    let mouseY = centerY;
     let speed = DEFAULT_SPEED;
-    let targetSpeed = DEFAULT_SPEED;
 
     const particles: Array<{
       x: number;
@@ -44,10 +41,13 @@ const HyperspaceEffect = () => {
       context.fillStyle = 'rgb(255, 255, 255)';
     };
 
-    // Initialize particles
+    // Initialize particles to emit from center
     const randomizeParticle = (p: any) => {
-      p.x = Math.random() * canvasWidth;
-      p.y = Math.random() * canvasHeight;
+      // Create particles in a circle around the center
+      const angle = Math.random() * Math.PI * 2;
+      const distance = Math.random() * 100 + 50; // Random distance from center
+      p.x = centerX + Math.cos(angle) * distance;
+      p.y = centerY + Math.sin(angle) * distance;
       p.z = Math.random() * 1500 + 500;
       return p;
     };
@@ -62,20 +62,6 @@ const HyperspaceEffect = () => {
       });
     }
 
-    // Event listeners
-    const handleMouseMove = (e: MouseEvent) => {
-      mouseX = e.clientX;
-      mouseY = e.clientY;
-    };
-
-    const handleMouseDown = () => {
-      targetSpeed = BOOST_SPEED;
-    };
-
-    const handleMouseUp = () => {
-      targetSpeed = DEFAULT_SPEED;
-    };
-
     // Animation loop
     const loop = () => {
       // Clear canvas with black background
@@ -83,9 +69,6 @@ const HyperspaceEffect = () => {
       context.fillStyle = 'rgb(0, 0, 0)';
       context.fillRect(0, 0, canvasWidth, canvasHeight);
       context.restore();
-
-      // Update speed
-      speed += (targetSpeed - speed) * 0.01;
 
       const halfPi = Math.PI * 0.5;
       const atan2 = Math.atan2;
@@ -105,9 +88,9 @@ const HyperspaceEffect = () => {
           continue;
         }
 
-        // Calculate position with mouse parallax effect
-        const cx = centerX - (mouseX - centerX) * 1.25;
-        const cy = centerY - (mouseY - centerY) * 1.25;
+        // Use fixed center point (no mouse parallax)
+        const cx = centerX;
+        const cy = centerY;
 
         const rx = p.x - cx;
         const ry = p.y - cy;
@@ -142,11 +125,8 @@ const HyperspaceEffect = () => {
     // Initialize
     resize();
     
-    // Add event listeners
+    // Add resize listener
     window.addEventListener('resize', resize);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('mouseup', handleMouseUp);
 
     // Start animation
     const interval = setInterval(loop, 1000 / 60);
@@ -155,9 +135,6 @@ const HyperspaceEffect = () => {
     return () => {
       clearInterval(interval);
       window.removeEventListener('resize', resize);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mousedown', handleMouseDown);
-      document.removeEventListener('mouseup', handleMouseUp);
     };
   }, []);
 
