@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
+import GameLogoSuggestions from "@/components/GameLogoSuggestions";
 import ScoreManager from "@/components/ScoreManager";
 import SecurityAuditLog from "@/components/SecurityAuditLog";
 
@@ -272,6 +273,12 @@ const Admin = () => {
                           className="bg-black/50 border-white/20 text-white w-full"
                         />
                       </div>
+                    <div className="w-full">
+                      <GameLogoSuggestions
+                        gameName={formData.name}
+                        onSelectImage={(url) => setFormData(prev => ({ ...prev, logo_url: url }))}
+                      />
+                    </div>
                     <div className="w-full">
                       <div className="overflow-hidden">
                         <ImagePasteUpload
