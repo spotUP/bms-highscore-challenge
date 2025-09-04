@@ -17,9 +17,9 @@ const LeaderboardEntry = ({ rank, name, score, isNewScore }: LeaderboardEntryPro
       <div className="flex items-center gap-4">
         <span className={`
           text-2xl font-bold
-          ${rank === 1 ? 'text-arcade-neonYellow' : 
-            rank === 2 ? 'text-arcade-neonCyan' : 
-            rank === 3 ? 'text-arcade-neonPink' : 'text-white'}
+          ${rank === 1 ? 'text-yellow-400' : 
+            rank === 2 ? 'text-gray-300' : 
+            rank === 3 ? 'text-orange-600' : 'text-white'}
         `}>
           #{rank}
         </span>

@@ -75,11 +75,11 @@ const OverallLeaderboard = () => {
   const getRankIcon = (index: number) => {
     switch (index) {
       case 0:
-        return <Trophy className="w-5 h-5 text-arcade-neonYellow" />;
+        return <Trophy className="w-5 h-5 text-yellow-400" />;
       case 1:
         return <Medal className="w-5 h-5 text-gray-300" />;
       case 2:
-        return <Award className="w-5 h-5 text-orange-400" />;
+        return <Award className="w-5 h-5 text-orange-600" />;
       default:
         return <span className="w-5 h-5 flex items-center justify-center text-sm font-bold text-white">#{index + 1}</span>;
     }
@@ -110,11 +110,11 @@ const OverallLeaderboard = () => {
               key={player.player_name}
               className={`flex items-center justify-between p-3 rounded-lg border ${
                 index === 0
-                  ? 'bg-arcade-neonYellow/10 border-arcade-neonYellow/30'
+                  ? 'bg-yellow-400/10 border-yellow-400/30'
                   : index === 1
-                  ? 'bg-gray-500/10 border-gray-500/30'
+                  ? 'bg-gray-300/10 border-gray-300/30'
                   : index === 2
-                  ? 'bg-orange-400/10 border-orange-400/30'
+                  ? 'bg-orange-600/10 border-orange-600/30'
                   : 'bg-white/5 border-white/10'
               }`}
             >
@@ -131,13 +131,13 @@ const OverallLeaderboard = () => {
               </div>
               <div className={`text-right ${
                 index === 0
-                  ? 'text-arcade-neonYellow'
+                  ? 'text-yellow-400'
                   : index === 1
                   ? 'text-gray-300'
                   : index === 2
-                  ? 'text-orange-400'
+                  ? 'text-orange-600'
                   : 'text-white'
-               } font-bold font-arcade`}>
+              } font-bold font-arcade`}>
                 {player.total_score.toLocaleString()}
               </div>
             </div>
