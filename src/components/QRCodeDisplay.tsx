@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { QrCode } from 'lucide-react';
 
@@ -9,6 +9,7 @@ interface QRCodeDisplayProps {
 
 const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
   
   useEffect(() => {
     if (canvasRef.current) {
@@ -18,8 +19,12 @@ const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
         width: 200,
         margin: 2,
         color: {
-          dark: '#FFFFFF', // white QR code pattern
-          light: '#00000000' // transparent background
+          dark: '#000000', // black QR code pattern
+          light: '#FFFFFF' // white background
+        }
+      }, (error) => {
+        if (!error && canvasRef.current) {
+          setQrDataUrl(canvasRef.current.toDataURL());
         }
       });
     }
@@ -28,19 +33,31 @@ const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
   return (
     <div className="space-y-4 p-6 bg-black/20 rounded-lg backdrop-blur-sm text-center">
       <div className="flex justify-center">
-        <div 
-          className="rounded-lg p-4 animated-gradient"
-          style={{
-            background: 'linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff00ff, #00ffff, #ffff00)',
-            backgroundSize: '300% 300%',
-            animation: 'gradientShift 4s ease-in-out infinite'
-          }}
-        >
+        <div className="relative">
           <canvas 
             ref={canvasRef}
-            className="rounded-lg"
-            style={{ background: 'transparent' }}
+            className="opacity-0 absolute"
           />
+          {qrDataUrl && (
+            <div 
+              className="rounded-lg"
+              style={{
+                background: 'linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff00ff, #00ffff, #ffff00)',
+                backgroundSize: '300% 300%',
+                animation: 'gradientShift 4s ease-in-out infinite',
+                WebkitMask: `url(${qrDataUrl})`,
+                mask: `url(${qrDataUrl})`,
+                WebkitMaskSize: 'contain',
+                maskSize: 'contain',
+                WebkitMaskRepeat: 'no-repeat',
+                maskRepeat: 'no-repeat',
+                WebkitMaskPosition: 'center',
+                maskPosition: 'center',
+                width: '200px',
+                height: '200px'
+              }}
+            />
+          )}
         </div>
       </div>
     </div>
