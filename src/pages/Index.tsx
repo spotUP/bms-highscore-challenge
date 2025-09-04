@@ -178,7 +178,7 @@ const Index = () => {
           
           {/* Right column - Game content (more space) */}
           <div className="lg:col-span-4 h-full">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 h-full">
+            <div className="flex gap-4 h-full overflow-x-auto pb-2">
               {games.map((game) => {
                 // Get logo URL - either from database, fallback mapping, or null
                 const logoUrl = game.logo_url || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
@@ -187,7 +187,7 @@ const Index = () => {
                   .filter((score) => score.game_id === game.id)
                   .sort((a, b) => b.score - a.score);
               return (
-                <section key={game.id} className="flex flex-col h-full">
+                <section key={game.id} className="flex flex-col h-full min-w-[280px] max-w-[320px] flex-shrink-0">
                   {/* Card containing logo, scores and QR code */}
                   <Card className="bg-black/50 border-white/20 flex-1 flex flex-col">
                     <CardHeader className="pb-3">
