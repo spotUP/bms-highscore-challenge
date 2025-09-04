@@ -75,11 +75,11 @@ const OverallLeaderboard = () => {
   const getRankIcon = (index: number) => {
     switch (index) {
       case 0:
-        return <Trophy className="w-5 h-5 text-yellow-400" />;
+        return <Trophy className="w-5 h-5 text-yellow-400 animate-gold-shine" />;
       case 1:
-        return <Medal className="w-5 h-5 text-gray-300" />;
+        return <Medal className="w-5 h-5 text-gray-300 animate-silver-shine" />;
       case 2:
-        return <Award className="w-5 h-5 text-orange-600" />;
+        return <Award className="w-5 h-5 text-orange-600 animate-bronze-shine" />;
       default:
         return <span className="w-5 h-5 flex items-center justify-center text-sm font-bold text-white">#{index + 1}</span>;
     }
@@ -122,9 +122,9 @@ const OverallLeaderboard = () => {
                 {getRankIcon(index)}
                 <div>
                   <div className={`font-arcade font-bold text-sm ${
-                    index === 0 ? 'text-yellow-400' : 
-                    index === 1 ? 'text-gray-300' : 
-                    index === 2 ? 'text-orange-600' : 'text-white'
+                    index === 0 ? 'text-yellow-400 animate-gold-shine' : 
+                    index === 1 ? 'text-gray-300 animate-silver-shine' : 
+                    index === 2 ? 'text-orange-600 animate-bronze-shine' : 'text-white'
                   }`}>
                     {player.player_name}
                   </div>
@@ -135,11 +135,11 @@ const OverallLeaderboard = () => {
               </div>
               <div className={`text-right ${
                 index === 0
-                  ? 'text-yellow-400'
+                  ? 'text-yellow-400 animate-gold-shine'
                   : index === 1
-                  ? 'text-gray-300'
+                  ? 'text-gray-300 animate-silver-shine'
                   : index === 2
-                  ? 'text-orange-600'
+                  ? 'text-orange-600 animate-bronze-shine'
                   : 'text-white'
               } font-bold font-arcade`}>
                 {player.total_score.toLocaleString()}

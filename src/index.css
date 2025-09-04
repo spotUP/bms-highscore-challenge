@@ -9,6 +9,65 @@
   font-family: 'Press Start 2P', monospace !important;
 }
 
+/* Shiny animations for medals */
+@keyframes goldShine {
+  0%, 100% {
+    text-shadow: 0 0 5px rgba(255, 193, 7, 0.8),
+                 0 0 10px rgba(255, 193, 7, 0.6),
+                 0 0 15px rgba(255, 193, 7, 0.4);
+    filter: brightness(1);
+  }
+  50% {
+    text-shadow: 0 0 10px rgba(255, 193, 7, 1),
+                 0 0 20px rgba(255, 193, 7, 0.8),
+                 0 0 30px rgba(255, 193, 7, 0.6);
+    filter: brightness(1.2);
+  }
+}
+
+@keyframes silverShine {
+  0%, 100% {
+    text-shadow: 0 0 5px rgba(209, 213, 219, 0.8),
+                 0 0 10px rgba(209, 213, 219, 0.6),
+                 0 0 15px rgba(209, 213, 219, 0.4);
+    filter: brightness(1);
+  }
+  50% {
+    text-shadow: 0 0 10px rgba(209, 213, 219, 1),
+                 0 0 20px rgba(209, 213, 219, 0.8),
+                 0 0 30px rgba(209, 213, 219, 0.6);
+    filter: brightness(1.2);
+  }
+}
+
+@keyframes bronzeShine {
+  0%, 100% {
+    text-shadow: 0 0 5px rgba(234, 88, 12, 0.8),
+                 0 0 10px rgba(234, 88, 12, 0.6),
+                 0 0 15px rgba(234, 88, 12, 0.4);
+    filter: brightness(1);
+  }
+  50% {
+    text-shadow: 0 0 10px rgba(234, 88, 12, 1),
+                 0 0 20px rgba(234, 88, 12, 0.8),
+                 0 0 30px rgba(234, 88, 12, 0.6);
+    filter: brightness(1.2);
+  }
+}
+
+/* Animation classes */
+.animate-gold-shine {
+  animation: goldShine 2s ease-in-out infinite;
+}
+
+.animate-silver-shine {
+  animation: silverShine 2s ease-in-out infinite;
+}
+
+.animate-bronze-shine {
+  animation: bronzeShine 2s ease-in-out infinite;
+}
+
 @layer base {
   :root {
     --background: 26 24% 10%;

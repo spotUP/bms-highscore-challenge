@@ -17,23 +17,23 @@ const LeaderboardEntry = ({ rank, name, score, isNewScore }: LeaderboardEntryPro
       <div className="flex items-center gap-4">
         <span className={`
           text-2xl font-bold
-          ${rank === 1 ? 'text-yellow-400' : 
-            rank === 2 ? 'text-gray-300' : 
-            rank === 3 ? 'text-orange-600' : 'text-white'}
+          ${rank === 1 ? 'text-yellow-400 animate-gold-shine' : 
+            rank === 2 ? 'text-gray-300 animate-silver-shine' : 
+            rank === 3 ? 'text-orange-600 animate-bronze-shine' : 'text-white'}
         `}>
           #{rank}
         </span>
         <span className={`text-xl font-arcade ${
-          rank === 1 ? 'text-yellow-400' : 
-          rank === 2 ? 'text-gray-300' : 
-          rank === 3 ? 'text-orange-600' : 'text-white'
+          rank === 1 ? 'text-yellow-400 animate-gold-shine' : 
+          rank === 2 ? 'text-gray-300 animate-silver-shine' : 
+          rank === 3 ? 'text-orange-600 animate-bronze-shine' : 'text-white'
         }`}>{name}</span>
       </div>
       <div className="flex items-center gap-2">
         <span className={`text-xl font-bold font-arcade ${
-          rank === 1 ? 'text-yellow-400' : 
-          rank === 2 ? 'text-gray-300' : 
-          rank === 3 ? 'text-orange-600' : 'text-arcade-neonCyan'
+          rank === 1 ? 'text-yellow-400 animate-gold-shine' : 
+          rank === 2 ? 'text-gray-300 animate-silver-shine' : 
+          rank === 3 ? 'text-orange-600 animate-bronze-shine' : 'text-arcade-neonCyan'
         }`}>{score.toLocaleString()}</span>
         {isNewScore && <Star className="text-arcade-neonYellow animate-glow" />}
       </div>
