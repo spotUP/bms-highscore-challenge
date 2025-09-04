@@ -191,7 +191,8 @@ const Admin = () => {
 
   if (loading || gamesLoading) {
     return (
-      <div className="min-h-screen bg-arcade-background flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center relative z-10"
+           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
         <div className="text-white text-xl">Loading...</div>
       </div>
     );
@@ -202,7 +203,8 @@ const Admin = () => {
   }
 
   return (
-    <div className="min-h-screen bg-arcade-background text-white p-4 md:p-8">
+    <div className="min-h-screen text-white p-4 md:p-8 relative z-10"
+         style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
       <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex justify-between items-center">
           <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-arcade-neonPink via-arcade-neonCyan to-arcade-neonYellow text-transparent bg-clip-text">

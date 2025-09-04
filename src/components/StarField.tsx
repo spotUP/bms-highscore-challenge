@@ -39,11 +39,11 @@ const Stars = ({ count = 5000 }: StarFieldProps) => {
           />
         </bufferGeometry>
         <pointsMaterial
-          size={2}
+          size={3}
           sizeAttenuation={true}
           color="#ffffff"
-          transparent={true}
-          opacity={0.8}
+          transparent={false}
+          opacity={1}
         />
       </points>
     </group>
@@ -52,7 +52,7 @@ const Stars = ({ count = 5000 }: StarFieldProps) => {
 
 const StarField = ({ count }: StarFieldProps) => {
   return (
-    <div className="fixed inset-0 -z-10">
+    <div className="fixed inset-0 z-0">
       <Canvas
         camera={{ 
           position: [0, 0, 1], 

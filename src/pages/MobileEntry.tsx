@@ -68,7 +68,8 @@ const MobileEntry = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-arcade-background text-white p-4 flex items-center justify-center">
+      <div className="min-h-screen text-white p-4 flex items-center justify-center relative z-10"
+           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
         <div className="text-center">
           <div className="text-xl">Loading...</div>
         </div>
@@ -78,7 +79,8 @@ const MobileEntry = () => {
 
   if (!game) {
     return (
-      <div className="min-h-screen bg-arcade-background text-white p-4 flex items-center justify-center">
+      <div className="min-h-screen text-white p-4 flex items-center justify-center relative z-10"
+           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
         <div className="text-center">
           <h1 className="text-2xl font-bold text-arcade-neonPink mb-4">Invalid Game</h1>
           <p className="text-gray-400">Game not found.</p>
@@ -174,7 +176,8 @@ const MobileEntry = () => {
   };
 
   return (
-    <div className="min-h-screen bg-arcade-background text-white p-4">
+    <div className="min-h-screen text-white p-4 relative z-10"
+         style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
       <div className="max-w-md mx-auto space-y-6 pt-8">
         <div className="text-center">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-arcade-neonPink via-arcade-neonCyan to-arcade-neonYellow text-transparent bg-clip-text mb-2">
