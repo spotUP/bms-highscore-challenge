@@ -15,7 +15,6 @@ import { Pencil, Trash2, Plus } from "lucide-react";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import ScoreManager from "@/components/ScoreManager";
 import SecurityAuditLog from "@/components/SecurityAuditLog";
-import OverallLeaderboard from "@/components/OverallLeaderboard";
 
 interface Game {
   id: string;
@@ -204,7 +203,7 @@ const Admin = () => {
 
   return (
     <div className="min-h-screen bg-arcade-background text-white p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-6xl mx-auto space-y-8">
         <div className="flex justify-between items-center">
           <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-arcade-neonPink via-arcade-neonCyan to-arcade-neonYellow text-transparent bg-clip-text">
             Admin Panel
@@ -214,15 +213,7 @@ const Admin = () => {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* Left column - Overall Leaderboard */}
-          <div className="lg:col-span-1">
-            <OverallLeaderboard />
-          </div>
-          
-          <div className="lg:col-span-3 space-y-8">
-            {/* Games Management Section */}
-            <Card className="bg-black/50 border-white/20">
+        <Card className="bg-black/50 border-white/20">
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle className="text-white">Games Management</CardTitle>
@@ -239,7 +230,7 @@ const Admin = () => {
                       {editingGame ? 'Edit Game' : 'Add New Game'}
                     </DialogTitle>
                   </DialogHeader>
-                  <div className="space-y-4 max-w-full">{/* Ensure proper width constraint */}
+                  <div className="space-y-4 max-w-full">
                     <div>
                       <Label htmlFor="name">Game Name *</Label>
                       <Input
@@ -348,12 +339,10 @@ const Admin = () => {
               </TableBody>
             </Table>
           </CardContent>
-            </Card>
+        </Card>
 
-            <ScoreManager />
-            <SecurityAuditLog />
-          </div>
-        </div>
+        <ScoreManager />
+        <SecurityAuditLog />
       </div>
     </div>
   );

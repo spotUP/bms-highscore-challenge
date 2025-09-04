@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import LeaderboardEntry from "@/components/LeaderboardEntry";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
+import OverallLeaderboard from "@/components/OverallLeaderboard";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -152,55 +153,65 @@ const Index = () => {
           </div>
         </div>
         
-        <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
-          {games.map((game) => {
-            // Get logo URL - either from database, fallback mapping, or null
-            const logoUrl = game.logo_url || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
-            
-            const filtered = scores
-              .filter((score) => score.game_id === game.id)
-              .sort((a, b) => b.score - a.score);
-            return (
-              <section key={game.id} className="space-y-4">
-                <div className="flex justify-center">
-                  {logoUrl ? (
-                    <img 
-                      src={logoUrl} 
-                      alt={game.name} 
-                      className="h-16 w-auto object-contain"
-                    />
-                  ) : (
-                    <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4">
-                      <span className="text-white font-bold text-lg">{game.name}</span>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          {/* Left column - Overall Leaderboard */}
+          <div className="lg:col-span-1">
+            <OverallLeaderboard />
+          </div>
+          
+          {/* Right column - Game content */}
+          <div className="lg:col-span-3">
+            <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
+              {games.map((game) => {
+                // Get logo URL - either from database, fallback mapping, or null
+                const logoUrl = game.logo_url || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
+                
+                const filtered = scores
+                  .filter((score) => score.game_id === game.id)
+                  .sort((a, b) => b.score - a.score);
+                return (
+                  <section key={game.id} className="space-y-4">
+                    <div className="flex justify-center">
+                      {logoUrl ? (
+                        <img 
+                          src={logoUrl} 
+                          alt={game.name} 
+                          className="h-16 w-auto object-contain"
+                        />
+                      ) : (
+                        <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4">
+                          <span className="text-white font-bold text-lg">{game.name}</span>
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  {filtered.map((score, index) => (
-                    <LeaderboardEntry
-                      key={score.id}
-                      rank={index + 1}
-                      name={score.player_name}
-                      score={score.score}
-                      isNewScore={score.isNew}
-                    />
-                  ))}
-                  {filtered.length === 0 && (
-                    <div className="text-center py-8 text-gray-400">
-                      No scores yet. Be the first to submit!
+                    <div className="space-y-2">
+                      {filtered.map((score, index) => (
+                        <LeaderboardEntry
+                          key={score.id}
+                          rank={index + 1}
+                          name={score.player_name}
+                          score={score.score}
+                          isNewScore={score.isNew}
+                        />
+                      ))}
+                      {filtered.length === 0 && (
+                        <div className="text-center py-8 text-gray-400">
+                          No scores yet. Be the first to submit!
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
 
-                <QRCodeDisplay gameId={game.id} gameName={game.name} />
-              </section>
-            );
-          })}
-          {games.length === 0 && (
-            <div className="col-span-full text-center py-8 text-gray-400">
-              No active games found. Please contact an administrator.
+                    <QRCodeDisplay gameId={game.id} gameName={game.name} />
+                  </section>
+                );
+              })}
+              {games.length === 0 && (
+                <div className="col-span-full text-center py-8 text-gray-400">
+                  No active games found. Please contact an administrator.
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
