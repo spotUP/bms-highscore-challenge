@@ -224,13 +224,13 @@ const Admin = () => {
                     Add Game
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-gray-900 text-white border-white/20">
+                <DialogContent className="bg-gray-900 text-white border-white/20 max-w-md max-h-[90vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle>
+                    <DialogTitle className="text-lg font-semibold break-words">
                       {editingGame ? 'Edit Game' : 'Add New Game'}
                     </DialogTitle>
                   </DialogHeader>
-                  <div className="space-y-4">
+                  <div className="space-y-4 max-w-full">{/* Ensure proper width constraint */}
                     <div>
                       <Label htmlFor="name">Game Name *</Label>
                       <Input
@@ -248,10 +248,11 @@ const Admin = () => {
                         value={formData.description}
                         onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                         placeholder="Enter game description"
-                        className="bg-black/50 border-white/20 text-white"
+                        className="bg-black/50 border-white/20 text-white resize-none min-h-[80px] break-words"
+                        rows={3}
                       />
                     </div>
-                    <div>
+                    <div className="w-full max-w-full">
                       <ImagePasteUpload
                         value={formData.logo_url}
                         onChange={(url) => setFormData(prev => ({ ...prev, logo_url: url }))}
