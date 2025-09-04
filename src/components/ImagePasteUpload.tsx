@@ -57,11 +57,13 @@ const ImagePasteUpload = ({ value, onChange, label, placeholder }: ImagePasteUpl
   };
 
   const handlePaste = async (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     const items = Array.from(e.clipboardData.items);
     const imageItem = items.find(item => item.type.startsWith('image/'));
     
     if (imageItem) {
-      e.preventDefault();
       const file = imageItem.getAsFile();
       if (file) {
         await uploadImage(file);
