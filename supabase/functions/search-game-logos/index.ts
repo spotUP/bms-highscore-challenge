@@ -28,17 +28,65 @@ serve(async (req) => {
       )
     }
 
-    console.log('Using fallback images for:', gameName)
-    const fallbackImages = [
-      `https://dummyimage.com/200x200/333333/ffffff&text=${encodeURIComponent(gameName)}+1`,
-      `https://dummyimage.com/200x200/555555/ffffff&text=${encodeURIComponent(gameName)}+2`,
-      `https://dummyimage.com/200x200/777777/ffffff&text=${encodeURIComponent(gameName)}+3`,
-      `https://dummyimage.com/200x200/999999/ffffff&text=${encodeURIComponent(gameName)}+4`
-    ]
+    const apiKey = Deno.env.get('GOOGLE_CUSTOM_SEARCH_API_KEY')
+    const searchEngineId = Deno.env.get('GOOGLE_CUSTOM_SEARCH_ENGINE_ID')
+
+    console.log('API Key present:', !!apiKey)
+    console.log('Search Engine ID present:', !!searchEngineId)
+
+    if (!apiKey || !searchEngineId) {
+      console.log('Google API not configured, using fallback images')
+      const fallbackImages = [
+        `https://dummyimage.com/200x200/333333/ffffff&text=${encodeURIComponent(gameName)}+1`,
+        `https://dummyimage.com/200x200/555555/ffffff&text=${encodeURIComponent(gameName)}+2`,
+        `https://dummyimage.com/200x200/777777/ffffff&text=${encodeURIComponent(gameName)}+3`,
+        `https://dummyimage.com/200x200/999999/ffffff&text=${encodeURIComponent(gameName)}+4`
+      ]
+      
+      return new Response(
+        JSON.stringify({ images: fallbackImages.slice(0, numResults) }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    // Search for game logos using Google Custom Search API
+    const searchQuery = `${gameName} game logo clear transparent`
+    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=${numResults}&imgType=clipart&imgColorType=trans&safe=active`
+
+    console.log('Searching for:', searchQuery)
+    console.log('Search URL (without key):', searchUrl.replace(apiKey, '[REDACTED]'))
+
+    const response = await fetch(searchUrl)
     
-    const images = fallbackImages.slice(0, numResults)
-    console.log('Returning', images.length, 'fallback images')
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('Google Search API error:', response.status, errorText)
+      
+      // Return fallback images on API error
+      const fallbackImages = [
+        `https://dummyimage.com/200x200/ff9999/ffffff&text=${encodeURIComponent(gameName)}+API+Error`,
+        `https://dummyimage.com/200x200/99ff99/ffffff&text=${encodeURIComponent(gameName)}+Check+Keys`,
+        `https://dummyimage.com/200x200/9999ff/ffffff&text=${encodeURIComponent(gameName)}+Fallback`,
+        `https://dummyimage.com/200x200/ffff99/ffffff&text=${encodeURIComponent(gameName)}+Mode`
+      ]
+      
+      return new Response(
+        JSON.stringify({ images: fallbackImages.slice(0, numResults) }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    const data = await response.json()
+    console.log('Google API response received, items count:', data.items?.length || 0)
     
+    const images = data.items?.map((item: any) => item.link) || []
+    
+    console.log(`Found ${images.length} images for "${gameName}"`)
+
     return new Response(
       JSON.stringify({ images }),
       { 
