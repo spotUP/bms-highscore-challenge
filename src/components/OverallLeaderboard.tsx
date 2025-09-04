@@ -13,44 +13,63 @@ const OverallLeaderboard = () => {
   const [leaders, setLeaders] = useState<PlayerScore[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const loadOverallLeaders = async () => {
+    try {
+      const { data: scores, error } = await supabase
+        .from('scores')
+        .select('player_name, score');
+
+      if (error) throw error;
+
+      // Group scores by player name and calculate totals
+      const playerTotals = scores?.reduce((acc: Record<string, PlayerScore>, score) => {
+        const playerName = score.player_name;
+        if (!acc[playerName]) {
+          acc[playerName] = {
+            player_name: playerName,
+            total_score: 0,
+            game_count: 0
+          };
+        }
+        acc[playerName].total_score += score.score;
+        acc[playerName].game_count += 1;
+        return acc;
+      }, {}) || {};
+
+      // Convert to array and sort by total score
+      const leadersList = Object.values(playerTotals)
+        .sort((a, b) => b.total_score - a.total_score)
+        .slice(0, 10); // Top 10 players
+
+      setLeaders(leadersList);
+    } catch (error) {
+      console.error('Error loading overall leaders:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const loadOverallLeaders = async () => {
-      try {
-        const { data: scores, error } = await supabase
-          .from('scores')
-          .select('player_name, score');
-
-        if (error) throw error;
-
-        // Group scores by player name and calculate totals
-        const playerTotals = scores?.reduce((acc: Record<string, PlayerScore>, score) => {
-          const playerName = score.player_name;
-          if (!acc[playerName]) {
-            acc[playerName] = {
-              player_name: playerName,
-              total_score: 0,
-              game_count: 0
-            };
-          }
-          acc[playerName].total_score += score.score;
-          acc[playerName].game_count += 1;
-          return acc;
-        }, {}) || {};
-
-        // Convert to array and sort by total score
-        const leadersList = Object.values(playerTotals)
-          .sort((a, b) => b.total_score - a.total_score)
-          .slice(0, 10); // Top 10 players
-
-        setLeaders(leadersList);
-      } catch (error) {
-        console.error('Error loading overall leaders:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadOverallLeaders();
+    
+    // Set up real-time subscription for score changes
+    const channel = supabase
+      .channel('overall-leaderboard-scores')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'scores' 
+        }, 
+        () => {
+          loadOverallLeaders(); // Reload leaders when scores change
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const getRankIcon = (index: number) => {
