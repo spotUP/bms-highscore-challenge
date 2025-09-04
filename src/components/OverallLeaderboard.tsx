@@ -121,7 +121,11 @@ const OverallLeaderboard = () => {
               <div className="flex items-center gap-3">
                 {getRankIcon(index)}
                 <div>
-                  <div className="text-white font-arcade font-bold text-sm">
+                  <div className={`font-arcade font-bold text-sm ${
+                    index === 0 ? 'text-yellow-400' : 
+                    index === 1 ? 'text-gray-300' : 
+                    index === 2 ? 'text-orange-600' : 'text-white'
+                  }`}>
                     {player.player_name}
                   </div>
                   <div className="text-xs text-gray-400">

@@ -23,10 +23,18 @@ const LeaderboardEntry = ({ rank, name, score, isNewScore }: LeaderboardEntryPro
         `}>
           #{rank}
         </span>
-        <span className="text-white text-xl font-arcade">{name}</span>
+        <span className={`text-xl font-arcade ${
+          rank === 1 ? 'text-yellow-400' : 
+          rank === 2 ? 'text-gray-300' : 
+          rank === 3 ? 'text-orange-600' : 'text-white'
+        }`}>{name}</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-arcade-neonCyan text-xl font-bold font-arcade">{score.toLocaleString()}</span>
+        <span className={`text-xl font-bold font-arcade ${
+          rank === 1 ? 'text-yellow-400' : 
+          rank === 2 ? 'text-gray-300' : 
+          rank === 3 ? 'text-orange-600' : 'text-arcade-neonCyan'
+        }`}>{score.toLocaleString()}</span>
         {isNewScore && <Star className="text-arcade-neonYellow animate-glow" />}
       </div>
     </div>
