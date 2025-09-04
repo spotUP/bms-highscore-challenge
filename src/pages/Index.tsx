@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,8 +48,6 @@ const Index = () => {
   const [scores, setScores] = useState<Score[]>([]);
   const [selectedGameForSubmission, setSelectedGameForSubmission] = useState<Game | null>(null);
   const [isSubmissionDialogOpen, setIsSubmissionDialogOpen] = useState(false);
-  const gamesContainerRef = useRef<HTMLDivElement>(null);
-  const [shouldAutoScroll, setShouldAutoScroll] = useState(false);
 
   // Load games from database
   const loadGames = async () => {
@@ -116,24 +114,6 @@ const Index = () => {
     };
   }, []);
 
-  // Check if games overflow and should auto-scroll
-  useEffect(() => {
-    const checkOverflow = () => {
-      if (gamesContainerRef.current) {
-        const container = gamesContainerRef.current;
-        const isOverflowing = container.scrollWidth > container.clientWidth;
-        setShouldAutoScroll(isOverflowing);
-      }
-    };
-
-    checkOverflow();
-    window.addEventListener('resize', checkOverflow);
-    
-    return () => {
-      window.removeEventListener('resize', checkOverflow);
-    };
-  }, [games]);
-
   const handleGameLogoClick = (game: Game) => {
     setSelectedGameForSubmission(game);
     setIsSubmissionDialogOpen(true);
@@ -190,24 +170,15 @@ const Index = () => {
           </div>
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 h-[calc(100vh-12rem)]">
-          {/* Left column - Overall Leaderboard (narrower) */}
+        <div className="grid grid-cols-1 lg:grid-cols-6 gap-4">
+          {/* Left column - Overall Leaderboard (smaller) */}
           <div className="lg:col-span-1">
             <OverallLeaderboard />
           </div>
           
-          {/* Right column - Game content (more space) */}
-          <div className="lg:col-span-4 h-full">
-            <div 
-              ref={gamesContainerRef}
-              className={`flex gap-4 h-full overflow-x-auto pb-2 ${
-                shouldAutoScroll ? 'animate-horizontal-scroll' : ''
-              }`}
-              style={{
-                scrollbarWidth: 'none',
-                msOverflowStyle: 'none',
-              }}
-            >
+          {/* Right column - Game content (much more space) */}
+          <div className="lg:col-span-5 h-full">
+            <div className="flex gap-3 h-full">
               {games.map((game) => {
                 // Get logo URL - either from database, fallback mapping, or null
                 const logoUrl = game.logo_url || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
@@ -216,7 +187,7 @@ const Index = () => {
                   .filter((score) => score.game_id === game.id)
                   .sort((a, b) => b.score - a.score);
               return (
-                <section key={game.id} className="flex flex-col h-full min-w-[250px] max-w-[280px] flex-shrink-0">
+                <section key={game.id} className="flex flex-col h-full flex-1 min-w-0">
                   {/* Card containing logo, scores and QR code */}
                   <Card className="bg-black/50 border-white/20 flex-1 flex flex-col">
                     <CardHeader className="pb-3">
