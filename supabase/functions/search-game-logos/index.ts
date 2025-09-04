@@ -53,10 +53,12 @@ serve(async (req) => {
 
     // Search for game logos using Google Custom Search API
     const searchQuery = `${gameName} game logo clear transparent`
-    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=${numResults}&imgType=clipart&imgColorType=trans&safe=active`
+    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=${numResults}&safe=active`
 
     console.log('Searching for:', searchQuery)
     console.log('Search URL (without key):', searchUrl.replace(apiKey, '[REDACTED]'))
+    console.log('Using API Key:', apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT SET')
+    console.log('Using Search Engine ID:', searchEngineId)
 
     const response = await fetch(searchUrl)
     
