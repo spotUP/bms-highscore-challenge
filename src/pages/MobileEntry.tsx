@@ -112,17 +112,51 @@ const MobileEntry = () => {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase
+      // First check if player already has a score for this game
+      const { data: existingScore, error: fetchError } = await supabase
         .from('scores')
-        .insert({
-          player_name: name.toUpperCase(),
-          score: scoreValue,
-          game_id: game.id
-        });
+        .select('*')
+        .eq('player_name', name.toUpperCase())
+        .eq('game_id', game.id)
+        .maybeSingle();
 
-      if (error) throw error;
+      if (fetchError) throw fetchError;
+
+      if (existingScore) {
+        // Player already has a score for this game
+        if (scoreValue <= existingScore.score) {
+          toast.error(`Your current best score for ${game.name} is ${existingScore.score.toLocaleString()}. Submit a higher score to improve your record.`);
+          setIsSubmitting(false);
+          return;
+        }
+        
+        // Update existing score with higher score
+        const { error } = await supabase
+          .from('scores')
+          .update({
+            score: scoreValue,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingScore.id);
+
+        if (error) throw error;
+
+        toast.success(`Score improved! New best: ${scoreValue.toLocaleString()} (previous: ${existingScore.score.toLocaleString()})`);
+      } else {
+        // Insert new score for this player/game combination
+        const { error } = await supabase
+          .from('scores')
+          .insert({
+            player_name: name.toUpperCase(),
+            score: scoreValue,
+            game_id: game.id
+          });
+
+        if (error) throw error;
+        
+        toast.success(`New score recorded: ${scoreValue.toLocaleString()}`);
+      }
       
-      toast.success("Score submitted successfully!");
       setName("");
       setScore("");
       

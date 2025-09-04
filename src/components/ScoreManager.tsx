@@ -152,7 +152,7 @@ const ScoreManager = () => {
       }
 
       if (editingScore) {
-        // Update existing score
+        // Update existing score - always allow admin to update
         const { error } = await supabase
           .from('scores')
           .update({
@@ -169,21 +169,49 @@ const ScoreManager = () => {
           description: "Score updated successfully"
         });
       } else {
-        // Create new score
-        const { error } = await supabase
+        // Create new score - check for existing score and handle appropriately
+        const { data: existingScore, error: fetchError } = await supabase
           .from('scores')
-          .insert({
-            player_name: formData.player_name.toUpperCase(),
-            score: scoreValue,
-            game_id: formData.game_id
-          });
+          .select('*')
+          .eq('player_name', formData.player_name.toUpperCase())
+          .eq('game_id', formData.game_id)
+          .maybeSingle();
 
-        if (error) throw error;
-        
-        toast({
-          title: "Success",
-          description: "Score created successfully"
-        });
+        if (fetchError) throw fetchError;
+
+        if (existingScore) {
+          // Update existing score instead of creating new one
+          const { error } = await supabase
+            .from('scores')
+            .update({
+              score: scoreValue,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingScore.id);
+
+          if (error) throw error;
+          
+          toast({
+            title: "Score Updated",
+            description: `Updated ${formData.player_name}'s score (was: ${existingScore.score.toLocaleString()}, now: ${scoreValue.toLocaleString()})`
+          });
+        } else {
+          // Create new score
+          const { error } = await supabase
+            .from('scores')
+            .insert({
+              player_name: formData.player_name.toUpperCase(),
+              score: scoreValue,
+              game_id: formData.game_id
+            });
+
+          if (error) throw error;
+          
+          toast({
+            title: "Success",
+            description: "Score created successfully"
+          });
+        }
       }
 
       setIsDialogOpen(false);
