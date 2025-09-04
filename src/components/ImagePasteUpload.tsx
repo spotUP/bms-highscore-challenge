@@ -118,7 +118,6 @@ const ImagePasteUpload = ({ value, onChange, label, placeholder }: ImagePasteUpl
           <Input
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            onPaste={handlePaste}
             placeholder={placeholder}
             className="bg-black/50 border-white/20 text-white w-full min-w-0"
           />
@@ -145,15 +144,25 @@ const ImagePasteUpload = ({ value, onChange, label, placeholder }: ImagePasteUpl
         )}
 
         <div
-          className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+          className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer ${
             dragActive 
               ? 'border-arcade-neonCyan bg-arcade-neonCyan/10' 
               : 'border-white/20 hover:border-white/40'
           }`}
+          tabIndex={0}
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
+          onPaste={handlePaste}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
+          role="button"
+          aria-label="Upload area - click, drag and drop, or paste an image"
         >
           <input
             ref={fileInputRef}
@@ -180,6 +189,9 @@ const ImagePasteUpload = ({ value, onChange, label, placeholder }: ImagePasteUpl
             </div>
             <div className="text-xs text-gray-400">
               You can also paste an image here (Ctrl+V)
+            </div>
+            <div className="text-xs text-gray-500">
+              Click this area first, then paste your image
             </div>
           </div>
           
