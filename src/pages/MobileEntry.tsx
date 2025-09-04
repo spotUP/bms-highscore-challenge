@@ -99,8 +99,13 @@ const MobileEntry = () => {
     }
 
     const scoreValue = parseInt(score);
-    if (isNaN(scoreValue) || scoreValue < 0) {
-      toast.error("Please enter a valid score");
+    if (isNaN(scoreValue) || scoreValue <= 0 || scoreValue > 999999999) {
+      toast.error("Please enter a valid score (1-999,999,999)");
+      return;
+    }
+
+    if (name.trim().length > 50) {
+      toast.error("Player name must be 50 characters or less");
       return;
     }
 
@@ -165,18 +170,30 @@ const MobileEntry = () => {
           <div className="space-y-4">
             <Input
               type="text"
-              placeholder="Player Name (3 characters)"
+              placeholder="Player Name (max 50 characters)"
               value={name}
-              onChange={(e) => setName(e.target.value.slice(0, 3))}
-              maxLength={3}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value.length <= 50) {
+                  setName(value);
+                }
+              }}
+              maxLength={50}
               className="bg-black/30 border-arcade-neonCyan text-white text-center text-lg"
               autoFocus
             />
             <Input
               type="number"
-              placeholder="Score"
+              placeholder="Score (1-999,999,999)"
               value={score}
-              onChange={(e) => setScore(e.target.value)}
+              onChange={(e) => {
+                const value = parseInt(e.target.value) || 0;
+                if (value <= 999999999) {
+                  setScore(e.target.value);
+                }
+              }}
+              min="1"
+              max="999999999"
               className="bg-black/30 border-arcade-neonPink text-white text-center text-lg"
             />
             <Button 

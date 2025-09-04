@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import LeaderboardEntry from "@/components/LeaderboardEntry";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import OverallLeaderboard from "@/components/OverallLeaderboard";
+import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -44,6 +45,8 @@ const Index = () => {
   const [games, setGames] = useState<Game[]>([]);
   const [gamesLoading, setGamesLoading] = useState(true);
   const [scores, setScores] = useState<Score[]>([]);
+  const [selectedGameForSubmission, setSelectedGameForSubmission] = useState<Game | null>(null);
+  const [isSubmissionDialogOpen, setIsSubmissionDialogOpen] = useState(false);
 
   // Load games from database
   const loadGames = async () => {
@@ -109,6 +112,15 @@ const Index = () => {
     };
   }, []);
 
+  const handleGameLogoClick = (game: Game) => {
+    setSelectedGameForSubmission(game);
+    setIsSubmissionDialogOpen(true);
+  };
+
+  const handleScoreSubmitted = () => {
+    loadScores(); // Reload scores after submission
+  };
+
   if (loading || gamesLoading) {
     return (
       <div className="min-h-screen bg-arcade-background flex items-center justify-center">
@@ -169,9 +181,14 @@ const Index = () => {
                 const filtered = scores
                   .filter((score) => score.game_id === game.id)
                   .sort((a, b) => b.score - a.score);
-                return (
-                  <section key={game.id} className="space-y-4">
-                    <div className="flex justify-center">
+              return (
+                <section key={game.id} className="space-y-4">
+                  <div className="flex justify-center">
+                    <div 
+                      className="cursor-pointer hover:scale-105 transition-transform duration-200 hover:shadow-lg hover:shadow-arcade-neonCyan/30"
+                      onClick={() => handleGameLogoClick(game)}
+                      title={`Click to submit score for ${game.name}`}
+                    >
                       {logoUrl ? (
                         <img 
                           src={logoUrl} 
@@ -179,11 +196,12 @@ const Index = () => {
                           className="h-16 w-auto object-contain"
                         />
                       ) : (
-                        <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4">
+                        <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4 hover:bg-black/50 transition-colors">
                           <span className="text-white font-bold text-lg">{game.name}</span>
                         </div>
                       )}
                     </div>
+                  </div>
                     <div className="space-y-2">
                       {filtered.map((score, index) => (
                         <LeaderboardEntry
@@ -213,6 +231,13 @@ const Index = () => {
             </div>
           </div>
         </div>
+        
+        <ScoreSubmissionDialog
+          game={selectedGameForSubmission}
+          isOpen={isSubmissionDialogOpen}
+          onClose={() => setIsSubmissionDialogOpen(false)}
+          onScoreSubmitted={handleScoreSubmitted}
+        />
       </div>
     </div>
   );
