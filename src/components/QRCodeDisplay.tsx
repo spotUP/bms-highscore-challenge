@@ -19,8 +19,8 @@ const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
         width: 200,
         margin: 2,
         color: {
-          dark: '#000000', // black QR code pattern
-          light: '#FFFFFF' // white background
+          dark: '#000000', // black QR code pattern  
+          light: '#FFFFFF00' // transparent background
         }
       }, (error) => {
         if (!error && canvasRef.current) {
@@ -45,10 +45,10 @@ const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
                 background: 'linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff00ff, #00ffff, #ffff00)',
                 backgroundSize: '300% 300%',
                 animation: 'gradientShift 4s ease-in-out infinite',
-                WebkitMask: `url(${qrDataUrl})`,
-                mask: `url(${qrDataUrl})`,
-                WebkitMaskSize: 'contain',
-                maskSize: 'contain',
+                WebkitMaskImage: `url(${qrDataUrl})`,
+                maskImage: `url(${qrDataUrl})`,
+                WebkitMaskSize: '200px 200px',
+                maskSize: '200px 200px',
                 WebkitMaskRepeat: 'no-repeat',
                 maskRepeat: 'no-repeat',
                 WebkitMaskPosition: 'center',
