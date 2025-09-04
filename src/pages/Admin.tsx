@@ -316,7 +316,6 @@ const Admin = () => {
               <TableHeader>
                 <TableRow className="border-white/20">
                   <TableHead className="text-white">Name</TableHead>
-                  <TableHead className="text-white">Status</TableHead>
                   <TableHead className="text-white">Challenge</TableHead>
                   <TableHead className="text-white">Created</TableHead>
                   <TableHead className="text-white">Actions</TableHead>
@@ -326,15 +325,6 @@ const Admin = () => {
                 {games.map((game) => (
                   <TableRow key={game.id} className="border-white/20">
                     <TableCell className="text-white font-medium">{game.name}</TableCell>
-                    <TableCell>
-                      <span className={`px-2 py-1 rounded text-xs ${
-                        game.is_active 
-                          ? 'bg-green-500/20 text-green-400' 
-                          : 'bg-red-500/20 text-red-400'
-                      }`}>
-                        {game.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </TableCell>
                     <TableCell>
                       <Checkbox
                         checked={game.include_in_challenge}
@@ -367,7 +357,7 @@ const Admin = () => {
                 ))}
                 {games.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-gray-400 py-8">
+                    <TableCell colSpan={4} className="text-center text-gray-400 py-8">
                       No games found. Add your first game!
                     </TableCell>
                   </TableRow>
