@@ -188,31 +188,30 @@ const Index = () => {
                   .sort((a, b) => b.score - a.score);
               return (
                 <section key={game.id} className="flex flex-col h-full">
-                  {/* Game logo */}
-                  <div className="flex justify-center mb-4">
-                    <div 
-                      className="cursor-pointer hover:scale-105 transition-transform duration-200 hover:shadow-lg hover:shadow-arcade-neonCyan/30"
-                      onClick={() => handleGameLogoClick(game)}
-                      title={`Click to submit score for ${game.name}`}
-                    >
-                      {logoUrl ? (
-                        <img 
-                          src={logoUrl} 
-                          alt={game.name} 
-                          className="h-16 w-auto object-contain"
-                        />
-                      ) : (
-                        <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4 hover:bg-black/50 transition-colors">
-                          <span className="text-white font-bold text-lg">{game.name}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {/* Card containing scores and QR code */}
+                  {/* Card containing logo, scores and QR code */}
                   <Card className="bg-black/50 border-white/20 flex-1 flex flex-col">
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-white text-lg">{game.name}</CardTitle>
+                      {/* Game logo inside card header */}
+                      <div className="flex justify-center mb-2">
+                        <div 
+                          className="cursor-pointer hover:scale-105 transition-transform duration-200 hover:shadow-lg hover:shadow-arcade-neonCyan/30"
+                          onClick={() => handleGameLogoClick(game)}
+                          title={`Click to submit score for ${game.name}`}
+                        >
+                          {logoUrl ? (
+                            <img 
+                              src={logoUrl} 
+                              alt={game.name} 
+                              className="h-16 w-auto object-contain"
+                            />
+                          ) : (
+                            <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4 hover:bg-black/50 transition-colors">
+                              <span className="text-white font-bold text-lg">{game.name}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <CardTitle className="text-white text-lg text-center">{game.name}</CardTitle>
                     </CardHeader>
                     <CardContent className="flex-1 flex flex-col">
                       {/* Scores section - scrollable if needed */}
