@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import StarField from "@/components/StarField";
 import Index from "./pages/Index";
 import MobileEntry from "./pages/MobileEntry";
 import Auth from "./pages/Auth";
@@ -15,6 +16,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <TooltipProvider>
+        <StarField count={3000} />
         <Toaster />
         <Sonner />
         <BrowserRouter>
