@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import ScoreManager from "@/components/ScoreManager";
@@ -98,6 +99,33 @@ const Admin = () => {
       include_in_challenge: game.include_in_challenge
     });
     setIsDialogOpen(true);
+  };
+
+  // Toggle challenge inclusion
+  const toggleChallengeInclusion = async (gameId: string, currentValue: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('games')
+        .update({ include_in_challenge: !currentValue })
+        .eq('id', gameId);
+
+      if (error) throw error;
+
+      // Refresh the games list
+      loadGames();
+      
+      toast({
+        title: "Success",
+        description: `Game ${!currentValue ? 'included in' : 'removed from'} challenge`
+      });
+    } catch (error) {
+      console.error('Error updating challenge inclusion:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update challenge inclusion",
+        variant: "destructive"
+      });
+    }
   };
 
   // Save game (create or update)
@@ -308,13 +336,11 @@ const Admin = () => {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <span className={`px-2 py-1 rounded text-xs ${
-                        game.include_in_challenge
-                          ? 'bg-arcade-neonCyan/20 text-arcade-neonCyan' 
-                          : 'bg-gray-500/20 text-gray-400'
-                      }`}>
-                        {game.include_in_challenge ? 'Included' : 'Not Included'}
-                      </span>
+                      <Checkbox
+                        checked={game.include_in_challenge}
+                        onCheckedChange={() => toggleChallengeInclusion(game.id, game.include_in_challenge)}
+                        className="data-[state=checked]:bg-arcade-neonCyan data-[state=checked]:border-arcade-neonCyan"
+                      />
                     </TableCell>
                     <TableCell className="text-gray-300">
                       {new Date(game.created_at).toLocaleDateString()}
