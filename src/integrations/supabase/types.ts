@@ -74,6 +74,63 @@ export type Database = {
         }
         Relationships: []
       }
+      role_audit_log: {
+        Row: {
+          action: string
+          changed_by: string | null
+          created_at: string
+          id: string
+          new_role: Database["public"]["Enums"]["app_role"] | null
+          old_role: Database["public"]["Enums"]["app_role"] | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_role?: Database["public"]["Enums"]["app_role"] | null
+          old_role?: Database["public"]["Enums"]["app_role"] | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          new_role?: Database["public"]["Enums"]["app_role"] | null
+          old_role?: Database["public"]["Enums"]["app_role"] | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      score_submission_rate_limit: {
+        Row: {
+          created_at: string
+          id: string
+          ip_address: unknown | null
+          submission_count: number
+          user_id: string | null
+          window_start: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          submission_count?: number
+          user_id?: string | null
+          window_start?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          submission_count?: number
+          user_id?: string | null
+          window_start?: string
+        }
+        Relationships: []
+      }
       scores: {
         Row: {
           created_at: string
@@ -135,6 +192,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_score_submission_rate_limit: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       get_public_username: {
         Args: { user_uuid: string }
         Returns: string

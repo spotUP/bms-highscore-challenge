@@ -114,26 +114,43 @@ const ScoreManager = () => {
       return;
     }
 
-    if (formData.player_name.length > 3) {
+    if (formData.player_name.length > 50) {
       toast({
         title: "Error",
-        description: "Player name must be 3 characters or less",
+        description: "Player name must be 50 characters or less",
         variant: "destructive"
       });
       return;
     }
 
     const scoreValue = parseInt(formData.score);
-    if (isNaN(scoreValue) || scoreValue < 0) {
+    if (isNaN(scoreValue) || scoreValue <= 0 || scoreValue > 999999999) {
       toast({
         title: "Error",
-        description: "Score must be a valid positive number",
+        description: "Score must be between 1 and 999,999,999",
         variant: "destructive"
       });
       return;
     }
 
     try {
+      // Check rate limiting for new scores (not edits)
+      if (!editingScore) {
+        const { data: rateLimitCheck, error: rateLimitError } = await supabase
+          .rpc('check_score_submission_rate_limit');
+        
+        if (rateLimitError) {
+          console.error('Rate limit check error:', rateLimitError);
+        } else if (!rateLimitCheck) {
+          toast({
+            title: "Rate Limit Exceeded",
+            description: "You can only submit 10 scores per hour. Please wait before submitting again.",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       if (editingScore) {
         // Update existing score
         const { error } = await supabase
@@ -172,13 +189,35 @@ const ScoreManager = () => {
       setIsDialogOpen(false);
       resetForm();
       loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving score:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save score",
-        variant: "destructive"
-      });
+      
+      // Handle specific constraint violations with user-friendly messages
+      if (error.message?.includes('score_positive')) {
+        toast({
+          title: "Invalid Score",
+          description: "Score must be a positive number",
+          variant: "destructive",
+        });
+      } else if (error.message?.includes('score_reasonable')) {
+        toast({
+          title: "Invalid Score", 
+          description: "Score is too high (maximum: 999,999,999)",
+          variant: "destructive",
+        });
+      } else if (error.message?.includes('player_name_length')) {
+        toast({
+          title: "Invalid Player Name",
+          description: "Player name must be between 1 and 50 characters",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to save score",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -238,16 +277,16 @@ const ScoreManager = () => {
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="player_name">Player Name (max 3 chars) *</Label>
+                  <Label htmlFor="player_name">Player Name (max 50 chars) *</Label>
                   <Input
                     id="player_name"
                     value={formData.player_name}
                     onChange={(e) => setFormData(prev => ({ 
                       ...prev, 
-                      player_name: e.target.value.toUpperCase().slice(0, 3)
+                      player_name: e.target.value.slice(0, 50)
                     }))}
-                    placeholder="ABC"
-                    maxLength={3}
+                    placeholder="Enter player name"
+                    maxLength={50}
                     className="bg-black/50 border-white/20 text-white"
                   />
                 </div>
