@@ -5,37 +5,36 @@ const HyperspaceEffect = () => {
   
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ backgroundColor: 'black', zIndex: -1 }}>
-      {/* Debug: Add a visible border to see if the container is there */}
-      <div 
-        className="scene" 
-        style={{ 
-          border: '2px solid red',
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: '200px',
-          height: '200px'
-        }}
-      >
-        <div className="wrap">
-          {/* Create multiple tunnel segments */}
-          {Array.from({ length: 20 }, (_, i) => (
-            <div 
-              key={i} 
-              className="wall" 
+      <div className="hyperspace-container">
+        {/* Create radial streaming lines */}
+        {Array.from({ length: 150 }, (_, i) => {
+          const angle = (i / 150) * 360;
+          const radius = 50 + (i % 3) * 30; // Vary starting radius
+          const length = 200 + (i % 4) * 100; // Vary line lengths
+          
+          return (
+            <div
+              key={i}
+              className="hyperspace-line"
               style={{
-                animationDelay: `${i * 0.5}s`,
-                backgroundColor: 'rgba(0, 255, 255, 0.1)' // Debug: make walls slightly visible
+                transform: `rotate(${angle}deg)`,
+                animationDelay: `${(i * 0.02)}s`,
+                animationDuration: `${0.8 + (i % 3) * 0.4}s`
               }}
             >
-              <div className="wall-left" style={{ backgroundColor: 'rgba(255, 0, 0, 0.3)' }}></div>
-              <div className="wall-right" style={{ backgroundColor: 'rgba(0, 255, 0, 0.3)' }}></div>
-              <div className="wall-top" style={{ backgroundColor: 'rgba(0, 0, 255, 0.3)' }}></div>
-              <div className="wall-bottom" style={{ backgroundColor: 'rgba(255, 255, 0, 0.3)' }}></div>
+              <div 
+                className="line-segment"
+                style={{
+                  width: `${length}px`,
+                  left: `${radius}px`
+                }}
+              />
             </div>
-          ))}
-        </div>
+          );
+        })}
+        
+        {/* Central bright core */}
+        <div className="hyperspace-core" />
       </div>
     </div>
   );
