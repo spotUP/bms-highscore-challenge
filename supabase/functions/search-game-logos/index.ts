@@ -31,16 +31,20 @@ serve(async (req) => {
     const apiKey = Deno.env.get('GOOGLE_CUSTOM_SEARCH_API_KEY')
     const searchEngineId = Deno.env.get('GOOGLE_CUSTOM_SEARCH_ENGINE_ID')
 
+    console.log('=== DEBUG INFO ===')
     console.log('API Key present:', !!apiKey)
+    console.log('API Key first 10 chars:', apiKey?.substring(0, 10))
     console.log('Search Engine ID present:', !!searchEngineId)
+    console.log('Search Engine ID value:', searchEngineId)
+    console.log('=== END DEBUG ===')
 
     if (!apiKey || !searchEngineId) {
       console.log('Google API not configured, using fallback images')
       const fallbackImages = [
-        `https://dummyimage.com/200x200/333333/ffffff&text=${encodeURIComponent(gameName)}+1`,
-        `https://dummyimage.com/200x200/555555/ffffff&text=${encodeURIComponent(gameName)}+2`,
-        `https://dummyimage.com/200x200/777777/ffffff&text=${encodeURIComponent(gameName)}+3`,
-        `https://dummyimage.com/200x200/999999/ffffff&text=${encodeURIComponent(gameName)}+4`
+        `https://dummyimage.com/200x200/333333/ffffff&text=${encodeURIComponent(gameName)}+Missing+Keys`,
+        `https://dummyimage.com/200x200/555555/ffffff&text=${encodeURIComponent(gameName)}+No+API`,
+        `https://dummyimage.com/200x200/777777/ffffff&text=${encodeURIComponent(gameName)}+Keys`,
+        `https://dummyimage.com/200x200/999999/ffffff&text=${encodeURIComponent(gameName)}+Found`
       ]
       
       return new Response(
