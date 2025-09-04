@@ -121,11 +121,7 @@ const OverallLeaderboard = () => {
               <div className="flex items-center gap-3">
                 {getRankIcon(index)}
                 <div>
-                  <div className={`font-arcade font-bold text-sm ${
-                    index === 0 ? 'text-yellow-400 animate-gold-shine' : 
-                    index === 1 ? 'text-gray-300 animate-silver-shine' : 
-                    index === 2 ? 'text-orange-600 animate-bronze-shine' : 'text-white'
-                  }`}>
+                  <div className="font-arcade font-bold text-sm animated-gradient">
                     {player.player_name}
                   </div>
                   <div className="text-xs text-gray-400">
@@ -133,15 +129,7 @@ const OverallLeaderboard = () => {
                   </div>
                 </div>
               </div>
-              <div className={`text-right ${
-                index === 0
-                  ? 'text-yellow-400 animate-gold-shine'
-                  : index === 1
-                  ? 'text-gray-300 animate-silver-shine'
-                  : index === 2
-                  ? 'text-orange-600 animate-bronze-shine'
-                  : 'text-white'
-              } font-bold font-arcade`}>
+              <div className="text-right font-bold font-arcade animated-gradient">
                 {player.total_score.toLocaleString()}
               </div>
             </div>

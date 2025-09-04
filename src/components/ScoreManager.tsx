@@ -375,8 +375,8 @@ const ScoreManager = () => {
           <TableBody>
             {scores.map((score) => (
               <TableRow key={score.id} className="border-white/20">
-                <TableCell className="text-white font-arcade font-bold">{score.player_name}</TableCell>
-                <TableCell className="text-arcade-neonYellow font-bold font-arcade">
+                <TableCell className="font-arcade font-bold animated-gradient">{score.player_name}</TableCell>
+                <TableCell className="font-bold font-arcade animated-gradient">
                   {score.score.toLocaleString()}
                 </TableCell>
                 <TableCell className="text-gray-300">{score.games?.name || 'Unknown'}</TableCell>
