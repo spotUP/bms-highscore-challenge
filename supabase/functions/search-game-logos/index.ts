@@ -26,12 +26,19 @@ serve(async (req) => {
     const apiKey = Deno.env.get('GOOGLE_CUSTOM_SEARCH_API_KEY')
     const searchEngineId = Deno.env.get('GOOGLE_CUSTOM_SEARCH_ENGINE_ID')
 
+    // Fallback to mock images if Google API is not configured
     if (!apiKey || !searchEngineId) {
-      console.error('Missing Google Custom Search credentials')
+      console.log('Google API not configured, using fallback images')
+      const fallbackImages = [
+        `https://dummyimage.com/200x200/333333/ffffff&text=${encodeURIComponent(gameName)}+1`,
+        `https://dummyimage.com/200x200/555555/ffffff&text=${encodeURIComponent(gameName)}+2`,
+        `https://dummyimage.com/200x200/777777/ffffff&text=${encodeURIComponent(gameName)}+3`,
+        `https://dummyimage.com/200x200/999999/ffffff&text=${encodeURIComponent(gameName)}+4`
+      ]
+      
       return new Response(
-        JSON.stringify({ error: 'Search service not configured' }),
+        JSON.stringify({ images: fallbackImages.slice(0, numResults) }),
         { 
-          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
