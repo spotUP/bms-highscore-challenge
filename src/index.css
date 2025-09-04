@@ -62,6 +62,35 @@
   animation: bronzeShine 3s ease-in-out infinite;
 }
 
+/* Animated gradient for header */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animated-gradient {
+  background: linear-gradient(45deg, 
+    #ff00ff, 
+    #00ffff, 
+    #ffff00, 
+    #ff00ff, 
+    #00ffff, 
+    #ffff00
+  );
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradientShift 4s ease-in-out infinite;
+}
+
 /* Removed hyperspace CSS - now using Canvas-based effect */
 
 @layer base {
