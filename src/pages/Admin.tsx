@@ -226,7 +226,7 @@ const Admin = () => {
                     Add Game
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="bg-gray-900 text-white border-white/20 max-w-md max-h-[90vh] overflow-y-auto">
+                <DialogContent className="bg-gray-900 text-white border-white/20 max-w-2xl w-full max-h-[90vh] overflow-y-auto mx-4">
                   <DialogHeader>
                     <DialogTitle className="text-lg font-semibold break-words">
                       {editingGame ? 'Edit Game' : 'Add New Game'}
@@ -250,17 +250,20 @@ const Admin = () => {
                         value={formData.description}
                         onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                         placeholder="Enter game description"
-                        className="bg-black/50 border-white/20 text-white resize-none min-h-[80px] break-words"
+                        className="bg-black/50 border-white/20 text-white resize-none min-h-[80px] w-full break-words"
                         rows={3}
+                        style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}
                       />
                     </div>
-                    <div className="w-full max-w-full">
-                      <ImagePasteUpload
-                        value={formData.logo_url}
-                        onChange={(url) => setFormData(prev => ({ ...prev, logo_url: url }))}
-                        label="Logo URL or Upload"
-                        placeholder="Enter logo URL or paste/upload an image"
-                      />
+                    <div className="w-full">
+                      <div className="overflow-hidden">
+                        <ImagePasteUpload
+                          value={formData.logo_url}
+                          onChange={(url) => setFormData(prev => ({ ...prev, logo_url: url }))}
+                          label="Logo URL or Upload"
+                          placeholder="Enter logo URL or paste/upload an image"
+                        />
+                      </div>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Switch
@@ -270,11 +273,11 @@ const Admin = () => {
                       />
                       <Label htmlFor="is_active">Active</Label>
                     </div>
-                    <div className="flex justify-end space-x-2">
-                      <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                    <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4">
+                      <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="w-full sm:w-auto">
                         Cancel
                       </Button>
-                      <Button onClick={saveGame} className="bg-arcade-neonPink hover:bg-arcade-neonPink/80">
+                      <Button onClick={saveGame} className="bg-arcade-neonPink hover:bg-arcade-neonPink/80 w-full sm:w-auto">
                         {editingGame ? 'Update' : 'Create'}
                       </Button>
                     </div>
