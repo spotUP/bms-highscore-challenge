@@ -19,6 +19,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          include_in_challenge: boolean
           is_active: boolean
           logo_url: string | null
           name: string
@@ -28,6 +29,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          include_in_challenge?: boolean
           is_active?: boolean
           logo_url?: string | null
           name: string
@@ -37,6 +39,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          include_in_challenge?: boolean
           is_active?: boolean
           logo_url?: string | null
           name?: string

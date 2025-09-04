@@ -22,6 +22,7 @@ interface Game {
   description: string | null;
   logo_url: string | null;
   is_active: boolean;
+  include_in_challenge: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -37,7 +38,8 @@ const Admin = () => {
   const [formData, setFormData] = useState({
     name: "",
     logo_url: "",
-    is_active: true
+    is_active: true,
+    include_in_challenge: false
   });
 
   // Redirect if not admin
@@ -80,7 +82,8 @@ const Admin = () => {
     setFormData({
       name: "",
       logo_url: "",
-      is_active: true
+      is_active: true,
+      include_in_challenge: false
     });
     setEditingGame(null);
   };
@@ -91,7 +94,8 @@ const Admin = () => {
     setFormData({
       name: game.name,
       logo_url: game.logo_url || "",
-      is_active: game.is_active
+      is_active: game.is_active,
+      include_in_challenge: game.include_in_challenge
     });
     setIsDialogOpen(true);
   };
@@ -115,7 +119,8 @@ const Admin = () => {
           .update({
             name: formData.name,
             logo_url: formData.logo_url || null,
-            is_active: formData.is_active
+            is_active: formData.is_active,
+            include_in_challenge: formData.include_in_challenge
           })
           .eq('id', editingGame.id);
 
@@ -132,7 +137,8 @@ const Admin = () => {
           .insert({
             name: formData.name,
             logo_url: formData.logo_url || null,
-            is_active: formData.is_active
+            is_active: formData.is_active,
+            include_in_challenge: formData.include_in_challenge
           });
 
         if (error) throw error;
@@ -256,6 +262,14 @@ const Admin = () => {
                       />
                       <Label htmlFor="is_active">Active</Label>
                     </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="include_in_challenge"
+                        checked={formData.include_in_challenge}
+                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, include_in_challenge: checked }))}
+                      />
+                      <Label htmlFor="include_in_challenge">Include in Challenge</Label>
+                    </div>
                     <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4">
                       <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="w-full sm:w-auto">
                         Cancel
@@ -276,6 +290,7 @@ const Admin = () => {
                   <TableHead className="text-white">Name</TableHead>
                   <TableHead className="text-white">Description</TableHead>
                   <TableHead className="text-white">Status</TableHead>
+                  <TableHead className="text-white">Challenge</TableHead>
                   <TableHead className="text-white">Created</TableHead>
                   <TableHead className="text-white">Actions</TableHead>
                 </TableRow>
@@ -292,6 +307,15 @@ const Admin = () => {
                           : 'bg-red-500/20 text-red-400'
                       }`}>
                         {game.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        game.include_in_challenge
+                          ? 'bg-arcade-neonCyan/20 text-arcade-neonCyan' 
+                          : 'bg-gray-500/20 text-gray-400'
+                      }`}>
+                        {game.include_in_challenge ? 'Included' : 'Not Included'}
                       </span>
                     </TableCell>
                     <TableCell className="text-gray-300">
@@ -319,7 +343,7 @@ const Admin = () => {
                 ))}
                 {games.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-gray-400 py-8">
+                    <TableCell colSpan={6} className="text-center text-gray-400 py-8">
                       No games found. Add your first game!
                     </TableCell>
                   </TableRow>
