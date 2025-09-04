@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -48,6 +48,8 @@ const Index = () => {
   const [scores, setScores] = useState<Score[]>([]);
   const [selectedGameForSubmission, setSelectedGameForSubmission] = useState<Game | null>(null);
   const [isSubmissionDialogOpen, setIsSubmissionDialogOpen] = useState(false);
+  const gamesContainerRef = useRef<HTMLDivElement>(null);
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(false);
 
   // Load games from database
   const loadGames = async () => {
@@ -114,6 +116,24 @@ const Index = () => {
     };
   }, []);
 
+  // Check if games overflow and should auto-scroll
+  useEffect(() => {
+    const checkOverflow = () => {
+      if (gamesContainerRef.current) {
+        const container = gamesContainerRef.current;
+        const isOverflowing = container.scrollWidth > container.clientWidth;
+        setShouldAutoScroll(isOverflowing);
+      }
+    };
+
+    checkOverflow();
+    window.addEventListener('resize', checkOverflow);
+    
+    return () => {
+      window.removeEventListener('resize', checkOverflow);
+    };
+  }, [games]);
+
   const handleGameLogoClick = (game: Game) => {
     setSelectedGameForSubmission(game);
     setIsSubmissionDialogOpen(true);
@@ -178,7 +198,16 @@ const Index = () => {
           
           {/* Right column - Game content (more space) */}
           <div className="lg:col-span-4 h-full">
-            <div className="flex gap-4 h-full overflow-x-auto pb-2">
+            <div 
+              ref={gamesContainerRef}
+              className={`flex gap-4 h-full overflow-x-auto pb-2 ${
+                shouldAutoScroll ? 'animate-horizontal-scroll' : ''
+              }`}
+              style={{
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+              }}
+            >
               {games.map((game) => {
                 // Get logo URL - either from database, fallback mapping, or null
                 const logoUrl = game.logo_url || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];

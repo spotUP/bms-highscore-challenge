@@ -150,3 +150,31 @@
                 0 0 140px #0fa;
   }
 }
+
+/* Horizontal scroll animation */
+@keyframes horizontalScroll {
+  0% {
+    transform: translateX(0);
+  }
+  45% {
+    transform: translateX(calc(-100% + 100vw));
+  }
+  50% {
+    transform: translateX(calc(-100% + 100vw));
+  }
+  95% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.animate-horizontal-scroll {
+  animation: horizontalScroll 20s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Hide scrollbar for smooth animation */
+.animate-horizontal-scroll::-webkit-scrollbar {
+  display: none;
+}
