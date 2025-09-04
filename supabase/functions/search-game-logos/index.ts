@@ -32,10 +32,13 @@ serve(async (req) => {
     const searchEngineId = Deno.env.get('GOOGLE_CUSTOM_SEARCH_ENGINE_ID')
 
     console.log('=== DEBUG INFO ===')
+    console.log('All env vars:', Object.keys(Deno.env.toObject()))
     console.log('API Key present:', !!apiKey)
+    console.log('API Key length:', apiKey?.length || 0)
     console.log('API Key first 10 chars:', apiKey?.substring(0, 10))
     console.log('Search Engine ID present:', !!searchEngineId)
     console.log('Search Engine ID value:', searchEngineId)
+    console.log('Search Engine ID length:', searchEngineId?.length || 0)
     console.log('=== END DEBUG ===')
 
     if (!apiKey || !searchEngineId) {
