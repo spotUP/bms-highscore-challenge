@@ -137,7 +137,7 @@ const Index = () => {
       <div className="min-h-screen text-white p-4 md:p-8 relative z-10"
            style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
         <div className="max-w-4xl mx-auto space-y-8 text-center">
-          <h1 className="text-4xl md:text-6xl font-bold animated-gradient">
+          <h1 className="text-4xl md:text-6xl font-bold animated-gradient leading-tight py-2">
             Arcade High Scores
           </h1>
           <p className="text-xl text-gray-300">Please sign in to view and manage scores</p>
@@ -154,7 +154,7 @@ const Index = () => {
          style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
       <div className="w-full space-y-8">
         <div className="flex justify-between items-center">
-          <h1 className="text-4xl md:text-6xl font-bold animated-gradient">
+          <h1 className="text-4xl md:text-6xl font-bold animated-gradient leading-tight py-2">
             Arcade High Scores
           </h1>
           <div className="flex gap-4 items-center">
