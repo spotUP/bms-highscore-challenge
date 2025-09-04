@@ -1,42 +1,172 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 
 const HyperspaceEffect = () => {
-  console.log('HyperspaceEffect rendering...');
-  
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    // Configuration
+    const PARTICLE_NUM = 2500;
+    const PARTICLE_BASE_RADIUS = 0.5;
+    const FL = 50;
+    const DEFAULT_SPEED = 2;
+    const BOOST_SPEED = 12;
+
+    let canvasWidth = window.innerWidth;
+    let canvasHeight = window.innerHeight;
+    let centerX = canvasWidth * 0.5;
+    let centerY = canvasHeight * 0.5;
+    let mouseX = centerX;
+    let mouseY = centerY;
+    let speed = DEFAULT_SPEED;
+    let targetSpeed = DEFAULT_SPEED;
+
+    const particles: Array<{
+      x: number;
+      y: number;
+      z: number;
+      pastZ: number;
+    }> = [];
+
+    // Resize handler
+    const resize = () => {
+      canvasWidth = window.innerWidth;
+      canvasHeight = window.innerHeight;
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+      centerX = canvasWidth * 0.5;
+      centerY = canvasHeight * 0.5;
+      context.fillStyle = 'rgb(255, 255, 255)';
+    };
+
+    // Initialize particles
+    const randomizeParticle = (p: any) => {
+      p.x = Math.random() * canvasWidth;
+      p.y = Math.random() * canvasHeight;
+      p.z = Math.random() * 1500 + 500;
+      return p;
+    };
+
+    // Create particles
+    for (let i = 0; i < PARTICLE_NUM; i++) {
+      particles[i] = randomizeParticle({
+        x: 0,
+        y: 0,
+        z: 0,
+        pastZ: 0
+      });
+    }
+
+    // Event listeners
+    const handleMouseMove = (e: MouseEvent) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+    };
+
+    const handleMouseDown = () => {
+      targetSpeed = BOOST_SPEED;
+    };
+
+    const handleMouseUp = () => {
+      targetSpeed = DEFAULT_SPEED;
+    };
+
+    // Animation loop
+    const loop = () => {
+      // Clear canvas with black background
+      context.save();
+      context.fillStyle = 'rgb(0, 0, 0)';
+      context.fillRect(0, 0, canvasWidth, canvasHeight);
+      context.restore();
+
+      // Update speed
+      speed += (targetSpeed - speed) * 0.01;
+
+      const halfPi = Math.PI * 0.5;
+      const atan2 = Math.atan2;
+      const cos = Math.cos;
+      const sin = Math.sin;
+
+      context.fillStyle = 'rgb(255, 255, 255)';
+      context.beginPath();
+
+      for (let i = 0; i < PARTICLE_NUM; i++) {
+        const p = particles[i];
+        p.pastZ = p.z;
+        p.z -= speed;
+
+        if (p.z <= 0) {
+          randomizeParticle(p);
+          continue;
+        }
+
+        // Calculate position with mouse parallax effect
+        const cx = centerX - (mouseX - centerX) * 1.25;
+        const cy = centerY - (mouseY - centerY) * 1.25;
+
+        const rx = p.x - cx;
+        const ry = p.y - cy;
+
+        // Current position
+        const f = FL / p.z;
+        const x = cx + rx * f;
+        const y = cy + ry * f;
+        const r = PARTICLE_BASE_RADIUS * f;
+
+        // Previous position for trail effect
+        const pf = FL / p.pastZ;
+        const px = cx + rx * pf;
+        const py = cy + ry * pf;
+        const pr = PARTICLE_BASE_RADIUS * pf;
+
+        // Create trail from previous to current position
+        const a = atan2(py - y, px - x);
+        const a1 = a + halfPi;
+        const a2 = a - halfPi;
+
+        context.moveTo(px + pr * cos(a1), py + pr * sin(a1));
+        context.arc(px, py, pr, a1, a2, true);
+        context.lineTo(x + r * cos(a2), y + r * sin(a2));
+        context.arc(x, y, r, a2, a1, true);
+        context.closePath();
+      }
+
+      context.fill();
+    };
+
+    // Initialize
+    resize();
+    
+    // Add event listeners
+    window.addEventListener('resize', resize);
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    // Start animation
+    const interval = setInterval(loop, 1000 / 60);
+
+    // Cleanup
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('resize', resize);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
   return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ backgroundColor: 'black', zIndex: -1 }}>
-      <div className="hyperspace-container">
-        {/* Create radial streaming lines */}
-        {Array.from({ length: 150 }, (_, i) => {
-          const angle = (i / 150) * 360;
-          const radius = 50 + (i % 3) * 30; // Vary starting radius
-          const length = 200 + (i % 4) * 100; // Vary line lengths
-          
-          return (
-            <div
-              key={i}
-              className="hyperspace-line"
-              style={{
-                transform: `rotate(${angle}deg)`,
-                animationDelay: `${(i * 0.02)}s`,
-                animationDuration: `${0.8 + (i % 3) * 0.4}s`
-              }}
-            >
-              <div 
-                className="line-segment"
-                style={{
-                  width: `${length}px`,
-                  left: `${radius}px`
-                }}
-              />
-            </div>
-          );
-        })}
-        
-        {/* Central bright core */}
-        <div className="hyperspace-core" />
-      </div>
-    </div>
+    <canvas
+      ref={canvasRef}
+      className="fixed inset-0 pointer-events-none"
+      style={{ zIndex: -1 }}
+    />
   );
 };
 
