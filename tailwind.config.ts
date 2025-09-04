@@ -19,7 +19,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        'arcade': ['Arcade Classic', 'monospace'],
+        'arcade': ['Press Start 2P', 'monospace'],
       },
       colors: {
         arcade: {
