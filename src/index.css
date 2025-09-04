@@ -68,8 +68,10 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  perspective: 5px;
+  perspective: 200px; /* Increased from 5px for more visible effect */
   perspective-origin: 50% 50%;
+  width: 100vw;
+  height: 100vh;
 }
 
 .wrap {
@@ -85,7 +87,7 @@
   position: absolute;
   width: 1000px;
   height: 1000px;
-  opacity: 0;
+  opacity: 0.3; /* Start visible instead of 0 */
   transform-style: preserve-3d;
   animation: move 3s linear infinite, fade 3s linear infinite;
 }
