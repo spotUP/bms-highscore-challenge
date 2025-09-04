@@ -28,18 +28,19 @@ serve(async (req) => {
       )
     }
 
-    const apiKey = Deno.env.get('GOOGLE_CUSTOM_SEARCH_API_KEY')
-    const searchEngineId = Deno.env.get('GOOGLE_CUSTOM_SEARCH_ENGINE_ID')
+    // Use secrets with fallback to the keys you provided
+    const apiKey = Deno.env.get('GOOGLE_CUSTOM_SEARCH_API_KEY') || 'AIzaSyAYC8x8i_3tN2DNxFZ_LrQTC_AuZg6LGEY'
+    const searchEngineId = Deno.env.get('GOOGLE_CUSTOM_SEARCH_ENGINE_ID') || '20175ef2c9acf44c5'
 
-    console.log('=== DEBUG INFO ===')
-    console.log('All env vars:', Object.keys(Deno.env.toObject()))
-    console.log('API Key present:', !!apiKey)
-    console.log('API Key length:', apiKey?.length || 0)
-    console.log('API Key first 10 chars:', apiKey?.substring(0, 10))
-    console.log('Search Engine ID present:', !!searchEngineId)
-    console.log('Search Engine ID value:', searchEngineId)
-    console.log('Search Engine ID length:', searchEngineId?.length || 0)
-    console.log('=== END DEBUG ===')
+    console.log('=== FINAL DEBUG ===')
+    console.log('Available env vars:', Object.keys(Deno.env.toObject()).sort())
+    console.log('Secret API Key present:', !!Deno.env.get('GOOGLE_CUSTOM_SEARCH_API_KEY'))
+    console.log('Secret Engine ID present:', !!Deno.env.get('GOOGLE_CUSTOM_SEARCH_ENGINE_ID'))
+    console.log('Final API Key present:', !!apiKey)
+    console.log('Final Engine ID present:', !!searchEngineId)
+    console.log('API Key source:', Deno.env.get('GOOGLE_CUSTOM_SEARCH_API_KEY') ? 'secret' : 'fallback')
+    console.log('Engine ID source:', Deno.env.get('GOOGLE_CUSTOM_SEARCH_ENGINE_ID') ? 'secret' : 'fallback')
+    console.log('=== END FINAL DEBUG ===')
 
     if (!apiKey || !searchEngineId) {
       console.log('Google API not configured, using fallback images')
