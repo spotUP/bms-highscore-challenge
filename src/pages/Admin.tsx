@@ -284,14 +284,6 @@ const Admin = () => {
                     </div>
                     <div className="flex items-center space-x-2">
                       <Switch
-                        id="is_active"
-                        checked={formData.is_active}
-                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
-                      />
-                      <Label htmlFor="is_active">Active</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Switch
                         id="include_in_challenge"
                         checked={formData.include_in_challenge}
                         onCheckedChange={(checked) => setFormData(prev => ({ ...prev, include_in_challenge: checked }))}
