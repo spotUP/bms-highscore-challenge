@@ -30,7 +30,13 @@ const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
       <div className="flex justify-center">
         <canvas 
           ref={canvasRef}
-          className="border-2 border-arcade-neonCyan/30 rounded-lg bg-black/40 p-4"
+          className="border-2 border-arcade-neonCyan/30 rounded-lg bg-black/40 p-4 animated-gradient-border"
+          style={{
+            background: 'linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff00ff, #00ffff, #ffff00)',
+            backgroundSize: '300% 300%',
+            animation: 'gradientShift 4s ease-in-out infinite',
+            padding: '4px'
+          }}
         />
       </div>
     </div>
