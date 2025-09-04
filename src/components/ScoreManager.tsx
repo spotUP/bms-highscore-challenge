@@ -373,10 +373,16 @@ const ScoreManager = () => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {scores.map((score) => (
-              <TableRow key={score.id} className="border-white/20">
-                <TableCell className="font-arcade font-bold animated-gradient">{score.player_name}</TableCell>
-                <TableCell className="font-bold font-arcade animated-gradient">
+             {scores.map((score, index) => (
+               <TableRow key={score.id} className="border-white/20">
+                <TableCell 
+                  className="font-arcade font-bold animated-gradient"
+                  style={{ animationDelay: `${index * 0.1}s` }}
+                >{score.player_name}</TableCell>
+                <TableCell 
+                  className="font-bold font-arcade animated-gradient"
+                  style={{ animationDelay: `${index * 0.1 + 0.2}s` }}
+                >
                   {score.score.toLocaleString()}
                 </TableCell>
                 <TableCell className="text-gray-300">{score.games?.name || 'Unknown'}</TableCell>
