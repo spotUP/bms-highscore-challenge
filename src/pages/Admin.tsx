@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import ScoreManager from "@/components/ScoreManager";
+import SecurityAuditLog from "@/components/SecurityAuditLog";
 
 interface Game {
   id: string;
@@ -340,6 +341,7 @@ const Admin = () => {
         </Card>
 
         <ScoreManager />
+        <SecurityAuditLog />
       </div>
     </div>
   );
