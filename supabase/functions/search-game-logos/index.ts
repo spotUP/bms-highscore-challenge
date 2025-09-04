@@ -6,14 +6,19 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+  console.log('search-game-logos function called', req.method)
+  
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
+    console.log('Parsing request body...')
     const { gameName, numResults = 4 } = await req.json()
+    console.log('Received request for game:', gameName, 'numResults:', numResults)
 
     if (!gameName) {
+      console.log('No game name provided')
       return new Response(
         JSON.stringify({ error: 'gameName parameter is required' }),
         { 
@@ -23,46 +28,17 @@ serve(async (req) => {
       )
     }
 
-    const apiKey = Deno.env.get('GOOGLE_CUSTOM_SEARCH_API_KEY')
-    const searchEngineId = Deno.env.get('GOOGLE_CUSTOM_SEARCH_ENGINE_ID')
-
-    // Fallback to mock images if Google API is not configured
-    if (!apiKey || !searchEngineId) {
-      console.log('Google API not configured, using fallback images')
-      const fallbackImages = [
-        `https://dummyimage.com/200x200/333333/ffffff&text=${encodeURIComponent(gameName)}+1`,
-        `https://dummyimage.com/200x200/555555/ffffff&text=${encodeURIComponent(gameName)}+2`,
-        `https://dummyimage.com/200x200/777777/ffffff&text=${encodeURIComponent(gameName)}+3`,
-        `https://dummyimage.com/200x200/999999/ffffff&text=${encodeURIComponent(gameName)}+4`
-      ]
-      
-      return new Response(
-        JSON.stringify({ images: fallbackImages.slice(0, numResults) }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
-    }
-
-    // Search for game logos using Google Custom Search API
-    const searchQuery = `${gameName} game logo clear transparent`
-    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=${numResults}&imgType=clipart&imgColorType=trans&safe=active`
-
-    console.log('Searching for:', searchQuery)
-
-    const response = await fetch(searchUrl)
+    console.log('Using fallback images for:', gameName)
+    const fallbackImages = [
+      `https://dummyimage.com/200x200/333333/ffffff&text=${encodeURIComponent(gameName)}+1`,
+      `https://dummyimage.com/200x200/555555/ffffff&text=${encodeURIComponent(gameName)}+2`,
+      `https://dummyimage.com/200x200/777777/ffffff&text=${encodeURIComponent(gameName)}+3`,
+      `https://dummyimage.com/200x200/999999/ffffff&text=${encodeURIComponent(gameName)}+4`
+    ]
     
-    if (!response.ok) {
-      console.error('Google Search API error:', response.status, await response.text())
-      throw new Error(`Google Search API error: ${response.status}`)
-    }
-
-    const data = await response.json()
+    const images = fallbackImages.slice(0, numResults)
+    console.log('Returning', images.length, 'fallback images')
     
-    const images = data.items?.map((item: any) => item.link) || []
-    
-    console.log(`Found ${images.length} images for "${gameName}"`)
-
     return new Response(
       JSON.stringify({ images }),
       { 
@@ -71,10 +47,19 @@ serve(async (req) => {
     )
   } catch (error) {
     console.error('Error in search-game-logos function:', error)
+    console.error('Error details:', error.message, error.stack)
+    
+    // Return fallback images even on error
+    const fallbackImages = [
+      'https://dummyimage.com/200x200/ff0000/ffffff&text=Error+1',
+      'https://dummyimage.com/200x200/ff0000/ffffff&text=Error+2',
+      'https://dummyimage.com/200x200/ff0000/ffffff&text=Error+3',
+      'https://dummyimage.com/200x200/ff0000/ffffff&text=Error+4'
+    ]
+    
     return new Response(
-      JSON.stringify({ error: 'Failed to search for images', details: error.message }),
+      JSON.stringify({ images: fallbackImages }),
       { 
-        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
