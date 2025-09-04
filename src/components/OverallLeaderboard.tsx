@@ -107,7 +107,7 @@ const OverallLeaderboard = () => {
 
   if (loading) {
     return (
-      <Card className="bg-black/50 border-white/20">
+      <Card className="bg-black/30 border-white/15">
         <CardContent className="p-6">
           <div className="text-center text-white">Loading leaders...</div>
         </CardContent>
@@ -116,7 +116,7 @@ const OverallLeaderboard = () => {
   }
 
   return (
-    <Card className="bg-black/50 border-white/20 h-full flex flex-col">
+    <Card className="bg-black/30 border-white/15 h-full flex flex-col">
       <CardHeader>
         <CardTitle className="text-white flex items-center gap-2">
           <Trophy className="w-5 h-5 text-arcade-neonYellow" />

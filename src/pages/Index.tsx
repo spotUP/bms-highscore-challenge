@@ -189,7 +189,7 @@ const Index = () => {
               return (
                 <section key={game.id} className="flex flex-col h-full flex-1 min-w-0">
                   {/* Card containing logo, scores and QR code */}
-                  <Card className="bg-black/50 border-white/20 flex-1 flex flex-col">
+                  <Card className="bg-black/30 border-white/15 flex-1 flex flex-col">
                     <CardHeader className="pb-3">
                       {/* Game logo inside card header */}
                       <div className="flex justify-center mb-2">
