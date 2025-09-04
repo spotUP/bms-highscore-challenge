@@ -23,13 +23,12 @@ serve(async (req) => {
       )
     }
 
-    // Mock image URLs for demonstration - in a real implementation, you would
-    // integrate with a proper image search API like Google Custom Search, Bing Search, etc.
+    // Mock image URLs for demonstration - using working placeholder services
     const mockImages = [
-      `https://via.placeholder.com/200x200/1a1a1a/fff?text=${encodeURIComponent(gameName)}-1`,
-      `https://via.placeholder.com/200x200/2a2a2a/fff?text=${encodeURIComponent(gameName)}-2`,
-      `https://via.placeholder.com/200x200/3a3a3a/fff?text=${encodeURIComponent(gameName)}-3`,
-      `https://via.placeholder.com/200x200/4a4a4a/fff?text=${encodeURIComponent(gameName)}-4`
+      `https://picsum.photos/200/200?random=1&text=${encodeURIComponent(gameName)}`,
+      `https://picsum.photos/200/200?random=2&text=${encodeURIComponent(gameName)}`,
+      `https://picsum.photos/200/200?random=3&text=${encodeURIComponent(gameName)}`,
+      `https://picsum.photos/200/200?random=4&text=${encodeURIComponent(gameName)}`
     ];
 
     // For a real implementation, you would:
