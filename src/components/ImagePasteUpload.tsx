@@ -1,0 +1,191 @@
+import React, { useState, useRef } from 'react';
+import { supabase } from "@/integrations/supabase/client";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { Upload, X } from "lucide-react";
+
+interface ImagePasteUploadProps {
+  value: string;
+  onChange: (url: string) => void;
+  label: string;
+  placeholder: string;
+}
+
+const ImagePasteUpload = ({ value, onChange, label, placeholder }: ImagePasteUploadProps) => {
+  const [isUploading, setIsUploading] = useState(false);
+  const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
+
+  const uploadImage = async (file: File) => {
+    setIsUploading(true);
+    try {
+      // Generate unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+      
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from('game-logos')
+        .upload(fileName, file);
+
+      if (error) throw error;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('game-logos')
+        .getPublicUrl(fileName);
+
+      onChange(publicUrl);
+      
+      toast({
+        title: "Success",
+        description: "Image uploaded successfully"
+      });
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast({
+        title: "Error",
+        description: "Failed to upload image",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData.items);
+    const imageItem = items.find(item => item.type.startsWith('image/'));
+    
+    if (imageItem) {
+      e.preventDefault();
+      const file = imageItem.getAsFile();
+      if (file) {
+        await uploadImage(file);
+      }
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/')) {
+        await uploadImage(file);
+      } else {
+        toast({
+          title: "Error",
+          description: "Please upload an image file",
+          variant: "destructive"
+        });
+      }
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      uploadImage(e.target.files[0]);
+    }
+  };
+
+  const clearImage = () => {
+    onChange("");
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <div className="space-y-2">
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          onPaste={handlePaste}
+          className="bg-black/50 border-white/20 text-white"
+        />
+        
+        {value && (
+          <div className="flex items-center gap-2 p-2 bg-black/30 rounded border border-white/20">
+            <img 
+              src={value} 
+              alt="Logo preview" 
+              className="w-12 h-12 object-contain bg-white/10 rounded"
+            />
+            <span className="text-sm text-gray-300 flex-1 truncate">{value}</span>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={clearImage}
+              className="text-red-400 hover:text-red-300"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
+        <div
+          className={`border-2 border-dashed rounded-lg p-4 text-center transition-colors ${
+            dragActive 
+              ? 'border-arcade-neonCyan bg-arcade-neonCyan/10' 
+              : 'border-white/20 hover:border-white/40'
+          }`}
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+          
+          <div className="space-y-2">
+            <Upload className="w-8 h-8 mx-auto text-gray-400" />
+            <div className="text-sm text-gray-300">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                className="text-arcade-neonCyan hover:text-arcade-neonCyan/80"
+              >
+                Click to upload
+              </Button>
+              {' or drag and drop an image'}
+            </div>
+            <div className="text-xs text-gray-400">
+              You can also paste an image here (Ctrl+V)
+            </div>
+          </div>
+          
+          {isUploading && (
+            <div className="mt-2 text-arcade-neonCyan">Uploading...</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ImagePasteUpload;

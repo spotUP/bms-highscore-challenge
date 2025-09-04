@@ -29,11 +29,11 @@ interface Game {
 }
 
 interface Score {
-  id: number;
-  name: string;
+  id: string;
+  player_name: string;
   score: number;
-  gameId: string;
-  timestamp: Date;
+  game_id: string;
+  created_at: string;
   isNew?: boolean;
 }
 
@@ -42,11 +42,7 @@ const Index = () => {
   const navigate = useNavigate();
   const [games, setGames] = useState<Game[]>([]);
   const [gamesLoading, setGamesLoading] = useState(true);
-  const [scores, setScores] = useState<Score[]>([
-    { id: 1, name: "ASH", score: 100000, gameId: "pacman", timestamp: new Date() },
-    { id: 2, name: "ZAK", score: 95000, gameId: "pacman", timestamp: new Date() },
-    { id: 3, name: "MEG", score: 90000, gameId: "pacman", timestamp: new Date() },
-  ]);
+  const [scores, setScores] = useState<Score[]>([]);
 
   // Load games from database
   const loadGames = async () => {
@@ -73,45 +69,42 @@ const Index = () => {
     }
   };
 
+  // Load scores from database
+  const loadScores = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('scores')
+        .select('*')
+        .order('score', { ascending: false });
+
+      if (error) throw error;
+      setScores(data || []);
+    } catch (error) {
+      console.error('Error loading scores:', error);
+    }
+  };
+
   useEffect(() => {
     loadGames();
-  }, []);
-
-  // Load scores from localStorage on mount and listen for updates
-  useEffect(() => {
-    const loadScores = () => {
-      const savedScores = localStorage.getItem('arcade-scores');
-      if (savedScores) {
-        const parsed = JSON.parse(savedScores);
-        // Merge with default scores, avoiding duplicates
-        const merged = [...scores];
-        parsed.forEach((savedScore: Score) => {
-          if (!merged.find(s => s.id === savedScore.id)) {
-            merged.push({
-              ...savedScore,
-              timestamp: new Date(savedScore.timestamp)
-            });
-          }
-        });
-        setScores(merged.sort((a, b) => b.score - a.score));
-      }
-    };
-
     loadScores();
     
-    // Listen for storage changes (when mobile form submits)
-    const handleStorageChange = () => {
-      loadScores();
-    };
+    // Set up real-time subscription for scores
+    const channel = supabase
+      .channel('scores-changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'scores' 
+        }, 
+        () => {
+          loadScores(); // Reload scores when changes occur
+        }
+      )
+      .subscribe();
 
-    window.addEventListener('storage', handleStorageChange);
-    
-    // Also check for updates periodically
-    const interval = setInterval(loadScores, 2000);
-    
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
+      supabase.removeChannel(channel);
     };
   }, []);
 
@@ -165,7 +158,7 @@ const Index = () => {
             const logoUrl = game.logo_url || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
             
             const filtered = scores
-              .filter((score) => score.gameId === game.id)
+              .filter((score) => score.game_id === game.id)
               .sort((a, b) => b.score - a.score);
             return (
               <section key={game.id} className="space-y-4">
@@ -187,7 +180,7 @@ const Index = () => {
                     <LeaderboardEntry
                       key={score.id}
                       rank={index + 1}
-                      name={score.name}
+                      name={score.player_name}
                       score={score.score}
                       isNewScore={score.isNew}
                     />

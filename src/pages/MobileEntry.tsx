@@ -1,20 +1,31 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
 import donkeyKongLogo from "@/assets/donkey-kong-logo.png";
 
-const GAMES = [
-  { id: "pacman", name: "Pac-Man", logo: pacmanLogo },
-  { id: "spaceinvaders", name: "Space Invaders", logo: spaceInvadersLogo },
-  { id: "tetris", name: "Tetris", logo: tetrisLogo },
-  { id: "donkeykong", name: "Donkey Kong", logo: donkeyKongLogo },
-];
+// Fallback logo mapping for backwards compatibility
+const LOGO_MAP: Record<string, string> = {
+  "pacman": pacmanLogo,
+  "pac-man": pacmanLogo,
+  "spaceinvaders": spaceInvadersLogo,
+  "space invaders": spaceInvadersLogo,
+  "tetris": tetrisLogo,
+  "donkeykong": donkeyKongLogo,
+  "donkey kong": donkeyKongLogo,
+};
+
+interface Game {
+  id: string;
+  name: string;
+  logo_url: string | null;
+}
 
 const MobileEntry = () => {
   const [searchParams] = useSearchParams();
@@ -23,8 +34,47 @@ const MobileEntry = () => {
   const [name, setName] = useState("");
   const [score, setScore] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [game, setGame] = useState<Game | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const game = GAMES.find(g => g.id === gameId);
+  // Load game from database
+  useEffect(() => {
+    const loadGame = async () => {
+      if (!gameId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('games')
+          .select('*')
+          .eq('id', gameId)
+          .eq('is_active', true)
+          .single();
+
+        if (error) throw error;
+        setGame(data);
+      } catch (error) {
+        console.error('Error loading game:', error);
+        setGame(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadGame();
+  }, [gameId]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-arcade-background text-white p-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-xl">Loading...</div>
+        </div>
+      </div>
+    );
+  }
 
   if (!game) {
     return (
@@ -37,30 +87,35 @@ const MobileEntry = () => {
     );
   }
 
+  // Get logo URL - either from database, fallback mapping, or null
+  const logoUrl = game.logo_url || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !score) {
-      toast.error("Please enter both name and score");
+    
+    if (!name.trim() || !score || !game) {
+      toast.error("Please fill in all fields");
+      return;
+    }
+
+    const scoreValue = parseInt(score);
+    if (isNaN(scoreValue) || scoreValue < 0) {
+      toast.error("Please enter a valid score");
       return;
     }
 
     setIsSubmitting(true);
-    
+
     try {
-      // Here you would typically send the data to your backend
-      // For now, we'll use localStorage to simulate the submission
-      const scores = JSON.parse(localStorage.getItem('arcade-scores') || '[]');
-      const newScore = {
-        id: Date.now(),
-        name: name.toUpperCase(),
-        score: parseInt(score),
-        gameId: game.id,
-        timestamp: new Date().toISOString(),
-        isNew: true,
-      };
-      
-      scores.push(newScore);
-      localStorage.setItem('arcade-scores', JSON.stringify(scores));
+      const { error } = await supabase
+        .from('scores')
+        .insert({
+          player_name: name.toUpperCase(),
+          score: scoreValue,
+          game_id: game.id
+        });
+
+      if (error) throw error;
       
       toast.success("Score submitted successfully!");
       setName("");
@@ -72,6 +127,7 @@ const MobileEntry = () => {
       }, 2000);
       
     } catch (error) {
+      console.error('Error submitting score:', error);
       toast.error("Failed to submit score. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -86,11 +142,17 @@ const MobileEntry = () => {
             Submit Score
           </h1>
           <div className="flex justify-center">
-            <img 
-              src={game.logo} 
-              alt={game.name} 
-              className="h-12 w-auto object-contain"
-            />
+            {logoUrl ? (
+              <img 
+                src={logoUrl} 
+                alt={game.name} 
+                className="h-12 w-auto object-contain"
+              />
+            ) : (
+              <div className="h-12 flex items-center justify-center bg-black/30 rounded-lg px-4">
+                <span className="text-white font-bold">{game.name}</span>
+              </div>
+            )}
           </div>
         </div>
 

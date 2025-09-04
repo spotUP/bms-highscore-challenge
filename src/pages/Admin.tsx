@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Pencil, Trash2, Plus } from "lucide-react";
+import ImagePasteUpload from "@/components/ImagePasteUpload";
+import ScoreManager from "@/components/ScoreManager";
 
 interface Game {
   id: string;
@@ -249,13 +251,11 @@ const Admin = () => {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="logo_url">Logo URL</Label>
-                      <Input
-                        id="logo_url"
+                      <ImagePasteUpload
                         value={formData.logo_url}
-                        onChange={(e) => setFormData(prev => ({ ...prev, logo_url: e.target.value }))}
-                        placeholder="Enter logo URL"
-                        className="bg-black/50 border-white/20 text-white"
+                        onChange={(url) => setFormData(prev => ({ ...prev, logo_url: url }))}
+                        label="Logo URL or Upload"
+                        placeholder="Enter logo URL or paste/upload an image"
                       />
                     </div>
                     <div className="flex items-center space-x-2">
@@ -338,6 +338,8 @@ const Admin = () => {
             </Table>
           </CardContent>
         </Card>
+
+        <ScoreManager />
       </div>
     </div>
   );
