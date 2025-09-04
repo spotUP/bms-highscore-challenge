@@ -6,24 +6,50 @@ interface StarFieldProps {
   count?: number;
 }
 
+// Create a circular texture for round stars
+const createCircularTexture = () => {
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d')!;
+  canvas.width = 32;
+  canvas.height = 32;
+  
+  const gradient = context.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  gradient.addColorStop(0.2, 'rgba(255, 255, 255, 1)');
+  gradient.addColorStop(0.4, 'rgba(255, 255, 255, 0.8)');
+  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, 32, 32);
+  
+  return new THREE.CanvasTexture(canvas);
+};
+
 const Stars = ({ count = 5000 }: StarFieldProps) => {
   const mesh = useRef<THREE.Points>(null!);
   
-  const particles = useMemo(() => {
-    const temp = new Float32Array(count * 3);
+  const [particles, sizes] = useMemo(() => {
+    const positions = new Float32Array(count * 3);
+    const starSizes = new Float32Array(count);
+    
     for (let i = 0; i < count; i++) {
       const i3 = i * 3;
-      temp[i3] = (Math.random() - 0.5) * 2000;
-      temp[i3 + 1] = (Math.random() - 0.5) * 2000;
-      temp[i3 + 2] = (Math.random() - 0.5) * 2000;
+      positions[i3] = (Math.random() - 0.5) * 2000;
+      positions[i3 + 1] = (Math.random() - 0.5) * 2000;
+      positions[i3 + 2] = (Math.random() - 0.5) * 2000;
+      
+      // Vary star sizes with most being small
+      starSizes[i] = Math.random() * 0.8 + 0.2; // Size between 0.2 and 1.0
     }
-    return temp;
+    return [positions, starSizes];
   }, [count]);
+
+  const texture = useMemo(() => createCircularTexture(), []);
 
   useFrame((state, delta) => {
     if (mesh.current) {
-      mesh.current.rotation.x -= delta / 10;
-      mesh.current.rotation.y -= delta / 15;
+      mesh.current.rotation.x -= delta / 20;
+      mesh.current.rotation.y -= delta / 30;
     }
   });
 
@@ -37,13 +63,21 @@ const Stars = ({ count = 5000 }: StarFieldProps) => {
             array={particles}
             itemSize={3}
           />
+          <bufferAttribute
+            attach="attributes-size"
+            count={sizes.length}
+            array={sizes}
+            itemSize={1}
+          />
         </bufferGeometry>
         <pointsMaterial
-          size={3}
+          size={1.5}
           sizeAttenuation={true}
           color="#ffffff"
-          transparent={false}
-          opacity={1}
+          transparent={true}
+          opacity={0.9}
+          map={texture}
+          vertexColors={false}
         />
       </points>
     </group>
