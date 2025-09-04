@@ -112,9 +112,7 @@ const GameLogoSuggestions = ({ gameName, onSelectImage }: GameLogoSuggestionsPro
                     alt={image.alt}
                     className="w-full h-20 object-contain rounded bg-white/10"
                     onError={(e) => {
-                      console.log('Image failed to load:', image.url);
-                      // Instead of hiding, show a fallback
-                      e.currentTarget.src = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="80" viewBox="0 0 200 80"><rect width="200" height="80" fill="#374151"/><text x="100" y="40" text-anchor="middle" dominant-baseline="middle" fill="white" font-family="Arial, sans-serif" font-size="12">Failed to load</text></svg>`)}`;
+                      e.currentTarget.style.display = 'none';
                     }}
                   />
                 </CardContent>
