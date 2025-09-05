@@ -9,6 +9,7 @@ import LeaderboardEntry from "@/components/LeaderboardEntry";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import OverallLeaderboard from "@/components/OverallLeaderboard";
 import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
+import SpinTheWheel from "@/components/SpinTheWheel";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -50,6 +51,7 @@ const Index = () => {
   const [scores, setScores] = useState<Score[]>([]);
   const [selectedGameForSubmission, setSelectedGameForSubmission] = useState<Game | null>(null);
   const [isSubmissionDialogOpen, setIsSubmissionDialogOpen] = useState(false);
+  const [isSpinWheelOpen, setIsSpinWheelOpen] = useState(false);
 
   // Load games from database
   const loadGames = async () => {
@@ -125,6 +127,13 @@ const Index = () => {
     loadScores(); // Reload scores after submission
   };
 
+  // Get unique player names for the wheel
+  const getLeaderboardNames = () => {
+    const uniqueNames = new Set<string>();
+    scores.forEach(score => uniqueNames.add(score.player_name));
+    return Array.from(uniqueNames);
+  };
+
   if (loading || gamesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center relative z-10"
@@ -146,6 +155,9 @@ const Index = () => {
             {user ? (
               <>
                 <span className="text-gray-300">Welcome, {user.email}</span>
+                <Button variant="outline" onClick={() => setIsSpinWheelOpen(true)}>
+                  🎡 Spin the Wheel
+                </Button>
                 {isAdmin && (
                   <Button variant="outline" onClick={() => navigate('/admin')}>
                     Admin Panel
@@ -249,6 +261,12 @@ const Index = () => {
           isOpen={isSubmissionDialogOpen}
           onClose={() => setIsSubmissionDialogOpen(false)}
           onScoreSubmitted={handleScoreSubmitted}
+        />
+
+        <SpinTheWheel
+          isOpen={isSpinWheelOpen}
+          onClose={() => setIsSpinWheelOpen(false)}
+          leaderboardNames={getLeaderboardNames()}
         />
       </div>
     </div>

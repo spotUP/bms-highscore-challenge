@@ -129,7 +129,7 @@ const HyperspaceEffect = () => {
     window.addEventListener('resize', resize);
 
     // Start animation
-    const interval = setInterval(loop, 1000 / 46); // ~30% slower (was 60fps, now ~46fps)
+    const interval = setInterval(loop, 1000 / 28); // ~40% slower (was ~46fps, now ~28fps)
 
     // Cleanup
     return () => {
