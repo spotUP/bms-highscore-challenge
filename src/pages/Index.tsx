@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,6 +44,7 @@ interface Score {
 const Index = () => {
   const { user, loading, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [games, setGames] = useState<Game[]>([]);
   const [gamesLoading, setGamesLoading] = useState(true);
   const [scores, setScores] = useState<Score[]>([]);
@@ -132,23 +134,6 @@ const Index = () => {
     );
   }
 
-  if (!user) {
-    return (
-      <div className="min-h-screen text-white p-4 md:p-8 relative z-10"
-           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-        <div className="max-w-4xl mx-auto space-y-8 text-center">
-          <h1 className="text-4xl md:text-6xl font-bold animated-gradient leading-tight py-2">
-            Arcade High Scores
-          </h1>
-          <p className="text-xl text-gray-300">Please sign in to view and manage scores</p>
-          <Button onClick={() => navigate('/auth')} size="lg">
-            Sign In
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen text-white p-4 md:p-8 relative z-10"
          style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
@@ -158,27 +143,35 @@ const Index = () => {
             Arcade High Scores
           </h1>
           <div className="flex gap-4 items-center">
-            <span className="text-gray-300">Welcome, {user.email}</span>
-            {isAdmin && (
-              <Button variant="outline" onClick={() => navigate('/admin')}>
-                Admin Panel
+            {user ? (
+              <>
+                <span className="text-gray-300">Welcome, {user.email}</span>
+                {isAdmin && (
+                  <Button variant="outline" onClick={() => navigate('/admin')}>
+                    Admin Panel
+                  </Button>
+                )}
+                <Button variant="ghost" onClick={signOut}>
+                  Sign Out
+                </Button>
+              </>
+            ) : (
+              <Button onClick={() => navigate('/auth')} variant="outline">
+                Sign In
               </Button>
             )}
-            <Button variant="ghost" onClick={signOut}>
-              Sign Out
-            </Button>
           </div>
         </div>
         
-        <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 h-[calc(100vh-12rem)]">
+        <div className={`grid gap-4 h-[calc(100vh-12rem)] ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-6'}`}>
           {/* Left column - Overall Leaderboard (smaller) */}
-          <div className="lg:col-span-1 h-full">
+          <div className={`h-full ${isMobile ? 'order-2' : 'lg:col-span-1'}`}>
             <OverallLeaderboard />
           </div>
           
           {/* Right column - Game content (much more space) */}
-          <div className="lg:col-span-5 h-full">
-            <div className="flex gap-3 h-full">
+          <div className={`h-full ${isMobile ? 'order-1' : 'lg:col-span-5'}`}>
+            <div className={`gap-3 h-full ${isMobile ? 'flex flex-col' : 'flex'}`}>
               {games.map((game) => {
                 // Get logo URL - either from database, fallback mapping, or null
                 const logoUrl = game.logo_url || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
@@ -186,8 +179,8 @@ const Index = () => {
                 const filtered = scores
                   .filter((score) => score.game_id === game.id)
                   .sort((a, b) => b.score - a.score);
-              return (
-                <section key={game.id} className="flex flex-col h-full flex-1 min-w-0">
+                return (
+                <section key={game.id} className={`flex flex-col ${isMobile ? 'h-96 mb-4' : 'h-full flex-1 min-w-0'}`}>
                   {/* Card containing logo, scores and QR code */}
                   <Card className="bg-black/30 border-white/15 flex-1 flex flex-col">
                     <CardHeader className="pb-3">
