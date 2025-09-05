@@ -16,7 +16,6 @@ import { Pencil, Trash2, Plus } from "lucide-react";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import GameLogoSuggestions from "@/components/GameLogoSuggestions";
 import ScoreManager from "@/components/ScoreManager";
-import SecurityAuditLog from "@/components/SecurityAuditLog";
 
 interface Game {
   id: string;
@@ -236,22 +235,22 @@ const Admin = () => {
     <div className="min-h-screen text-white p-4 md:p-8 relative z-10"
          style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
       <div className="max-w-6xl mx-auto space-y-8">
-        <div className="flex justify-between items-center">
-          <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-arcade-neonPink via-arcade-neonCyan to-arcade-neonYellow text-transparent bg-clip-text">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h1 className="text-2xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-arcade-neonPink via-arcade-neonCyan to-arcade-neonYellow text-transparent bg-clip-text">
             Admin Panel
           </h1>
-          <Button variant="outline" onClick={() => navigate('/')}>
+          <Button variant="outline" onClick={() => navigate('/')} className="w-full sm:w-auto">
             Back to Leaderboard
           </Button>
         </div>
 
         <Card className="bg-black/50 border-white/20">
           <CardHeader>
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <CardTitle className="text-white">Games Management</CardTitle>
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button onClick={resetForm} className="bg-arcade-neonPink hover:bg-arcade-neonPink/80">
+                  <Button onClick={resetForm} className="bg-arcade-neonPink hover:bg-arcade-neonPink/80 w-full sm:w-auto">
                     <Plus className="w-4 h-4 mr-2" />
                     Add Game
                   </Button>
@@ -310,14 +309,14 @@ const Admin = () => {
               </Dialog>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="border-white/20">
-                  <TableHead className="text-white">Name</TableHead>
-                  <TableHead className="text-white">Challenge</TableHead>
-                  <TableHead className="text-white">Created</TableHead>
-                  <TableHead className="text-white">Actions</TableHead>
+                  <TableHead className="text-white min-w-[120px]">Name</TableHead>
+                  <TableHead className="text-white min-w-[80px]">Challenge</TableHead>
+                  <TableHead className="text-white min-w-[100px]">Created</TableHead>
+                  <TableHead className="text-white min-w-[120px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -335,11 +334,12 @@ const Admin = () => {
                       {new Date(game.created_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell>
-                      <div className="flex space-x-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => openEditDialog(game)}
+                          className="w-full sm:w-auto"
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
@@ -347,6 +347,7 @@ const Admin = () => {
                           size="sm"
                           variant="destructive"
                           onClick={() => deleteGame(game.id)}
+                          className="w-full sm:w-auto"
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -367,7 +368,6 @@ const Admin = () => {
         </Card>
 
         <ScoreManager />
-        <SecurityAuditLog />
       </div>
     </div>
   );

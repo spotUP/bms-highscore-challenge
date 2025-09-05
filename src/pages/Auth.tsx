@@ -291,7 +291,7 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md mx-4">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold">Arcade Highscores</CardTitle>
           <CardDescription>
@@ -390,7 +390,7 @@ export default function Auth() {
 
       {showForgotPassword && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-md">
+          <Card className="w-full max-w-md mx-4">
             <CardHeader>
               <CardTitle>Reset Password</CardTitle>
               <CardDescription>

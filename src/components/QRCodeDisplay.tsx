@@ -31,7 +31,7 @@ const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
   }, [gameId]);
 
   return (
-    <div className="space-y-4 p-6 bg-black/20 rounded-lg backdrop-blur-sm text-center">
+    <div className="space-y-4 text-center">
       <div className="flex justify-center">
         <div className="relative">
           <canvas 
