@@ -66,9 +66,9 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         .select('*')
         .eq('player_name', trimmedName.toUpperCase())
         .eq('game_id', game.id)
-        .maybeSingle();
+        .single();
 
-      if (fetchError) throw fetchError;
+      if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
 
       if (existingScore) {
         // Player already has a score for this game

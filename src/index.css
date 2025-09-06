@@ -93,6 +93,59 @@
 
 /* Removed hyperspace CSS - now using Canvas-based effect */
 
+/* Gradient border animations */
+@keyframes gradientBorder1 {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes gradientBorder2 {
+  0% { background-position: 25% 75%; }
+  50% { background-position: 125% 75%; }
+  100% { background-position: 25% 75%; }
+}
+
+@keyframes gradientBorder3 {
+  0% { background-position: 50% 100%; }
+  50% { background-position: 150% 100%; }
+  100% { background-position: 50% 100%; }
+}
+
+.gradient-border-1 {
+  position: relative;
+  background: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+  background-size: 300% 300%;
+  animation: gradientBorder1 4s ease-in-out infinite;
+  border-radius: 0.5rem;
+  padding: 2px;
+}
+
+.gradient-border-2 {
+  position: relative;
+  background: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+  background-size: 300% 300%;
+  animation: gradientBorder2 4s ease-in-out infinite;
+  border-radius: 0.5rem;
+  padding: 2px;
+}
+
+.gradient-border-3 {
+  position: relative;
+  background: linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff00ff);
+  background-size: 300% 300%;
+  animation: gradientBorder3 4s ease-in-out infinite;
+  border-radius: 0.5rem;
+  padding: 2px;
+}
+
+.gradient-border-content {
+  background: hsl(var(--card));
+  border-radius: calc(0.5rem - 2px);
+  width: 100%;
+  height: 100%;
+}
+
 @layer base {
   :root {
     --background: 26 24% 10%;

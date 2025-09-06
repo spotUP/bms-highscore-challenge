@@ -10,6 +10,7 @@ import QRCodeDisplay from "@/components/QRCodeDisplay";
 import OverallLeaderboard from "@/components/OverallLeaderboard";
 import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import SpinTheWheel from "@/components/SpinTheWheel";
+import MobileMenu from "@/components/MobileMenu";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -151,7 +152,9 @@ const Index = () => {
           <h1 className="text-4xl md:text-6xl font-bold animated-gradient leading-tight py-2">
             Arcade High Scores
           </h1>
-          <div className="flex gap-4 items-center">
+          
+          {/* Desktop Menu */}
+          <div className="hidden md:flex gap-4 items-center">
             {user ? (
               <>
                 <span className="text-gray-300">Welcome, {user.email}</span>
@@ -173,6 +176,9 @@ const Index = () => {
               </Button>
             )}
           </div>
+          
+          {/* Mobile Menu */}
+          <MobileMenu onSpinWheel={() => setIsSpinWheelOpen(true)} />
         </div>
         
         <div className={`grid gap-4 h-[calc(100vh-12rem)] ${isMobile ? 'grid-cols-1' : 'grid-cols-1 lg:grid-cols-6'}`}>
@@ -194,56 +200,58 @@ const Index = () => {
                 return (
                 <section key={game.id} className={`flex flex-col ${isMobile ? 'h-96 mb-4' : 'h-full flex-1 min-w-0'}`}>
                   {/* Card containing logo, scores and QR code */}
-                  <Card className="bg-black/30 border-white/15 flex-1 flex flex-col">
-                    <CardHeader className="pb-3">
-                      {/* Game logo inside card header */}
-                      <div className="flex justify-center">
-                        <div 
-                          className="cursor-pointer hover:scale-105 transition-transform duration-200 hover:shadow-lg hover:shadow-arcade-neonCyan/30"
-                          onClick={() => handleGameLogoClick(game)}
-                          title={`Click to submit score for ${game.name}`}
-                        >
-                          {logoUrl ? (
-                            <img 
-                              src={logoUrl} 
-                              alt={game.name} 
-                              className="h-16 w-auto object-contain"
-                            />
-                          ) : (
-                            <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4 hover:bg-black/50 transition-colors">
-                              <span className="text-white font-bold text-lg">{game.name}</span>
-                            </div>
-                          )}
+                  <div className={`gradient-border-${(games.indexOf(game) % 3) + 1} h-full`}>
+                    <Card 
+                      className="gradient-border-content bg-black/30 border-none flex-1 flex flex-col cursor-pointer hover:scale-[1.02] transition-transform duration-200"
+                      onClick={() => handleGameLogoClick(game)}
+                      title={`Click to submit score for ${game.name}`}
+                    >
+                      <CardHeader className="pb-3">
+                        {/* Game logo inside card header */}
+                        <div className="flex justify-center">
+                          <div className="transition-transform duration-200">
+                            {logoUrl ? (
+                              <img 
+                                src={logoUrl} 
+                                alt={game.name} 
+                                className="h-16 w-auto object-contain"
+                              />
+                            ) : (
+                              <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4 transition-colors">
+                                <span className="text-white font-bold text-lg">{game.name}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="flex-1 flex flex-col">
-                      {/* Scores section - scrollable if needed */}
-                      <div className="flex-1 overflow-y-auto mb-4">
-                        <div className="space-y-2">
-                          {filtered.map((score, index) => (
-                            <LeaderboardEntry
-                              key={score.id}
-                              rank={index + 1}
-                              name={score.player_name}
-                              score={score.score}
-                              isNewScore={score.isNew}
-                            />
-                          ))}
-                          {filtered.length === 0 && (
-                            <div className="text-center py-8 text-gray-400">
-                              No scores yet. Be the first to submit!
-                            </div>
-                          )}
+                      </CardHeader>
+                      <CardContent className="flex-1 flex flex-col">
+                        {/* Scores section - scrollable if needed */}
+                        <div className="flex-1 overflow-y-auto mb-4">
+                          <div className="space-y-2">
+                            {filtered.map((score, index) => (
+                              <LeaderboardEntry
+                                key={score.id}
+                                rank={index + 1}
+                                name={score.player_name}
+                                score={score.score}
+                                isNewScore={score.isNew}
+                              />
+                            ))}
+                            {filtered.length === 0 && (
+                              <div className="text-center py-8 text-gray-400">
+                                No scores yet. Be the first to submit!
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                      
-                      {/* QR Code - inside card at bottom */}
-                      <div className="mt-auto">
-                        <QRCodeDisplay gameId={game.id} gameName={game.name} />
-                      </div>
-                    </CardContent>
-                  </Card>
+                        
+                        {/* QR Code - inside card at bottom */}
+                        <div className="mt-auto">
+                          <QRCodeDisplay gameId={game.id} gameName={game.name} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
                 </section>
                 );
               })}
