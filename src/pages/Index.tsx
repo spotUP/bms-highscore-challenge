@@ -200,12 +200,11 @@ const Index = () => {
                 return (
                 <section key={game.id} className={`flex flex-col ${isMobile ? 'h-96 mb-4' : 'h-full flex-1 min-w-0'}`}>
                   {/* Card containing logo, scores and QR code */}
-                  <div className={`gradient-border-${(games.indexOf(game) % 3) + 1} h-full`}>
-                    <Card 
-                      className="gradient-border-content bg-black/30 border-none flex-1 flex flex-col cursor-pointer hover:scale-[1.02] transition-transform duration-200"
-                      onClick={() => handleGameLogoClick(game)}
-                      title={`Click to submit score for ${game.name}`}
-                    >
+                  <Card 
+                    className="bg-black/30 border-white/20 flex-1 flex flex-col cursor-pointer hover:scale-[1.02] transition-transform duration-200"
+                    onClick={() => handleGameLogoClick(game)}
+                    title={`Click to submit score for ${game.name}`}
+                  >
                       <CardHeader className="pb-3">
                         {/* Game logo inside card header */}
                         <div className="flex justify-center">
@@ -251,7 +250,6 @@ const Index = () => {
                         </div>
                       </CardContent>
                     </Card>
-                  </div>
                 </section>
                 );
               })}
