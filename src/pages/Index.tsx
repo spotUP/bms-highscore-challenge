@@ -183,13 +183,13 @@ const Index = () => {
         
         <div className={`grid gap-4 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-12rem)] grid-cols-1 lg:grid-cols-6'}`}>
           {/* Left column - Overall Leaderboard (smaller) */}
-          <div className={`${isMobile ? 'order-2 h-96' : 'h-full lg:col-span-1'}`}>
+          <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-1'}`}>
             <OverallLeaderboard />
           </div>
           
           {/* Right column - Game content (much more space) */}
           <div className={`${isMobile ? 'order-1' : 'h-full lg:col-span-5'}`}>
-            <div className={`gap-3 ${isMobile ? 'flex flex-col space-y-4' : 'flex h-full'}`}>
+            <div className={`${isMobile ? 'flex flex-col space-y-6' : 'flex gap-3 h-full'}`}>
               {games.map((game) => {
                 // Get logo URL - either from database, fallback mapping, or null
                 const logoUrl = game.logo_url || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
@@ -198,7 +198,7 @@ const Index = () => {
                   .filter((score) => score.game_id === game.id)
                   .sort((a, b) => b.score - a.score);
                 return (
-                <section key={game.id} className={`flex flex-col ${isMobile ? 'h-96' : 'h-full flex-1 min-w-0'}`}>
+                <section key={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full flex-1 min-w-0'}`}>
                   {/* Card containing logo, scores and QR code */}
                   <Card 
                     className="bg-black/30 border-white/20 flex-1 flex flex-col cursor-pointer hover:scale-[1.02] transition-transform duration-200"
