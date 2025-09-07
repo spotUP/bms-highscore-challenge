@@ -93,15 +93,10 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
 
         if (error) throw error;
 
-        // Post to webhook for score improvement
+        // Post to webhook via edge function for score improvement
         try {
-          await fetch('https://defaultb880007628fd4e2691f5df32a17ab7.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7b89bae5305240c6a43f262a668a4f0c/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Ck7LfP6-BFk1UUXzZ4bh5zcWzDSKanMHhDwhesYU_Lo', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            mode: 'no-cors',
-            body: JSON.stringify({
+          const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
+            body: {
               player_name: trimmedName.toUpperCase(),
               score: scoreValue,
               game_name: game.name,
@@ -109,10 +104,16 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
               type: 'score_improved',
               previous_score: existingScore.score,
               timestamp: new Date().toISOString()
-            }),
+            }
           });
+          
+          if (webhookResponse.error) {
+            console.error('Webhook error:', webhookResponse.error);
+          } else {
+            console.log('Webhook sent successfully:', webhookResponse.data);
+          }
         } catch (webhookError) {
-          console.error('Webhook error:', webhookError);
+          console.error('Webhook call failed:', webhookError);
         }
 
         toast({
@@ -131,25 +132,26 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
 
         if (error) throw error;
         
-        // Post to webhook for new score
+        // Post to webhook via edge function for new score
         try {
-          await fetch('https://defaultb880007628fd4e2691f5df32a17ab7.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/7b89bae5305240c6a43f262a668a4f0c/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=Ck7LfP6-BFk1UUXzZ4bh5zcWzDSKanMHhDwhesYU_Lo', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            mode: 'no-cors',
-            body: JSON.stringify({
+          const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
+            body: {
               player_name: trimmedName.toUpperCase(),
               score: scoreValue,
               game_name: game.name,
               game_id: game.id,
               type: 'new_score',
               timestamp: new Date().toISOString()
-            }),
+            }
           });
+          
+          if (webhookResponse.error) {
+            console.error('Webhook error:', webhookResponse.error);
+          } else {
+            console.log('Webhook sent successfully:', webhookResponse.data);
+          }
         } catch (webhookError) {
-          console.error('Webhook error:', webhookError);
+          console.error('Webhook call failed:', webhookError);
         }
         
         toast({
