@@ -72,10 +72,18 @@ const handler = async (req: Request): Promise<Response> => {
             "version": "1.5",
             "body": [
               {
-                "type": "Image",
-                "url": gameLogoUrl,
+                "type": "Container",
                 "horizontalAlignment": "Center",
-                "size": "Medium"
+                "items": [
+                  {
+                    "type": "Image",
+                    "url": gameLogoUrl,
+                    "horizontalAlignment": "Center",
+                    "width": "100%",
+                    "height": "auto",
+                    "size": "Auto"
+                  }
+                ]
               },
               {
                 "type": "TextBlock",
@@ -88,53 +96,33 @@ const handler = async (req: Request): Promise<Response> => {
               },
               {
                 "type": "Container",
+                "horizontalAlignment": "Center",
                 "items": [
                   {
-                    "type": "ColumnSet",
-                    "columns": [
-                      {
-                        "type": "Column",
-                        "width": "auto",
-                        "items": [
-                          {
-                            "type": "TextBlock",
-                            "text": "🏆",
-                            "size": "Large",
-                            "horizontalAlignment": "Center"
-                          }
-                        ],
-                        "verticalContentAlignment": "Center"
-                      },
-                      {
-                        "type": "Column",
-                        "width": "stretch",
-                        "items": [
-                          {
-                            "type": "TextBlock",
-                            "text": `#${position} ${webhookData.player_name}`,
-                            "wrap": true,
-                            "size": "Large",
-                            "weight": "Bolder",
-                            "color": "Accent"
-                          },
-                          {
-                            "type": "TextBlock",
-                            "text": `Score: ${webhookData.score.toLocaleString()}`,
-                            "wrap": true,
-                            "size": "Medium",
-                            "weight": "Bolder",
-                            "color": "Good"
-                          },
-                          {
-                            "type": "TextBlock",
-                            "text": `Game: ${webhookData.game_name}`,
-                            "wrap": true,
-                            "size": "Small",
-                            "color": "Default"
-                          }
-                        ]
-                      }
-                    ]
+                    "type": "TextBlock",
+                    "text": "🏆 #1 " + webhookData.player_name,
+                    "wrap": true,
+                    "size": "Large",
+                    "weight": "Bolder",
+                    "color": "Accent",
+                    "horizontalAlignment": "Center"
+                  },
+                  {
+                    "type": "TextBlock",
+                    "text": "Score: " + webhookData.score.toLocaleString(),
+                    "wrap": true,
+                    "size": "Medium",
+                    "weight": "Bolder",
+                    "color": "Good",
+                    "horizontalAlignment": "Center"
+                  },
+                  {
+                    "type": "TextBlock",
+                    "text": "Game: " + webhookData.game_name,
+                    "wrap": true,
+                    "size": "Small",
+                    "color": "Default",
+                    "horizontalAlignment": "Center"
                   }
                 ]
               }
@@ -158,6 +146,7 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Webhook response status:", webhookResponse.status);
     console.log("Webhook response headers:", Object.fromEntries(webhookResponse.headers.entries()));
 
+    
     if (!webhookResponse.ok) {
       const errorText = await webhookResponse.text();
       console.error("Webhook error response:", errorText);

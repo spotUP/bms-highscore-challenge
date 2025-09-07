@@ -207,20 +207,24 @@ const Index = () => {
                   >
                       <CardHeader className="pb-3">
                         {/* Game logo inside card header */}
-                        <div className="flex justify-center">
+                        <div className="flex flex-col items-center space-y-3">
                           <div className="transition-transform duration-200">
                             {logoUrl ? (
                               <img 
                                 src={logoUrl} 
                                 alt={game.name} 
-                                className="h-16 w-auto object-contain"
+                                className="h-24 md:h-32 w-auto object-contain max-w-full"
                               />
                             ) : (
-                              <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4 transition-colors">
-                                <span className="text-white font-bold text-lg">{game.name}</span>
+                              <div className="h-24 md:h-32 flex items-center justify-center bg-black/30 rounded-lg px-4 transition-colors">
+                                <span className="text-white font-bold text-xl md:text-2xl">{game.name}</span>
                               </div>
                             )}
                           </div>
+                          {/* Game name text under the logo */}
+                          <h3 className="text-center text-white font-bold text-lg md:text-xl">
+                            {game.name}
+                          </h3>
                         </div>
                       </CardHeader>
                       <CardContent className="flex-1 flex flex-col">
