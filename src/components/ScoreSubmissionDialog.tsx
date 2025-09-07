@@ -203,17 +203,30 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-gray-900 text-white border-white/20 max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-center text-xl font-bold bg-gradient-to-r from-arcade-neonPink via-arcade-neonCyan to-arcade-neonYellow text-transparent bg-clip-text">
-            Submit Score for {game.name}
-          </DialogTitle>
+      <DialogContent className="bg-black/30 border-white/20 max-w-md backdrop-blur-sm">
+        <DialogHeader className="pb-3">
+          {/* Game logo header */}
+          <div className="flex justify-center mb-4">
+            <div className="transition-transform duration-200">
+              {game.logo_url ? (
+                <img 
+                  src={game.logo_url} 
+                  alt={game.name} 
+                  className="h-16 w-auto object-contain"
+                />
+              ) : (
+                <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4 transition-colors">
+                  <span className="text-white font-bold text-lg">{game.name}</span>
+                </div>
+              )}
+            </div>
+          </div>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="flex items-center gap-2 justify-center mb-4">
             <Trophy className="animate-glow text-arcade-neonYellow" />
-            <span className="text-lg font-semibold">Enter Your Score</span>
+            <span className="text-lg font-semibold text-white">Enter Your Score</span>
           </div>
           
           <div className="space-y-4">
