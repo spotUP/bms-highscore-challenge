@@ -220,7 +220,7 @@ const PlayerDashboard = () => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-400">Total Scores</p>
-                    <p className="text-2xl font-bold text-white">{playerStats.total_scores}</p>
+                    <p className="text-2xl font-bold text-white">{playerStats.total_scores || 0}</p>
                   </div>
                 </div>
               </CardContent>
@@ -234,7 +234,7 @@ const PlayerDashboard = () => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-400">First Places</p>
-                    <p className="text-2xl font-bold text-white">{playerStats.first_place_count}</p>
+                    <p className="text-2xl font-bold text-white">{playerStats.first_place_count || 0}</p>
                   </div>
                 </div>
               </CardContent>
@@ -248,7 +248,7 @@ const PlayerDashboard = () => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-400">Best Score</p>
-                    <p className="text-2xl font-bold text-white">{playerStats.best_score.toLocaleString()}</p>
+                    <p className="text-2xl font-bold text-white">{playerStats.best_score?.toLocaleString() || '0'}</p>
                   </div>
                 </div>
               </CardContent>
@@ -262,7 +262,7 @@ const PlayerDashboard = () => {
                   </div>
                   <div>
                     <p className="text-sm text-gray-400">Games Played</p>
-                    <p className="text-2xl font-bold text-white">{playerStats.total_games_played}</p>
+                    <p className="text-2xl font-bold text-white">{playerStats.total_games_played || 0}</p>
                   </div>
                 </div>
               </CardContent>
@@ -354,13 +354,13 @@ const PlayerDashboard = () => {
                   <div className="flex justify-between items-center">
                     <span className="text-gray-300">Current Streak</span>
                     <Badge variant="outline" className="border-green-500 text-green-400">
-                      {playerStats.current_streak} games
+                      {playerStats.current_streak || 0} games
                     </Badge>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-gray-300">Longest Streak</span>
                     <Badge variant="outline" className="border-purple-500 text-purple-400">
-                      {playerStats.longest_streak} games
+                      {playerStats.longest_streak || 0} games
                     </Badge>
                   </div>
                 </div>
