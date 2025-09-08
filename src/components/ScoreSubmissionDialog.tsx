@@ -250,6 +250,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
       <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-black/30 border-white/20 max-w-md backdrop-blur-sm">
         <DialogHeader className="pb-3">
+          <DialogTitle className="sr-only">Submit Score for {game.name}</DialogTitle>
           {/* Game logo header */}
           <div className="flex justify-center mb-4">
             <div className="transition-transform duration-200">
