@@ -69,9 +69,15 @@ CREATE POLICY "Admins can manage roles" ON user_roles
     USING (is_admin(auth.uid()));
 
 -- Create initial admin user (replace with your email)
--- INSERT INTO user_roles (user_id, role) 
--- VALUES ((SELECT id FROM auth.users WHERE email = 'your-email@example.com'), 'admin')
--- ON CONFLICT (user_id) DO UPDATE SET role = 'admin';
+-- To make yourself admin, uncomment and run this line with your email:
+-- INSERT INTO user_roles (user_id, role, created_at, updated_at) 
+-- VALUES (
+--   (SELECT id FROM auth.users WHERE email = 'your-email@example.com'), 
+--   'admin',
+--   NOW(),
+--   NOW()
+-- )
+-- ON CONFLICT (user_id) DO UPDATE SET role = 'admin', updated_at = NOW();
 
 -- Show current setup
 SELECT 'User roles system created successfully!' as status;
