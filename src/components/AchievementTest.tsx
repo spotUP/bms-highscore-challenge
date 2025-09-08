@@ -60,17 +60,27 @@ const AchievementTest = () => {
   };
 
   const testAchievementTrigger = async () => {
+    console.log('Test button clicked!');
     try {
+      console.log('Starting achievement test...');
+      
       // Insert a test score to trigger achievement system
-      const { data: games } = await supabase
+      const { data: games, error: gamesError } = await supabase
         .from('games')
         .select('id')
         .limit(1);
+
+      console.log('Games query result:', { games, gamesError });
+
+      if (gamesError) {
+        throw new Error(`Games query error: ${gamesError.message}`);
+      }
 
       if (!games || games.length === 0) {
         throw new Error('No games found in database');
       }
 
+      console.log('Inserting test score...');
       const { error } = await supabase
         .from('scores')
         .insert({
@@ -79,12 +89,19 @@ const AchievementTest = () => {
           game_id: games[0].id
         });
 
+      console.log('Score insert result:', { error });
+
       if (error) {
         throw new Error(`Score insert error: ${error.message}`);
       }
 
+      console.log('Test score inserted successfully!');
       alert('Test score inserted! Check if achievements were triggered.');
+      
+      // Refresh the test data
+      testAchievementSystem();
     } catch (err) {
+      console.error('Test error:', err);
       alert(`Error testing achievement trigger: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
@@ -159,6 +176,9 @@ const AchievementTest = () => {
           </Button>
           <Button onClick={testAchievementTrigger} variant="outline">
             Test Achievement Trigger
+          </Button>
+          <Button onClick={() => alert('Button click test works!')} variant="outline">
+            Test Button Click
           </Button>
         </div>
 
