@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getCardStyle, getTypographyStyle } from '@/utils/designSystem';
 
 interface GamePopularityChartProps {
   scores: Array<{
@@ -37,8 +38,8 @@ const GamePopularityChart: React.FC<GamePopularityChartProps> = React.memo(({ sc
   }, [scores, games]);
 
   const colors = [
-    '#ef4444', '#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6',
-    '#06b6d4', '#f97316', '#84cc16', '#ec4899', '#6366f1'
+    '#ff00ff', '#00ffff', '#ffff00', '#ff00ff', '#00ffff',
+    '#ffff00', '#ff00ff', '#00ffff', '#ffff00', '#ff00ff'
   ];
 
   const CustomTooltip = useCallback(({ active, payload }: any) => {
@@ -97,9 +98,9 @@ const GamePopularityChart: React.FC<GamePopularityChartProps> = React.memo(({ sc
   }
 
   return (
-    <Card className="bg-gray-900 border-white/20">
+    <Card className={getCardStyle('primary')}>
       <CardHeader>
-        <CardTitle className="text-white flex items-center gap-2">
+        <CardTitle className={getTypographyStyle('h4') + " flex items-center gap-2"}>
           🎮 Game Popularity
         </CardTitle>
         <p className="text-gray-400 text-sm">

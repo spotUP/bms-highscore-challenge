@@ -12,7 +12,6 @@ import OverallLeaderboard from "@/components/OverallLeaderboard";
 import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import SpinTheWheel from "@/components/SpinTheWheel";
 import MobileMenu from "@/components/MobileMenu";
-import OptimizedImage from "@/components/OptimizedImage";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -266,12 +265,17 @@ const Index = () => {
                         {/* Game logo inside card header */}
                         <div className="flex justify-center">
                           <div className="transition-transform duration-200">
-                            <OptimizedImage
-                              src={logoUrl}
-                              alt={game.name}
-                              className="h-24 md:h-32 w-auto object-contain max-w-full"
-                              fallbackIcon="🎮"
-                            />
+                            {logoUrl ? (
+                              <img 
+                                src={logoUrl} 
+                                alt={game.name} 
+                                className="h-16 md:h-20 w-auto object-contain max-w-full"
+                              />
+                            ) : (
+                              <div className="h-16 md:h-20 flex items-center justify-center bg-black/30 rounded-lg px-4 min-w-[200px]">
+                                <span className="text-white font-bold text-center">{game.name}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </CardHeader>

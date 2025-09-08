@@ -37,7 +37,7 @@ export function createLazyComponent<T extends ComponentType<any>>(
   const LazyComponent = lazy(importFn);
   
   return (props: React.ComponentProps<T>) => (
-    <React.Suspense fallback={fallback ? <fallback /> : <div>Loading...</div>}>
+    <React.Suspense fallback={fallback ? React.createElement(fallback) : <div>Loading...</div>}>
       <LazyComponent {...props} />
     </React.Suspense>
   );

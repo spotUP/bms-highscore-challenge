@@ -12,6 +12,7 @@ import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
 import donkeyKongLogo from "@/assets/donkey-kong-logo.png";
+import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer } from "@/utils/designSystem";
 
 // Fallback logo mapping for backwards compatibility
 const LOGO_MAP: Record<string, string> = {
@@ -264,6 +265,8 @@ const MobileEntry = () => {
     }
   };
 
+  const pageLayout = getPageLayout();
+  
   return (
     <>
       <PlayerInsult 
@@ -271,13 +274,12 @@ const MobileEntry = () => {
         playerName={insultPlayerName}
         onComplete={() => setShowPlayerInsult(false)} 
       />
-      <div className="min-h-screen text-white p-4 relative z-10"
-           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-      <div className="max-w-md mx-auto space-y-6 pt-8">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-arcade-neonPink via-arcade-neonCyan to-arcade-neonYellow text-transparent bg-clip-text mb-2">
-            Submit Score
-          </h1>
+      <div {...pageLayout}>
+        <PageContainer className="max-w-md mx-auto space-y-6 pt-8">
+          <div className="text-center">
+            <h1 className={getTypographyStyle('h2') + " mb-2"}>
+              Submit Score
+            </h1>
           <div className="flex justify-center">
             {logoUrl ? (
               <img 
@@ -330,7 +332,8 @@ const MobileEntry = () => {
             />
             <Button 
               type="submit"
-              className="w-full bg-arcade-neonYellow hover:bg-arcade-neonYellow/80 text-black font-bold text-lg py-3"
+              variant="outline"
+              className="w-full text-lg py-3"
               disabled={!name || !score || isSubmitting}
             >
               {isSubmitting ? "Submitting..." : "Submit Score"}
@@ -347,8 +350,8 @@ const MobileEntry = () => {
             Back to Leaderboard
           </Button>
         </div>
+        </PageContainer>
       </div>
-    </div>
     </>
   );
 };

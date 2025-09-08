@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getCardStyle, getTypographyStyle } from '@/utils/designSystem';
 
 interface ScoreDistributionChartProps {
   scores: Array<{
@@ -19,13 +20,13 @@ const ScoreDistributionChart: React.FC<ScoreDistributionChartProps> = React.memo
   // Create score ranges with useMemo for performance
   const scoreRanges = useMemo(() => {
     const ranges = [
-      { range: '0-1K', min: 0, max: 1000, count: 0, color: '#ef4444' },
-      { range: '1K-5K', min: 1000, max: 5000, count: 0, color: '#f97316' },
-      { range: '5K-10K', min: 5000, max: 10000, count: 0, color: '#eab308' },
-      { range: '10K-25K', min: 10000, max: 25000, count: 0, color: '#22c55e' },
-      { range: '25K-50K', min: 25000, max: 50000, count: 0, color: '#06b6d4' },
-      { range: '50K-100K', min: 50000, max: 100000, count: 0, color: '#3b82f6' },
-      { range: '100K+', min: 100000, max: Infinity, count: 0, color: '#8b5cf6' },
+      { range: '0-1K', min: 0, max: 1000, count: 0, color: '#ff00ff' }, // arcade-neonPink
+      { range: '1K-5K', min: 1000, max: 5000, count: 0, color: '#00ffff' }, // arcade-neonCyan
+      { range: '5K-10K', min: 5000, max: 10000, count: 0, color: '#ffff00' }, // arcade-neonYellow
+      { range: '10K-25K', min: 10000, max: 25000, count: 0, color: '#ff00ff' }, // arcade-neonPink
+      { range: '25K-50K', min: 25000, max: 50000, count: 0, color: '#00ffff' }, // arcade-neonCyan
+      { range: '50K-100K', min: 50000, max: 100000, count: 0, color: '#ffff00' }, // arcade-neonYellow
+      { range: '100K+', min: 100000, max: Infinity, count: 0, color: '#ff00ff' }, // arcade-neonPink
     ];
 
     // Count scores in each range
@@ -54,9 +55,9 @@ const ScoreDistributionChart: React.FC<ScoreDistributionChartProps> = React.memo
   }, []);
 
   return (
-    <Card className="bg-gray-900 border-white/20">
+    <Card className={getCardStyle('primary')}>
       <CardHeader>
-        <CardTitle className="text-white flex items-center gap-2">
+        <CardTitle className={getTypographyStyle('h4') + " flex items-center gap-2"}>
           📊 Score Distribution
         </CardTitle>
         <p className="text-gray-400 text-sm">

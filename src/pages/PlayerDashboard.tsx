@@ -7,6 +7,7 @@ import { ArrowLeft, Trophy, Target, TrendingUp, Gamepad2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import PlayerAchievements from '@/components/PlayerAchievements';
 import PlayerScoreHistoryChart from '@/components/charts/PlayerScoreHistoryChart';
+import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from '@/utils/designSystem';
 
 interface PlayerStats {
   id: string;
@@ -108,50 +109,50 @@ const PlayerDashboard = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center relative z-10"
-           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-        <div className="text-white text-xl">Loading player dashboard...</div>
-      </div>
-    );
+    return <LoadingSpinner text="Loading player dashboard..." />;
   }
 
   if (!playerName) {
     return (
-      <div className="min-h-screen flex items-center justify-center relative z-10"
-           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-        <div className="text-white text-xl">Player not found</div>
+      <div {...getPageLayout()}>
+        <PageContainer>
+          <div className="text-center">
+            <h1 className={getTypographyStyle('h1')}>Player Not Found</h1>
+            <p className="text-gray-400 mb-6">Please provide a player name in the URL</p>
+            <Button
+              onClick={() => navigate('/')}
+              variant="outline"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Main
+            </Button>
+          </div>
+        </PageContainer>
       </div>
     );
   }
 
+  const pageLayout = getPageLayout();
+  
   return (
-    <div className="min-h-screen text-white p-4 relative z-10"
-         style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-      
-      {/* Header */}
-      <div className="max-w-6xl mx-auto mb-6">
-        <div className="flex items-center gap-4 mb-4">
+    <div {...pageLayout}>
+      <PageContainer className="max-w-6xl mx-auto">
+        <PageHeader 
+          title={`${playerName}'s Dashboard`}
+          subtitle="Player statistics and achievement progress"
+        >
           <Button
-            variant="outline"
-            size="sm"
             onClick={() => navigate('/')}
-            className="border-white text-white hover:bg-white hover:text-black"
+            variant="outline"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back
+            Back to Main
           </Button>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-arcade-neonPink via-arcade-neonCyan to-arcade-neonYellow text-transparent bg-clip-text">
-            {playerName}'s Dashboard
-          </h1>
-        </div>
-      </div>
-
-      <div className="max-w-6xl mx-auto space-y-6">
+        </PageHeader>
         {/* Stats Overview */}
         {playerStats && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="bg-gray-900 border-white/20">
+            <Card className={getCardStyle('primary')}>
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-blue-600/20 rounded-lg">
@@ -165,11 +166,11 @@ const PlayerDashboard = () => {
               </CardContent>
             </Card>
 
-            <Card className="bg-gray-900 border-white/20">
+            <Card className={getCardStyle('primary')}>
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-yellow-600/20 rounded-lg">
-                    <Trophy className="w-6 h-6 text-yellow-400" />
+                    <Trophy className="w-6 h-6 text-arcade-neonYellow" />
                   </div>
                   <div>
                     <p className="text-sm text-gray-400">First Places</p>
@@ -179,11 +180,11 @@ const PlayerDashboard = () => {
               </CardContent>
             </Card>
 
-            <Card className="bg-gray-900 border-white/20">
+            <Card className={getCardStyle('primary')}>
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-green-600/20 rounded-lg">
-                    <TrendingUp className="w-6 h-6 text-green-400" />
+                    <TrendingUp className="w-6 h-6 text-arcade-neonCyan" />
                   </div>
                   <div>
                     <p className="text-sm text-gray-400">Best Score</p>
@@ -193,11 +194,11 @@ const PlayerDashboard = () => {
               </CardContent>
             </Card>
 
-            <Card className="bg-gray-900 border-white/20">
+            <Card className={getCardStyle('primary')}>
               <CardContent className="p-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-purple-600/20 rounded-lg">
-                    <Gamepad2 className="w-6 h-6 text-purple-400" />
+                    <Gamepad2 className="w-6 h-6 text-arcade-neonPink" />
                   </div>
                   <div>
                     <p className="text-sm text-gray-400">Games Played</p>
@@ -211,10 +212,10 @@ const PlayerDashboard = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Recent Achievements */}
-          <Card className="bg-gray-900 border-white/20">
+          <Card className={getCardStyle('primary')}>
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-yellow-400" />
+              <CardTitle className={getTypographyStyle('h4') + " flex items-center gap-2"}>
+                <Trophy className="w-5 h-5 text-arcade-neonYellow" />
                 Recent Achievements
               </CardTitle>
             </CardHeader>
@@ -309,7 +310,7 @@ const PlayerDashboard = () => {
 
         {/* All Achievements */}
         <PlayerAchievements playerName={playerName} />
-      </div>
+      </PageContainer>
     </div>
   );
 };

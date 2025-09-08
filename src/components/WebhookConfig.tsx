@@ -275,7 +275,6 @@ const WebhookConfig: React.FC = () => {
                         variant="outline"
                         onClick={() => testWebhook(webhook)}
                         disabled={testing === webhook.id || !webhook.url}
-                        className="border-gray-600 text-gray-300 hover:bg-gray-700"
                       >
                         {testing === webhook.id ? (
                           <>
@@ -384,7 +383,6 @@ const WebhookConfig: React.FC = () => {
                         variant="outline"
                         onClick={() => testWebhook(webhook, 'competition_started')}
                         disabled={testing === webhook.id || !webhook.url}
-                        className="border-blue-500 text-blue-400 hover:bg-blue-500/10"
                       >
                         {testing === webhook.id ? (
                           <>
@@ -404,7 +402,6 @@ const WebhookConfig: React.FC = () => {
                         variant="outline"
                         onClick={() => testWebhook(webhook, 'competition_ended')}
                         disabled={testing === webhook.id || !webhook.url}
-                        className="border-red-500 text-red-400 hover:bg-red-500/10"
                       >
                         {testing === webhook.id ? (
                           <>

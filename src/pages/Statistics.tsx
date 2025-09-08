@@ -8,6 +8,7 @@ import { Trophy, Medal, Award, Users, Gamepad2, Target, Calendar, ArrowLeft, Bar
 import { formatScore } from '@/lib/utils';
 import { useOptimizedData } from '@/hooks/useOptimizedData';
 import { LazyCharts } from '@/utils/dynamicImports';
+import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from '@/utils/designSystem';
 
 interface CompetitionHistory {
   id: string;
@@ -153,41 +154,34 @@ const Statistics = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center relative z-10"
-           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-        <div className="text-white text-xl">Loading statistics...</div>
-      </div>
-    );
+    return <LoadingSpinner text="Loading statistics..." />;
   }
 
   const selectedComp = getSelectedCompetition();
   const gameStats = getGameStats();
 
+  const pageLayout = getPageLayout();
+  
   return (
-    <div className="min-h-screen text-white p-4 relative z-10"
-         style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-      
-      {/* Header */}
-      <div className="max-w-7xl mx-auto mb-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              onClick={() => navigate('/')}
-              className="border-white text-white hover:bg-white hover:text-black"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Main
-            </Button>
-            <h1 className="text-3xl font-bold text-arcade-neonYellow">Competition Statistics</h1>
-          </div>
-        </div>
+    <div {...pageLayout}>
+      <PageContainer>
+        <PageHeader 
+          title="Competition Statistics"
+          subtitle="Detailed analytics and performance metrics"
+        >
+          <Button
+            onClick={() => navigate('/')}
+            variant="outline"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Main
+          </Button>
+        </PageHeader>
 
         {/* Competition Selector */}
-        <Card className="bg-black/30 border-white/15 mb-6">
+        <Card className={getCardStyle('primary')}>
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
+            <CardTitle className={getTypographyStyle('h4') + " flex items-center gap-2"}>
               <Calendar className="w-5 h-5 text-arcade-neonCyan" />
               Select Competition
             </CardTitle>
@@ -212,10 +206,10 @@ const Statistics = () => {
           <>
             {/* Competition Overview */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-              <Card className="bg-black/30 border-white/15">
+              <Card className={getCardStyle('primary')}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <Users className="w-5 h-5 text-blue-400" />
+                    <Users className="w-5 h-5 text-arcade-neonCyan" />
                     <div>
                       <p className="text-sm text-gray-400">Total Players</p>
                       <p className="text-2xl font-bold text-white">{selectedComp.total_players}</p>
@@ -224,10 +218,10 @@ const Statistics = () => {
                 </CardContent>
               </Card>
               
-              <Card className="bg-black/30 border-white/15">
+              <Card className={getCardStyle('primary')}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <Gamepad2 className="w-5 h-5 text-green-400" />
+                    <Gamepad2 className="w-5 h-5 text-arcade-neonYellow" />
                     <div>
                       <p className="text-sm text-gray-400">Games Played</p>
                       <p className="text-2xl font-bold text-white">{selectedComp.total_games}</p>
@@ -236,10 +230,10 @@ const Statistics = () => {
                 </CardContent>
               </Card>
               
-              <Card className="bg-black/30 border-white/15">
+              <Card className={getCardStyle('primary')}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <Target className="w-5 h-5 text-purple-400" />
+                    <Target className="w-5 h-5 text-arcade-neonPink" />
                     <div>
                       <p className="text-sm text-gray-400">Total Scores</p>
                       <p className="text-2xl font-bold text-white">{selectedComp.total_scores}</p>
@@ -248,10 +242,10 @@ const Statistics = () => {
                 </CardContent>
               </Card>
               
-              <Card className="bg-black/30 border-white/15">
+              <Card className={getCardStyle('primary')}>
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-orange-400" />
+                    <Calendar className="w-5 h-5 text-arcade-neonYellow" />
                     <div>
                       <p className="text-sm text-gray-400">Duration</p>
                       <p className="text-lg font-bold text-white">
@@ -265,9 +259,9 @@ const Statistics = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Top Players */}
-              <Card className="bg-black/30 border-white/15">
+              <Card className={getCardStyle('primary')}>
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
+                  <CardTitle className={getTypographyStyle('h4') + " flex items-center gap-2"}>
                     <Trophy className="w-5 h-5 text-arcade-neonYellow" />
                     Top Players
                   </CardTitle>
@@ -298,9 +292,9 @@ const Statistics = () => {
               </Card>
 
               {/* Game Statistics */}
-              <Card className="bg-black/30 border-white/15">
+              <Card className={getCardStyle('primary')}>
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
+                  <CardTitle className={getTypographyStyle('h4') + " flex items-center gap-2"}>
                     <Gamepad2 className="w-5 h-5 text-arcade-neonCyan" />
                     Game Statistics
                   </CardTitle>
@@ -339,9 +333,9 @@ const Statistics = () => {
 
         {/* Visual Analytics Section */}
         <div className="mt-8">
-          <Card className="bg-black/30 border-white/15 mb-6">
+          <Card className={getCardStyle('primary')}>
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className={getTypographyStyle('h3') + " flex items-center gap-2"}>
                 <BarChart3 className="w-5 h-5 text-arcade-neonCyan" />
                 Visual Analytics
               </CardTitle>
@@ -374,17 +368,17 @@ const Statistics = () => {
         </div>
 
         {competitions.length === 0 && (
-          <Card className="bg-black/30 border-white/15">
+          <Card className={getCardStyle('primary')}>
             <CardContent className="p-8 text-center">
               <Trophy className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-white mb-2">No Competitions Yet</h3>
+              <h3 className={getTypographyStyle('h3')}>No Competitions Yet</h3>
               <p className="text-gray-400">
                 No competitions have been completed yet. Start playing and complete a competition to see statistics here.
               </p>
             </CardContent>
           </Card>
         )}
-      </div>
+      </PageContainer>
     </div>
   );
 };

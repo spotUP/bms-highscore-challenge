@@ -315,7 +315,8 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
               </Button>
               <Button 
                 type="submit"
-                className="flex-1 bg-arcade-neonYellow hover:bg-arcade-neonYellow/80 text-black font-bold"
+                variant="outline"
+                className="flex-1"
                 disabled={!name || !score || isSubmitting}
               >
                 {isSubmitting ? "Submitting..." : "Submit Score"}

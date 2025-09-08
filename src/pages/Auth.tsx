@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer } from '@/utils/designSystem';
 
 export default function Auth() {
   const [searchParams] = useSearchParams();
@@ -279,7 +280,7 @@ export default function Auth() {
                   minLength={6}
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" variant="outline" className="w-full" disabled={isLoading}>
                 {isLoading ? 'Updating...' : 'Update Password'}
               </Button>
             </form>
@@ -289,15 +290,18 @@ export default function Auth() {
     );
   }
 
+  const pageLayout = getPageLayout();
+  
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md mx-4">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Arcade Highscores</CardTitle>
-          <CardDescription>
-            Sign in to your account or create a new one
-          </CardDescription>
-        </CardHeader>
+    <div {...pageLayout}>
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className={getCardStyle('primary') + " w-full max-w-md mx-4"}>
+          <CardHeader className="text-center">
+            <CardTitle className={getTypographyStyle('h2')}>Arcade Highscores</CardTitle>
+            <CardDescription className="text-gray-400">
+              Sign in to your account or create a new one
+            </CardDescription>
+          </CardHeader>
         <CardContent>
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
@@ -329,7 +333,7 @@ export default function Auth() {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" variant="outline" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Signing in...' : 'Sign In'}
                 </Button>
                 <div className="text-center mt-4">
@@ -379,7 +383,7 @@ export default function Auth() {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" variant="outline" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Creating account...' : 'Sign Up'}
                 </Button>
               </form>
@@ -423,7 +427,7 @@ export default function Auth() {
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" className="flex-1" disabled={isLoading}>
+                  <Button type="submit" variant="outline" className="flex-1" disabled={isLoading}>
                     {isLoading ? 'Sending...' : 'Send Reset Link'}
                   </Button>
                 </div>
@@ -432,6 +436,7 @@ export default function Auth() {
           </Card>
         </div>
       )}
+      </div>
     </div>
   );
 }

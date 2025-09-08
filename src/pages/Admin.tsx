@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Pencil, Trash2, Plus, Wrench } from "lucide-react";
+import { Pencil, Trash2, Plus, Wrench, ArrowLeft } from "lucide-react";
 import { isPlaceholderLogo } from "@/lib/utils";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import GameLogoSuggestions, { GameLogoSuggestionsRef } from "@/components/GameLogoSuggestions";
@@ -20,6 +20,7 @@ import ScoreManager from "@/components/ScoreManager";
 import RandomizeGames from "@/components/RandomizeGames";
 import StopCompetition from "@/components/StopCompetition";
 import WebhookConfig from "@/components/WebhookConfig";
+import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from "@/utils/designSystem";
 
 interface Game {
   id: string;
@@ -278,42 +279,41 @@ const Admin = () => {
   };
 
   if (loading || gamesLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center relative z-10"
-           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-        <div className="text-white text-xl">Loading...</div>
-      </div>
-    );
+    return <LoadingSpinner text="Loading admin panel..." />;
   }
 
   if (!user || !isAdmin) {
     return null; // Will redirect via useEffect
   }
 
+  const pageLayout = getPageLayout();
+  
   return (
-    <div className="min-h-screen text-white p-4 md:p-8 relative z-10"
-         style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-      <div className="max-w-6xl mx-auto space-y-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-arcade-neonPink via-arcade-neonCyan to-arcade-neonYellow text-transparent bg-clip-text">
-            Admin Panel
-          </h1>
-          <Button variant="outline" onClick={() => navigate('/')} className="w-full sm:w-auto">
+    <div {...pageLayout}>
+      <PageContainer className="max-w-6xl mx-auto">
+        <PageHeader 
+          title="Admin Panel"
+          subtitle="Manage games, scores, and system configuration"
+        >
+          <Button 
+            onClick={() => navigate('/')} 
+            variant="outline"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Leaderboard
           </Button>
-        </div>
+        </PageHeader>
 
-        <Card className="bg-black/50 border-white/20">
+        <Card className={getCardStyle('primary')}>
           <CardHeader>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <CardTitle className="text-white">Games Management</CardTitle>
+              <CardTitle className={getTypographyStyle('h3')}>Games Management</CardTitle>
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                 <RandomizeGames onGamesUpdated={loadGames} />
                 <StopCompetition onCompetitionStopped={loadGames} refreshTrigger={gamesUpdateTrigger} />
                 <Button 
-                  variant="outline" 
                   onClick={cleanupPlaceholderLogos}
-                  className="w-full sm:w-auto"
+                  className={getButtonStyle('secondary') + " w-full sm:w-auto"}
                   title="Remove broken placeholder logos and use fallback UI instead"
                 >
                   <Wrench className="w-4 h-4 mr-2" />
@@ -321,7 +321,7 @@ const Admin = () => {
                 </Button>
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
-                    <Button onClick={resetForm} className="bg-arcade-neonPink hover:bg-arcade-neonPink/80 w-full sm:w-auto">
+                    <Button onClick={resetForm} variant="outline" className="w-full sm:w-auto">
                       <Plus className="w-4 h-4 mr-2" />
                       Add Game
                     </Button>
@@ -378,7 +378,7 @@ const Admin = () => {
                       <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="w-full sm:w-auto">
                         Cancel
                       </Button>
-                      <Button onClick={saveGame} className="bg-arcade-neonPink hover:bg-arcade-neonPink/80 w-full sm:w-auto">
+                      <Button onClick={saveGame} variant="outline" className="w-full sm:w-auto">
                         {editingGame ? 'Update' : 'Create'}
                       </Button>
                     </div>
@@ -449,7 +449,7 @@ const Admin = () => {
         <ScoreManager />
 
         <WebhookConfig />
-      </div>
+      </PageContainer>
     </div>
   );
 };
