@@ -43,7 +43,7 @@ const Admin = () => {
     name: "",
     logo_url: "",
     is_active: true,
-    include_in_challenge: false
+    include_in_challenge: true
   });
   const gameLogoSuggestionsRef = useRef<GameLogoSuggestionsRef>(null);
 
@@ -89,7 +89,7 @@ const Admin = () => {
       name: "",
       logo_url: "",
       is_active: true,
-      include_in_challenge: false
+      include_in_challenge: true
     });
     setEditingGame(null);
   };
