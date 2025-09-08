@@ -60,37 +60,51 @@ const PlayerDashboard = () => {
       setError(null);
       console.log('Loading player data for:', playerName);
       
-      // Load player stats
-      const { data: statsData, error: statsError } = await supabase
-        .from('player_stats')
-        .select('*')
-        .eq('player_name', playerName?.toUpperCase())
-        .single();
+      // Try to load player stats (this might fail if table doesn't exist)
+      let statsData = null;
+      try {
+        const { data, error: statsError } = await supabase
+          .from('player_stats')
+          .select('*')
+          .eq('player_name', playerName?.toUpperCase())
+          .single();
 
-      console.log('Player stats result:', { statsData, statsError });
-
-      if (statsError && statsError.code !== 'PGRST116') {
-        throw statsError;
+        console.log('Player stats result:', { data, statsError });
+        
+        if (statsError && statsError.code !== 'PGRST116') {
+          console.warn('Player stats error (non-critical):', statsError);
+        } else {
+          statsData = data;
+        }
+      } catch (statsErr) {
+        console.warn('Player stats table might not exist:', statsErr);
       }
 
-      // Load recent achievements (last 5)
-      const { data: achievementsData, error: achievementsError } = await supabase
-        .from('player_achievements')
-        .select(`
-          *,
-          achievements (*)
-        `)
-        .eq('player_name', playerName?.toUpperCase())
-        .order('unlocked_at', { ascending: false })
-        .limit(5);
+      // Try to load achievements (this might fail if table doesn't exist)
+      let achievementsData = [];
+      try {
+        const { data, error: achievementsError } = await supabase
+          .from('player_achievements')
+          .select(`
+            *,
+            achievements (*)
+          `)
+          .eq('player_name', playerName?.toUpperCase())
+          .order('unlocked_at', { ascending: false })
+          .limit(5);
 
-      console.log('Player achievements result:', { achievementsData, achievementsError });
-
-      if (achievementsError) {
-        throw achievementsError;
+        console.log('Player achievements result:', { data, achievementsError });
+        
+        if (achievementsError) {
+          console.warn('Player achievements error (non-critical):', achievementsError);
+        } else {
+          achievementsData = data || [];
+        }
+      } catch (achievementsErr) {
+        console.warn('Player achievements table might not exist:', achievementsErr);
       }
 
-      // Load games and scores for chart
+      // Load games and scores (these should exist)
       const [gamesResult, scoresResult] = await Promise.all([
         supabase
           .from('games')
@@ -99,20 +113,27 @@ const PlayerDashboard = () => {
         supabase
           .from('scores')
           .select('game_id, player_name, score, created_at')
+          .eq('player_name', playerName?.toUpperCase())
           .order('created_at', { ascending: false })
       ]);
 
       console.log('Games and scores results:', { gamesResult, scoresResult });
 
-      if (gamesResult.error) throw gamesResult.error;
-      if (scoresResult.error) throw scoresResult.error;
+      if (gamesResult.error) {
+        console.warn('Games error:', gamesResult.error);
+      }
+      if (scoresResult.error) {
+        console.warn('Scores error:', scoresResult.error);
+      }
 
-      setPlayerStats(statsData || null);
-      setRecentAchievements(achievementsData || []);
+      setPlayerStats(statsData);
+      setRecentAchievements(achievementsData);
       setGames(gamesResult.data || []);
       setScores(scoresResult.data || []);
+      
+      console.log('Player dashboard data loaded successfully');
     } catch (error) {
-      console.error('Error loading player data:', error);
+      console.error('Critical error loading player data:', error);
       setError(error instanceof Error ? error.message : 'Unknown error occurred');
     } finally {
       setLoading(false);
@@ -189,7 +210,7 @@ const PlayerDashboard = () => {
           </Button>
         </PageHeader>
         {/* Stats Overview */}
-        {playerStats && (
+        {playerStats ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className={getCardStyle('primary')}>
               <CardContent className="p-4">
@@ -246,6 +267,21 @@ const PlayerDashboard = () => {
                 </div>
               </CardContent>
             </Card>
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <div className="bg-gray-800/50 rounded-lg p-8">
+              <Gamepad2 className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+              <h3 className="text-xl font-bold text-white mb-2">No Player Stats Available</h3>
+              <p className="text-gray-400 mb-4">
+                This player hasn't submitted any scores yet, or the achievement system isn't set up.
+              </p>
+              <div className="space-y-2 text-sm text-gray-500">
+                <p>• Make sure the player has submitted scores</p>
+                <p>• Check if the achievement system is properly configured</p>
+                <p>• Try refreshing the page</p>
+              </div>
+            </div>
           </div>
         )}
 
