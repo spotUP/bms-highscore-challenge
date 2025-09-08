@@ -79,36 +79,34 @@ export const useAchievements = () => {
         .limit(1)
         .single();
 
-      // Temporarily disable webhook calls until the function is deployed
-      console.log('🚀 Achievement webhook would be sent:', {
+      console.log('🚀 Sending achievement webhook:', {
         player_name: playerName,
         achievement: achievement.name,
         points: achievement.points
       });
       
-      // TODO: Re-enable webhook calls after deploying the updated function
-      // const webhookResponse = await supabase.functions.invoke('send-achievement-webhook', {
-      //   body: {
-      //     player_name: playerName,
-      //     achievement: {
-      //       id: achievement.id,
-      //       name: achievement.name,
-      //       description: achievement.description,
-      //       badge_icon: achievement.badge_icon,
-      //       badge_color: achievement.badge_color,
-      //       points: achievement.points
-      //     },
-      //     game_name: recentScore?.games?.name,
-      //     score: recentScore?.score,
-      //     timestamp: playerAchievement.unlocked_at
-      //   }
-      // });
+      const webhookResponse = await supabase.functions.invoke('send-achievement-webhook', {
+        body: {
+          player_name: playerName,
+          achievement: {
+            id: achievement.id,
+            name: achievement.name,
+            description: achievement.description,
+            badge_icon: achievement.badge_icon,
+            badge_color: achievement.badge_color,
+            points: achievement.points
+          },
+          game_name: recentScore?.games?.name,
+          score: recentScore?.score,
+          timestamp: playerAchievement.unlocked_at
+        }
+      });
 
-      // if (webhookResponse.error) {
-      //   console.error('❌ Achievement webhook error:', webhookResponse.error);
-      // } else {
-      //   console.log('✅ Achievement webhook sent successfully:', webhookResponse.data);
-      // }
+      if (webhookResponse.error) {
+        console.error('❌ Achievement webhook error:', webhookResponse.error);
+      } else {
+        console.log('✅ Achievement webhook sent successfully:', webhookResponse.data);
+      }
     } catch (error) {
       console.error('❌ Achievement webhook call failed:', error);
     }
