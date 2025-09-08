@@ -28,56 +28,36 @@ serve(async (req) => {
       )
     }
 
-    // Use secrets with fallback to the keys you provided
-    const apiKey = Deno.env.get('GOOGLE_CUSTOM_SEARCH_API_KEY') || 'AIzaSyAYC8x8i_3tN2DNxFZ_LrQTC_AuZg6LGEY'
-    const searchEngineId = Deno.env.get('GOOGLE_CUSTOM_SEARCH_ENGINE_ID') || '20175ef2c9acf44c5'
+    console.log('=== LAUNCHBOX DIRECT SEARCH ===')
+    console.log('Searching LaunchBox Games Database directly for:', gameName)
+    console.log('=== END LAUNCHBOX SEARCH INIT ===')
 
-    console.log('=== FINAL DEBUG ===')
-    console.log('Available env vars:', Object.keys(Deno.env.toObject()).sort())
-    console.log('Secret API Key present:', !!Deno.env.get('GOOGLE_CUSTOM_SEARCH_API_KEY'))
-    console.log('Secret Engine ID present:', !!Deno.env.get('GOOGLE_CUSTOM_SEARCH_ENGINE_ID'))
-    console.log('Final API Key present:', !!apiKey)
-    console.log('Final Engine ID present:', !!searchEngineId)
-    console.log('API Key source:', Deno.env.get('GOOGLE_CUSTOM_SEARCH_API_KEY') ? 'secret' : 'fallback')
-    console.log('Engine ID source:', Deno.env.get('GOOGLE_CUSTOM_SEARCH_ENGINE_ID') ? 'secret' : 'fallback')
-    console.log('=== END FINAL DEBUG ===')
+    // Search LaunchBox Games Database directly with more specific query
+    const searchQuery = gameName
+    const searchUrl = `https://gamesdb.launchbox-app.com/games/search?q=${encodeURIComponent(searchQuery)}&platform=Arcade`
+    
+    console.log('Searching for exact game:', gameName)
 
-    if (!apiKey || !searchEngineId) {
-      console.log('Google API not configured, using fallback images')
-      const fallbackImages = [
-        `https://dummyimage.com/200x200/333333/ffffff&text=${encodeURIComponent(gameName)}+Missing+Keys`,
-        `https://dummyimage.com/200x200/555555/ffffff&text=${encodeURIComponent(gameName)}+No+API`,
-        `https://dummyimage.com/200x200/777777/ffffff&text=${encodeURIComponent(gameName)}+Keys`,
-        `https://dummyimage.com/200x200/999999/ffffff&text=${encodeURIComponent(gameName)}+Found`
-      ]
-      
-      return new Response(
-        JSON.stringify({ images: fallbackImages.slice(0, numResults) }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
-    }
-
-    // Search for game logos using Google Custom Search API
-    const searchQuery = `${gameName} game logo clear transparent`
-    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${searchEngineId}&q=${encodeURIComponent(searchQuery)}&searchType=image&num=${numResults}&safe=active`
-
+    console.log('=== LAUNCHBOX SEARCH DEBUG ===')
     console.log('Searching for:', searchQuery)
-    console.log('Search URL (without key):', searchUrl.replace(apiKey, '[REDACTED]'))
-    console.log('Using API Key:', apiKey ? `${apiKey.substring(0, 10)}...` : 'NOT SET')
-    console.log('Using Search Engine ID:', searchEngineId)
+    console.log('Search URL:', searchUrl)
+    console.log('=== END LAUNCHBOX SEARCH DEBUG ===')
 
-    const response = await fetch(searchUrl)
+    const response = await fetch(searchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; GameLogoBot/1.0)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      }
+    })
     
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('Google Search API error:', response.status, errorText)
+      console.error('LaunchBox search error:', response.status, errorText)
       
       // Return fallback images on API error
       const fallbackImages = [
-        `https://dummyimage.com/200x200/ff9999/ffffff&text=${encodeURIComponent(gameName)}+API+Error`,
-        `https://dummyimage.com/200x200/99ff99/ffffff&text=${encodeURIComponent(gameName)}+Check+Keys`,
+        `https://dummyimage.com/200x200/ff9999/ffffff&text=${encodeURIComponent(gameName)}+LaunchBox+Error`,
+        `https://dummyimage.com/200x200/99ff99/ffffff&text=${encodeURIComponent(gameName)}+Search+Failed`,
         `https://dummyimage.com/200x200/9999ff/ffffff&text=${encodeURIComponent(gameName)}+Fallback`,
         `https://dummyimage.com/200x200/ffff99/ffffff&text=${encodeURIComponent(gameName)}+Mode`
       ]
@@ -90,12 +70,92 @@ serve(async (req) => {
       )
     }
 
-    const data = await response.json()
-    console.log('Google API response received, items count:', data.items?.length || 0)
+    const html = await response.text()
+    console.log('LaunchBox response received, HTML length:', html.length)
     
-    const images = data.items?.map((item: any) => item.link) || []
+    // Debug: Check if we got a valid response
+    if (html.length < 1000) {
+      console.log('HTML response seems too short, might be an error page')
+      console.log('HTML content:', html.substring(0, 500))
+    }
     
-    console.log(`Found ${images.length} images for "${gameName}"`)
+    // Debug: Check if the page contains the game we're looking for
+    const hasGameTitle = html.toLowerCase().includes(gameName.toLowerCase())
+    console.log(`Page contains game title "${gameName}":`, hasGameTitle)
+    
+    // Parse HTML to extract clear logo image URLs from the Clear Logo section
+    const images: string[] = []
+    
+    // First, try to find the Clear Logo section in the HTML
+    // Look for the section that contains "Clear Logo" heading
+    const clearLogoSectionRegex = /### Clear Logo[\s\S]*?(?=### [A-Z]|$)/i
+    const clearLogoSection = html.match(clearLogoSectionRegex)
+    
+    console.log('Clear Logo section found:', !!clearLogoSection)
+    
+    if (clearLogoSection) {
+      console.log('Clear Logo section length:', clearLogoSection[0].length)
+      console.log('Clear Logo section preview:', clearLogoSection[0].substring(0, 200))
+      
+      // Extract image URLs from within the Clear Logo section only
+      const imageRegex = /https:\/\/images\.launchbox-app\.com\/[^"'\s]+\.(png|jpg|jpeg)/gi
+      const sectionMatches = clearLogoSection[0].match(imageRegex)
+      
+      if (sectionMatches) {
+        images.push(...sectionMatches.slice(0, numResults))
+        console.log('Found images in Clear Logo section:', sectionMatches.length)
+        console.log('Clear Logo section URLs:', sectionMatches)
+      }
+    }
+    
+    // If no Clear Logo section found, try alternative approach
+    if (images.length === 0) {
+      console.log('No Clear Logo section found, trying alternative parsing...')
+      
+      // Look for LaunchBox clear logo images with more specific pattern
+      const clearLogoRegex = /https:\/\/images\.launchbox-app\.com\/[^"'\s]*clear[^"'\s]*\.(png|jpg|jpeg)/gi
+      const clearMatches = html.match(clearLogoRegex)
+      
+      if (clearMatches) {
+        images.push(...clearMatches.slice(0, numResults))
+        console.log('Found LaunchBox clear logos via regex:', clearMatches.length)
+        console.log('Clear logo URLs:', clearMatches)
+      }
+    }
+    
+    // Debug: If still no images, let's see what's in the HTML
+    if (images.length === 0) {
+      console.log('No clear logos found, debugging HTML content...')
+      
+      // Check if there are any LaunchBox images at all
+      const allLaunchBoxImages = html.match(/https:\/\/images\.launchbox-app\.com\/[^"'\s]+\.(png|jpg|jpeg)/gi)
+      console.log('All LaunchBox images found:', allLaunchBoxImages?.length || 0)
+      if (allLaunchBoxImages && allLaunchBoxImages.length > 0) {
+        console.log('Sample LaunchBox image URLs:', allLaunchBoxImages.slice(0, 5))
+      }
+      
+      // Check if the page has the expected structure
+      const hasMediaSection = html.includes('Media')
+      const hasClearLogoText = html.includes('Clear Logo')
+      console.log('Page has Media section:', hasMediaSection)
+      console.log('Page has Clear Logo text:', hasClearLogoText)
+    }
+    
+    // Final fallback: look for any LaunchBox logo images (but log that it's not from Clear Logo section)
+    if (images.length === 0) {
+      console.log('No clear logos found, using general logo fallback...')
+      const logoRegex = /https:\/\/images\.launchbox-app\.com\/[^"'\s]*logo[^"'\s]*\.(png|jpg|jpeg)/gi
+      const logoMatches = html.match(logoRegex)
+      
+      if (logoMatches) {
+        images.push(...logoMatches.slice(0, numResults))
+        console.log('Found LaunchBox logos (NOT from Clear Logo section):', logoMatches.length)
+        console.log('Logo URLs:', logoMatches)
+      }
+    }
+    
+    console.log(`Final result: Found ${images.length} LaunchBox images for "${gameName}"`)
+    console.log('Final image URLs:', images)
 
     return new Response(
       JSON.stringify({ images }),
