@@ -286,6 +286,11 @@ const ScoreManager = () => {
       setIsDialogOpen(false);
       resetForm();
       loadData();
+      
+      // Refresh the page to update all leaderboards
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
     } catch (error: any) {
       console.error('Error saving score:', error);
       
@@ -476,7 +481,7 @@ const ScoreManager = () => {
                 {scores.map((score, index) => (
                   <TableRow key={score.id} className="border-white/20">
                     <TableCell 
-                      className="font-arcade font-bold animated-gradient"
+                      className="font-arcade font-bold text-base animated-gradient"
                       style={{ animationDelay: `${index * 0.1}s` }}
                     >{score.player_name}</TableCell>
                     <TableCell 
@@ -522,7 +527,7 @@ const ScoreManager = () => {
                 {competitionScores.map((score, index) => (
                   <TableRow key={score.id} className="border-white/20">
                     <TableCell 
-                      className="font-arcade font-bold animated-gradient"
+                      className="font-arcade font-bold text-base animated-gradient"
                       style={{ animationDelay: `${index * 0.1}s` }}
                     >{score.player_name}</TableCell>
                     <TableCell 

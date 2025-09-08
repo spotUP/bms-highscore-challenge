@@ -252,9 +252,10 @@ const MobileEntry = () => {
         checkForNewAchievements(name);
       }, 1000);
       
-      // Navigate back to main page after a short delay
+      // Navigate back to main page after a short delay and refresh
       setTimeout(() => {
-        navigate("/");
+        navigate("/", { replace: true });
+        window.location.reload();
       }, 2000);
       
     } catch (error) {

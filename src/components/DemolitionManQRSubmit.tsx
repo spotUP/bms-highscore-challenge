@@ -97,6 +97,11 @@ const DemolitionManQRSubmit = () => {
       // Clear form
       setPlayerName('');
       setScore('');
+      
+      // Refresh the page to update leaderboards
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
     } catch (error: any) {
       console.error('Error submitting score:', error);
       toast({

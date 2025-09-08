@@ -45,7 +45,7 @@ const LeaderboardEntry = React.memo(({ rank, name, score, isNewScore }: Leaderbo
         {getRankIcon(rank)}
         <div className="flex-1">
           <div 
-            className="font-arcade font-bold text-sm animated-gradient"
+            className="font-arcade font-bold text-base animated-gradient"
             style={{ animationDelay: `${rank * 0.1}s` }}
           >
             {name}
