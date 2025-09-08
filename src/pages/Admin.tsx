@@ -282,7 +282,7 @@ const Admin = () => {
                               gameLogoSuggestionsRef.current?.searchForLogos();
                             }
                           }}
-                          placeholder="Enter game name (press Enter to search logos)"
+                          placeholder="Enter game name (press Enter to search local logos)"
                           className="bg-black/50 border-white/20 text-white w-full"
                         />
                       </div>

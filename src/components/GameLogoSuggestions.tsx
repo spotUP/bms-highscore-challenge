@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import gameLogoMapping from "@/data/game-logo-mapping.json";
 
 interface GameLogoSuggestionsProps {
   gameName: string;
@@ -36,29 +36,40 @@ const GameLogoSuggestions = forwardRef<GameLogoSuggestionsRef, GameLogoSuggestio
 
     setLoading(true);
     try {
-      // Call our edge function to search for images
-      const { data, error } = await supabase.functions.invoke('search-game-logos', {
-        body: { 
-          gameName: gameName.trim(),
-          numResults: 4
-        }
+      const searchTerm = gameName.trim().toLowerCase();
+      const supabaseUrl = 'https://tnsgrwntmnzpaifmutqh.supabase.co';
+      
+      // Find matching games in our local mapping
+      const matchingGames = Object.entries(gameLogoMapping).filter(([gameTitle, gameData]) => {
+        const title = gameTitle.toLowerCase();
+        const mameName = gameData.mameName.toLowerCase();
+        const mameTitle = gameData.mameTitle.toLowerCase();
+        
+        return title.includes(searchTerm) || 
+               mameName.includes(searchTerm) || 
+               mameTitle.includes(searchTerm) ||
+               searchTerm.includes(title) ||
+               searchTerm.includes(mameName) ||
+               searchTerm.includes(mameTitle);
       });
 
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      const imageResults: ImageResult[] = data?.images?.map((url: string, index: number) => ({
-        url,
-        alt: `${gameName} logo ${index + 1}`
-      })) || [];
+      // Convert to image results with Supabase Storage URLs
+      const imageResults: ImageResult[] = matchingGames.slice(0, 6).map(([gameTitle, gameData]) => ({
+        url: `${supabaseUrl}/storage/v1/object/public/game-logos/${gameData.logoFile}`,
+        alt: `${gameTitle} logo`
+      }));
 
       setSuggestions(imageResults);
       
       if (imageResults.length === 0) {
         toast({
           title: "No Results",
-          description: "No logo images found for this game",
+          description: "No logo images found for this game in our database",
+        });
+      } else {
+        toast({
+          title: "Found Logos",
+          description: `Found ${imageResults.length} logo(s) for "${gameName}"`,
         });
       }
     } catch (error) {
@@ -101,7 +112,7 @@ const GameLogoSuggestions = forwardRef<GameLogoSuggestionsRef, GameLogoSuggestio
           ) : (
             <Search className="w-4 h-4" />
           )}
-          <span>Search Logo Images</span>
+          <span>Search Local Game Logos</span>
         </Button>
       </div>
 
