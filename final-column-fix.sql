@@ -32,7 +32,8 @@ BEGIN
         WHERE a.name = 'First Score';
     END IF;
 
-    -- Award "Century Club" achievement if score >= 100
+    -- Award "Century Club" achievement if score 
+    >= 100
     IF NEW.score >= 100 AND NOT EXISTS (
         SELECT 1 FROM player_achievements pa 
         JOIN achievements a ON pa.achievement_id = a.id

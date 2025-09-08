@@ -59,18 +59,15 @@ const handler = async (req: Request): Promise<Response> => {
     // Calculate position (1-based index) - count how many scores are higher than this one
     const position = (scoresData?.filter(score => score.score > webhookData.score).length || 0) + 1;
 
-    // Get the game logo URL - use a data URI SVG that Teams definitely supports
-    const gameName = gameData.name || 'GAME';
-    const svgImage = `<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
-      <rect width="800" height="600" fill="#4F46E5"/>
-      <text x="400" y="300" font-family="Arial, sans-serif" font-size="64" fill="white" text-anchor="middle" dominant-baseline="middle">${gameName}</text>
-    </svg>`;
-    let gameLogoUrl = `data:image/svg+xml;base64,${btoa(svgImage)}`;
+    // Use a simple, reliable placeholder image that Teams can display
+    let gameLogoUrl = "https://cdn-icons-png.flaticon.com/512/1574/1574337.png"; // Trophy icon
     
-    // Try Supabase Storage URL first, but fall back to SVG if Teams can't access it
+    // Try to use the actual game logo from Supabase Storage
     if (gameData.logo_url && gameData.logo_url.startsWith('/game-logos/')) {
       const fileName = gameData.logo_url.substring('/game-logos/'.length);
-      gameLogoUrl = `${supabaseUrl}/storage/v1/object/public/game-logos/${fileName}`;
+      const supabaseLogoUrl = `${supabaseUrl}/storage/v1/object/public/game-logos/${fileName}`;
+      // Use the actual logo URL, fall back to trophy if it fails to load
+      gameLogoUrl = supabaseLogoUrl;
     }
     else if (gameData.logo_url && gameData.logo_url.includes('supabase.co/storage/')) {
       gameLogoUrl = gameData.logo_url;
@@ -88,14 +85,6 @@ const handler = async (req: Request): Promise<Response> => {
             "type": "AdaptiveCard",
             "version": "1.5",
             "body": [
-                  {
-                    "type": "Image",
-                    "url": gameLogoUrl,
-                    "horizontalAlignment": "Center",
-                    "size": "ExtraLarge",
-                    "width": "100%",
-                    "height": "auto"
-                  },
               {
                 "type": "TextBlock",
                 "text": "NEW HIGHSCORE ALERT!",

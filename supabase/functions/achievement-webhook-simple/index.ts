@@ -7,9 +7,11 @@ const corsHeaders = {
 
 interface SimpleAchievementRequest {
   player_name: string;
-  achievement_name: string;
-  description: string;
-  points: number;
+  achievements: Array<{
+    name: string;
+    description: string;
+    points: number;
+  }>;
   game_name?: string;
   score?: number;
 }
@@ -31,7 +33,114 @@ const handler = async (req: Request): Promise<Response> => {
     let teamsSuccess = false;
 
     if (teamsUrl) {
-      // Create Teams Adaptive Card message (same format as score webhook)
+      // Calculate total points
+      const totalPoints = data.achievements.reduce((sum, achievement) => sum + achievement.points, 0);
+      
+      // Create header based on number of achievements
+      const headerText = data.achievements.length === 1 
+        ? "🏆 ACHIEVEMENT UNLOCKED!"
+        : `🏆 ${data.achievements.length} ACHIEVEMENTS UNLOCKED!`;
+
+      // Create Teams Adaptive Card message
+      const cardBody = [
+        {
+          "type": "TextBlock",
+          "text": headerText,
+          "wrap": true,
+          "style": "heading",
+          "size": "ExtraLarge",
+          "horizontalAlignment": "Center",
+          "color": "Good"
+        },
+        {
+          "type": "TextBlock",
+          "text": `🎯 ${data.player_name}`,
+          "wrap": true,
+          "size": "Large",
+          "weight": "Bolder",
+          "color": "Accent",
+          "horizontalAlignment": "Center"
+        }
+      ];
+
+      // Add each achievement
+      data.achievements.forEach((achievement, index) => {
+        cardBody.push({
+          "type": "Container",
+          "horizontalAlignment": "Center",
+          "separator": index > 0,
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": `🏅 ${achievement.name}`,
+              "wrap": true,
+              "size": "Medium",
+              "weight": "Bolder",
+              "color": "Good",
+              "horizontalAlignment": "Center"
+            },
+            {
+              "type": "TextBlock",
+              "text": `📝 ${achievement.description}`,
+              "wrap": true,
+              "size": "Small",
+              "color": "Default",
+              "horizontalAlignment": "Center"
+            },
+            {
+              "type": "TextBlock",
+              "text": `⭐ +${achievement.points} Points`,
+              "wrap": true,
+              "size": "Small",
+              "weight": "Bolder",
+              "color": "Accent",
+              "horizontalAlignment": "Center"
+            }
+          ]
+        });
+      });
+
+      // Add total points if multiple achievements
+      if (data.achievements.length > 1) {
+        cardBody.push({
+          "type": "TextBlock",
+          "text": `🎊 Total: +${totalPoints} Points`,
+          "wrap": true,
+          "size": "Large",
+          "weight": "Bolder",
+          "color": "Accent",
+          "horizontalAlignment": "Center",
+          "separator": true
+        });
+      }
+
+      // Add game context if available
+      if (data.game_name && data.score) {
+        cardBody.push({
+          "type": "Container",
+          "horizontalAlignment": "Center",
+          "separator": true,
+          "items": [
+            {
+              "type": "TextBlock",
+              "text": `🎮 Earned in: ${data.game_name}`,
+              "wrap": true,
+              "size": "Small",
+              "color": "Default",
+              "horizontalAlignment": "Center"
+            },
+            {
+              "type": "TextBlock",
+              "text": `🎯 Score: ${data.score.toLocaleString()}`,
+              "wrap": true,
+              "size": "Small",
+              "color": "Default",
+              "horizontalAlignment": "Center"
+            }
+          ]
+        });
+      }
+
       const message = {
         "attachments": [
           {
@@ -39,82 +148,11 @@ const handler = async (req: Request): Promise<Response> => {
             "content": {
               "type": "AdaptiveCard",
               "version": "1.5",
-              "body": [
-                {
-                  "type": "TextBlock",
-                  "text": "🏆 ACHIEVEMENT UNLOCKED!",
-                  "wrap": true,
-                  "style": "heading",
-                  "size": "ExtraLarge",
-                  "horizontalAlignment": "Center",
-                  "color": "Good"
-                },
-                {
-                  "type": "Container",
-                  "horizontalAlignment": "Center",
-                  "items": [
-                    {
-                      "type": "TextBlock",
-                      "text": `🎯 ${data.player_name}`,
-                      "wrap": true,
-                      "size": "Large",
-                      "weight": "Bolder",
-                      "color": "Accent",
-                      "horizontalAlignment": "Center"
-                    },
-                    {
-                      "type": "TextBlock",
-                      "text": `🏅 ${data.achievement_name}`,
-                      "wrap": true,
-                      "size": "Large",
-                      "weight": "Bolder",
-                      "color": "Good",
-                      "horizontalAlignment": "Center"
-                    },
-                    {
-                      "type": "TextBlock",
-                      "text": `📝 ${data.description}`,
-                      "wrap": true,
-                      "size": "Medium",
-                      "color": "Default",
-                      "horizontalAlignment": "Center"
-                    },
-                    {
-                      "type": "TextBlock",
-                      "text": `⭐ +${data.points} Points`,
-                      "wrap": true,
-                      "size": "Medium",
-                      "weight": "Bolder",
-                      "color": "Accent",
-                      "horizontalAlignment": "Center"
-                    }
-                  ]
-                }
-              ]
+              "body": cardBody
             }
           }
         ]
       };
-
-      // Add game context if available
-      if (data.game_name && data.score) {
-        message.attachments[0].content.body[1].items.push({
-          "type": "TextBlock",
-          "text": `🎮 Earned in: ${data.game_name}`,
-          "wrap": true,
-          "size": "Small",
-          "color": "Default",
-          "horizontalAlignment": "Center"
-        });
-        message.attachments[0].content.body[1].items.push({
-          "type": "TextBlock",
-          "text": `🎯 Score: ${data.score.toLocaleString()}`,
-          "wrap": true,
-          "size": "Small",
-          "color": "Default",
-          "horizontalAlignment": "Center"
-        });
-      }
 
       console.log("Sending to Teams:", JSON.stringify(message, null, 2));
 

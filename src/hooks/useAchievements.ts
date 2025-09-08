@@ -35,8 +35,8 @@ export const useAchievements = () => {
         if (Array.isArray(newAchievements) && newAchievements.length > 0) {
           console.log(`🏆 Found ${newAchievements.length} new achievements for ${playerName}`);
           
+          // Show individual notifications with delays
           newAchievements.forEach((achievement: any, index: number) => {
-            // Add a small delay between notifications if multiple achievements
             setTimeout(() => {
               showAchievementNotification({
                 id: achievement.achievement_id,
@@ -46,20 +46,11 @@ export const useAchievements = () => {
                 badge_color: achievement.badge_color,
                 points: achievement.points
               });
-              
-              // Send webhook for achievement unlock
-              sendAchievementWebhook(playerName, {
-                id: achievement.achievement_id,
-                name: achievement.achievement_name,
-                description: achievement.achievement_description,
-                badge_icon: achievement.badge_icon,
-                badge_color: achievement.badge_color,
-                points: achievement.points
-              }, {
-                unlocked_at: achievement.unlocked_at
-              });
             }, index * 1000);
           });
+          
+          // Send single webhook with all achievements
+          sendMultipleAchievementsWebhook(playerName, newAchievements);
         } else {
           console.log('📭 No new achievements found for', playerName);
         }
@@ -72,6 +63,52 @@ export const useAchievements = () => {
       console.error('Error in checkForNewAchievements:', error);
     }
   }, [showAchievementNotification]);
+
+  const sendMultipleAchievementsWebhook = useCallback(async (
+    playerName: string, 
+    achievements: any[]
+  ) => {
+    try {
+      console.log('🚀 Sending achievement webhook for', achievements.length, 'achievements:', {
+        player_name: playerName,
+        achievements: achievements.map(a => a.achievement_name)
+      });
+
+      // Get the most recent score for this player to provide context
+      const { data: recentScore } = await supabase
+        .from('scores')
+        .select(`
+          score,
+          game_id,
+          games (name)
+        `)
+        .eq('player_name', playerName.toUpperCase())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const webhookResponse = await supabase.functions.invoke('achievement-webhook-simple', {
+        body: {
+          player_name: playerName,
+          achievements: achievements.map(achievement => ({
+            name: achievement.achievement_name,
+            description: achievement.achievement_description,
+            points: achievement.points
+          })),
+          game_name: recentScore?.games?.name,
+          score: recentScore?.score
+        }
+      });
+
+      if (webhookResponse.error) {
+        console.error('❌ Achievement webhook error:', webhookResponse.error);
+      } else {
+        console.log('✅ Achievement webhook sent successfully:', webhookResponse.data);
+      }
+    } catch (error) {
+      console.error('❌ Achievement webhook call failed:', error);
+    }
+  }, []);
 
   const sendAchievementWebhook = useCallback(async (
     playerName: string, 
@@ -101,9 +138,11 @@ export const useAchievements = () => {
       const webhookResponse = await supabase.functions.invoke('achievement-webhook-simple', {
         body: {
           player_name: playerName,
-          achievement_name: achievement.name,
-          description: achievement.description,
-          points: achievement.points,
+          achievements: [{
+            name: achievement.name,
+            description: achievement.description,
+            points: achievement.points
+          }],
           game_name: recentScore?.games?.name,
           score: recentScore?.score
         }

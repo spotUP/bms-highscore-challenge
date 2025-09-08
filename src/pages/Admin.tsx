@@ -23,6 +23,7 @@ import StopCompetition from "@/components/StopCompetition";
 import WebhookConfig from "@/components/WebhookConfig";
 import AchievementTest from "@/components/AchievementTest";
 import UserManagement from "@/components/UserManagement";
+import ResetFunctions from "@/components/ResetFunctions";
 import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from "@/utils/designSystem";
 import { useUserRoles } from "@/hooks/useUserRoles";
 
@@ -53,6 +54,7 @@ const Admin = () => {
     include_in_challenge: true
   });
   const gameLogoSuggestionsRef = useRef<GameLogoSuggestionsRef>(null);
+  const [isResetting, setIsResetting] = useState(false);
 
   // Redirect if not admin
   useEffect(() => {
@@ -486,7 +488,10 @@ const Admin = () => {
           </TabsContent>
 
           <TabsContent value="system" className="mt-6">
-            <AchievementTest />
+            <div className="space-y-6">
+              <AchievementTest />
+              <ResetFunctions />
+            </div>
           </TabsContent>
 
           <TabsContent value="users" className="mt-6">
