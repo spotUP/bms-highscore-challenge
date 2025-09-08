@@ -22,17 +22,34 @@ const PlayerScoreHistoryChart: React.FC<PlayerScoreHistoryChartProps> = React.me
   playerName 
 }) => {
   const chartData = useMemo(() => {
+    if (!scores || !Array.isArray(scores) || !playerName) {
+      return [];
+    }
+
     // Filter scores for this player
-    const playerScores = scores.filter(score => score.player_name === playerName);
+    const playerScores = scores.filter(score => 
+      score && 
+      score.player_name === playerName && 
+      score.created_at && 
+      typeof score.score === 'number'
+    );
+    
+    if (playerScores.length === 0) {
+      return [];
+    }
     
     // Group by date and sum scores
     const scoresByDate = playerScores.reduce((acc, score) => {
-      const date = new Date(score.created_at).toISOString().split('T')[0];
-      if (!acc[date]) {
-        acc[date] = { date, totalScore: 0, gameCount: 0 };
+      try {
+        const date = new Date(score.created_at).toISOString().split('T')[0];
+        if (!acc[date]) {
+          acc[date] = { date, totalScore: 0, gameCount: 0 };
+        }
+        acc[date].totalScore += score.score;
+        acc[date].gameCount += 1;
+      } catch (error) {
+        console.warn('Error processing score date:', error, score);
       }
-      acc[date].totalScore += score.score;
-      acc[date].gameCount += 1;
       return acc;
     }, {} as Record<string, { date: string; totalScore: number; gameCount: number }>);
 
@@ -43,7 +60,7 @@ const PlayerScoreHistoryChart: React.FC<PlayerScoreHistoryChartProps> = React.me
   }, [scores, playerName]);
 
   const CustomTooltip = useCallback(({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
+    if (active && payload && payload.length && label) {
       return (
         <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-lg">
           <p className="text-white font-semibold mb-2">{`Date: ${new Date(label).toLocaleDateString()}`}</p>
