@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
-import GameLogoSuggestions from "@/components/GameLogoSuggestions";
+import GameLogoSuggestions, { GameLogoSuggestionsRef } from "@/components/GameLogoSuggestions";
 import ScoreManager from "@/components/ScoreManager";
 import RandomizeGames from "@/components/RandomizeGames";
 import StopCompetition from "@/components/StopCompetition";
@@ -45,6 +45,7 @@ const Admin = () => {
     is_active: true,
     include_in_challenge: false
   });
+  const gameLogoSuggestionsRef = useRef<GameLogoSuggestionsRef>(null);
 
   // Redirect if not admin
   useEffect(() => {
@@ -275,12 +276,19 @@ const Admin = () => {
                           id="name"
                           value={formData.name}
                           onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                          placeholder="Enter game name"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              gameLogoSuggestionsRef.current?.searchForLogos();
+                            }
+                          }}
+                          placeholder="Enter game name (press Enter to search logos)"
                           className="bg-black/50 border-white/20 text-white w-full"
                         />
                       </div>
                     <div className="w-full">
                       <GameLogoSuggestions
+                        ref={gameLogoSuggestionsRef}
                         gameName={formData.name}
                         onSelectImage={(url) => setFormData(prev => ({ ...prev, logo_url: url }))}
                       />

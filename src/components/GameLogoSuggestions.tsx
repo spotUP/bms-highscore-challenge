@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, forwardRef, useImperativeHandle } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Search } from "lucide-react";
@@ -15,7 +15,11 @@ interface ImageResult {
   alt: string;
 }
 
-const GameLogoSuggestions = ({ gameName, onSelectImage }: GameLogoSuggestionsProps) => {
+export interface GameLogoSuggestionsRef {
+  searchForLogos: () => void;
+}
+
+const GameLogoSuggestions = forwardRef<GameLogoSuggestionsRef, GameLogoSuggestionsProps>(({ gameName, onSelectImage }, ref) => {
   const [suggestions, setSuggestions] = useState<ImageResult[]>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -68,6 +72,11 @@ const GameLogoSuggestions = ({ gameName, onSelectImage }: GameLogoSuggestionsPro
       setLoading(false);
     }
   };
+
+  // Expose searchForLogos function to parent component
+  useImperativeHandle(ref, () => ({
+    searchForLogos
+  }));
 
   const handleImageSelect = (imageUrl: string) => {
     onSelectImage(imageUrl);
@@ -123,6 +132,8 @@ const GameLogoSuggestions = ({ gameName, onSelectImage }: GameLogoSuggestionsPro
       )}
     </div>
   );
-};
+});
+
+GameLogoSuggestions.displayName = 'GameLogoSuggestions';
 
 export default GameLogoSuggestions;
