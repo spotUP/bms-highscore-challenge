@@ -94,12 +94,11 @@ const handler = async (req: Request): Promise<Response> => {
                     "horizontalAlignment": "Center",
                     "size": "ExtraLarge",
                     "width": "100%",
-                    "height": "auto",
-                    "style": "person"
+                    "height": "auto"
                   },
               {
                 "type": "TextBlock",
-                "text": "🎮 NEW HIGHSCORE ALERT! 🎮",
+                "text": "NEW HIGHSCORE ALERT!",
                 "wrap": true,
                 "style": "heading",
                 "size": "ExtraLarge",
@@ -130,7 +129,7 @@ const handler = async (req: Request): Promise<Response> => {
                   },
                   {
                     "type": "TextBlock",
-                    "text": "🎯 Game: " + webhookData.game_name,
+                    "text": "Game: " + webhookData.game_name,
                     "wrap": true,
                     "size": "Medium",
                     "color": "Default",
