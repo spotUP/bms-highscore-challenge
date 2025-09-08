@@ -39,19 +39,42 @@ const GameLogoSuggestions = forwardRef<GameLogoSuggestionsRef, GameLogoSuggestio
       const searchTerm = gameName.trim().toLowerCase();
       const supabaseUrl = 'https://tnsgrwntmnzpaifmutqh.supabase.co';
       
-      // Find matching games in our local mapping
-      const matchingGames = Object.entries(gameLogoMapping).filter(([gameTitle, gameData]) => {
+      // Create a comprehensive search that includes exact matches and fuzzy matching
+      const allGames = Object.entries(gameLogoMapping);
+      const matchingGames: Array<[string, any]> = [];
+      
+      // First, try exact match by game title
+      const exactMatch = allGames.find(([gameTitle]) => 
+        gameTitle.toLowerCase() === searchTerm
+      );
+      if (exactMatch) {
+        matchingGames.push(exactMatch);
+      }
+      
+      // Then try exact match by MAME name
+      const mameMatch = allGames.find(([, gameData]) => 
+        gameData.mameName.toLowerCase() === searchTerm
+      );
+      if (mameMatch && !matchingGames.includes(mameMatch)) {
+        matchingGames.push(mameMatch);
+      }
+      
+      // Then try fuzzy matching on all fields
+      const fuzzyMatches = allGames.filter(([gameTitle, gameData]) => {
         const title = gameTitle.toLowerCase();
         const mameName = gameData.mameName.toLowerCase();
         const mameTitle = gameData.mameTitle.toLowerCase();
         
-        return title.includes(searchTerm) || 
-               mameName.includes(searchTerm) || 
-               mameTitle.includes(searchTerm) ||
-               searchTerm.includes(title) ||
-               searchTerm.includes(mameName) ||
-               searchTerm.includes(mameTitle);
+        return (title.includes(searchTerm) || 
+                mameName.includes(searchTerm) || 
+                mameTitle.includes(searchTerm) ||
+                searchTerm.includes(title) ||
+                searchTerm.includes(mameName) ||
+                searchTerm.includes(mameTitle)) &&
+               !matchingGames.some(([existingTitle]) => existingTitle === gameTitle);
       });
+      
+      matchingGames.push(...fuzzyMatches);
 
       // Convert to image results with Supabase Storage URLs
       const imageResults: ImageResult[] = matchingGames.slice(0, 6).map(([gameTitle, gameData]) => ({
@@ -60,6 +83,15 @@ const GameLogoSuggestions = forwardRef<GameLogoSuggestionsRef, GameLogoSuggestio
       }));
 
       setSuggestions(imageResults);
+      
+      // Debug logging
+      console.log(`Search for "${gameName}":`, {
+        searchTerm,
+        exactMatch: exactMatch ? exactMatch[0] : null,
+        mameMatch: mameMatch ? mameMatch[0] : null,
+        totalMatches: matchingGames.length,
+        results: imageResults.map(r => r.alt)
+      });
       
       if (imageResults.length === 0) {
         toast({
