@@ -37,6 +37,21 @@ const handler = async (req: Request): Promise<Response> => {
     
     console.log("Processing achievement webhook data:", webhookData);
 
+    // Validate required data
+    if (!webhookData.achievement) {
+      throw new Error("Missing achievement data in webhook request");
+    }
+
+    if (!webhookData.achievement.badge_color) {
+      console.warn("Missing badge_color, using default");
+      webhookData.achievement.badge_color = "#FFD700";
+    }
+
+    if (!webhookData.achievement.badge_icon) {
+      console.warn("Missing badge_icon, using default");
+      webhookData.achievement.badge_icon = "🏆";
+    }
+
     // Create achievement badge image
     const achievementBadgeSvg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -92,7 +107,7 @@ const handler = async (req: Request): Promise<Response> => {
                   },
                   {
                     "type": "TextBlock",
-                    "text": "🏅 " + webhookData.achievement.name,
+                    "text": "🏅 " + (webhookData.achievement.name || "Unknown Achievement"),
                     "wrap": true,
                     "size": "Medium",
                     "weight": "Bolder",
@@ -101,7 +116,7 @@ const handler = async (req: Request): Promise<Response> => {
                   },
                   {
                     "type": "TextBlock",
-                    "text": webhookData.achievement.description,
+                    "text": webhookData.achievement.description || "No description available",
                     "wrap": true,
                     "size": "Small",
                     "color": "Default",
@@ -109,7 +124,7 @@ const handler = async (req: Request): Promise<Response> => {
                   },
                   {
                     "type": "TextBlock",
-                    "text": "⭐ +" + webhookData.achievement.points + " points",
+                    "text": "⭐ +" + (webhookData.achievement.points || 0) + " points",
                     "wrap": true,
                     "size": "Small",
                     "weight": "Bolder",
@@ -174,22 +189,22 @@ const handler = async (req: Request): Promise<Response> => {
           embeds: [{
             title: "🏆 Achievement Unlocked!",
             description: `**${webhookData.player_name}** just unlocked a new achievement!`,
-            color: parseInt(webhookData.achievement.badge_color.replace('#', ''), 16),
+            color: parseInt((webhookData.achievement.badge_color || '#FFD700').replace('#', ''), 16),
             thumbnail: { url: achievementBadgeUrl },
             fields: [
               {
                 name: "🏅 Achievement",
-                value: webhookData.achievement.name,
+                value: webhookData.achievement.name || "Unknown Achievement",
                 inline: true
               },
               {
                 name: "⭐ Points",
-                value: `+${webhookData.achievement.points}`,
+                value: `+${webhookData.achievement.points || 0}`,
                 inline: true
               },
               {
                 name: "📝 Description",
-                value: webhookData.achievement.description,
+                value: webhookData.achievement.description || "No description available",
                 inline: false
               }
             ],
@@ -264,15 +279,15 @@ const handler = async (req: Request): Promise<Response> => {
               fields: [
                 {
                   type: "mrkdwn",
-                  text: `*Achievement:*\n${webhookData.achievement.name}`
+                  text: `*Achievement:*\n${webhookData.achievement.name || "Unknown Achievement"}`
                 },
                 {
                   type: "mrkdwn",
-                  text: `*Points:*\n+${webhookData.achievement.points}`
+                  text: `*Points:*\n+${webhookData.achievement.points || 0}`
                 },
                 {
                   type: "mrkdwn",
-                  text: `*Description:*\n${webhookData.achievement.description}`
+                  text: `*Description:*\n${webhookData.achievement.description || "No description available"}`
                 }
               ]
             }
