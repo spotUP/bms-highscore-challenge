@@ -276,7 +276,7 @@ const Statistics = () => {
                           <div className="flex items-center gap-3">
                             {getRankIcon(player.final_rank)}
                             <div>
-                              <p className="font-semibold text-white text-base">{player.player_name}</p>
+                              <p className="font-semibold text-white text-lg">{player.player_name}</p>
                               <p className="text-sm text-gray-400">{player.games_played} games</p>
                             </div>
                           </div>

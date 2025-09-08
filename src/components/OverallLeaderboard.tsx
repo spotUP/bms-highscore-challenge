@@ -361,7 +361,7 @@ const OverallLeaderboard = () => {
                   {getRankIcon(index)}
                   <div>
                     <div 
-                      className="font-arcade font-bold text-base animated-gradient"
+                      className="font-arcade font-bold text-lg animated-gradient"
                       style={{ animationDelay: `${index * 0.15}s` }}
                     >
                       {player.player_name}
@@ -415,7 +415,7 @@ const OverallLeaderboard = () => {
                   {getAchievementRankIcon(index)}
                   <div>
                     <div 
-                      className="font-arcade font-bold text-base animated-gradient"
+                      className="font-arcade font-bold text-lg animated-gradient"
                       style={{ animationDelay: `${index * 0.15}s` }}
                     >
                       {hunter.player_name}
@@ -469,7 +469,7 @@ const OverallLeaderboard = () => {
                   {getDemolitionRankIcon(index)}
                   <div>
                     <div 
-                      className="font-arcade font-bold text-base animated-gradient"
+                      className="font-arcade font-bold text-lg animated-gradient"
                       style={{ animationDelay: `${index * 0.15}s` }}
                     >
                       {score.player_name}

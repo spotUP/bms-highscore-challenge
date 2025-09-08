@@ -481,7 +481,7 @@ const ScoreManager = () => {
                 {scores.map((score, index) => (
                   <TableRow key={score.id} className="border-white/20">
                     <TableCell 
-                      className="font-arcade font-bold text-base animated-gradient"
+                      className="font-arcade font-bold text-lg animated-gradient"
                       style={{ animationDelay: `${index * 0.1}s` }}
                     >{score.player_name}</TableCell>
                     <TableCell 
@@ -527,7 +527,7 @@ const ScoreManager = () => {
                 {competitionScores.map((score, index) => (
                   <TableRow key={score.id} className="border-white/20">
                     <TableCell 
-                      className="font-arcade font-bold text-base animated-gradient"
+                      className="font-arcade font-bold text-lg animated-gradient"
                       style={{ animationDelay: `${index * 0.1}s` }}
                     >{score.player_name}</TableCell>
                     <TableCell 

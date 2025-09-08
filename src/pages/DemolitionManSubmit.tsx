@@ -90,9 +90,10 @@ const DemolitionManSubmit = () => {
       setPlayerName('');
       setScore('');
 
-      // Redirect to main page after 2 seconds
+      // Redirect to main page and refresh after 2 seconds
       setTimeout(() => {
-        navigate('/');
+        navigate('/', { replace: true });
+        window.location.reload();
       }, 2000);
     } catch (error: any) {
       console.error('Error submitting score:', error);

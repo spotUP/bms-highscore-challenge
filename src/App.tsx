@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Suspense, lazy } from "react";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AchievementProvider } from "@/contexts/AchievementContext";
-import HyperspaceEffect from "@/components/HyperspaceEffect";
 import Index from "./pages/Index";
 
 // Lazy load heavy components
@@ -32,7 +31,6 @@ const App = () => (
     <AuthProvider>
       <AchievementProvider>
         <TooltipProvider>
-          <HyperspaceEffect />
           <Toaster />
           <Sonner />
           <BrowserRouter
