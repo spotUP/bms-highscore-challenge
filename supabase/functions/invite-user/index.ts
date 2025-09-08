@@ -37,7 +37,9 @@ const handler = async (req: Request): Promise<Response> => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Invite the user
-    const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email);
+    const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
+      redirectTo: `${Deno.env.get('SUPABASE_URL')}/auth/callback`
+    });
 
     if (inviteError) {
       console.error("Error inviting user:", inviteError);
@@ -45,20 +47,22 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     console.log("User invited successfully:", inviteData);
+    
+    // Log email sending status
+    if (inviteData.user) {
+      console.log("Invitation email should be sent to:", email);
+      console.log("User created with ID:", inviteData.user.id);
+      console.log("User confirmation status:", inviteData.user.email_confirmed_at ? "confirmed" : "pending");
+    }
 
     // Set the user's role
     if (inviteData.user) {
       const { error: roleError } = await supabase
         .from('user_roles')
-        .upsert(
-          { 
-            user_id: inviteData.user.id, 
-            role: role,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          },
-          { onConflict: 'user_id' }
-        );
+        .insert({ 
+          user_id: inviteData.user.id, 
+          role: role
+        });
 
       if (roleError) {
         console.error("Error setting user role:", roleError);

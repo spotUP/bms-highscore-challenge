@@ -16,38 +16,57 @@ export const useAchievements = () => {
 
   const checkForNewAchievements = useCallback(async (playerName: string) => {
     try {
-      // Get recently unlocked achievements for this player (last 30 seconds)
-      const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString();
+      console.log('🎯 Achievement system called for:', playerName);
       
-      const { data: newAchievements, error } = await supabase
-        .from('player_achievements')
-        .select(`
-          *,
-          achievements (*)
-        `)
-        .eq('player_name', playerName.toUpperCase())
-        .gte('unlocked_at', thirtySecondsAgo)
-        .order('unlocked_at', { ascending: false });
+      // Use a SQL query to safely check and retrieve new achievements
+      // This avoids TypeScript type issues while the tables are being set up
+      try {
+        const { data: newAchievements, error } = await (supabase as any).rpc('get_recent_achievements', {
+          p_player_name: playerName.toUpperCase(),
+          p_since_minutes: 1 // Check for achievements in last minute
+        });
 
-      if (error) {
-        console.error('Error checking for new achievements:', error);
-        return;
-      }
+        if (error) {
+          console.log('⚠️ Achievement system not available:', error.message);
+          return;
+        }
 
-      // Show notification and send webhook for each new achievement
-      if (newAchievements && newAchievements.length > 0) {
-        newAchievements.forEach((playerAchievement) => {
-          const achievement = playerAchievement.achievements as Achievement;
-          if (achievement) {
+        // Show notification and send webhook for each new achievement
+        if (Array.isArray(newAchievements) && newAchievements.length > 0) {
+          console.log(`🏆 Found ${newAchievements.length} new achievements for ${playerName}`);
+          
+          newAchievements.forEach((achievement: any, index: number) => {
             // Add a small delay between notifications if multiple achievements
             setTimeout(() => {
-              showAchievementNotification(achievement);
+              showAchievementNotification({
+                id: achievement.achievement_id,
+                name: achievement.achievement_name,
+                description: achievement.achievement_description,
+                badge_icon: achievement.badge_icon,
+                badge_color: achievement.badge_color,
+                points: achievement.points
+              });
               
               // Send webhook for achievement unlock
-              sendAchievementWebhook(playerName, achievement, playerAchievement);
-            }, newAchievements.indexOf(playerAchievement) * 1000);
-          }
-        });
+              sendAchievementWebhook(playerName, {
+                id: achievement.achievement_id,
+                name: achievement.achievement_name,
+                description: achievement.achievement_description,
+                badge_icon: achievement.badge_icon,
+                badge_color: achievement.badge_color,
+                points: achievement.points
+              }, {
+                unlocked_at: achievement.unlocked_at
+              });
+            }, index * 1000);
+          });
+        } else {
+          console.log('📭 No new achievements found for', playerName);
+        }
+      } catch (error) {
+        console.log('⚠️ Achievement RPC not available - set up achievement system first');
+        console.log('📖 Run simple-achievement-setup.sql in your Supabase SQL Editor');
+        console.log('🔧 Error details:', error);
       }
     } catch (error) {
       console.error('Error in checkForNewAchievements:', error);
@@ -77,40 +96,24 @@ export const useAchievements = () => {
         .eq('player_name', playerName.toUpperCase())
         .order('created_at', { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      console.log('🏆 Achievement unlocked for webhook:', {
-        player_name: playerName,
-        achievement: achievement.name,
-        points: achievement.points
+      const webhookResponse = await supabase.functions.invoke('achievement-webhook-simple', {
+        body: {
+          player_name: playerName,
+          achievement_name: achievement.name,
+          description: achievement.description,
+          points: achievement.points,
+          game_name: recentScore?.games?.name,
+          score: recentScore?.score
+        }
       });
-      
-      // Temporarily disable webhook calls due to 500 errors
-      // The achievement system works perfectly in the UI
-      // TODO: Debug and fix webhook function deployment
-      
-      // const webhookResponse = await supabase.functions.invoke('send-achievement-webhook', {
-      //   body: {
-      //     player_name: playerName,
-      //     achievement: {
-      //       id: achievement.id,
-      //       name: achievement.name,
-      //       description: achievement.description,
-      //       badge_icon: achievement.badge_icon,
-      //       badge_color: achievement.badge_color,
-      //       points: achievement.points
-      //     },
-      //     game_name: recentScore?.games?.name,
-      //     score: recentScore?.score,
-      //     timestamp: playerAchievement.unlocked_at
-      //   }
-      // });
 
-      // if (webhookResponse.error) {
-      //   console.error('❌ Achievement webhook error:', webhookResponse.error);
-      // } else {
-      //   console.log('✅ Achievement webhook sent successfully:', webhookResponse.data);
-      // }
+      if (webhookResponse.error) {
+        console.error('❌ Achievement webhook error:', webhookResponse.error);
+      } else {
+        console.log('✅ Achievement webhook sent successfully:', webhookResponse.data);
+      }
     } catch (error) {
       console.error('❌ Achievement webhook call failed:', error);
     }

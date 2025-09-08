@@ -35,11 +35,17 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const webhookData: AchievementWebhookRequest = await req.json();
     
-    console.log("Processing achievement webhook data:", webhookData);
+    console.log("Processing achievement webhook data:", JSON.stringify(webhookData, null, 2));
 
     // Validate required data
     if (!webhookData.achievement) {
+      console.error("Missing achievement data in webhook request. Received:", webhookData);
       throw new Error("Missing achievement data in webhook request");
+    }
+
+    if (!webhookData.achievement.name) {
+      console.error("Missing achievement name. Achievement data:", webhookData.achievement);
+      throw new Error("Achievement missing required name field");
     }
 
     if (!webhookData.achievement.badge_color) {
@@ -52,112 +58,36 @@ const handler = async (req: Request): Promise<Response> => {
       webhookData.achievement.badge_icon = "🏆";
     }
 
-    // Create achievement badge image
-    const achievementBadgeSvg = `<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <radialGradient id="badgeGradient" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" style="stop-color:${webhookData.achievement.badge_color};stop-opacity:1" />
-          <stop offset="100%" style="stop-color:${webhookData.achievement.badge_color}80;stop-opacity:1" />
-        </radialGradient>
-      </defs>
-      <circle cx="100" cy="100" r="90" fill="url(#badgeGradient)" stroke="#FFD700" stroke-width="4"/>
-      <text x="100" y="110" font-family="Arial, sans-serif" font-size="60" fill="white" text-anchor="middle" dominant-baseline="middle">${webhookData.achievement.badge_icon}</text>
-    </svg>`;
-    
-    const achievementBadgeUrl = `data:image/svg+xml;base64,${btoa(achievementBadgeSvg)}`;
+    // Use a simpler approach - just use a placeholder image or remove the image entirely
+    // The SVG data URI might be causing issues with Teams
+    const achievementBadgeUrl = "https://cdn-icons-png.flaticon.com/512/1574/1574337.png"; // Trophy icon placeholder
 
-    // Create Teams message for achievement
-    const teamsMessage = {
-      "attachments": [
-        {
-          "contentType": "application/vnd.microsoft.card.adaptive",
-          "content": {
-            "type": "AdaptiveCard",
-            "version": "1.5",
-            "body": [
-              {
-                "type": "Image",
-                "url": achievementBadgeUrl,
-                "horizontalAlignment": "Center",
-                "size": "Medium",
-                "width": "100px",
-                "height": "100px"
-              },
-              {
-                "type": "TextBlock",
-                "text": "🏆 ACHIEVEMENT UNLOCKED! 🏆",
-                "wrap": true,
-                "style": "heading",
-                "size": "ExtraLarge",
-                "horizontalAlignment": "Center",
-                "color": "Accent"
-              },
-              {
-                "type": "Container",
-                "horizontalAlignment": "Center",
-                "items": [
-                  {
-                    "type": "TextBlock",
-                    "text": "🎯 " + webhookData.player_name,
-                    "wrap": true,
-                    "size": "Large",
-                    "weight": "Bolder",
-                    "color": "Accent",
-                    "horizontalAlignment": "Center"
-                  },
-                  {
-                    "type": "TextBlock",
-                    "text": "🏅 " + (webhookData.achievement.name || "Unknown Achievement"),
-                    "wrap": true,
-                    "size": "Medium",
-                    "weight": "Bolder",
-                    "color": "Good",
-                    "horizontalAlignment": "Center"
-                  },
-                  {
-                    "type": "TextBlock",
-                    "text": webhookData.achievement.description || "No description available",
-                    "wrap": true,
-                    "size": "Small",
-                    "color": "Default",
-                    "horizontalAlignment": "Center"
-                  },
-                  {
-                    "type": "TextBlock",
-                    "text": "⭐ +" + (webhookData.achievement.points || 0) + " points",
-                    "wrap": true,
-                    "size": "Small",
-                    "weight": "Bolder",
-                    "color": "Warning",
-                    "horizontalAlignment": "Center"
-                  }
-                ]
-              }
-            ]
-          }
-        }
-      ]
+    // Use the absolute simplest Teams message format for testing
+    let teamsMessage = {
+      "text": `Achievement Unlocked: ${webhookData.player_name} earned ${webhookData.achievement.name || "Unknown Achievement"} (+${webhookData.achievement.points || 0} points)`
     };
 
     // Add game context if available
     if (webhookData.game_name && webhookData.score) {
-      teamsMessage.attachments[0].content.body.push({
-        "type": "TextBlock",
-        "text": "🎮 In " + webhookData.game_name + " (Score: " + webhookData.score.toLocaleString() + ")",
-        "wrap": true,
-        "size": "Small",
-        "color": "Default",
-        "horizontalAlignment": "Center"
-      });
+      teamsMessage.text += ` in ${webhookData.game_name} with score ${webhookData.score.toLocaleString()}`;
     }
 
     // Send to Microsoft Teams
     const teamsWebhookUrl = Deno.env.get('TEAMS_WEBHOOK_URL');
     let teamsResponse = null;
     
+    console.log("🔍 Checking Teams webhook URL...");
+    console.log("Teams webhook URL exists:", !!teamsWebhookUrl);
+    console.log("Teams webhook URL length:", teamsWebhookUrl?.length || 0);
+    console.log("Teams webhook URL value:", teamsWebhookUrl ? "FOUND" : "NOT FOUND");
+    console.log("Available env vars:", Object.keys(Deno.env.toObject()));
+    console.log("Env var TEAMS_WEBHOOK_URL specifically:", Deno.env.get('TEAMS_WEBHOOK_URL') ? "EXISTS" : "MISSING");
+    
     if (teamsWebhookUrl) {
       try {
-        console.log("Sending achievement webhook to Teams:", teamsWebhookUrl);
+        console.log("🔗 Teams webhook URL found:", teamsWebhookUrl ? "Yes" : "No");
+        console.log("📤 Sending achievement webhook to Teams...");
+        console.log("📋 Teams message payload:", JSON.stringify(teamsMessage, null, 2));
         
         teamsResponse = await fetch(teamsWebhookUrl, {
           method: 'POST',
@@ -167,15 +97,23 @@ const handler = async (req: Request): Promise<Response> => {
           body: JSON.stringify(teamsMessage),
         });
 
-        console.log("Teams webhook response status:", teamsResponse.status);
+        console.log("📊 Teams webhook response status:", teamsResponse.status);
+        console.log("✅ Teams webhook response ok:", teamsResponse.ok);
         
         if (!teamsResponse.ok) {
           const errorText = await teamsResponse.text();
-          console.error("Teams webhook error:", errorText);
+          console.error("❌ Teams webhook error details:", errorText);
+          console.error("❌ Teams webhook headers:", Object.fromEntries(teamsResponse.headers.entries()));
+        } else {
+          const responseText = await teamsResponse.text();
+          console.log("✅ Teams webhook success response:", responseText);
         }
       } catch (error) {
-        console.error("Error sending to Teams:", error);
+        console.error("💥 Error sending to Teams:", error);
+        console.error("💥 Error stack:", error.stack);
       }
+    } else {
+      console.warn("⚠️ No Teams webhook URL configured");
     }
 
     // Send to Discord if configured
@@ -353,11 +291,16 @@ const handler = async (req: Request): Promise<Response> => {
     });
   } catch (error: any) {
     console.error("Error in send-achievement-webhook function:", error);
+    console.error("Error stack:", error.stack);
+    console.error("Error details:", JSON.stringify(error, null, 2));
+    
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message,
-        details: "Failed to send achievement webhook"
+        error: error.message || "Unknown error",
+        errorType: error.constructor.name,
+        details: "Failed to send achievement webhook",
+        timestamp: new Date().toISOString()
       }),
       {
         status: 500,

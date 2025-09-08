@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trophy } from "lucide-react";
@@ -72,9 +72,9 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         .select('*')
         .eq('player_name', trimmedName.toUpperCase())
         .eq('game_id', game.id)
-        .single();
+        .maybeSingle();
 
-      if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
+      if (fetchError) throw fetchError;
 
       if (existingScore) {
         // Player already has a score for this game
@@ -251,6 +251,9 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
       <DialogContent className="bg-black/30 border-white/20 max-w-md backdrop-blur-sm">
         <DialogHeader className="pb-3">
           <DialogTitle className="sr-only">Submit Score for {game.name}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Enter your player name and score for {game.name}. Your score will be added to the leaderboard.
+          </DialogDescription>
           {/* Game logo header */}
           <div className="flex justify-center mb-4">
             <div className="transition-transform duration-200">

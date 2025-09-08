@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Users, Shield, UserPlus, Edit, Trash2, Mail, Calendar } from 'lucide-react';
@@ -108,15 +108,32 @@ const UserManagement: React.FC = () => {
 
   const updateUserRole = async (userId: string, newRole: string) => {
     try {
-      const { error } = await supabase
+      // Check if the role already exists for this user
+      const { data: existingRole } = await supabase
         .from('user_roles')
-        .upsert(
-          { user_id: userId, role: newRole, updated_at: new Date().toISOString() },
-          { onConflict: 'user_id' }
-        );
+        .select('*')
+        .eq('user_id', userId)
+        .single();
 
-      if (error) {
-        throw error;
+      if (existingRole) {
+        // Update existing role
+        const { error } = await supabase
+          .from('user_roles')
+          .update({ role: newRole })
+          .eq('user_id', userId);
+
+        if (error) {
+          throw error;
+        }
+      } else {
+        // Insert new role
+        const { error } = await supabase
+          .from('user_roles')
+          .insert({ user_id: userId, role: newRole });
+
+        if (error) {
+          throw error;
+        }
       }
 
       toast({
@@ -248,6 +265,9 @@ const UserManagement: React.FC = () => {
             <DialogContent className="bg-gray-900 text-white border-white/20">
               <DialogHeader>
                 <DialogTitle>Invite New User</DialogTitle>
+                <DialogDescription>
+                  Send an invitation email to a new user and assign them a role.
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div>

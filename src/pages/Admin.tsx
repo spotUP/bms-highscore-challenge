@@ -12,7 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Pencil, Trash2, Plus, Wrench, ArrowLeft } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Pencil, Trash2, Plus, Wrench, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook } from "lucide-react";
 import { isPlaceholderLogo } from "@/lib/utils";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import GameLogoSuggestions, { GameLogoSuggestionsRef } from "@/components/GameLogoSuggestions";
@@ -307,155 +308,191 @@ const Admin = () => {
           </Button>
         </PageHeader>
 
-        <Card className={getCardStyle('primary')}>
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <CardTitle className={getTypographyStyle('h3')}>Games Management</CardTitle>
-              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                <RandomizeGames onGamesUpdated={loadGames} />
-                <StopCompetition onCompetitionStopped={loadGames} refreshTrigger={gamesUpdateTrigger} />
-                <Button 
-                  onClick={cleanupPlaceholderLogos}
-                  className={getButtonStyle('secondary') + " w-full sm:w-auto"}
-                  title="Remove broken placeholder logos and use fallback UI instead"
-                >
-                  <Wrench className="w-4 h-4 mr-2" />
-                  Fix Logos
-                </Button>
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button onClick={resetForm} variant="outline" className="w-full sm:w-auto">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Add Game
+        <Tabs defaultValue="games" className="w-full">
+          <TabsList className="grid w-full grid-cols-5 bg-gray-900 border border-white/20">
+            <TabsTrigger value="games" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
+              <Gamepad2 className="w-4 h-4 mr-2" />
+              Games
+            </TabsTrigger>
+            <TabsTrigger value="scores" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Scores
+            </TabsTrigger>
+            <TabsTrigger value="webhooks" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
+              <Webhook className="w-4 h-4 mr-2" />
+              Webhooks
+            </TabsTrigger>
+            <TabsTrigger value="system" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
+              <TestTube className="w-4 h-4 mr-2" />
+              System
+            </TabsTrigger>
+            <TabsTrigger value="users" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
+              <Users className="w-4 h-4 mr-2" />
+              Users
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="games" className="mt-6">
+            <Card className={getCardStyle('primary')}>
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <CardTitle className={getTypographyStyle('h3')}>Games Management</CardTitle>
+                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                    <RandomizeGames onGamesUpdated={loadGames} />
+                    <StopCompetition onCompetitionStopped={loadGames} refreshTrigger={gamesUpdateTrigger} />
+                    <Button 
+                      onClick={cleanupPlaceholderLogos}
+                      variant="outline"
+                      className="w-full sm:w-auto"
+                      title="Remove broken placeholder logos and use fallback UI instead"
+                    >
+                      <Wrench className="w-4 h-4 mr-2" />
+                      Fix Logos
                     </Button>
-                  </DialogTrigger>
-                <DialogContent className="bg-gray-900 text-white border-white/20 max-w-2xl w-[95vw] max-h-[90vh] overflow-hidden mx-auto">
-                  <DialogHeader>
-                    <DialogTitle className="text-lg font-semibold break-words">
-                      {editingGame ? 'Edit Game' : 'Add New Game'}
-                    </DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4 overflow-y-auto max-h-[70vh] px-1">
-                      <div className="w-full">
-                        <Label htmlFor="name">Game Name *</Label>
-                        <Input
-                          id="name"
-                          value={formData.name}
-                          onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              gameLogoSuggestionsRef.current?.searchForLogos();
-                            }
-                          }}
-                          placeholder="Enter game name (press Enter to search local logos)"
-                          className="bg-black/50 border-white/20 text-white w-full"
-                        />
-                      </div>
-                    <div className="w-full">
-                      <GameLogoSuggestions
-                        ref={gameLogoSuggestionsRef}
-                        gameName={formData.name}
-                        onSelectImage={(url) => setFormData(prev => ({ ...prev, logo_url: url }))}
-                      />
-                    </div>
-                    <div className="w-full">
-                      <div className="overflow-hidden">
-                        <ImagePasteUpload
-                          value={formData.logo_url}
-                          onChange={(url) => setFormData(prev => ({ ...prev, logo_url: url }))}
-                          label="Logo URL or Upload"
-                          placeholder="Enter logo URL or paste/upload an image"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="include_in_challenge"
-                        checked={formData.include_in_challenge}
-                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, include_in_challenge: checked }))}
-                      />
-                      <Label htmlFor="include_in_challenge">Include in Challenge</Label>
-                    </div>
-                    <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4">
-                      <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="w-full sm:w-auto">
-                        Cancel
-                      </Button>
-                      <Button onClick={saveGame} variant="outline" className="w-full sm:w-auto">
-                        {editingGame ? 'Update' : 'Create'}
-                      </Button>
-                    </div>
+                    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button onClick={resetForm} variant="outline" className="w-full sm:w-auto">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Add Game
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="bg-gray-900 text-white border-white/20 max-w-2xl w-[95vw] max-h-[90vh] overflow-hidden mx-auto">
+                        <DialogHeader>
+                          <DialogTitle className="text-lg font-semibold break-words">
+                            {editingGame ? 'Edit Game' : 'Add New Game'}
+                          </DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 overflow-y-auto max-h-[70vh] px-1">
+                          <div className="w-full">
+                            <Label htmlFor="name">Game Name *</Label>
+                            <Input
+                              id="name"
+                              value={formData.name}
+                              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  gameLogoSuggestionsRef.current?.searchForLogos();
+                                }
+                              }}
+                              placeholder="Enter game name (press Enter to search local logos)"
+                              className="bg-black/50 border-white/20 text-white w-full"
+                            />
+                          </div>
+                          <div className="w-full">
+                            <GameLogoSuggestions
+                              ref={gameLogoSuggestionsRef}
+                              gameName={formData.name}
+                              onSelectImage={(url) => setFormData(prev => ({ ...prev, logo_url: url }))}
+                            />
+                          </div>
+                          <div className="w-full">
+                            <div className="overflow-hidden">
+                              <ImagePasteUpload
+                                value={formData.logo_url}
+                                onChange={(url) => setFormData(prev => ({ ...prev, logo_url: url }))}
+                                label="Logo URL or Upload"
+                                placeholder="Enter logo URL or paste/upload an image"
+                              />
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Switch
+                              id="include_in_challenge"
+                              checked={formData.include_in_challenge}
+                              onCheckedChange={(checked) => setFormData(prev => ({ ...prev, include_in_challenge: checked }))}
+                            />
+                            <Label htmlFor="include_in_challenge">Include in Challenge</Label>
+                          </div>
+                          <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4">
+                            <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="w-full sm:w-auto">
+                              Cancel
+                            </Button>
+                            <Button onClick={saveGame} variant="outline" className="w-full sm:w-auto">
+                              {editingGame ? 'Update' : 'Create'}
+                            </Button>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   </div>
-                </DialogContent>
-              </Dialog>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-white/20">
-                  <TableHead className="text-white min-w-[120px]">Name</TableHead>
-                  <TableHead className="text-white min-w-[80px]">Challenge</TableHead>
-                  <TableHead className="text-white min-w-[100px]">Created</TableHead>
-                  <TableHead className="text-white min-w-[120px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {games.map((game) => (
-                  <TableRow key={game.id} className="border-white/20">
-                    <TableCell className="text-white font-medium">{game.name}</TableCell>
-                    <TableCell>
-                      <Checkbox
-                        checked={game.include_in_challenge}
-                        onCheckedChange={() => toggleChallengeInclusion(game.id, game.include_in_challenge)}
-                        className="data-[state=checked]:bg-arcade-neonCyan data-[state=checked]:border-arcade-neonCyan"
-                      />
-                    </TableCell>
-                    <TableCell className="text-gray-300">
-                      {new Date(game.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openEditDialog(game)}
-                          className="w-full sm:w-auto"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => deleteGame(game.id)}
-                          className="w-full sm:w-auto"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {games.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-gray-400 py-8">
-                      No games found. Add your first game!
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                </div>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="border-white/20">
+                      <TableHead className="text-white min-w-[120px]">Name</TableHead>
+                      <TableHead className="text-white min-w-[80px]">Challenge</TableHead>
+                      <TableHead className="text-white min-w-[100px]">Created</TableHead>
+                      <TableHead className="text-white min-w-[120px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {games.map((game) => (
+                      <TableRow key={game.id} className="border-white/20">
+                        <TableCell className="text-white font-medium">{game.name}</TableCell>
+                        <TableCell>
+                          <Checkbox
+                            checked={game.include_in_challenge}
+                            onCheckedChange={() => toggleChallengeInclusion(game.id, game.include_in_challenge)}
+                            className="data-[state=checked]:bg-arcade-neonCyan data-[state=checked]:border-arcade-neonCyan"
+                          />
+                        </TableCell>
+                        <TableCell className="text-gray-300">
+                          {new Date(game.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openEditDialog(game)}
+                              className="w-full sm:w-auto"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => deleteGame(game.id)}
+                              className="w-full sm:w-auto"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {games.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={4} className="text-center text-gray-400 py-8">
+                          No games found. Add your first game!
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        <ScoreManager />
+          <TabsContent value="scores" className="mt-6">
+            <ScoreManager />
+          </TabsContent>
 
-        <WebhookConfig />
+          <TabsContent value="webhooks" className="mt-6">
+            <WebhookConfig />
+          </TabsContent>
 
-        <AchievementTest />
+          <TabsContent value="system" className="mt-6">
+            <AchievementTest />
+          </TabsContent>
 
-        <UserManagement />
+          <TabsContent value="users" className="mt-6">
+            <UserManagement />
+          </TabsContent>
+        </Tabs>
       </PageContainer>
     </div>
   );

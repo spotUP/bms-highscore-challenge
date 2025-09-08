@@ -23,6 +23,26 @@ interface Score {
   };
 }
 
+interface CompetitionScore {
+  id: string;
+  player_name: string;
+  score: number;
+  game_name: string;
+  rank_in_game: number;
+  ranking_points: number;
+  created_at: string;
+}
+
+interface Competition {
+  id: string;
+  competition_name: string;
+  start_date: string;
+  end_date: string;
+  total_players: number;
+  total_games: number;
+  total_scores: number;
+}
+
 interface Game {
   id: string;
   name: string;
@@ -30,10 +50,13 @@ interface Game {
 
 const ScoreManager = () => {
   const [scores, setScores] = useState<Score[]>([]);
+  const [competitionScores, setCompetitionScores] = useState<CompetitionScore[]>([]);
+  const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingScore, setEditingScore] = useState<Score | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedCompetition, setSelectedCompetition] = useState<string>("current");
   const [formData, setFormData] = useState({
     player_name: "",
     score: "",
@@ -55,7 +78,16 @@ const ScoreManager = () => {
       if (gamesError) throw gamesError;
       setGames(gamesData || []);
 
-      // Load scores with game names (only from games included in challenge)
+      // Load competitions
+      const { data: competitionsData, error: competitionsError } = await supabase
+        .from('competition_history')
+        .select('*')
+        .order('end_date', { ascending: false });
+
+      if (competitionsError) throw competitionsError;
+      setCompetitions(competitionsData || []);
+
+      // Load current scores with game names
       const { data: scoresData, error: scoresError } = await supabase
         .from('scores')
         .select(`
@@ -70,6 +102,11 @@ const ScoreManager = () => {
 
       if (scoresError) throw scoresError;
       setScores(scoresData || []);
+
+      // Load competition scores if a specific competition is selected
+      if (selectedCompetition !== "current") {
+        await loadCompetitionScores(selectedCompetition);
+      }
     } catch (error) {
       console.error('Error loading data:', error);
       toast({
@@ -82,9 +119,37 @@ const ScoreManager = () => {
     }
   };
 
+  // Load scores for a specific competition
+  const loadCompetitionScores = async (competitionId: string) => {
+    try {
+      const { data: competitionScoresData, error: competitionScoresError } = await supabase
+        .from('competition_scores')
+        .select('*')
+        .eq('competition_id', competitionId)
+        .order('score', { ascending: false });
+
+      if (competitionScoresError) throw competitionScoresError;
+      setCompetitionScores(competitionScoresData || []);
+    } catch (error) {
+      console.error('Error loading competition scores:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load competition scores",
+        variant: "destructive"
+      });
+    }
+  };
+
   useEffect(() => {
     loadData();
   }, []);
+
+  // Load competition scores when selection changes
+  useEffect(() => {
+    if (selectedCompetition !== "current" && competitions.length > 0) {
+      loadCompetitionScores(selectedCompetition);
+    }
+  }, [selectedCompetition, competitions]);
 
   // Reset form
   const resetForm = () => {
@@ -292,15 +357,35 @@ const ScoreManager = () => {
   return (
     <Card className="bg-black/50 border-white/20">
       <CardHeader>
-        <div className="flex justify-between items-center">
-          <CardTitle className="text-white">Scores Management</CardTitle>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm} className="bg-arcade-neonCyan hover:bg-arcade-neonCyan/80">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Score
-              </Button>
-            </DialogTrigger>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 flex-1">
+            <CardTitle className="text-white">Scores Management</CardTitle>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+              <Select value={selectedCompetition} onValueChange={setSelectedCompetition}>
+                <SelectTrigger className="bg-black/50 border-white/20 text-white w-48">
+                  <SelectValue placeholder="Select competition" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-900 border-white/20">
+                  <SelectItem value="current" className="text-white">
+                    Current Competition
+                  </SelectItem>
+                  {competitions.map((competition) => (
+                    <SelectItem key={competition.id} value={competition.id} className="text-white">
+                      {competition.competition_name} ({new Date(competition.end_date).toLocaleDateString()})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {selectedCompetition === "current" && (
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={resetForm} variant="outline">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Score
+                </Button>
+              </DialogTrigger>
             <DialogContent className="bg-gray-900 text-white border-white/20">
               <DialogHeader>
                 <DialogTitle>
@@ -356,13 +441,14 @@ const ScoreManager = () => {
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={saveScore} className="bg-arcade-neonCyan hover:bg-arcade-neonCyan/80">
+                  <Button onClick={saveScore} variant="outline">
                     {editingScore ? 'Update' : 'Create'}
                   </Button>
                 </div>
               </div>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -372,53 +458,106 @@ const ScoreManager = () => {
               <TableHead className="text-white">Player</TableHead>
               <TableHead className="text-white">Score</TableHead>
               <TableHead className="text-white">Game</TableHead>
+              {selectedCompetition !== "current" && (
+                <>
+                  <TableHead className="text-white">Rank</TableHead>
+                  <TableHead className="text-white">Points</TableHead>
+                </>
+              )}
               <TableHead className="text-white">Date</TableHead>
-              <TableHead className="text-white">Actions</TableHead>
+              {selectedCompetition === "current" && (
+                <TableHead className="text-white">Actions</TableHead>
+              )}
             </TableRow>
           </TableHeader>
           <TableBody>
-             {scores.map((score, index) => (
-               <TableRow key={score.id} className="border-white/20">
-                <TableCell 
-                  className="font-arcade font-bold animated-gradient"
-                  style={{ animationDelay: `${index * 0.1}s` }}
-                >{score.player_name}</TableCell>
-                <TableCell 
-                  className="font-bold font-arcade animated-gradient"
-                  style={{ animationDelay: `${index * 0.1 + 0.2}s` }}
-                >
-                  {formatScore(score.score)}
-                </TableCell>
-                <TableCell className="text-gray-300">{score.games?.name || 'Unknown'}</TableCell>
-                <TableCell className="text-gray-300">
-                  {new Date(score.created_at).toLocaleDateString()}
-                </TableCell>
-                <TableCell>
-                  <div className="flex space-x-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openEditDialog(score)}
+            {selectedCompetition === "current" ? (
+              <>
+                {scores.map((score, index) => (
+                  <TableRow key={score.id} className="border-white/20">
+                    <TableCell 
+                      className="font-arcade font-bold animated-gradient"
+                      style={{ animationDelay: `${index * 0.1}s` }}
+                    >{score.player_name}</TableCell>
+                    <TableCell 
+                      className="font-bold font-arcade animated-gradient"
+                      style={{ animationDelay: `${index * 0.1 + 0.2}s` }}
                     >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => deleteScore(score.id)}
+                      {formatScore(score.score)}
+                    </TableCell>
+                    <TableCell className="text-gray-300">{score.games?.name || 'Unknown'}</TableCell>
+                    <TableCell className="text-gray-300">
+                      {new Date(score.created_at).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openEditDialog(score)}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => deleteScore(score.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {scores.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-gray-400 py-8">
+                      No scores found. Add the first score!
+                    </TableCell>
+                  </TableRow>
+                )}
+              </>
+            ) : (
+              <>
+                {competitionScores.map((score, index) => (
+                  <TableRow key={score.id} className="border-white/20">
+                    <TableCell 
+                      className="font-arcade font-bold animated-gradient"
+                      style={{ animationDelay: `${index * 0.1}s` }}
+                    >{score.player_name}</TableCell>
+                    <TableCell 
+                      className="font-bold font-arcade animated-gradient"
+                      style={{ animationDelay: `${index * 0.1 + 0.2}s` }}
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-            {scores.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-gray-400 py-8">
-                  No scores found. Add the first score!
-                </TableCell>
-              </TableRow>
+                      {formatScore(score.score)}
+                    </TableCell>
+                    <TableCell className="text-gray-300">{score.game_name}</TableCell>
+                    <TableCell className="text-center">
+                      <div className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
+                        score.rank_in_game === 1 ? 'bg-yellow-500 text-black' : 
+                        score.rank_in_game === 2 ? 'bg-gray-400 text-black' : 
+                        score.rank_in_game === 3 ? 'bg-orange-600 text-white' : 
+                        'bg-gray-600 text-white'
+                      }`}>
+                        {score.rank_in_game}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className="font-bold text-arcade-neonCyan">{score.ranking_points}</span>
+                    </TableCell>
+                    <TableCell className="text-gray-300">
+                      {new Date(score.created_at).toLocaleDateString()}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {competitionScores.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-gray-400 py-8">
+                      No archived scores found for this competition.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </>
             )}
           </TableBody>
         </Table>
