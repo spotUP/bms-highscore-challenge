@@ -420,6 +420,10 @@
     "core": "BubbleBobble"
   },
   {
+    "name": "Tempest",
+    "core": "Tempest"
+  },
+  {
     "name": "Bubbles",
     "core": "Robotron"
   },

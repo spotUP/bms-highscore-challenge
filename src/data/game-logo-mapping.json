@@ -518,5 +518,50 @@
     "logoFile": "futspy.png",
     "mameName": "futspy",
     "mameTitle": "Future Spy (315-5061)"
+  },
+  "Asteroids": {
+    "logoFile": "asteroid.png",
+    "mameName": "asteroid",
+    "mameTitle": "Asteroids"
+  },
+  "Centipede": {
+    "logoFile": "centiped.png",
+    "mameName": "centiped",
+    "mameTitle": "Centipede"
+  },
+  "Defender": {
+    "logoFile": "defender.png",
+    "mameName": "defender",
+    "mameTitle": "Defender"
+  },
+  "Donkey Kong": {
+    "logoFile": "dkong.png",
+    "mameName": "dkong",
+    "mameTitle": "Donkey Kong"
+  },
+  "Donkey Kong 3": {
+    "logoFile": "dkong3.png",
+    "mameName": "dkong3",
+    "mameTitle": "Donkey Kong 3"
+  },
+  "Donkey Kong Junior": {
+    "logoFile": "dkongjr.png",
+    "mameName": "dkongjr",
+    "mameTitle": "Donkey Kong Junior"
+  },
+  "Missile Command": {
+    "logoFile": "missile.png",
+    "mameName": "missile",
+    "mameTitle": "Missile Command"
+  },
+  "Q*bert": {
+    "logoFile": "qbert.png",
+    "mameName": "qbert",
+    "mameTitle": "Q*bert"
+  },
+  "Tempest": {
+    "logoFile": "tempest.png",
+    "mameName": "tempest",
+    "mameTitle": "Tempest"
   }
 }
