@@ -171,11 +171,25 @@ const Index = () => {
     loadScores(); // Reload scores after submission
   };
 
-  // Get unique player names for the wheel
+  // Get player names for the wheel - each player appears once per game they have scores for
   const getLeaderboardNames = () => {
-    const uniqueNames = new Set<string>();
-    scores.forEach(score => uniqueNames.add(score.player_name));
-    return Array.from(uniqueNames);
+    const playerGameCounts = new Map<string, number>();
+    
+    // Count how many different games each player has scores for
+    scores.forEach(score => {
+      const currentCount = playerGameCounts.get(score.player_name) || 0;
+      playerGameCounts.set(score.player_name, currentCount + 1);
+    });
+    
+    // Create array where each player appears once per game they have scores for
+    const wheelNames: string[] = [];
+    playerGameCounts.forEach((gameCount, playerName) => {
+      for (let i = 0; i < gameCount; i++) {
+        wheelNames.push(playerName);
+      }
+    });
+    
+    return wheelNames;
   };
 
   if (loading || gamesLoading) {

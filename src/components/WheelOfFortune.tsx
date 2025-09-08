@@ -196,6 +196,9 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
         <p className="text-gray-600 text-sm">
           {names.length} entr{names.length !== 1 ? 'ies' : 'y'} ready to spin
         </p>
+        <p className="text-gray-500 text-xs mt-1">
+          Players with more games have higher chances
+        </p>
       </div>
     </div>
   );
