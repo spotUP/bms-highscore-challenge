@@ -1,0 +1,694 @@
+[
+  {
+    "name": "Arkanoid",
+    "core": "Arkanoid"
+  },
+  {
+    "name": "Asteroids",
+    "core": "Asteroids"
+  },
+  {
+    "name": "Asteroids Deluxe",
+    "core": "AsteroidsDeluxe"
+  },
+  {
+    "name": "Extra Bases",
+    "core": "Astrocade"
+  },
+  {
+    "name": "Gorf",
+    "core": "Astrocade"
+  },
+  {
+    "name": "Sea Wolf II",
+    "core": "Astrocade"
+  },
+  {
+    "name": "Space Zap",
+    "core": "Astrocade"
+  },
+  {
+    "name": "The Adventures of Robby Roto!",
+    "core": "Astrocade"
+  },
+  {
+    "name": "Wizard of Wor",
+    "core": "Astrocade"
+  },
+  {
+    "name": "Tetris (Atari)",
+    "core": "ATetris"
+  },
+  {
+    "name": "Athena",
+    "core": "Athena"
+  },
+  {
+    "name": "Country Club",
+    "core": "Athena"
+  },
+  {
+    "name": "Fighting Golf",
+    "core": "Athena"
+  },
+  {
+    "name": "Bagman",
+    "core": "Bagman"
+  },
+  {
+    "name": "Botanic",
+    "core": "Bagman"
+  },
+  {
+    "name": "Pickin'",
+    "core": "Bagman"
+  },
+  {
+    "name": "Squash",
+    "core": "Bagman"
+  },
+  {
+    "name": "Super Bagman",
+    "core": "Bagman"
+  },
+  {
+    "name": "Bank Panic",
+    "core": "BankPanic"
+  },
+  {
+    "name": "Combat Hawk",
+    "core": "BankPanic"
+  },
+  {
+    "name": "Battle Zone",
+    "core": "BattleZone"
+  },
+  {
+    "name": "Bradley Trainer",
+    "core": "BattleZone"
+  },
+  {
+    "name": "Red Baron",
+    "core": "BattleZone"
+  },
+  {
+    "name": "Berzerk",
+    "core": "Berzerk"
+  },
+  {
+    "name": "Black Widow",
+    "core": "BlackWidow"
+  },
+  {
+    "name": "Gravitar",
+    "core": "BlackWidow"
+  },
+  {
+    "name": "Lunar Battle",
+    "core": "BlackWidow"
+  },
+  {
+    "name": "Blasto",
+    "core": "Blockade"
+  },
+  {
+    "name": "Blockade",
+    "core": "Blockade"
+  },
+  {
+    "name": "CoMotion",
+    "core": "Blockade"
+  },
+  {
+    "name": "Hustle",
+    "core": "Blockade"
+  },
+  {
+    "name": "Bomb Jack",
+    "core": "BombJack"
+  },
+  {
+    "name": "Bosconian - Star Destroyer",
+    "core": "Bosconian"
+  },
+  {
+    "name": "Breakout (TTL)",
+    "core": "Breakout"
+  },
+  {
+    "name": "Burger Time",
+    "core": "BurgerTime"
+  },
+  {
+    "name": "Burnin' Rubber",
+    "core": "BurningRubber"
+  },
+  {
+    "name": "Canyon Bomber",
+    "core": "CanyonBomber"
+  },
+  {
+    "name": "Dangun Feveron",
+    "core": "Cave"
+  },
+  {
+    "name": "DoDonPachi",
+    "core": "Cave"
+  },
+  {
+    "name": "DonPachi",
+    "core": "Cave"
+  },
+  {
+    "name": "ESP Ra.De.",
+    "core": "Cave"
+  },
+  {
+    "name": "Fever SOS",
+    "core": "Cave"
+  },
+  {
+    "name": "Gaia Crusaders",
+    "core": "Cave"
+  },
+  {
+    "name": "Guwange",
+    "core": "Cave"
+  },
+  {
+    "name": "Puzzle Uo Poko",
+    "core": "Cave"
+  },
+  {
+    "name": "Thunder Heroes",
+    "core": "Cave"
+  },
+  {
+    "name": "Centipede",
+    "core": "Centipede"
+  },
+  {
+    "name": "Chameleon",
+    "core": "Chameleon"
+  },
+  {
+    "name": "Computer Space",
+    "core": "ComputerSpace"
+  },
+  {
+    "name": "Congo Bongo",
+    "core": "CongoBongo"
+  },
+  {
+    "name": "Tip Top",
+    "core": "CongoBongo"
+  },
+  {
+    "name": "Cosmic Alien",
+    "core": "Cosmic"
+  },
+  {
+    "name": "Devil Zone",
+    "core": "Cosmic"
+  },
+  {
+    "name": "Magical Spot",
+    "core": "Cosmic"
+  },
+  {
+    "name": "No Mans Land",
+    "core": "Cosmic"
+  },
+  {
+    "name": "Space Panic",
+    "core": "Cosmic"
+  },
+  {
+    "name": "Cosmic Guerilla",
+    "core": "CosmicGuerilla"
+  },
+  {
+    "name": "Crazy Balloon",
+    "core": "CrazyBalloon"
+  },
+  {
+    "name": "Crazy Climber",
+    "core": "CrazyClimber"
+  },
+  {
+    "name": "Crazy Kong",
+    "core": "CrazyKong"
+  },
+  {
+    "name": "Crystal Castles",
+    "core": "CrystalCastles"
+  },
+  {
+    "name": "Defender",
+    "core": "Defender"
+  },
+  {
+    "name": "Defender II",
+    "core": "Defender"
+  },
+  {
+    "name": "Stargate",
+    "core": "Defender"
+  },
+  {
+    "name": "Dig Dug",
+    "core": "DigDug"
+  },
+  {
+    "name": "Dig Dug II",
+    "core": "DigDug"
+  },
+  {
+    "name": "Donkey Kong",
+    "core": "DonkeyKong"
+  },
+  {
+    "name": "Donkey Kong Jr.",
+    "core": "DonkeyKong"
+  },
+  {
+    "name": "Donkey Kong 3",
+    "core": "DonkeyKong"
+  },
+  {
+    "name": "Donkey Kong 3",
+    "core": "DonkeyKong3"
+  },
+  {
+    "name": "Elevator Action",
+    "core": "ElevatorAction"
+  },
+  {
+    "name": "Frogger",
+    "core": "Frogger"
+  },
+  {
+    "name": "Galaga",
+    "core": "Galaga"
+  },
+  {
+    "name": "Galaga '88",
+    "core": "Galaga"
+  },
+  {
+    "name": "Gaplus",
+    "core": "Galaga"
+  },
+  {
+    "name": "Super Galaga",
+    "core": "Galaga"
+  },
+  {
+    "name": "Galaxian",
+    "core": "Galaxian"
+  },
+  {
+    "name": "Gyruss",
+    "core": "Gyruss"
+  },
+  {
+    "name": "Joust",
+    "core": "Joust"
+  },
+  {
+    "name": "Joust 2",
+    "core": "Joust"
+  },
+  {
+    "name": "Kangaroo",
+    "core": "Kangaroo"
+  },
+  {
+    "name": "Lady Bug",
+    "core": "LadyBug"
+  },
+  {
+    "name": "Snap Jack",
+    "core": "LadyBug"
+  },
+  {
+    "name": "Mario Bros.",
+    "core": "MarioBros"
+  },
+  {
+    "name": "Missile Command",
+    "core": "MissileCommand"
+  },
+  {
+    "name": "Moon Patrol",
+    "core": "MoonPatrol"
+  },
+  {
+    "name": "Ms. Pac-Man",
+    "core": "MsPacman"
+  },
+  {
+    "name": "Pac-Man",
+    "core": "MsPacman"
+  },
+  {
+    "name": "Pac-Man Plus",
+    "core": "MsPacman"
+  },
+  {
+    "name": "Pac-Man",
+    "core": "Pacman"
+  },
+  {
+    "name": "Pac-Man Plus",
+    "core": "Pacman"
+  },
+  {
+    "name": "Pengo",
+    "core": "Pengo"
+  },
+  {
+    "name": "Phoenix",
+    "core": "Phoenix"
+  },
+  {
+    "name": "Pleiades",
+    "core": "Phoenix"
+  },
+  {
+    "name": "Pong",
+    "core": "Pong"
+  },
+  {
+    "name": "Pooyan",
+    "core": "Pooyan"
+  },
+  {
+    "name": "Popeye",
+    "core": "Popeye"
+  },
+  {
+    "name": "Sky Skipper",
+    "core": "Popeye"
+  },
+  {
+    "name": "Q*Bert",
+    "core": "QBert"
+  },
+  {
+    "name": "Mad Planets",
+    "core": "QBert"
+  },
+  {
+    "name": "Rally-X",
+    "core": "Rallyx"
+  },
+  {
+    "name": "New Rally-X",
+    "core": "Rallyx"
+  },
+  {
+    "name": "Robotron 2084",
+    "core": "Robotron"
+  },
+  {
+    "name": "Alien Arena",
+    "core": "Robotron"
+  },
+  {
+    "name": "Bubbles",
+    "core": "Robotron"
+  },
+  {
+    "name": "Joust",
+    "core": "Robotron"
+  },
+  {
+    "name": "Playball",
+    "core": "Robotron"
+  },
+  {
+    "name": "Sinistar",
+    "core": "Robotron"
+  },
+  {
+    "name": "Splat!",
+    "core": "Robotron"
+  },
+  {
+    "name": "Stargate",
+    "core": "Robotron"
+  },
+  {
+    "name": "Rush'n Attack",
+    "core": "RushnAttack"
+  },
+  {
+    "name": "Green Beret",
+    "core": "RushnAttack"
+  },
+  {
+    "name": "Mr. Goemon",
+    "core": "RushnAttack"
+  },
+  {
+    "name": "Scramble",
+    "core": "Scramble"
+  },
+  {
+    "name": "Amidar",
+    "core": "Scramble"
+  },
+  {
+    "name": "Anteater",
+    "core": "Scramble"
+  },
+  {
+    "name": "Armored Car",
+    "core": "Scramble"
+  },
+  {
+    "name": "Battle of Atlantis",
+    "core": "Scramble"
+  },
+  {
+    "name": "Calipso",
+    "core": "Scramble"
+  },
+  {
+    "name": "Dark Planet",
+    "core": "Scramble"
+  },
+  {
+    "name": "Frogger (Konami)",
+    "core": "Scramble"
+  },
+  {
+    "name": "Frogger (Sega)",
+    "core": "Scramble"
+  },
+  {
+    "name": "Lost Tomb",
+    "core": "Scramble"
+  },
+  {
+    "name": "Mars",
+    "core": "Scramble"
+  },
+  {
+    "name": "Mighty Monkey",
+    "core": "Scramble"
+  },
+  {
+    "name": "Minefield",
+    "core": "Scramble"
+  },
+  {
+    "name": "Moon War",
+    "core": "Scramble"
+  },
+  {
+    "name": "Rescue",
+    "core": "Scramble"
+  },
+  {
+    "name": "Speed Coin",
+    "core": "Scramble"
+  },
+  {
+    "name": "Strategy X",
+    "core": "Scramble"
+  },
+  {
+    "name": "Super Cobra",
+    "core": "Scramble"
+  },
+  {
+    "name": "Tazz-mania",
+    "core": "Scramble"
+  },
+  {
+    "name": "The End",
+    "core": "Scramble"
+  },
+  {
+    "name": "Turtles",
+    "core": "Scramble"
+  },
+  {
+    "name": "Space Invaders",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Space Invaders Part II",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "280Z-ZZAP",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Amazing Maze",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Attack Force",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Balloon Bomber",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Blue Shark",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Boot Hill",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Clowns",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Cosmo",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Galaxy Wars",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Gun Fight",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Laguna Racer",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Lunar Rescue",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Lupin III",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Sea Wolf",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Shuffleboard",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Space Chaser",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Space Encounters",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Vortex",
+    "core": "SpaceInvaders"
+  },
+  {
+    "name": "Space Race",
+    "core": "SpaceRace"
+  },
+  {
+    "name": "Sprint 1",
+    "core": "Sprint1"
+  },
+  {
+    "name": "Sprint 2",
+    "core": "Sprint2"
+  },
+  {
+    "name": "Super Breakout",
+    "core": "SuperBreakout"
+  },
+  {
+    "name": "Tank Battalion",
+    "core": "TankBattalion"
+  },
+  {
+    "name": "Time Pilot",
+    "core": "TimePilot"
+  },
+  {
+    "name": "Time Pilot '84",
+    "core": "TimePilot84"
+  },
+  {
+    "name": "TNKIII",
+    "core": "TNKIII"
+  },
+  {
+    "name": "Traverse USA",
+    "core": "TraverseUSA"
+  },
+  {
+    "name": "Shot Rider",
+    "core": "TraverseUSA"
+  },
+  {
+    "name": "Turkey Shoot",
+    "core": "TurkeyShoot"
+  },
+  {
+    "name": "Ultra Tank",
+    "core": "Ultratank"
+  },
+  {
+    "name": "V'Ball",
+    "core": "VBall"
+  },
+  {
+    "name": "Xevious",
+    "core": "Xevious"
+  },
+  {
+    "name": "Super Xevious",
+    "core": "Xevious"
+  },
+  {
+    "name": "Zaxxon",
+    "core": "Zaxxon"
+  },
+  {
+    "name": "Super Zaxxon",
+    "core": "Zaxxon"
+  },
+  {
+    "name": "Future Spy",
+    "core": "Zaxxon"
+  },
+  {
+    "name": "Zig Zag",
+    "core": "ZigZag"
+  }
+]

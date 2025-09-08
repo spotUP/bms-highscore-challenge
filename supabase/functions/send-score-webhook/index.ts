@@ -11,7 +11,7 @@ interface ScoreWebhookRequest {
   score: number;
   game_name: string;
   game_id: string;
-  type: 'new_score' | 'score_improved';
+  type?: 'new_score' | 'score_improved';
   previous_score?: number;
   timestamp: string;
 }
@@ -56,11 +56,28 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error(`Failed to fetch scores for ranking: ${scoresError.message}`);
     }
 
-    // Calculate position (1-based index)
-    const position = scoresData?.findIndex(score => score.score === webhookData.score) + 1 || 1;
+    // Calculate position (1-based index) - count how many scores are higher than this one
+    const position = (scoresData?.filter(score => score.score > webhookData.score).length || 0) + 1;
 
-    // Get the game logo URL - use database URL or fallback to a default
-    const gameLogoUrl = gameData.logo_url || 'https://via.placeholder.com/200x200/1a1a1a/ffffff?text=GAME';
+    // Get the game logo URL - use a data URI SVG that Teams definitely supports
+    const gameName = gameData.name || 'GAME';
+    const svgImage = `<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+      <rect width="800" height="600" fill="#4F46E5"/>
+      <text x="400" y="300" font-family="Arial, sans-serif" font-size="64" fill="white" text-anchor="middle" dominant-baseline="middle">${gameName}</text>
+    </svg>`;
+    let gameLogoUrl = `data:image/svg+xml;base64,${btoa(svgImage)}`;
+    
+    // Try Supabase Storage URL first, but fall back to SVG if Teams can't access it
+    if (gameData.logo_url && gameData.logo_url.startsWith('/game-logos/')) {
+      const fileName = gameData.logo_url.substring('/game-logos/'.length);
+      gameLogoUrl = `${supabaseUrl}/storage/v1/object/public/game-logos/${fileName}`;
+    }
+    else if (gameData.logo_url && gameData.logo_url.includes('supabase.co/storage/')) {
+      gameLogoUrl = gameData.logo_url;
+    }
+    
+    console.log("Game logo URL:", gameLogoUrl);
+    console.log("Game data:", JSON.stringify(gameData, null, 2));
 
     // Create the Teams message with attachments array (Power Automate format)
     const teamsMessage = {
@@ -71,23 +88,18 @@ const handler = async (req: Request): Promise<Response> => {
             "type": "AdaptiveCard",
             "version": "1.5",
             "body": [
-              {
-                "type": "Container",
-                "horizontalAlignment": "Center",
-                "items": [
                   {
                     "type": "Image",
                     "url": gameLogoUrl,
                     "horizontalAlignment": "Center",
+                    "size": "ExtraLarge",
                     "width": "100%",
                     "height": "auto",
-                    "size": "Auto"
-                  }
-                ]
-              },
+                    "style": "person"
+                  },
               {
                 "type": "TextBlock",
-                "text": "NEW HIGHSCORE ALERT!",
+                "text": "🎮 NEW HIGHSCORE ALERT! 🎮",
                 "wrap": true,
                 "style": "heading",
                 "size": "ExtraLarge",
@@ -100,7 +112,7 @@ const handler = async (req: Request): Promise<Response> => {
                 "items": [
                   {
                     "type": "TextBlock",
-                    "text": "🏆 #1 " + webhookData.player_name,
+                    "text": "🏆 #" + position + " " + webhookData.player_name,
                     "wrap": true,
                     "size": "Large",
                     "weight": "Bolder",
@@ -118,9 +130,9 @@ const handler = async (req: Request): Promise<Response> => {
                   },
                   {
                     "type": "TextBlock",
-                    "text": "Game: " + webhookData.game_name,
+                    "text": "🎯 Game: " + webhookData.game_name,
                     "wrap": true,
-                    "size": "Small",
+                    "size": "Medium",
                     "color": "Default",
                     "horizontalAlignment": "Center"
                   }
@@ -133,7 +145,11 @@ const handler = async (req: Request): Promise<Response> => {
     };
 
     // Send the Teams MessageCard to Microsoft Teams
-    const webhookUrl = "https://defaultb880007628fd4e2691f5df32a17ab7.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/feb381c9899444c3937d80295b4afc57/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=5H4ofX0in_nS0DVzRKur5Y4YpXKILSqp2BMUXH4rfKU";
+    const webhookUrl = Deno.env.get('TEAMS_WEBHOOK_URL') || "https://defaultb880007628fd4e2691f5df32a17ab7.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/feb381c9899444c3937d80295b4afc57/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=5H4ofX0in_nS0DVzRKur5Y4YpXKILSqp2BMUXH4rfKU";
+    
+    console.log("Sending webhook to:", webhookUrl);
+    console.log("Teams message payload:", JSON.stringify(teamsMessage, null, 2));
+    console.log("Webhook data received:", JSON.stringify(webhookData, null, 2));
 
     const webhookResponse = await fetch(webhookUrl, {
       method: 'POST',
@@ -146,15 +162,22 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Webhook response status:", webhookResponse.status);
     console.log("Webhook response headers:", Object.fromEntries(webhookResponse.headers.entries()));
 
-    
     if (!webhookResponse.ok) {
       const errorText = await webhookResponse.text();
       console.error("Webhook error response:", errorText);
+      console.error("Webhook error details:", {
+        status: webhookResponse.status,
+        statusText: webhookResponse.statusText,
+        url: webhookUrl,
+        body: errorText
+      });
       throw new Error(`Webhook failed: ${webhookResponse.status} - ${errorText}`);
     }
 
     const responseText = await webhookResponse.text();
     console.log("Webhook success response:", responseText);
+    console.log("Power Automate response length:", responseText.length);
+    console.log("Power Automate response type:", typeof responseText);
 
     return new Response(JSON.stringify({ 
       success: true, 

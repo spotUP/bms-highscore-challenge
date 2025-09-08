@@ -6,88 +6,99 @@ interface WheelOfFortuneProps {
   onWinner: (winner: string) => void;
 }
 
+// Wheel of Names style colors - clean and vibrant
+const segmentColors = [
+  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', 
+  '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9',
+  '#FF9F43', '#10AC84', '#EE5A24', '#0984E3', '#6C5CE7'
+];
+
 const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
   const [isSpinning, setIsSpinning] = useState(false);
-  const [rotation, setRotation] = useState(0);
+  const [currentRotation, setCurrentRotation] = useState(0);
+  const [spinVelocity, setSpinVelocity] = useState(0);
   const wheelRef = useRef<HTMLDivElement>(null);
-
-  // Generate colors for each segment
-  const segmentColors = [
-    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', 
-    '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9'
-  ];
+  const animationRef = useRef<number>();
 
   const segmentAngle = 360 / names.length;
 
+  // Smooth physics-based spinning like Wheel of Names
   const spinWheel = () => {
     if (isSpinning || names.length === 0) return;
 
     setIsSpinning(true);
     
-    // Random spin between 5 and 10 full rotations plus random angle
-    const minSpins = 5;
-    const maxSpins = 10;
-    const spins = Math.random() * (maxSpins - minSpins) + minSpins;
-    const finalRotation = rotation + (spins * 360) + Math.random() * 360;
+    // Random initial velocity with some variation - increased for longer spin
+    const baseVelocity = 25 + Math.random() * 15; // 25-40 degrees per frame
+    const velocity = baseVelocity;
+    setSpinVelocity(velocity);
     
-    setRotation(finalRotation);
-
-    // Calculate winner after spin completes
-    setTimeout(() => {
-      const normalizedRotation = (360 - (finalRotation % 360)) % 360;
-      const winnerIndex = Math.floor(normalizedRotation / segmentAngle) % names.length;
-      const winner = names[winnerIndex];
-      
-      setIsSpinning(false);
-      onWinner(winner);
-    }, 4000); // Match CSS animation duration
+    const animate = () => {
+      setSpinVelocity(prev => {
+        const newVelocity = prev * 0.985; // Slower deceleration for longer spin
+        
+        setCurrentRotation(prevRot => {
+          const newRotation = prevRot + newVelocity;
+          
+          if (newVelocity > 0.1) {
+            animationRef.current = requestAnimationFrame(animate);
+            return newRotation;
+          } else {
+            // Wheel has stopped - calculate winner
+            // The pointer is at the top (0 degrees), so we need to find which segment it's pointing to
+            // We need to account for the fact that segments start from the top and go clockwise
+            const normalizedRotation = ((newRotation % 360) + 360) % 360;
+            // Calculate which segment the pointer is pointing to
+            // Since segments are positioned clockwise from the top, we need to reverse the calculation
+            // Add 1 to account for the offset (pointer points to the correct segment)
+            const segmentIndex = Math.floor(normalizedRotation / segmentAngle);
+            const winnerIndex = (names.length - segmentIndex - 1) % names.length;
+            const winner = names[winnerIndex];
+            
+            console.log('Winner calculation:', {
+              currentRotation: newRotation,
+              normalizedRotation,
+              segmentAngle,
+              segmentIndex,
+              winnerIndex,
+              winner,
+              names
+            });
+            
+            setTimeout(() => {
+              setIsSpinning(false);
+              onWinner(winner);
+            }, 500); // Small delay for dramatic effect
+            
+            return newRotation;
+          }
+        });
+        
+        return newVelocity;
+      });
+    };
+    
+    animationRef.current = requestAnimationFrame(animate);
   };
 
-  const renderSegments = () => {
-    return names.map((name, index) => {
-      const angle = segmentAngle * index;
-      const color = segmentColors[index % segmentColors.length];
-      
-      return (
-        <div
-          key={index}
-          className="absolute top-0 left-1/2 origin-bottom"
-          style={{
-            transform: `rotate(${angle}deg)`,
-            width: '2px',
-            height: '150px',
-            transformOrigin: 'bottom center',
-          }}
-        >
-          <div
-            className="absolute top-0 left-0 flex items-start justify-center text-xs font-bold text-white text-center pt-2"
-            style={{
-              width: `${Math.tan((segmentAngle * Math.PI) / 360) * 150 * 2}px`,
-              height: '150px',
-              background: `conic-gradient(from ${-segmentAngle/2}deg, ${color} 0deg, ${color} ${segmentAngle}deg, transparent ${segmentAngle}deg)`,
-              clipPath: `polygon(50% 100%, ${50 - Math.tan((segmentAngle * Math.PI) / 360) * 100}% 0%, ${50 + Math.tan((segmentAngle * Math.PI) / 360) * 100}% 0%)`,
-              marginLeft: `-${Math.tan((segmentAngle * Math.PI) / 360) * 150}px`,
-            }}
-          >
-            <span 
-              className="transform -rotate-90 whitespace-nowrap text-shadow"
-              style={{ 
-                fontSize: Math.min(12, 80 / name.length) + 'px',
-                textShadow: '1px 1px 2px rgba(0,0,0,0.8)'
-              }}
-            >
-              {name}
-            </span>
-          </div>
-        </div>
-      );
-    });
-  };
+  // Cleanup animation on unmount
+  useEffect(() => {
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, []);
 
   if (names.length === 0) {
     return (
-      <div className="text-center text-white">
-        <p className="text-xl mb-4">No players found!</p>
+      <div className="text-center text-gray-600">
+        <div className="mb-6">
+          <div className="w-32 h-32 mx-auto rounded-full border-4 border-dashed border-gray-300 flex items-center justify-center">
+            <span className="text-gray-400 text-4xl">?</span>
+          </div>
+        </div>
+        <p className="text-xl mb-2 font-semibold">No players found!</p>
         <p className="text-gray-400">Add some scores to the leaderboard first.</p>
       </div>
     );
@@ -95,42 +106,97 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
 
   return (
     <div className="flex flex-col items-center space-y-8">
+      {/* Wheel Container - Wheel of Names style */}
       <div className="relative">
-        {/* Wheel container */}
+        {/* Main wheel - clean and simple like Wheel of Names */}
         <div
           ref={wheelRef}
-          className="relative w-80 h-80 rounded-full border-4 border-white shadow-2xl transition-transform duration-4000 ease-out"
+          className="relative w-96 h-96 rounded-full border-4 border-gray-300 shadow-xl"
           style={{
-            transform: `rotate(${rotation}deg)`,
-            background: 'conic-gradient(from 0deg, #FF6B6B, #4ECDC4, #45B7D1, #96CEB4, #FFEAA7, #DDA0DD, #98D8C8, #F7DC6F, #BB8FCE, #85C1E9)',
+            transform: `rotate(${currentRotation}deg)`,
+            background: `conic-gradient(${names.map((_, index) => {
+              const color = segmentColors[index % segmentColors.length];
+              const startAngle = (360 / names.length) * index;
+              const endAngle = (360 / names.length) * (index + 1);
+              return `${color} ${startAngle}deg ${endAngle}deg`;
+            }).join(', ')})`,
+            transition: isSpinning ? 'none' : 'transform 0.2s ease-out',
+            willChange: isSpinning ? 'transform' : 'auto',
           }}
         >
-          {/* Center circle */}
-          <div className="absolute top-1/2 left-1/2 w-8 h-8 bg-white rounded-full transform -translate-x-1/2 -translate-y-1/2 border-2 border-gray-800 z-10"></div>
-          
-          {/* Segments */}
-          <div className="relative w-full h-full overflow-hidden rounded-full">
-            {renderSegments()}
+          {/* Center hub - simple and clean like Wheel of Names */}
+          <div className="absolute top-1/2 left-1/2 w-16 h-16 bg-white rounded-full transform -translate-x-1/2 -translate-y-1/2 border-2 border-gray-300 z-10 shadow-lg">
+            <div className="w-full h-full rounded-full bg-gray-100 flex items-center justify-center">
+              <div className="w-4 h-4 bg-gray-400 rounded-full"></div>
+            </div>
           </div>
+
+          {/* Player names - positioned like Wheel of Names */}
+          {names.map((name, index) => {
+            const segmentCenterAngle = segmentAngle * index + segmentAngle / 2;
+            // Position names in the middle of each segment
+            const radius = 120; // Middle of the segment
+            const x = Math.cos((segmentCenterAngle - 90) * Math.PI / 180) * radius;
+            const y = Math.sin((segmentCenterAngle - 90) * Math.PI / 180) * radius;
+            
+            // Rotate names 90 degrees from their segment angle
+            let rotationAngle = segmentCenterAngle + 90;
+            // Flip text that would be upside down to keep it readable
+            if (rotationAngle > 90 && rotationAngle < 270) {
+              rotationAngle += 180;
+            }
+            
+            return (
+              <div
+                key={`name-${index}`}
+                className="absolute text-white font-bold text-sm z-30"
+                style={{
+                  left: `calc(50% + ${x}px)`,
+                  top: `calc(50% + ${y}px)`,
+                  transform: `translate(-50%, -50%) rotate(${rotationAngle}deg)`,
+                  transformOrigin: 'center',
+                  textShadow: '1px 1px 2px rgba(0,0,0,0.7)',
+                  maxWidth: '100px',
+                  textAlign: 'center',
+                  lineHeight: '1.2',
+                  fontWeight: '600',
+                  letterSpacing: '0.3px'
+                }}
+              >
+                {name}
+              </div>
+            );
+          })}
         </div>
 
-        {/* Pointer */}
-        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2 z-20">
-          <div className="w-0 h-0 border-l-4 border-r-4 border-b-8 border-l-transparent border-r-transparent border-b-white"></div>
+        {/* Pointer - simple triangle like Wheel of Names */}
+        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2 z-40">
+          <div className="w-0 h-0 border-l-4 border-r-4 border-b-8 border-l-transparent border-r-transparent border-b-gray-600 shadow-md"></div>
         </div>
       </div>
 
+      {/* Spin Button - clean and simple like Wheel of Names */}
       <Button
         onClick={spinWheel}
         disabled={isSpinning}
-        className="bg-arcade-neonYellow hover:bg-arcade-neonYellow/80 text-black font-bold text-xl px-8 py-4 rounded-lg shadow-lg transition-all duration-200 hover:scale-105"
+        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-lg px-8 py-4 rounded-lg shadow-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {isSpinning ? 'Spinning...' : 'SPIN THE WHEEL!'}
+        {isSpinning ? (
+          <div className="flex items-center space-x-2">
+            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <span>Spinning...</span>
+          </div>
+        ) : (
+          'Spin the Wheel'
+        )}
       </Button>
 
-      <p className="text-white text-center max-w-md">
-        {names.length} player{names.length !== 1 ? 's' : ''} on the wheel
-      </p>
+      {/* Player Info - minimal like Wheel of Names */}
+      <div className="text-center">
+        <p className="text-gray-600 text-sm">
+          {names.length} entr{names.length !== 1 ? 'ies' : 'y'} ready to spin
+        </p>
+      </div>
     </div>
   );
 };

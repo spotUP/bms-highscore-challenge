@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, Plus } from "lucide-react";
+import { formatScore } from '@/lib/utils';
 
 interface Score {
   id: string;
@@ -386,7 +387,7 @@ const ScoreManager = () => {
                   className="font-bold font-arcade animated-gradient"
                   style={{ animationDelay: `${index * 0.1 + 0.2}s` }}
                 >
-                  {score.score.toLocaleString()}
+                  {formatScore(score.score)}
                 </TableCell>
                 <TableCell className="text-gray-300">{score.games?.name || 'Unknown'}</TableCell>
                 <TableCell className="text-gray-300">

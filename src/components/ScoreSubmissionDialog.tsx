@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import PlayerInsult from "./PlayerInsult";
 
 interface Game {
   id: string;
@@ -23,6 +24,8 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
   const [name, setName] = useState("");
   const [score, setScore] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPlayerInsult, setShowPlayerInsult] = useState(false);
+  const [insultPlayerName, setInsultPlayerName] = useState('');
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -95,6 +98,15 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
 
         // Post to webhook via edge function for score improvement
         try {
+          console.log('🚀 Calling webhook for score improvement:', {
+            player_name: trimmedName.toUpperCase(),
+            score: scoreValue,
+            game_name: game.name,
+            game_id: game.id,
+            type: 'score_improved',
+            previous_score: existingScore.score
+          });
+          
           const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
             body: {
               player_name: trimmedName.toUpperCase(),
@@ -108,18 +120,23 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           });
           
           if (webhookResponse.error) {
-            console.error('Webhook error:', webhookResponse.error);
+            console.error('❌ Webhook error:', webhookResponse.error);
           } else {
-            console.log('Webhook sent successfully:', webhookResponse.data);
+            console.log('✅ Webhook sent successfully:', webhookResponse.data);
+            console.log('📊 Full webhook response:', webhookResponse);
           }
         } catch (webhookError) {
-          console.error('Webhook call failed:', webhookError);
+          console.error('❌ Webhook call failed:', webhookError);
         }
 
         toast({
           title: "Score Improved!",
           description: `New best score for ${game.name}: ${scoreValue.toLocaleString()} (previous: ${existingScore.score.toLocaleString()})`
         });
+
+        // Show message for all players
+        setInsultPlayerName(trimmedName);
+        setShowPlayerInsult(true);
       } else {
         // Insert new score for this player/game combination
         const { error } = await supabase
@@ -134,6 +151,14 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         
         // Post to webhook via edge function for new score
         try {
+          console.log('🚀 Calling webhook for new score:', {
+            player_name: trimmedName.toUpperCase(),
+            score: scoreValue,
+            game_name: game.name,
+            game_id: game.id,
+            type: 'new_score'
+          });
+          
           const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
             body: {
               player_name: trimmedName.toUpperCase(),
@@ -146,18 +171,23 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           });
           
           if (webhookResponse.error) {
-            console.error('Webhook error:', webhookResponse.error);
+            console.error('❌ Webhook error:', webhookResponse.error);
           } else {
-            console.log('Webhook sent successfully:', webhookResponse.data);
+            console.log('✅ Webhook sent successfully:', webhookResponse.data);
+            console.log('📊 Full webhook response:', webhookResponse);
           }
         } catch (webhookError) {
-          console.error('Webhook call failed:', webhookError);
+          console.error('❌ Webhook call failed:', webhookError);
         }
         
         toast({
           title: "New Score Recorded!",
           description: `First score for ${game.name}: ${scoreValue.toLocaleString()}`
         });
+
+        // Show message for all players
+        setInsultPlayerName(trimmedName);
+        setShowPlayerInsult(true);
       }
       
       setName("");
@@ -202,7 +232,13 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
   if (!game) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <>
+      <PlayerInsult 
+        isVisible={showPlayerInsult} 
+        playerName={insultPlayerName}
+        onComplete={() => setShowPlayerInsult(false)} 
+      />
+      <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-black/30 border-white/20 max-w-md backdrop-blur-sm">
         <DialogHeader className="pb-3">
           {/* Game logo header */}
@@ -280,6 +316,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         </form>
       </DialogContent>
     </Dialog>
+    </>
   );
 };
 

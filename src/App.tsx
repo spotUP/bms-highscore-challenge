@@ -9,6 +9,7 @@ import Index from "./pages/Index";
 import MobileEntry from "./pages/MobileEntry";
 import Auth from "./pages/Auth";
 import Admin from "./pages/Admin";
+import Statistics from "./pages/Statistics";
 
 const queryClient = new QueryClient();
 
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="/mobile-entry" element={<MobileEntry />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/statistics" element={<Statistics />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

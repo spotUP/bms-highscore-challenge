@@ -46,7 +46,7 @@ const MobileMenu = ({ onSpinWheel }: MobileMenuProps) => {
                   onClick={() => handleNavigation(onSpinWheel)}
                   className="w-full justify-start text-left"
                 >
-                  🎡 Spin the Wheel
+                  Spin the Wheel
                 </Button>
                 {isAdmin && (
                   <Button

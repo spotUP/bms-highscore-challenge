@@ -16,6 +16,8 @@ import { Pencil, Trash2, Plus } from "lucide-react";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import GameLogoSuggestions from "@/components/GameLogoSuggestions";
 import ScoreManager from "@/components/ScoreManager";
+import RandomizeGames from "@/components/RandomizeGames";
+import StopCompetition from "@/components/StopCompetition";
 
 interface Game {
   id: string;
@@ -36,6 +38,7 @@ const Admin = () => {
   const [gamesLoading, setGamesLoading] = useState(true);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [gamesUpdateTrigger, setGamesUpdateTrigger] = useState(0);
   const [formData, setFormData] = useState({
     name: "",
     logo_url: "",
@@ -60,6 +63,7 @@ const Admin = () => {
 
       if (error) throw error;
       setGames(data || []);
+      setGamesUpdateTrigger(prev => prev + 1); // Trigger refresh for StopCompetition
     } catch (error) {
       console.error('Error loading games:', error);
       toast({
@@ -248,13 +252,16 @@ const Admin = () => {
           <CardHeader>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <CardTitle className="text-white">Games Management</CardTitle>
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button onClick={resetForm} className="bg-arcade-neonPink hover:bg-arcade-neonPink/80 w-full sm:w-auto">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Game
-                  </Button>
-                </DialogTrigger>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <RandomizeGames onGamesUpdated={loadGames} />
+                <StopCompetition onCompetitionStopped={loadGames} refreshTrigger={gamesUpdateTrigger} />
+                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button onClick={resetForm} className="bg-arcade-neonPink hover:bg-arcade-neonPink/80 w-full sm:w-auto">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Game
+                    </Button>
+                  </DialogTrigger>
                 <DialogContent className="bg-gray-900 text-white border-white/20 max-w-2xl w-[95vw] max-h-[90vh] overflow-hidden mx-auto">
                   <DialogHeader>
                     <DialogTitle className="text-lg font-semibold break-words">
@@ -307,6 +314,7 @@ const Admin = () => {
                   </div>
                 </DialogContent>
               </Dialog>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="overflow-x-auto">

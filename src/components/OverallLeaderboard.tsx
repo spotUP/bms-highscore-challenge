@@ -2,37 +2,61 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trophy, Medal, Award } from "lucide-react";
+import { formatScore } from '@/lib/utils';
 
 interface PlayerScore {
   player_name: string;
   total_score: number;
+  total_ranking_points: number;
   game_count: number;
 }
 
 const OverallLeaderboard = () => {
   const [leaders, setLeaders] = useState<PlayerScore[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
   const loadOverallLeaders = async () => {
     try {
+      console.log('Loading overall leaders...');
+      // Get all scores with game information
       const { data: scores, error } = await supabase
         .from('scores')
         .select(`
           player_name, 
           score,
-          games!inner(include_in_challenge)
+          game_id,
+          games!inner(include_in_challenge, name)
         `)
         .eq('games.include_in_challenge', true);
 
       if (error) throw error;
 
-      // Group scores by player name and calculate totals
+      // Group scores by game
+      const scoresByGame = scores?.reduce((acc: Record<string, any[]>, score) => {
+        const gameId = score.game_id;
+        if (!acc[gameId]) {
+          acc[gameId] = [];
+        }
+        acc[gameId].push(score);
+        return acc;
+      }, {}) || {};
+
+      // Function to calculate ranking points based on position
+      const getRankingPoints = (position: number): number => {
+        // Fixed points system: 1st=100, 2nd=80, 3rd=70, 4th=60, 5th=50, etc.
+        // Linear scale: 100 - (position - 1) * 10, minimum 10 points
+        return Math.max(100 - (position - 1) * 10, 10);
+      };
+
+      // Calculate ranking points for each player across all games
       const playerTotals = scores?.reduce((acc: Record<string, PlayerScore>, score) => {
         const playerName = score.player_name;
         if (!acc[playerName]) {
           acc[playerName] = {
             player_name: playerName,
             total_score: 0,
+            total_ranking_points: 0,
             game_count: 0
           };
         }
@@ -41,12 +65,37 @@ const OverallLeaderboard = () => {
         return acc;
       }, {}) || {};
 
-      // Convert to array and sort by total score
+      // For each game, rank players and assign ranking points
+      Object.values(scoresByGame).forEach(gameScores => {
+        // Sort scores by score (descending) to get rankings
+        const sortedScores = gameScores.sort((a, b) => b.score - a.score);
+        
+        // Assign ranking points based on position
+        sortedScores.forEach((score, index) => {
+          const position = index + 1;
+          const rankingPoints = getRankingPoints(position);
+          
+          if (playerTotals[score.player_name]) {
+            playerTotals[score.player_name].total_ranking_points += rankingPoints;
+          }
+        });
+      });
+
+      // Convert to array and sort by total ranking points (primary) and total score (secondary)
       const leadersList = Object.values(playerTotals)
-        .sort((a, b) => b.total_score - a.total_score)
+        .sort((a, b) => {
+          // Primary sort: by ranking points (descending)
+          if (b.total_ranking_points !== a.total_ranking_points) {
+            return b.total_ranking_points - a.total_ranking_points;
+          }
+          // Secondary sort: by total score (descending)
+          return b.total_score - a.total_score;
+        })
         .slice(0, 10); // Top 10 players
 
       setLeaders(leadersList);
+      setLastUpdate(new Date());
+      console.log('Overall leaders loaded successfully:', leadersList.length, 'players');
     } catch (error) {
       console.error('Error loading overall leaders:', error);
     } finally {
@@ -57,36 +106,60 @@ const OverallLeaderboard = () => {
   useEffect(() => {
     loadOverallLeaders();
     
+    // Set up periodic refresh as fallback (every 30 seconds)
+    const refreshInterval = setInterval(() => {
+      console.log('OverallLeaderboard: Periodic refresh triggered');
+      loadOverallLeaders();
+    }, 30000);
+    
     // Set up real-time subscriptions for score and game changes
     const scoresChannel = supabase
       .channel('overall-leaderboard-scores')
       .on('postgres_changes', 
         { 
-          event: '*', 
+          event: '*', // INSERT, UPDATE, DELETE
           schema: 'public', 
           table: 'scores' 
         }, 
-        () => {
+        (payload) => {
+          console.log('OverallLeaderboard: Score change detected:', payload.eventType, payload);
           loadOverallLeaders(); // Reload leaders when scores change
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('OverallLeaderboard: Scores subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('OverallLeaderboard: Successfully subscribed to score changes');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('OverallLeaderboard: Error subscribing to score changes');
+        }
+      });
 
     const gamesChannel = supabase
       .channel('overall-leaderboard-games')
       .on('postgres_changes', 
         { 
-          event: 'UPDATE', 
+          event: '*', // INSERT, UPDATE, DELETE - in case games are added/removed
           schema: 'public', 
           table: 'games' 
         }, 
-        () => {
-          loadOverallLeaders(); // Reload leaders when game challenge status changes
+        (payload) => {
+          console.log('OverallLeaderboard: Game change detected:', payload.eventType, payload);
+          loadOverallLeaders(); // Reload leaders when games change
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('OverallLeaderboard: Games subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('OverallLeaderboard: Successfully subscribed to game changes');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('OverallLeaderboard: Error subscribing to game changes');
+        }
+      });
 
     return () => {
+      console.log('Cleaning up overall leaderboard subscriptions');
+      clearInterval(refreshInterval);
       supabase.removeChannel(scoresChannel);
       supabase.removeChannel(gamesChannel);
     };
@@ -156,7 +229,7 @@ const OverallLeaderboard = () => {
                 className="text-right font-bold font-arcade animated-gradient"
                 style={{ animationDelay: `${index * 0.15 + 0.3}s` }}
               >
-                {player.total_score.toLocaleString()}
+                {formatScore(player.total_ranking_points)}
               </div>
             </div>
           ))}

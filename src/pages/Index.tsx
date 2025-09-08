@@ -53,6 +53,7 @@ const Index = () => {
   const [selectedGameForSubmission, setSelectedGameForSubmission] = useState<Game | null>(null);
   const [isSubmissionDialogOpen, setIsSubmissionDialogOpen] = useState(false);
   const [isSpinWheelOpen, setIsSpinWheelOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Load games from database
   const loadGames = async () => {
@@ -108,15 +109,32 @@ const Index = () => {
           schema: 'public', 
           table: 'scores' 
         }, 
-        () => {
+        (payload) => {
+          console.log('Index: Score change detected:', payload.eventType, payload);
           loadScores(); // Reload scores when changes occur
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Index: Scores subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('Index: Successfully subscribed to score changes');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Index: Error subscribing to score changes');
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
+  }, []);
+
+  // Clock update effect
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
   }, []);
 
   const handleGameLogoClick = (game: Game) => {
@@ -155,11 +173,24 @@ const Index = () => {
           
           {/* Desktop Menu */}
           <div className="hidden md:flex gap-4 items-center">
+            {/* Digital Clock */}
+            <div className="font-arcade font-bold text-lg animated-gradient">
+              {currentTime.toLocaleTimeString('en-GB', { 
+                hour12: false, 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+              })}
+            </div>
+            
             {user ? (
               <>
                 <span className="text-gray-300">Welcome, {user.email}</span>
                 <Button variant="outline" onClick={() => setIsSpinWheelOpen(true)}>
-                  🎡 Spin the Wheel
+                  Spin the Wheel
+                </Button>
+                <Button variant="outline" onClick={() => navigate('/statistics')}>
+                  Statistics
                 </Button>
                 {isAdmin && (
                   <Button variant="outline" onClick={() => navigate('/admin')}>
@@ -207,7 +238,7 @@ const Index = () => {
                   >
                       <CardHeader className="pb-3">
                         {/* Game logo inside card header */}
-                        <div className="flex flex-col items-center space-y-3">
+                        <div className="flex justify-center">
                           <div className="transition-transform duration-200">
                             {logoUrl ? (
                               <img 
@@ -221,10 +252,6 @@ const Index = () => {
                               </div>
                             )}
                           </div>
-                          {/* Game name text under the logo */}
-                          <h3 className="text-center text-white font-bold text-lg md:text-xl">
-                            {game.name}
-                          </h3>
                         </div>
                       </CardHeader>
                       <CardContent className="flex-1 flex flex-col">
@@ -248,8 +275,8 @@ const Index = () => {
                           </div>
                         </div>
                         
-                        {/* QR Code - inside card at bottom */}
-                        <div className="mt-auto">
+                        {/* QR Code - inside card at bottom - hidden on mobile */}
+                        <div className="mt-auto hidden md:block">
                           <QRCodeDisplay gameId={game.id} gameName={game.name} />
                         </div>
                       </CardContent>

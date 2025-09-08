@@ -1,0 +1,517 @@
+{
+  "Extra Bases": {
+    "logoFile": "ebases.png",
+    "mameName": "ebases",
+    "mameTitle": "Extra Bases"
+  },
+  "Gorf": {
+    "logoFile": "gorf.png",
+    "mameName": "gorf",
+    "mameTitle": "Gorf"
+  },
+  "Sea Wolf II": {
+    "logoFile": "seawolf2.png",
+    "mameName": "seawolf2",
+    "mameTitle": "Sea Wolf II"
+  },
+  "Space Zap": {
+    "logoFile": "ace.png",
+    "mameName": "ace",
+    "mameTitle": "Ace"
+  },
+  "The Adventures of Robby Roto!": {
+    "logoFile": "robby.png",
+    "mameName": "robby",
+    "mameTitle": "The Adventures of Robby Roto!"
+  },
+  "Wizard of Wor": {
+    "logoFile": "wiz.png",
+    "mameName": "wiz",
+    "mameTitle": "Wiz"
+  },
+  "Tetris (Atari)": {
+    "logoFile": "4in1boot.png",
+    "mameName": "4in1boot",
+    "mameTitle": "Puzzle King (PacMan 2, Tetris, HyperMan 2, Snow Bros.)"
+  },
+  "Athena": {
+    "logoFile": "atehate.png",
+    "mameName": "atehate",
+    "mameTitle": "Athena no Hatena?"
+  },
+  "Bagman": {
+    "logoFile": "bagman.png",
+    "mameName": "bagman",
+    "mameTitle": "Bagman"
+  },
+  "Botanic": {
+    "logoFile": "botanic.png",
+    "mameName": "botanic",
+    "mameTitle": "Botanic (English / Spanish)"
+  },
+  "Pickin'": {
+    "logoFile": "pickin.png",
+    "mameName": "pickin",
+    "mameTitle": "Pickin'"
+  },
+  "Squash": {
+    "logoFile": "squaitsa.png",
+    "mameName": "squaitsa",
+    "mameTitle": "Squash (Itisa)"
+  },
+  "Super Bagman": {
+    "logoFile": "bagman.png",
+    "mameName": "bagman",
+    "mameTitle": "Bagman"
+  },
+  "Bank Panic": {
+    "logoFile": "bankp.png",
+    "mameName": "bankp",
+    "mameTitle": "Bank Panic"
+  },
+  "Combat Hawk": {
+    "logoFile": "combh.png",
+    "mameName": "combh",
+    "mameTitle": "Combat Hawk"
+  },
+  "Bradley Trainer": {
+    "logoFile": "bradley.png",
+    "mameName": "bradley",
+    "mameTitle": "Bradley Trainer"
+  },
+  "Berzerk": {
+    "logoFile": "berzerk.png",
+    "mameName": "berzerk",
+    "mameTitle": "Berzerk (revision RC31A)"
+  },
+  "Black Widow": {
+    "logoFile": "bwidow.png",
+    "mameName": "bwidow",
+    "mameTitle": "Black Widow"
+  },
+  "Gravitar": {
+    "logoFile": "gravitar.png",
+    "mameName": "gravitar",
+    "mameTitle": "Gravitar (version 3)"
+  },
+  "Blasto": {
+    "logoFile": "blasto.png",
+    "mameName": "blasto",
+    "mameTitle": "Blasto"
+  },
+  "Blockade": {
+    "logoFile": "blockade.png",
+    "mameName": "blockade",
+    "mameTitle": "Blockade"
+  },
+  "CoMotion": {
+    "logoFile": "comotion.png",
+    "mameName": "comotion",
+    "mameTitle": "CoMotion"
+  },
+  "Bosconian - Star Destroyer": {
+    "logoFile": "bosco.png",
+    "mameName": "bosco",
+    "mameTitle": "Bosconian - Star Destroyer (version 5)"
+  },
+  "Breakout (TTL)": {
+    "logoFile": "breakout.png",
+    "mameName": "breakout",
+    "mameTitle": "Breakout"
+  },
+  "Burger Time": {
+    "logoFile": "btime.png",
+    "mameName": "btime",
+    "mameTitle": "Burger Time (Data East set 1)"
+  },
+  "Burnin' Rubber": {
+    "logoFile": "brubber.png",
+    "mameName": "brubber",
+    "mameTitle": "Burnin' Rubber"
+  },
+  "Canyon Bomber": {
+    "logoFile": "canyon.png",
+    "mameName": "canyon",
+    "mameTitle": "Canyon Bomber"
+  },
+  "DoDonPachi": {
+    "logoFile": "ddonpach.png",
+    "mameName": "ddonpach",
+    "mameTitle": "DoDonPachi (World, 1997 2/ 5 Master Ver.)"
+  },
+  "DonPachi": {
+    "logoFile": "ddonpach.png",
+    "mameName": "ddonpach",
+    "mameTitle": "DoDonPachi (World, 1997 2/ 5 Master Ver.)"
+  },
+  "ESP Ra.De.": {
+    "logoFile": "esprade.png",
+    "mameName": "esprade",
+    "mameTitle": "ESP Ra.De. (World, 1998 4/22 International Ver.)"
+  },
+  "Fever SOS": {
+    "logoFile": "feversos.png",
+    "mameName": "feversos",
+    "mameTitle": "Fever SOS (World, 98/09/25 VER)"
+  },
+  "Gaia Crusaders": {
+    "logoFile": "gaia.png",
+    "mameName": "gaia",
+    "mameTitle": "Gaia Crusaders"
+  },
+  "Guwange": {
+    "logoFile": "guwange.png",
+    "mameName": "guwange",
+    "mameTitle": "Guwange (Japan, 1999 6/24 Master Ver 16:55)"
+  },
+  "Puzzle Uo Poko": {
+    "logoFile": "uopoko.png",
+    "mameName": "uopoko",
+    "mameTitle": "Puzzle Uo Poko (World)"
+  },
+  "Thunder Heroes": {
+    "logoFile": "hero.png",
+    "mameName": "hero",
+    "mameTitle": "Hero"
+  },
+  "Computer Space": {
+    "logoFile": "ace.png",
+    "mameName": "ace",
+    "mameTitle": "Ace"
+  },
+  "Congo Bongo": {
+    "logoFile": "bongo.png",
+    "mameName": "bongo",
+    "mameTitle": "Bongo"
+  },
+  "Devil Zone": {
+    "logoFile": "devzone.png",
+    "mameName": "devzone",
+    "mameTitle": "Devil Zone"
+  },
+  "Space Panic": {
+    "logoFile": "ace.png",
+    "mameName": "ace",
+    "mameTitle": "Ace"
+  },
+  "Stargate": {
+    "logoFile": "alienaru.png",
+    "mameName": "alienaru",
+    "mameTitle": "Alien Arena (Stargate upgrade)"
+  },
+  "Dig Dug": {
+    "logoFile": "digdug.png",
+    "mameName": "digdug",
+    "mameTitle": "Dig Dug (rev 2)"
+  },
+  "Dig Dug II": {
+    "logoFile": "digdug.png",
+    "mameName": "digdug",
+    "mameTitle": "Dig Dug (rev 2)"
+  },
+  "Frogger": {
+    "logoFile": "frogger.png",
+    "mameName": "frogger",
+    "mameTitle": "Frogger"
+  },
+  "Galaga": {
+    "logoFile": "20pacgal.png",
+    "mameName": "20pacgal",
+    "mameTitle": "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.08)"
+  },
+  "Galaga '88": {
+    "logoFile": "20pacgal.png",
+    "mameName": "20pacgal",
+    "mameTitle": "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.08)"
+  },
+  "Gaplus": {
+    "logoFile": "gaplus.png",
+    "mameName": "gaplus",
+    "mameTitle": "Gaplus (GP2 rev. B)"
+  },
+  "Super Galaga": {
+    "logoFile": "20pacgal.png",
+    "mameName": "20pacgal",
+    "mameTitle": "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.08)"
+  },
+  "Gyruss": {
+    "logoFile": "gyruss.png",
+    "mameName": "gyruss",
+    "mameTitle": "Gyruss"
+  },
+  "Joust": {
+    "logoFile": "joust.png",
+    "mameName": "joust",
+    "mameTitle": "Joust (Green label)"
+  },
+  "Joust 2": {
+    "logoFile": "joust.png",
+    "mameName": "joust",
+    "mameTitle": "Joust (Green label)"
+  },
+  "Lady Bug": {
+    "logoFile": "ladybug.png",
+    "mameName": "ladybug",
+    "mameTitle": "Lady Bug"
+  },
+  "Snap Jack": {
+    "logoFile": "snapjack.png",
+    "mameName": "snapjack",
+    "mameTitle": "Snap Jack"
+  },
+  "Mario Bros.": {
+    "logoFile": "mario.png",
+    "mameName": "mario",
+    "mameTitle": "Mario Bros. (US, Revision G)"
+  },
+  "Moon Patrol": {
+    "logoFile": "mpatrol.png",
+    "mameName": "mpatrol",
+    "mameTitle": "Moon Patrol"
+  },
+  "Ms. Pac-Man": {
+    "logoFile": "20pacgal.png",
+    "mameName": "20pacgal",
+    "mameTitle": "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.08)"
+  },
+  "Pac-Man": {
+    "logoFile": "20pacgal.png",
+    "mameName": "20pacgal",
+    "mameTitle": "Ms. Pac-Man/Galaga - 20th Anniversary Class of 1981 Reunion (V1.08)"
+  },
+  "Pooyan": {
+    "logoFile": "pooyan.png",
+    "mameName": "pooyan",
+    "mameTitle": "Pooyan"
+  },
+  "Sky Skipper": {
+    "logoFile": "skyskipr.png",
+    "mameName": "skyskipr",
+    "mameTitle": "Sky Skipper"
+  },
+  "Mad Planets": {
+    "logoFile": "mplanets.png",
+    "mameName": "mplanets",
+    "mameTitle": "Mad Planets"
+  },
+  "Robotron 2084": {
+    "logoFile": "robotron.png",
+    "mameName": "robotron",
+    "mameTitle": "Robotron: 2084 (Solid Blue label)"
+  },
+  "Bubbles": {
+    "logoFile": "bubbles.png",
+    "mameName": "bubbles",
+    "mameTitle": "Bubbles"
+  },
+  "Playball": {
+    "logoFile": "playball.png",
+    "mameName": "playball",
+    "mameTitle": "PlayBall! (prototype)"
+  },
+  "Splat!": {
+    "logoFile": "splat.png",
+    "mameName": "splat",
+    "mameTitle": "Splat!"
+  },
+  "Green Beret": {
+    "logoFile": "gberet.png",
+    "mameName": "gberet",
+    "mameTitle": "Green Beret"
+  },
+  "Mr. Goemon": {
+    "logoFile": "mrgoemon.png",
+    "mameName": "mrgoemon",
+    "mameTitle": "Mr. Goemon (Japan)"
+  },
+  "Amidar": {
+    "logoFile": "amidar.png",
+    "mameName": "amidar",
+    "mameTitle": "Amidar"
+  },
+  "Anteater": {
+    "logoFile": "anteater.png",
+    "mameName": "anteater",
+    "mameTitle": "Anteater"
+  },
+  "Battle of Atlantis": {
+    "logoFile": "atlantis.png",
+    "mameName": "atlantis",
+    "mameTitle": "Battle of Atlantis (set 1)"
+  },
+  "Dark Planet": {
+    "logoFile": "darkplnt.png",
+    "mameName": "darkplnt",
+    "mameTitle": "Dark Planet"
+  },
+  "Frogger (Konami)": {
+    "logoFile": "frogger.png",
+    "mameName": "frogger",
+    "mameTitle": "Frogger"
+  },
+  "Frogger (Sega)": {
+    "logoFile": "frogger.png",
+    "mameName": "frogger",
+    "mameTitle": "Frogger"
+  },
+  "Mighty Monkey": {
+    "logoFile": "mimonkey.png",
+    "mameName": "mimonkey",
+    "mameTitle": "Mighty Monkey"
+  },
+  "Minefield": {
+    "logoFile": "minefld.png",
+    "mameName": "minefld",
+    "mameTitle": "Minefield"
+  },
+  "Speed Coin": {
+    "logoFile": "spdcoin.png",
+    "mameName": "spdcoin",
+    "mameTitle": "Speed Coin (prototype)"
+  },
+  "Strategy X": {
+    "logoFile": "stratgys.png",
+    "mameName": "stratgys",
+    "mameTitle": "Strategy X (Stern Electronics)"
+  },
+  "Space Invaders": {
+    "logoFile": "ace.png",
+    "mameName": "ace",
+    "mameTitle": "Ace"
+  },
+  "Space Invaders Part II": {
+    "logoFile": "ace.png",
+    "mameName": "ace",
+    "mameTitle": "Ace"
+  },
+  "Amazing Maze": {
+    "logoFile": "maze.png",
+    "mameName": "maze",
+    "mameTitle": "Amazing Maze"
+  },
+  "Balloon Bomber": {
+    "logoFile": "ballbomb.png",
+    "mameName": "ballbomb",
+    "mameTitle": "Balloon Bomber"
+  },
+  "Boot Hill": {
+    "logoFile": "boothill.png",
+    "mameName": "boothill",
+    "mameTitle": "Boot Hill"
+  },
+  "Gun Fight": {
+    "logoFile": "gunfight.png",
+    "mameName": "gunfight",
+    "mameTitle": "Gun Fight (set 1)"
+  },
+  "Laguna Racer": {
+    "logoFile": "ace.png",
+    "mameName": "ace",
+    "mameTitle": "Ace"
+  },
+  "Lupin III": {
+    "logoFile": "lupin3.png",
+    "mameName": "lupin3",
+    "mameTitle": "Lupin III (set 1)"
+  },
+  "Sea Wolf": {
+    "logoFile": "seawolf.png",
+    "mameName": "seawolf",
+    "mameTitle": "Sea Wolf (set 1)"
+  },
+  "Shuffleboard": {
+    "logoFile": "shuffle.png",
+    "mameName": "shuffle",
+    "mameTitle": "Shuffleboard"
+  },
+  "Space Chaser": {
+    "logoFile": "ace.png",
+    "mameName": "ace",
+    "mameTitle": "Ace"
+  },
+  "Space Encounters": {
+    "logoFile": "ace.png",
+    "mameName": "ace",
+    "mameTitle": "Ace"
+  },
+  "Space Race": {
+    "logoFile": "ace.png",
+    "mameName": "ace",
+    "mameTitle": "Ace"
+  },
+  "Sprint 1": {
+    "logoFile": "sprint1.png",
+    "mameName": "sprint1",
+    "mameTitle": "Sprint 1"
+  },
+  "Sprint 2": {
+    "logoFile": "sprint2.png",
+    "mameName": "sprint2",
+    "mameTitle": "Sprint 2 (set 1)"
+  },
+  "Super Breakout": {
+    "logoFile": "breakout.png",
+    "mameName": "breakout",
+    "mameTitle": "Breakout"
+  },
+  "Time Pilot": {
+    "logoFile": "timefgtr.png",
+    "mameName": "timefgtr",
+    "mameTitle": "Time Fighter (Time Pilot conversion on Galaxian hardware)"
+  },
+  "Time Pilot '84": {
+    "logoFile": "timeplt.png",
+    "mameName": "timeplt",
+    "mameTitle": "Time Pilot"
+  },
+  "Traverse USA": {
+    "logoFile": "travrusa.png",
+    "mameName": "travrusa",
+    "mameTitle": "Traverse USA / Zippy Race"
+  },
+  "Shot Rider": {
+    "logoFile": "shtrider.png",
+    "mameName": "shtrider",
+    "mameTitle": "Shot Rider"
+  },
+  "Turkey Shoot": {
+    "logoFile": "tshoot.png",
+    "mameName": "tshoot",
+    "mameTitle": "Turkey Shoot (prototype)"
+  },
+  "Ultra Tank": {
+    "logoFile": "ultratnk.png",
+    "mameName": "ultratnk",
+    "mameTitle": "Ultra Tank"
+  },
+  "V'Ball": {
+    "logoFile": "vball.png",
+    "mameName": "vball",
+    "mameTitle": "U.S. Championship V'ball (US)"
+  },
+  "Xevious": {
+    "logoFile": "supxevs.png",
+    "mameName": "supxevs",
+    "mameTitle": "Vs. Super Xevious"
+  },
+  "Super Xevious": {
+    "logoFile": "supxevs.png",
+    "mameName": "supxevs",
+    "mameTitle": "Vs. Super Xevious"
+  },
+  "Zaxxon": {
+    "logoFile": "szaxxon.png",
+    "mameName": "szaxxon",
+    "mameTitle": "Super Zaxxon (315-5013)"
+  },
+  "Super Zaxxon": {
+    "logoFile": "szaxxon.png",
+    "mameName": "szaxxon",
+    "mameTitle": "Super Zaxxon (315-5013)"
+  },
+  "Future Spy": {
+    "logoFile": "futspy.png",
+    "mameName": "futspy",
+    "mameTitle": "Future Spy (315-5061)"
+  }
+}

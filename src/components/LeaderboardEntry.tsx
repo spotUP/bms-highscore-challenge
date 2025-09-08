@@ -1,4 +1,5 @@
 import { Star, Trophy, Medal, Award } from "lucide-react";
+import { formatScore } from '@/lib/utils';
 
 interface LeaderboardEntryProps {
   rank: number;
@@ -45,7 +46,7 @@ const LeaderboardEntry = ({ rank, name, score, isNewScore }: LeaderboardEntryPro
             className="text-xs font-arcade animated-gradient mt-1"
             style={{ animationDelay: `${rank * 0.1 + 0.2}s` }}
           >
-            {score.toLocaleString()}
+            {formatScore(score)}
           </div>
         </div>
       </div>

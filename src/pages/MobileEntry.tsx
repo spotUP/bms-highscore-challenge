@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import PlayerInsult from "@/components/PlayerInsult";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -36,6 +37,8 @@ const MobileEntry = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPlayerInsult, setShowPlayerInsult] = useState(false);
+  const [insultPlayerName, setInsultPlayerName] = useState('');
 
   // Load game from database
   useEffect(() => {
@@ -143,7 +146,44 @@ const MobileEntry = () => {
 
         if (error) throw error;
 
+        // Post to webhook via edge function for score improvement
+        try {
+          console.log('🚀 [Mobile] Calling webhook for score improvement:', {
+            player_name: name.toUpperCase(),
+            score: scoreValue,
+            game_name: game.name,
+            game_id: game.id,
+            type: 'score_improved',
+            previous_score: existingScore.score
+          });
+          
+          const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
+            body: {
+              player_name: name.toUpperCase(),
+              score: scoreValue,
+              game_name: game.name,
+              game_id: game.id,
+              type: 'score_improved',
+              previous_score: existingScore.score,
+              timestamp: new Date().toISOString()
+            }
+          });
+          
+          if (webhookResponse.error) {
+            console.error('❌ [Mobile] Webhook error:', webhookResponse.error);
+          } else {
+            console.log('✅ [Mobile] Webhook sent successfully:', webhookResponse.data);
+            console.log('📊 [Mobile] Full webhook response:', webhookResponse);
+          }
+        } catch (webhookError) {
+          console.error('❌ [Mobile] Webhook call failed:', webhookError);
+        }
+
         toast.success(`Score improved! New best: ${scoreValue.toLocaleString()} (previous: ${existingScore.score.toLocaleString()})`);
+        
+        // Show message for all players
+        setInsultPlayerName(name.trim());
+        setShowPlayerInsult(true);
       } else {
         // Insert new score for this player/game combination
         const { error } = await supabase
@@ -156,7 +196,42 @@ const MobileEntry = () => {
 
         if (error) throw error;
         
+        // Post to webhook via edge function for new score
+        try {
+          console.log('🚀 [Mobile] Calling webhook for new score:', {
+            player_name: name.toUpperCase(),
+            score: scoreValue,
+            game_name: game.name,
+            game_id: game.id,
+            type: 'new_score'
+          });
+          
+          const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
+            body: {
+              player_name: name.toUpperCase(),
+              score: scoreValue,
+              game_name: game.name,
+              game_id: game.id,
+              type: 'new_score',
+              timestamp: new Date().toISOString()
+            }
+          });
+          
+          if (webhookResponse.error) {
+            console.error('❌ [Mobile] Webhook error:', webhookResponse.error);
+          } else {
+            console.log('✅ [Mobile] Webhook sent successfully:', webhookResponse.data);
+            console.log('📊 [Mobile] Full webhook response:', webhookResponse);
+          }
+        } catch (webhookError) {
+          console.error('❌ [Mobile] Webhook call failed:', webhookError);
+        }
+        
         toast.success(`New score recorded: ${scoreValue.toLocaleString()}`);
+        
+        // Show message for all players
+        setInsultPlayerName(name.trim());
+        setShowPlayerInsult(true);
       }
       
       setName("");
@@ -176,8 +251,14 @@ const MobileEntry = () => {
   };
 
   return (
-    <div className="min-h-screen text-white p-4 relative z-10"
-         style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
+    <>
+      <PlayerInsult 
+        isVisible={showPlayerInsult} 
+        playerName={insultPlayerName}
+        onComplete={() => setShowPlayerInsult(false)} 
+      />
+      <div className="min-h-screen text-white p-4 relative z-10"
+           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
       <div className="max-w-md mx-auto space-y-6 pt-8">
         <div className="text-center">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-arcade-neonPink via-arcade-neonCyan to-arcade-neonYellow text-transparent bg-clip-text mb-2">
@@ -254,6 +335,7 @@ const MobileEntry = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 
