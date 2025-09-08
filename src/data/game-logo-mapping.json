@@ -299,6 +299,11 @@
     "mameName": "robotron",
     "mameTitle": "Robotron: 2084 (Solid Blue label)"
   },
+  "Bubble Bobble": {
+    "logoFile": "bublbobl.png",
+    "mameName": "bublbobl",
+    "mameTitle": "Bubble Bobble"
+  },
   "Bubbles": {
     "logoFile": "bubbles.png",
     "mameName": "bubbles",
