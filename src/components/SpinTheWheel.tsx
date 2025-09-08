@@ -42,6 +42,11 @@ const SpinTheWheel = ({ isOpen, onClose, leaderboardNames }: SpinTheWheelProps) 
     <>
       <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent className="bg-gray-900 text-white border-white/20 max-w-2xl w-[95vw] max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="text-arcade-neonYellow text-xl text-center">
+              Spin the Wheel
+            </DialogTitle>
+          </DialogHeader>
           <div className="py-6 max-h-[70vh] overflow-y-auto">
             {!winner ? (
               <WheelOfFortune names={leaderboardNames} onWinner={handleWinner} />
