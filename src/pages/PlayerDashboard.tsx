@@ -43,6 +43,7 @@ const PlayerDashboard = () => {
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
   const [recentAchievements, setRecentAchievements] = useState<PlayerAchievement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [games, setGames] = useState<Array<{ id: string; name: string }>>([]);
   const [scores, setScores] = useState<Array<{ game_id: string; player_name: string; score: number; created_at: string }>>([]);
 
@@ -56,12 +57,17 @@ const PlayerDashboard = () => {
 
   const loadPlayerData = async () => {
     try {
+      setError(null);
+      console.log('Loading player data for:', playerName);
+      
       // Load player stats
       const { data: statsData, error: statsError } = await supabase
         .from('player_stats')
         .select('*')
         .eq('player_name', playerName?.toUpperCase())
         .single();
+
+      console.log('Player stats result:', { statsData, statsError });
 
       if (statsError && statsError.code !== 'PGRST116') {
         throw statsError;
@@ -77,6 +83,8 @@ const PlayerDashboard = () => {
         .eq('player_name', playerName?.toUpperCase())
         .order('unlocked_at', { ascending: false })
         .limit(5);
+
+      console.log('Player achievements result:', { achievementsData, achievementsError });
 
       if (achievementsError) {
         throw achievementsError;
@@ -94,6 +102,8 @@ const PlayerDashboard = () => {
           .order('created_at', { ascending: false })
       ]);
 
+      console.log('Games and scores results:', { gamesResult, scoresResult });
+
       if (gamesResult.error) throw gamesResult.error;
       if (scoresResult.error) throw scoresResult.error;
 
@@ -103,6 +113,7 @@ const PlayerDashboard = () => {
       setScores(scoresResult.data || []);
     } catch (error) {
       console.error('Error loading player data:', error);
+      setError(error instanceof Error ? error.message : 'Unknown error occurred');
     } finally {
       setLoading(false);
     }
@@ -110,6 +121,34 @@ const PlayerDashboard = () => {
 
   if (loading) {
     return <LoadingSpinner text="Loading player dashboard..." />;
+  }
+
+  if (error) {
+    return (
+      <div {...getPageLayout()}>
+        <PageContainer>
+          <div className="text-center">
+            <h1 className={getTypographyStyle('h1')}>Error Loading Player Dashboard</h1>
+            <p className="text-red-400 mb-6">{error}</p>
+            <div className="space-y-2">
+              <Button
+                onClick={() => loadPlayerData()}
+                variant="outline"
+              >
+                Retry
+              </Button>
+              <Button
+                onClick={() => navigate('/')}
+                variant="outline"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Main
+              </Button>
+            </div>
+          </div>
+        </PageContainer>
+      </div>
+    );
   }
 
   if (!playerName) {
