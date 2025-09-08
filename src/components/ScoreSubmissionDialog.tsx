@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAchievements } from "@/hooks/useAchievements";
 import { getGameLogoUrl } from "@/lib/utils";
 import PlayerInsult from "./PlayerInsult";
 
@@ -28,6 +29,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
   const [showPlayerInsult, setShowPlayerInsult] = useState(false);
   const [insultPlayerName, setInsultPlayerName] = useState('');
   const { toast } = useToast();
+  const { checkForNewAchievements } = useAchievements();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -194,6 +196,12 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
       setName("");
       setScore("");
       onScoreSubmitted();
+      
+      // Check for new achievements after a short delay to allow database triggers to complete
+      setTimeout(() => {
+        checkForNewAchievements(trimmedName);
+      }, 1000);
+      
       onClose();
       
     } catch (error: any) {

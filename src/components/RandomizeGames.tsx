@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useCompetitionWebhooks } from '@/hooks/useCompetitionWebhooks';
 import misterGames from '@/data/mister-games.json';
 import gameLogoMapping from '@/data/game-logo-mapping.json';
 
@@ -14,6 +15,7 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { sendCompetitionStartedWebhook } = useCompetitionWebhooks();
 
   const handleRandomizeGames = async () => {
     setIsLoading(true);
@@ -46,8 +48,39 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
         return;
       }
       
-      // Select 5 random games from the MiSTer games list
-      const shuffled = [...misterGames].sort(() => 0.5 - Math.random());
+      // Get list of previously used games from competition history
+      const { data: previousGames, error: previousGamesError } = await supabase
+        .from('competition_games')
+        .select('game_name');
+      
+      if (previousGamesError) {
+        console.error('Error fetching previous games:', previousGamesError);
+        toast({
+          title: "Error",
+          description: `Failed to fetch previous games: ${previousGamesError.message}`,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Create a set of previously used game names for efficient lookup
+      const usedGameNames = new Set(previousGames?.map(g => g.game_name) || []);
+      
+      // Filter out previously used games from the MiSTer games list
+      const availableGames = misterGames.filter(game => !usedGameNames.has(game.name));
+      
+      // Check if we have enough games available
+      if (availableGames.length < 5) {
+        toast({
+          title: "Not Enough Games Available",
+          description: `Only ${availableGames.length} games haven't been used in previous competitions. Need at least 5 games to randomize.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Select 5 random games from the available games list
+      const shuffled = [...availableGames].sort(() => 0.5 - Math.random());
       const selectedGames = shuffled.slice(0, 5);
       
       console.log('Selected games:', selectedGames);
@@ -115,7 +148,7 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
         if (!selectedGame) return Promise.resolve();
         
         // Try to find a local logo first
-        let logoUrl = `https://via.placeholder.com/200x200/4F46E5/FFFFFF?text=${encodeURIComponent(selectedGame.name)}`;
+        let logoUrl = null;
         
         // Look for game in the mapping
         const logoData = gameLogoMapping[selectedGame.name];
@@ -124,7 +157,7 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
           logoUrl = `/game-logos/${logoData.logoFile}`;
           console.log(`Found local logo for ${selectedGame.name}: ${logoData.mameName} -> ${logoData.logoFile}`);
         } else {
-          console.log(`No local logo found for ${selectedGame.name}, using placeholder`);
+          console.log(`No local logo found for ${selectedGame.name}, will use fallback UI`);
         }
         
         return supabase
@@ -161,6 +194,20 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
         title: "Games Randomized!",
         description: `New games with ${localLogosCount}/5 local logos: ${newGameNames.join(', ')}`,
       });
+
+      // Send competition started webhook
+      const gamesForWebhook = selectedGames.map(game => {
+        const logoData = gameLogoMapping[game.name];
+        return {
+          id: game.name.toLowerCase().replace(/\s+/g, '-'),
+          name: game.name,
+          logo_url: logoData ? `/game-logos/${logoData.logoFile}` : undefined
+        };
+      });
+
+      setTimeout(() => {
+        sendCompetitionStartedWebhook(gamesForWebhook, `Competition ${new Date().toLocaleDateString()}`);
+      }, 1000);
       
       // Close dialog and notify parent component
       setIsOpen(false);
@@ -195,7 +242,7 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
         <div className="space-y-4 py-4">
           <p className="text-gray-300">
             This will randomly select 5 new games from the MiSTer arcade cores collection 
-            and replace the current games in your highscore challenge. High-quality local game logos will be used when available.
+            and replace the current games in your highscore challenge. Games that have been used in previous competitions will be excluded. High-quality local game logos will be used when available.
           </p>
           
           <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-3">

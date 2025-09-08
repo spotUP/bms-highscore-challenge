@@ -12,12 +12,14 @@ import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus, Wrench } from "lucide-react";
+import { isPlaceholderLogo } from "@/lib/utils";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import GameLogoSuggestions, { GameLogoSuggestionsRef } from "@/components/GameLogoSuggestions";
 import ScoreManager from "@/components/ScoreManager";
 import RandomizeGames from "@/components/RandomizeGames";
 import StopCompetition from "@/components/StopCompetition";
+import WebhookConfig from "@/components/WebhookConfig";
 
 interface Game {
   id: string;
@@ -223,6 +225,58 @@ const Admin = () => {
     }
   };
 
+  // Clean up placeholder logos
+  const cleanupPlaceholderLogos = async () => {
+    try {
+      const { data: gamesWithPlaceholders, error: fetchError } = await supabase
+        .from('games')
+        .select('id, name, logo_url')
+        .not('logo_url', 'is', null);
+
+      if (fetchError) throw fetchError;
+
+      const gamesToUpdate = gamesWithPlaceholders?.filter(game => 
+        isPlaceholderLogo(game.logo_url)
+      ) || [];
+
+      if (gamesToUpdate.length === 0) {
+        toast({
+          title: "No Action Needed",
+          description: "No placeholder logos found to clean up"
+        });
+        return;
+      }
+
+      const updatePromises = gamesToUpdate.map(game =>
+        supabase
+          .from('games')
+          .update({ logo_url: null })
+          .eq('id', game.id)
+      );
+
+      const results = await Promise.all(updatePromises);
+      const hasErrors = results.some(result => result.error);
+
+      if (hasErrors) {
+        throw new Error('Some updates failed');
+      }
+
+      toast({
+        title: "Success",
+        description: `Cleaned up ${gamesToUpdate.length} placeholder logos`
+      });
+
+      loadGames();
+    } catch (error) {
+      console.error('Error cleaning up placeholder logos:', error);
+      toast({
+        title: "Error",
+        description: "Failed to clean up placeholder logos",
+        variant: "destructive"
+      });
+    }
+  };
+
   if (loading || gamesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center relative z-10"
@@ -256,6 +310,15 @@ const Admin = () => {
               <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                 <RandomizeGames onGamesUpdated={loadGames} />
                 <StopCompetition onCompetitionStopped={loadGames} refreshTrigger={gamesUpdateTrigger} />
+                <Button 
+                  variant="outline" 
+                  onClick={cleanupPlaceholderLogos}
+                  className="w-full sm:w-auto"
+                  title="Remove broken placeholder logos and use fallback UI instead"
+                >
+                  <Wrench className="w-4 h-4 mr-2" />
+                  Fix Logos
+                </Button>
                 <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                   <DialogTrigger asChild>
                     <Button onClick={resetForm} className="bg-arcade-neonPink hover:bg-arcade-neonPink/80 w-full sm:w-auto">
@@ -384,6 +447,8 @@ const Admin = () => {
         </Card>
 
         <ScoreManager />
+
+        <WebhookConfig />
       </div>
     </div>
   );

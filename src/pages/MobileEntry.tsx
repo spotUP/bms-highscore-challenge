@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { useAchievements } from "@/hooks/useAchievements";
 import { getGameLogoUrl } from "@/lib/utils";
 import PlayerInsult from "@/components/PlayerInsult";
 import pacmanLogo from "@/assets/pacman-logo.png";
@@ -40,6 +41,7 @@ const MobileEntry = () => {
   const [loading, setLoading] = useState(true);
   const [showPlayerInsult, setShowPlayerInsult] = useState(false);
   const [insultPlayerName, setInsultPlayerName] = useState('');
+  const { checkForNewAchievements } = useAchievements();
 
   // Load game from database
   useEffect(() => {
@@ -55,6 +57,7 @@ const MobileEntry = () => {
           .select('*')
           .eq('id', gameId)
           .eq('is_active', true)
+          .eq('include_in_challenge', true)
           .single();
 
         if (error) throw error;
@@ -62,6 +65,11 @@ const MobileEntry = () => {
       } catch (error) {
         console.error('Error loading game:', error);
         setGame(null);
+        // If game is not found or not in challenge, redirect to main page
+        if (error.code === 'PGRST116') {
+          toast.error("This game is no longer available for score submission.");
+          setTimeout(() => navigate("/"), 2000);
+        }
       } finally {
         setLoading(false);
       }
@@ -237,6 +245,11 @@ const MobileEntry = () => {
       
       setName("");
       setScore("");
+      
+      // Check for new achievements after a short delay to allow database triggers to complete
+      setTimeout(() => {
+        checkForNewAchievements(name);
+      }, 1000);
       
       // Navigate back to main page after a short delay
       setTimeout(() => {

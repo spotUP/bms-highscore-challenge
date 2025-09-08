@@ -1,5 +1,7 @@
-import { Star, Trophy, Medal, Award } from "lucide-react";
+import React from "react";
+import { Star, Trophy, Medal, Award, User } from "lucide-react";
 import { formatScore } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 interface LeaderboardEntryProps {
   rank: number;
@@ -8,7 +10,13 @@ interface LeaderboardEntryProps {
   isNewScore?: boolean;
 }
 
-const LeaderboardEntry = ({ rank, name, score, isNewScore }: LeaderboardEntryProps) => {
+const LeaderboardEntry = React.memo(({ rank, name, score, isNewScore }: LeaderboardEntryProps) => {
+  const navigate = useNavigate();
+
+  const handlePlayerClick = () => {
+    navigate(`/player?player=${encodeURIComponent(name)}`);
+  };
+
   const getRankIcon = (rank: number) => {
     switch (rank) {
       case 1:
@@ -35,7 +43,7 @@ const LeaderboardEntry = ({ rank, name, score, isNewScore }: LeaderboardEntryPro
     `}>
       <div className="flex items-center gap-3">
         {getRankIcon(rank)}
-        <div>
+        <div className="flex-1">
           <div 
             className="font-arcade font-bold text-sm animated-gradient"
             style={{ animationDelay: `${rank * 0.1}s` }}
@@ -49,10 +57,19 @@ const LeaderboardEntry = ({ rank, name, score, isNewScore }: LeaderboardEntryPro
             {formatScore(score)}
           </div>
         </div>
+        <button
+          onClick={handlePlayerClick}
+          className="p-1 text-gray-400 hover:text-white transition-colors"
+          title="View player profile"
+        >
+          <User className="w-4 h-4" />
+        </button>
       </div>
       {isNewScore && <Star className="text-arcade-neonYellow animate-glow w-4 h-4" />}
     </div>
   );
-};
+});
+
+LeaderboardEntry.displayName = 'LeaderboardEntry';
 
 export default LeaderboardEntry;

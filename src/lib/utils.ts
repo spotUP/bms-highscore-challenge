@@ -25,6 +25,17 @@ export function getGameLogoUrl(logoUrl: string | null): string | null {
     return `https://tnsgrwntmnzpaifmutqh.supabase.co/storage/v1/object/public/game-logos/${fileName}`;
   }
   
+  // If it's a placeholder URL, return null to trigger fallback
+  if (logoUrl.includes('via.placeholder.com') || logoUrl.includes('placeholder')) {
+    return null;
+  }
+  
   // Return as-is for other URLs
   return logoUrl;
+}
+
+// Check if a logo URL is a placeholder that should be treated as null
+export function isPlaceholderLogo(logoUrl: string | null): boolean {
+  if (!logoUrl) return true;
+  return logoUrl.includes('via.placeholder.com') || logoUrl.includes('placeholder');
 }

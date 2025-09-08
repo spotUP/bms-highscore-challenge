@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trophy, Medal, Award, Users, Gamepad2, Target, Calendar, ArrowLeft } from 'lucide-react';
+import { Trophy, Medal, Award, Users, Gamepad2, Target, Calendar, ArrowLeft, BarChart3 } from 'lucide-react';
 import { formatScore } from '@/lib/utils';
+import { useOptimizedData } from '@/hooks/useOptimizedData';
+import { LazyCharts } from '@/utils/dynamicImports';
 
 interface CompetitionHistory {
   id: string;
@@ -42,6 +44,14 @@ const Statistics = () => {
   const [scores, setScores] = useState<CompetitionScore[]>([]);
   const [loading, setLoading] = useState(true);
   const [scoresLoading, setScoresLoading] = useState(false);
+  // Use optimized data hook
+  const { 
+    games: currentGames, 
+    scores: currentScores, 
+    achievements, 
+    playerAchievements,
+    loading: dataLoading 
+  } = useOptimizedData({ refetchInterval: 30000 }); // Refetch every 30 seconds
 
   useEffect(() => {
     loadCompetitions();
@@ -73,6 +83,7 @@ const Statistics = () => {
       setLoading(false);
     }
   };
+
 
   const loadCompetitionData = async (competitionId: string) => {
     setScoresLoading(true);
@@ -325,6 +336,42 @@ const Statistics = () => {
             </div>
           </>
         )}
+
+        {/* Visual Analytics Section */}
+        <div className="mt-8">
+          <Card className="bg-black/30 border-white/15 mb-6">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <BarChart3 className="w-5 h-5 text-arcade-neonCyan" />
+                Visual Analytics
+              </CardTitle>
+              <p className="text-gray-400 text-sm">
+                Interactive charts and graphs showing current game data and player performance
+              </p>
+            </CardHeader>
+          </Card>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <Suspense fallback={<div className="h-80 bg-gray-800 rounded-lg animate-pulse" />}>
+              <LazyCharts.ScoreDistributionChart scores={currentScores} games={currentGames} />
+            </Suspense>
+            <Suspense fallback={<div className="h-80 bg-gray-800 rounded-lg animate-pulse" />}>
+              <LazyCharts.GamePopularityChart scores={currentScores} games={currentGames} />
+            </Suspense>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <Suspense fallback={<div className="h-80 bg-gray-800 rounded-lg animate-pulse" />}>
+              <LazyCharts.PlayerPerformanceChart scores={currentScores} games={currentGames} />
+            </Suspense>
+            <Suspense fallback={<div className="h-80 bg-gray-800 rounded-lg animate-pulse" />}>
+              <LazyCharts.AchievementProgressChart 
+                achievements={achievements} 
+                playerAchievements={playerAchievements} 
+              />
+            </Suspense>
+          </div>
+        </div>
 
         {competitions.length === 0 && (
           <Card className="bg-black/30 border-white/15">

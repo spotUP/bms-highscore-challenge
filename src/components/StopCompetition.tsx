@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useCompetitionWebhooks } from '@/hooks/useCompetitionWebhooks';
 
 interface StopCompetitionProps {
   onCompetitionStopped?: () => void;
@@ -16,6 +17,7 @@ const StopCompetition: React.FC<StopCompetitionProps> = ({ onCompetitionStopped,
   const [hasGames, setHasGames] = useState(false);
   const { toast } = useToast();
   const { isAdmin } = useAuth();
+  const { sendCompetitionEndedWebhook } = useCompetitionWebhooks();
 
   // Check if there are any games in the highscore table
   useEffect(() => {
@@ -53,6 +55,27 @@ const StopCompetition: React.FC<StopCompetitionProps> = ({ onCompetitionStopped,
 
     setIsLoading(true);
     try {
+      // First, gather competition data before archiving
+      const [gamesResult, scoresResult, winnerResult] = await Promise.all([
+        supabase
+          .from('games')
+          .select('id, name, logo_url')
+          .eq('include_in_challenge', true),
+        supabase
+          .from('scores')
+          .select('player_name, score'),
+        supabase
+          .from('scores')
+          .select('player_name, score')
+          .order('score', { ascending: false })
+          .limit(1)
+          .single()
+      ]);
+
+      const games = gamesResult.data || [];
+      const scores = scoresResult.data || [];
+      const winner = winnerResult.data;
+
       // Call the archive function
       const { data, error } = await supabase.rpc('archive_current_competition');
 
@@ -66,6 +89,28 @@ const StopCompetition: React.FC<StopCompetitionProps> = ({ onCompetitionStopped,
           title: "Competition Archived!",
           description: `Competition "${data.competition_name}" has been successfully archived. ${data.total_players} players, ${data.total_games} games, ${data.total_scores} scores saved.`,
         });
+
+        // Send competition ended webhook
+        const gamesForWebhook = games.map(game => ({
+          id: game.id,
+          name: game.name,
+          logo_url: game.logo_url
+        }));
+
+        const winnerData = winner ? {
+          player_name: winner.player_name,
+          total_score: winner.score
+        } : undefined;
+
+        setTimeout(() => {
+          sendCompetitionEndedWebhook(
+            gamesForWebhook,
+            data.competition_name,
+            undefined, // duration - could be calculated if we track start time
+            scores.length,
+            winnerData
+          );
+        }, 1000);
 
         setIsOpen(false);
         setHasGames(false); // Hide button since games will be cleared

@@ -12,6 +12,7 @@ import OverallLeaderboard from "@/components/OverallLeaderboard";
 import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import SpinTheWheel from "@/components/SpinTheWheel";
 import MobileMenu from "@/components/MobileMenu";
+import OptimizedImage from "@/components/OptimizedImage";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -102,7 +103,7 @@ const Index = () => {
     loadScores();
     
     // Set up real-time subscription for scores
-    const channel = supabase
+    const scoresChannel = supabase
       .channel('scores-changes')
       .on('postgres_changes', 
         { 
@@ -124,8 +125,32 @@ const Index = () => {
         }
       });
 
+    // Set up real-time subscription for games
+    const gamesChannel = supabase
+      .channel('games-changes')
+      .on('postgres_changes', 
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'games' 
+        }, 
+        (payload) => {
+          console.log('Index: Game change detected:', payload.eventType, payload);
+          loadGames(); // Reload games when changes occur
+        }
+      )
+      .subscribe((status) => {
+        console.log('Index: Games subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('Index: Successfully subscribed to game changes');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Index: Error subscribing to game changes');
+        }
+      });
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(scoresChannel);
+      supabase.removeChannel(gamesChannel);
     };
   }, []);
 
@@ -241,17 +266,12 @@ const Index = () => {
                         {/* Game logo inside card header */}
                         <div className="flex justify-center">
                           <div className="transition-transform duration-200">
-                            {logoUrl ? (
-                              <img 
-                                src={logoUrl} 
-                                alt={game.name} 
-                                className="h-24 md:h-32 w-auto object-contain max-w-full"
-                              />
-                            ) : (
-                              <div className="h-24 md:h-32 flex items-center justify-center bg-black/30 rounded-lg px-4 transition-colors">
-                                <span className="text-white font-bold text-xl md:text-2xl">{game.name}</span>
-                              </div>
-                            )}
+                            <OptimizedImage
+                              src={logoUrl}
+                              alt={game.name}
+                              className="h-24 md:h-32 w-auto object-contain max-w-full"
+                              fallbackIcon="🎮"
+                            />
                           </div>
                         </div>
                       </CardHeader>

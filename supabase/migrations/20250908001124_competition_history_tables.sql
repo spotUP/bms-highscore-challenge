@@ -224,6 +224,9 @@ BEGIN
   -- Clear current competition data
   DELETE FROM scores WHERE game_id IN (SELECT id FROM games WHERE include_in_challenge = true);
   
+  -- Remove games from challenge
+  UPDATE games SET include_in_challenge = false WHERE include_in_challenge = true;
+  
   -- Return result
   result := json_build_object(
     'success', true,
