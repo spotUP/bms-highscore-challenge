@@ -20,6 +20,7 @@ import ScoreManager from "@/components/ScoreManager";
 import RandomizeGames from "@/components/RandomizeGames";
 import StopCompetition from "@/components/StopCompetition";
 import WebhookConfig from "@/components/WebhookConfig";
+import AchievementTest from "@/components/AchievementTest";
 import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from "@/utils/designSystem";
 
 interface Game {
@@ -449,6 +450,8 @@ const Admin = () => {
         <ScoreManager />
 
         <WebhookConfig />
+
+        <AchievementTest />
       </PageContainer>
     </div>
   );
