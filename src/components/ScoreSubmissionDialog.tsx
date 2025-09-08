@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Trophy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { getGameLogoUrl } from "@/lib/utils";
 import PlayerInsult from "./PlayerInsult";
 
 interface Game {
@@ -244,9 +245,9 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           {/* Game logo header */}
           <div className="flex justify-center mb-4">
             <div className="transition-transform duration-200">
-              {game.logo_url ? (
+              {getGameLogoUrl(game.logo_url) ? (
                 <img 
-                  src={game.logo_url} 
+                  src={getGameLogoUrl(game.logo_url)!} 
                   alt={game.name} 
                   className="h-16 w-auto object-contain"
                 />

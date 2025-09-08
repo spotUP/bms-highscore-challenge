@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
+import { getGameLogoUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LeaderboardEntry from "@/components/LeaderboardEntry";
@@ -222,8 +223,8 @@ const Index = () => {
           <div className={`${isMobile ? 'order-1' : 'h-full lg:col-span-5'}`}>
             <div className={`${isMobile ? 'flex flex-col space-y-6' : 'flex gap-3 h-full'}`}>
               {games.map((game) => {
-                // Get logo URL - either from database, fallback mapping, or null
-                const logoUrl = game.logo_url || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
+                // Get logo URL - convert local paths to Supabase Storage URLs
+                const logoUrl = getGameLogoUrl(game.logo_url) || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
                 
                 const filtered = scores
                   .filter((score) => score.game_id === game.id)

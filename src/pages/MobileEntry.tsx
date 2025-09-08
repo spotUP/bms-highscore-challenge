@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { getGameLogoUrl } from "@/lib/utils";
 import PlayerInsult from "@/components/PlayerInsult";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
@@ -92,8 +93,8 @@ const MobileEntry = () => {
     );
   }
 
-  // Get logo URL - either from database, fallback mapping, or null
-  const logoUrl = game.logo_url || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
+  // Get logo URL - convert local paths to Supabase Storage URLs
+  const logoUrl = getGameLogoUrl(game.logo_url) || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
