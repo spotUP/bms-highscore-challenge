@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import gameLogoMapping from "@/data/game-logo-mapping.json";
+import misterGames from "@/data/mister-games.json";
 
 interface GameLogoSuggestionsProps {
   gameName: string;
@@ -43,7 +44,7 @@ const GameLogoSuggestions = forwardRef<GameLogoSuggestionsRef, GameLogoSuggestio
       const allGames = Object.entries(gameLogoMapping);
       const matchingGames: Array<[string, any]> = [];
       
-      // First, try exact match by game title
+      // First, try exact match by game title in mapping
       const exactMatch = allGames.find(([gameTitle]) => 
         gameTitle.toLowerCase() === searchTerm
       );
@@ -57,6 +58,21 @@ const GameLogoSuggestions = forwardRef<GameLogoSuggestionsRef, GameLogoSuggestio
       );
       if (mameMatch && !matchingGames.includes(mameMatch)) {
         matchingGames.push(mameMatch);
+      }
+      
+      // Then try exact match in MiSTer games list
+      const misterMatch = misterGames.find(game => 
+        game.name.toLowerCase() === searchTerm
+      );
+      if (misterMatch) {
+        // Check if this MiSTer game has a logo in our mapping
+        const logoData = gameLogoMapping[misterMatch.name];
+        if (logoData) {
+          const misterGameEntry: [string, any] = [misterMatch.name, logoData];
+          if (!matchingGames.some(([existingTitle]) => existingTitle === misterMatch.name)) {
+            matchingGames.push(misterGameEntry);
+          }
+        }
       }
       
       // Then try fuzzy matching on all fields
@@ -75,6 +91,22 @@ const GameLogoSuggestions = forwardRef<GameLogoSuggestionsRef, GameLogoSuggestio
       });
       
       matchingGames.push(...fuzzyMatches);
+      
+      // If still no matches, try fuzzy matching in MiSTer games
+      if (matchingGames.length === 0) {
+        const misterFuzzyMatches = misterGames.filter(game => {
+          const name = game.name.toLowerCase();
+          return name.includes(searchTerm) || searchTerm.includes(name);
+        });
+        
+        // Add MiSTer games that have logos
+        misterFuzzyMatches.forEach(game => {
+          const logoData = gameLogoMapping[game.name];
+          if (logoData && !matchingGames.some(([existingTitle]) => existingTitle === game.name)) {
+            matchingGames.push([game.name, logoData]);
+          }
+        });
+      }
 
       // Convert to image results with Supabase Storage URLs
       const imageResults: ImageResult[] = matchingGames.slice(0, 6).map(([gameTitle, gameData]) => ({
@@ -89,8 +121,10 @@ const GameLogoSuggestions = forwardRef<GameLogoSuggestionsRef, GameLogoSuggestio
         searchTerm,
         exactMatch: exactMatch ? exactMatch[0] : null,
         mameMatch: mameMatch ? mameMatch[0] : null,
+        misterMatch: misterMatch ? misterMatch.name : null,
         totalMatches: matchingGames.length,
-        results: imageResults.map(r => r.alt)
+        results: imageResults.map(r => r.alt),
+        allGameKeys: Object.keys(gameLogoMapping).slice(0, 10) // Show first 10 keys for debugging
       });
       
       if (imageResults.length === 0) {
