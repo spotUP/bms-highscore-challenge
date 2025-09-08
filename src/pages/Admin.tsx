@@ -21,7 +21,9 @@ import RandomizeGames from "@/components/RandomizeGames";
 import StopCompetition from "@/components/StopCompetition";
 import WebhookConfig from "@/components/WebhookConfig";
 import AchievementTest from "@/components/AchievementTest";
+import UserManagement from "@/components/UserManagement";
 import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from "@/utils/designSystem";
+import { useUserRoles } from "@/hooks/useUserRoles";
 
 interface Game {
   id: string;
@@ -452,6 +454,8 @@ const Admin = () => {
         <WebhookConfig />
 
         <AchievementTest />
+
+        <UserManagement />
       </PageContainer>
     </div>
   );
