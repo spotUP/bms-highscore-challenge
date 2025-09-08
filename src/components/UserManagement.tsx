@@ -51,8 +51,10 @@ const UserManagement: React.FC = () => {
 
   const loadUsers = async () => {
     try {
-      // Get users from auth.users (requires admin access)
-      const { data, error } = await supabase.auth.admin.listUsers();
+      // Use Edge Function to get users (has proper admin access)
+      const { data, error } = await supabase.functions.invoke('manage-users', {
+        body: { action: 'list' }
+      });
       
       if (error) {
         console.error('Error loading users:', error);
@@ -64,13 +66,11 @@ const UserManagement: React.FC = () => {
         return;
       }
 
-      setUsers(data.users.map(user => ({
-        id: user.id,
-        email: user.email || '',
-        created_at: user.created_at,
-        last_sign_in_at: user.last_sign_in_at,
-        email_confirmed_at: user.email_confirmed_at
-      })));
+      if (data.success) {
+        setUsers(data.users);
+      } else {
+        throw new Error(data.error || 'Failed to load users');
+      }
     } catch (error) {
       console.error('Error loading users:', error);
       toast({
@@ -139,34 +139,33 @@ const UserManagement: React.FC = () => {
     if (!newUserEmail) return;
 
     try {
-      const { error } = await supabase.auth.admin.inviteUserByEmail(newUserEmail);
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: { email: newUserEmail, role: newUserRole }
+      });
 
       if (error) {
         throw error;
       }
 
-      // Add role for the invited user
-      const { data: userData } = await supabase.auth.admin.listUsers();
-      const invitedUser = userData?.users.find(user => user.email === newUserEmail);
-      
-      if (invitedUser) {
-        await updateUserRole(invitedUser.id, newUserRole);
+      if (data.success) {
+        toast({
+          title: "Success",
+          description: `Invitation sent to ${newUserEmail}`,
+        });
+
+        setNewUserEmail('');
+        setNewUserRole('user');
+        setIsDialogOpen(false);
+        loadUsers();
+        loadUserRoles();
+      } else {
+        throw new Error(data.error || 'Failed to invite user');
       }
-
-      toast({
-        title: "Success",
-        description: `Invitation sent to ${newUserEmail}`,
-      });
-
-      setNewUserEmail('');
-      setNewUserRole('user');
-      setIsDialogOpen(false);
-      loadUsers();
     } catch (error) {
       console.error('Error inviting user:', error);
       toast({
         title: "Error",
-        description: "Failed to invite user.",
+        description: error instanceof Error ? error.message : "Failed to invite user.",
         variant: "destructive",
       });
     }
@@ -178,25 +177,25 @@ const UserManagement: React.FC = () => {
     }
 
     try {
-      const { error } = await supabase.auth.admin.deleteUser(userId);
+      const { data, error } = await supabase.functions.invoke('manage-users', {
+        body: { action: 'delete', user_id: userId }
+      });
 
       if (error) {
         throw error;
       }
 
-      // Also remove from user_roles
-      await supabase
-        .from('user_roles')
-        .delete()
-        .eq('user_id', userId);
+      if (data.success) {
+        toast({
+          title: "Success",
+          description: "User deleted successfully.",
+        });
 
-      toast({
-        title: "Success",
-        description: "User deleted successfully.",
-      });
-
-      loadUsers();
-      loadUserRoles();
+        loadUsers();
+        loadUserRoles();
+      } else {
+        throw new Error(data.error || 'Failed to delete user');
+      }
     } catch (error) {
       console.error('Error deleting user:', error);
       toast({
