@@ -66,6 +66,19 @@ export const useAchievements = () => {
         points: achievement.points
       });
 
+      // Get the most recent score for this player to provide context
+      const { data: recentScore } = await supabase
+        .from('scores')
+        .select(`
+          score,
+          game_id,
+          games (name)
+        `)
+        .eq('player_name', playerName.toUpperCase())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
       const webhookResponse = await supabase.functions.invoke('send-achievement-webhook', {
         body: {
           player_name: playerName,
@@ -77,8 +90,8 @@ export const useAchievements = () => {
             badge_color: achievement.badge_color,
             points: achievement.points
           },
-          game_name: playerAchievement.game_id ? await getGameName(playerAchievement.game_id) : undefined,
-          score: playerAchievement.score,
+          game_name: recentScore?.games?.name,
+          score: recentScore?.score,
           timestamp: playerAchievement.unlocked_at
         }
       });
@@ -93,21 +106,6 @@ export const useAchievements = () => {
     }
   }, []);
 
-  const getGameName = useCallback(async (gameId: string): Promise<string | undefined> => {
-    try {
-      const { data, error } = await supabase
-        .from('games')
-        .select('name')
-        .eq('id', gameId)
-        .single();
-      
-      if (error) throw error;
-      return data?.name;
-    } catch (error) {
-      console.error('Error fetching game name:', error);
-      return undefined;
-    }
-  }, []);
 
   return {
     checkForNewAchievements

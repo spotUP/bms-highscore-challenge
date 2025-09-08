@@ -64,6 +64,10 @@ const AchievementTest = () => {
     try {
       console.log('Starting achievement test...');
       
+      // Generate a unique test player name
+      const testPlayerName = `TEST_PLAYER_${Date.now()}`;
+      console.log('Using test player name:', testPlayerName);
+      
       // Insert a test score to trigger achievement system
       const { data: games, error: gamesError } = await supabase
         .from('games')
@@ -84,7 +88,7 @@ const AchievementTest = () => {
       const { error } = await supabase
         .from('scores')
         .insert({
-          player_name: 'TEST_PLAYER',
+          player_name: testPlayerName,
           score: 1000,
           game_id: games[0].id
         });
@@ -96,7 +100,40 @@ const AchievementTest = () => {
       }
 
       console.log('Test score inserted successfully!');
-      alert('Test score inserted! Check if achievements were triggered.');
+      
+      // Wait a moment for triggers to fire
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Check if the test score was inserted
+      const { data: testScores, error: testScoresError } = await supabase
+        .from('scores')
+        .select('*')
+        .eq('player_name', testPlayerName)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      console.log('Test scores check:', { testScores, testScoresError });
+      
+      // Check if any achievements were triggered for test player
+      const { data: testAchievements, error: testAchievementsError } = await supabase
+        .from('player_achievements')
+        .select('*')
+        .eq('player_name', testPlayerName);
+      
+      console.log('Test achievements check:', { testAchievements, testAchievementsError });
+      
+      // Check if player stats were updated
+      const { data: testStats, error: testStatsError } = await supabase
+        .from('player_stats')
+        .select('*')
+        .eq('player_name', testPlayerName);
+      
+      console.log('Test stats check:', { testStats, testStatsError });
+      
+      alert(`Test completed! Check console for details. 
+Score inserted: ${testScores?.length || 0}
+Achievements triggered: ${testAchievements?.length || 0}
+Stats updated: ${testStats?.length || 0}`);
       
       // Refresh the test data
       testAchievementSystem();
