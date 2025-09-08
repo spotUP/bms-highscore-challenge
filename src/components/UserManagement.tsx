@@ -51,16 +51,26 @@ const UserManagement: React.FC = () => {
 
   const loadUsers = async () => {
     try {
-      // Temporary: Show message about Edge Functions not being deployed
-      console.log('Edge Functions not deployed yet - showing mock data');
-      toast({
-        title: "Info",
-        description: "User management Edge Functions need to be deployed to Supabase.",
-        variant: "default",
+      // Use Edge Function to get users (has proper admin access)
+      const { data, error } = await supabase.functions.invoke('manage-users', {
+        body: { action: 'list' }
       });
       
-      // For now, show empty state until Edge Functions are deployed
-      setUsers([]);
+      if (error) {
+        console.error('Error loading users:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load users. Make sure you have admin privileges.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (data.success) {
+        setUsers(data.users);
+      } else {
+        throw new Error(data.error || 'Failed to load users');
+      }
     } catch (error) {
       console.error('Error loading users:', error);
       toast({
@@ -129,17 +139,33 @@ const UserManagement: React.FC = () => {
     if (!newUserEmail) return;
 
     try {
-      // Temporary: Show message about Edge Functions not being deployed
-      toast({
-        title: "Not Available",
-        description: "User invitation requires Edge Functions to be deployed to Supabase. Please deploy 'invite-user' function first.",
-        variant: "destructive",
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: { email: newUserEmail, role: newUserRole }
       });
+
+      if (error) {
+        throw error;
+      }
+
+      if (data.success) {
+        toast({
+          title: "Success",
+          description: `Invitation sent to ${newUserEmail}`,
+        });
+
+        setNewUserEmail('');
+        setNewUserRole('user');
+        setIsDialogOpen(false);
+        loadUsers();
+        loadUserRoles();
+      } else {
+        throw new Error(data.error || 'Failed to invite user');
+      }
     } catch (error) {
       console.error('Error inviting user:', error);
       toast({
         title: "Error",
-        description: "Failed to invite user.",
+        description: error instanceof Error ? error.message : "Failed to invite user.",
         variant: "destructive",
       });
     }
