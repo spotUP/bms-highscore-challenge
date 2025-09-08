@@ -15,6 +15,7 @@ const Auth = lazy(() => import("./pages/Auth"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Statistics = lazy(() => import("./pages/Statistics"));
 const PlayerDashboard = lazy(() => import("./pages/PlayerDashboard"));
+const DemolitionManSubmit = lazy(() => import("./pages/DemolitionManSubmit"));
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
                 <Route path="/admin" element={<Admin />} />
                 <Route path="/statistics" element={<Statistics />} />
                 <Route path="/player" element={<PlayerDashboard />} />
+                <Route path="/demolition-man-submit" element={<DemolitionManSubmit />} />
               </Routes>
             </Suspense>
           </BrowserRouter>

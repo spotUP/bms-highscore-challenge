@@ -17,9 +17,16 @@ interface AchievementHunter {
   achievement_count: number;
 }
 
+interface DemolitionManScore {
+  player_name: string;
+  score: number;
+  created_at: string;
+}
+
 const OverallLeaderboard = () => {
   const [leaders, setLeaders] = useState<PlayerScore[]>([]);
   const [achievementHunters, setAchievementHunters] = useState<AchievementHunter[]>([]);
+  const [demolitionManScores, setDemolitionManScores] = useState<DemolitionManScore[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
@@ -151,15 +158,50 @@ const OverallLeaderboard = () => {
     }
   };
 
+  const loadDemolitionManScores = async () => {
+    try {
+      console.log('Loading Demolition Man scores...');
+      // Get scores for Demolition Man game (permanent leaderboard)
+      const { data: scoreData, error } = await supabase
+        .from('scores')
+        .select(`
+          player_name,
+          score,
+          created_at,
+          games!inner(name)
+        `)
+        .eq('games.name', 'Demolition Man')
+        .order('score', { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+
+      // Transform the data
+      const demolitionScores = scoreData?.map(item => ({
+        player_name: item.player_name,
+        score: item.score,
+        created_at: item.created_at
+      })) || [];
+
+      setDemolitionManScores(demolitionScores);
+      console.log('Demolition Man scores loaded successfully:', demolitionScores.length, 'scores');
+    } catch (error) {
+      console.error('Error loading Demolition Man scores:', error);
+      setDemolitionManScores([]);
+    }
+  };
+
   useEffect(() => {
     loadOverallLeaders();
     loadAchievementHunters();
+    loadDemolitionManScores();
     
     // Set up periodic refresh as fallback (every 30 seconds)
     const refreshInterval = setInterval(() => {
       console.log('OverallLeaderboard: Periodic refresh triggered');
       loadOverallLeaders();
       loadAchievementHunters();
+      loadDemolitionManScores();
     }, 30000);
     
     // Set up real-time subscriptions for score and game changes
@@ -175,6 +217,7 @@ const OverallLeaderboard = () => {
           console.log('OverallLeaderboard: Score change detected:', payload.eventType, payload);
           loadOverallLeaders(); // Reload leaders when scores change
           loadAchievementHunters(); // Reload achievement hunters when scores change (as achievements might be unlocked)
+          loadDemolitionManScores(); // Reload Demolition Man scores when scores change
         }
       )
       .subscribe((status) => {
@@ -261,6 +304,19 @@ const OverallLeaderboard = () => {
         return <Star className="w-4 h-4 text-purple-300" />;
       case 2:
         return <Star className="w-4 h-4 text-indigo-600" />;
+      default:
+        return <span className="w-4 h-4 flex items-center justify-center text-xs font-bold text-white">#{index + 1}</span>;
+    }
+  };
+
+  const getDemolitionRankIcon = (index: number) => {
+    switch (index) {
+      case 0:
+        return <Trophy className="w-4 h-4 text-red-400" />;
+      case 1:
+        return <Medal className="w-4 h-4 text-orange-300" />;
+      case 2:
+        return <Award className="w-4 h-4 text-yellow-600" />;
       default:
         return <span className="w-4 h-4 flex items-center justify-center text-xs font-bold text-white">#{index + 1}</span>;
     }
@@ -374,6 +430,63 @@ const OverallLeaderboard = () => {
             {achievementHunters.length === 0 && (
               <div className="text-center text-gray-400 py-4">
                 No achievements yet.
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Demolition Man Eternal Leaderboard */}
+      <Card className="bg-black/30 border-white/15 flex-1">
+        <CardHeader>
+          <CardTitle className="text-white flex flex-col items-center gap-2">
+            <div className="text-center">
+              {/* Demolition Man Logo */}
+              <img 
+                src="https://images.launchbox-app.com/c84bf29b-1b54-4310-9290-9b52f587f442.png"
+                alt="Demolition Man"
+                className="w-40 h-auto rounded-lg mx-auto"
+              />
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="overflow-y-auto">
+          <div className="space-y-3">
+            {demolitionManScores.map((score, index) => (
+              <div
+                key={`${score.player_name}-${score.created_at}`}
+                className={`flex items-center justify-between p-3 rounded-lg border ${
+                  index === 0
+                    ? 'bg-red-400/10 border-red-400/30'
+                    : index === 1
+                    ? 'bg-orange-300/10 border-orange-300/30'
+                    : index === 2
+                    ? 'bg-yellow-600/10 border-yellow-600/30'
+                    : 'bg-white/5 border-white/10'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  {getDemolitionRankIcon(index)}
+                  <div>
+                    <div 
+                      className="font-arcade font-bold text-sm animated-gradient"
+                      style={{ animationDelay: `${index * 0.15}s` }}
+                    >
+                      {score.player_name}
+                    </div>
+                  </div>
+                </div>
+                <div 
+                  className="text-right font-bold font-arcade animated-gradient"
+                  style={{ animationDelay: `${index * 0.15 + 0.3}s` }}
+                >
+                  {formatScore(score.score)}
+                </div>
+              </div>
+            ))}
+            {demolitionManScores.length === 0 && (
+              <div className="text-center text-gray-400 py-4">
+                No Demolition Man scores yet.
               </div>
             )}
           </div>

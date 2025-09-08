@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Pencil, Trash2, Plus, Wrench, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook } from "lucide-react";
+import { Pencil, Trash2, Plus, Wrench, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, QrCode } from "lucide-react";
 import { isPlaceholderLogo } from "@/lib/utils";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import GameLogoSuggestions, { GameLogoSuggestionsRef } from "@/components/GameLogoSuggestions";
@@ -24,6 +24,7 @@ import WebhookConfig from "@/components/WebhookConfig";
 import AchievementTest from "@/components/AchievementTest";
 import UserManagement from "@/components/UserManagement";
 import ResetFunctions from "@/components/ResetFunctions";
+import DemolitionManQRSubmit from "@/components/DemolitionManQRSubmit";
 import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from "@/utils/designSystem";
 import { useUserRoles } from "@/hooks/useUserRoles";
 
@@ -311,7 +312,7 @@ const Admin = () => {
         </PageHeader>
 
         <Tabs defaultValue="games" className="w-full">
-          <TabsList className="grid w-full grid-cols-5 bg-gray-900 border border-white/20">
+          <TabsList className="grid w-full grid-cols-6 bg-gray-900 border border-white/20">
             <TabsTrigger value="games" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
               <Gamepad2 className="w-4 h-4 mr-2" />
               Games
@@ -319,6 +320,10 @@ const Admin = () => {
             <TabsTrigger value="scores" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
               <BarChart3 className="w-4 h-4 mr-2" />
               Scores
+            </TabsTrigger>
+            <TabsTrigger value="qr-submit" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
+              <QrCode className="w-4 h-4 mr-2" />
+              QR Submit
             </TabsTrigger>
             <TabsTrigger value="webhooks" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
               <Webhook className="w-4 h-4 mr-2" />
@@ -481,6 +486,10 @@ const Admin = () => {
 
           <TabsContent value="scores" className="mt-6">
             <ScoreManager />
+          </TabsContent>
+
+          <TabsContent value="qr-submit" className="mt-6">
+            <DemolitionManQRSubmit />
           </TabsContent>
 
           <TabsContent value="webhooks" className="mt-6">
