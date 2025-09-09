@@ -1,9 +1,12 @@
 import * as React from "react"
+import { Copy } from "lucide-react"
 
 import type {
   ToastActionElement,
   ToastProps,
 } from "@/components/ui/toast"
+import { ToastAction } from "@/components/ui/toast"
+import { copyToClipboard, getRecentConsoleLogs } from "@/lib/utils"
 
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
@@ -149,12 +152,69 @@ function toast({ ...props }: Toast) {
     })
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
 
+  // Create copy button for error messages
+  let action: ToastActionElement | undefined = undefined
+  const isError = props.variant === "destructive" ||
+                  (props.title && typeof props.title === "string" &&
+                   (props.title.toLowerCase().includes("error") ||
+                    props.title.toLowerCase().includes("failed") ||
+                    props.title.toLowerCase().includes("unable") ||
+                    props.title.toLowerCase().includes("invalid") ||
+                    props.title.toLowerCase().includes("denied") ||
+                    props.title.toLowerCase().includes("permission") ||
+                    props.title.toLowerCase().includes("unauthorized"))) ||
+                  (props.description && typeof props.description === "string" &&
+                   (props.description.toLowerCase().includes("error") ||
+                    props.description.toLowerCase().includes("failed") ||
+                    props.description.toLowerCase().includes("unable") ||
+                    props.description.toLowerCase().includes("invalid") ||
+                    props.description.toLowerCase().includes("denied") ||
+                    props.description.toLowerCase().includes("permission") ||
+                    props.description.toLowerCase().includes("unauthorized")))
+
+  if (isError && (props.description || props.title)) {
+    const recentLogs = getRecentConsoleLogs()
+    const errorText = [
+      props.title ? `Error: ${props.title}` : "",
+      props.description ? String(props.description) : "",
+      "",
+      "=== RECENT CONSOLE LOGS ===",
+      ...recentLogs,
+      "",
+      "=== END CONSOLE LOGS ==="
+    ].filter(line => line !== "").join("\n")
+
+    action = React.createElement(ToastAction, {
+      altText: "Copy error with logs",
+      onClick: async () => {
+        const success = await copyToClipboard(errorText)
+        if (success) {
+          // Show a brief success toast
+          toast({
+            title: "Copied!",
+            description: "Error message and logs copied to clipboard",
+            duration: 2000,
+          })
+        } else {
+          toast({
+            title: "Copy Failed",
+            description: "Unable to copy to clipboard",
+            variant: "destructive",
+            duration: 2000,
+          })
+        }
+      },
+      className: "gap-1"
+    }, React.createElement(Copy, { className: "h-4 w-4" }), "Copy")
+  }
+
   dispatch({
     type: "ADD_TOAST",
     toast: {
       ...props,
       id,
       open: true,
+      action,
       onOpenChange: (open) => {
         if (!open) dismiss()
       },

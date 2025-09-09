@@ -1,69 +1,49 @@
 -- Automatic tournament membership fix
--- This will add the first admin user as owner of the default tournament
+-- This will add the user as owner of the current tournament
 
 DO $$
 DECLARE
-  default_tournament_id UUID;
-  admin_user_id UUID;
+  current_tournament_id UUID;
+  current_user_id UUID := '6a5550ca-ec3e-413d-9a9b-e20ec827f045'; -- Your user ID
   membership_exists BOOLEAN;
 BEGIN
-  -- Find the default tournament
-  SELECT id INTO default_tournament_id
+  -- Find the current tournament (BMS Highscore Challenge)
+  SELECT id INTO current_tournament_id
   FROM tournaments
-  WHERE slug = 'default-arcade'
-  OR name = 'Default Arcade Tournament'
-  OR name LIKE '%Default%'
+  WHERE slug = 'bms-highscore-challenge'
+  OR name = 'BMS Highscore Challenge'
   LIMIT 1;
   
-  IF default_tournament_id IS NULL THEN
-    RAISE EXCEPTION 'Default tournament not found. Please check if the migration was completed successfully.';
+  IF current_tournament_id IS NULL THEN
+    RAISE EXCEPTION 'BMS Highscore Challenge tournament not found. Please check if the migration was completed successfully.';
   END IF;
-  
-  RAISE NOTICE 'Found default tournament ID: %', default_tournament_id;
-  
-  -- Find the first admin user (from the old user_roles table)
-  SELECT ur.user_id INTO admin_user_id
-  FROM user_roles ur
-  WHERE ur.role = 'admin'
-  LIMIT 1;
-  
-  IF admin_user_id IS NULL THEN
-    -- If no admin user found, try to get the first user
-    SELECT id INTO admin_user_id
-    FROM auth.users
-    ORDER BY created_at ASC
-    LIMIT 1;
-  END IF;
-  
-  IF admin_user_id IS NULL THEN
-    RAISE EXCEPTION 'No users found in the system.';
-  END IF;
-  
-  RAISE NOTICE 'Using user ID: %', admin_user_id;
+
+  RAISE NOTICE 'Found BMS Highscore Challenge tournament ID: %', current_tournament_id;
+  RAISE NOTICE 'Using user ID: %', current_user_id;
   
   -- Check if membership already exists
   SELECT EXISTS(
-    SELECT 1 FROM tournament_members 
-    WHERE tournament_id = default_tournament_id 
-    AND user_id = admin_user_id
+    SELECT 1 FROM tournament_members
+    WHERE tournament_id = current_tournament_id
+    AND user_id = current_user_id
   ) INTO membership_exists;
-  
+
   IF membership_exists THEN
-    RAISE NOTICE 'User is already a member of the default tournament';
-    
+    RAISE NOTICE 'User is already a member of the BMS Highscore Challenge tournament';
+
     -- Update to make sure they are active and owner
-    UPDATE tournament_members 
+    UPDATE tournament_members
     SET role = 'owner', is_active = true, updated_at = NOW()
-    WHERE tournament_id = default_tournament_id 
-    AND user_id = admin_user_id;
-    
+    WHERE tournament_id = current_tournament_id
+    AND user_id = current_user_id;
+
     RAISE NOTICE 'Updated user role to owner and set as active';
   ELSE
-    -- Add user as owner of the default tournament
+    -- Add user as owner of the BMS Highscore Challenge tournament
     INSERT INTO tournament_members (tournament_id, user_id, role, is_active)
-    VALUES (default_tournament_id, admin_user_id, 'owner', true);
-    
-    RAISE NOTICE 'Added user as owner of the default tournament';
+    VALUES (current_tournament_id, current_user_id, 'owner', true);
+
+    RAISE NOTICE 'Added user as owner of the BMS Highscore Challenge tournament';
   END IF;
   
   RAISE NOTICE 'Tournament membership fix completed successfully!';
