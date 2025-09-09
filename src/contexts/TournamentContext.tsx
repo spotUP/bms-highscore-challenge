@@ -89,6 +89,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         .eq('is_active', true);
 
       console.log('Tournament memberships result:', { memberships, error });
+      console.log('Error details:', {
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint
+      });
 
       if (error) throw error;
 
