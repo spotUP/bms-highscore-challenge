@@ -29,6 +29,8 @@ import DemolitionManScoreManager from "@/components/DemolitionManScoreManager";
 import PerformanceToggle from "@/components/PerformanceToggle";
 import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from "@/utils/designSystem";
 import { useUserRoles } from "@/hooks/useUserRoles";
+import { useTournament } from "@/contexts/TournamentContext";
+import TournamentSelector from "@/components/TournamentSelector";
 
 interface Game {
   id: string;
@@ -43,6 +45,7 @@ interface Game {
 
 const Admin = () => {
   const { user, isAdmin, loading } = useAuth();
+  const { currentTournament, hasPermission } = useTournament();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [games, setGames] = useState<Game[]>([]);
@@ -61,17 +64,23 @@ const Admin = () => {
 
   // Redirect if not admin
   useEffect(() => {
-    if (!loading && (!user || !isAdmin)) {
+    if (!loading && (!user || (!isAdmin && !hasPermission('admin')))) {
       navigate('/');
     }
-  }, [user, isAdmin, loading, navigate]);
+  }, [user, isAdmin, hasPermission, loading, navigate]);
 
-  // Load games
+  // Load games for current tournament
   const loadGames = async () => {
+    if (!currentTournament) {
+      setGamesLoading(false);
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('games')
         .select('*')
+        .eq('tournament_id', currentTournament.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -90,10 +99,10 @@ const Admin = () => {
   };
 
   useEffect(() => {
-    if (user && isAdmin) {
+    if (user && (isAdmin || hasPermission('admin')) && currentTournament) {
       loadGames();
     }
-  }, [user, isAdmin]);
+  }, [user, isAdmin, hasPermission, currentTournament]);
 
   // Reset form
   const resetForm = () => {
@@ -183,7 +192,8 @@ const Admin = () => {
             name: formData.name,
             logo_url: formData.logo_url || null,
             is_active: formData.is_active,
-            include_in_challenge: formData.include_in_challenge
+            include_in_challenge: formData.include_in_challenge,
+            tournament_id: currentTournament?.id
           });
 
         if (error) throw error;
@@ -291,8 +301,24 @@ const Admin = () => {
     return <LoadingSpinner text="Loading admin panel..." />;
   }
 
-  if (!user || !isAdmin) {
+  if (!user || (!isAdmin && !hasPermission('admin'))) {
     return null; // Will redirect via useEffect
+  }
+
+  if (!currentTournament) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative z-10"
+           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
+        <div className="text-center text-white">
+          <div className="text-6xl mb-4">🏆</div>
+          <h1 className="text-4xl font-bold mb-4">Tournament Required</h1>
+          <p className="text-xl text-gray-300 mb-8">
+            Select a tournament to access the admin panel.
+          </p>
+          <TournamentSelector />
+        </div>
+      </div>
+    );
   }
 
   const pageLayout = getPageLayout();
@@ -302,15 +328,18 @@ const Admin = () => {
       <PageContainer className="max-w-6xl mx-auto">
         <PageHeader 
           title="Admin Panel"
-          subtitle="Manage games, scores, and system configuration"
+          subtitle={`Managing ${currentTournament?.name} tournament`}
         >
-          <Button 
-            onClick={() => navigate('/')} 
-            variant="outline"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Leaderboard
-          </Button>
+          <div className="flex items-center gap-4">
+            <TournamentSelector />
+            <Button 
+              onClick={() => navigate('/')} 
+              variant="outline"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Leaderboard
+            </Button>
+          </div>
         </PageHeader>
 
         <Tabs defaultValue="games" className="w-full">

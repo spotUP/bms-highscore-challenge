@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useGameData } from "@/hooks/useGameData";
+import { useTournamentGameData } from "@/hooks/useTournamentGameData";
 import { getGameLogoUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,6 +13,8 @@ import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import SpinTheWheel from "@/components/SpinTheWheel";
 import MobileMenu from "@/components/MobileMenu";
 import PerformanceModeToggle from "@/components/PerformanceModeToggle";
+import TournamentSelector from "@/components/TournamentSelector";
+import { useTournament } from "@/contexts/TournamentContext";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -47,9 +49,10 @@ interface Score {
 
 const Index = () => {
   const { user, loading, signOut, isAdmin } = useAuth();
+  const { currentTournament, loading: tournamentLoading } = useTournament();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { activeGames: games, gameScores, loading: gamesLoading, refetch } = useGameData();
+  const { activeGames: games, gameScores, loading: gamesLoading, refetch } = useTournamentGameData();
   const [selectedGameForSubmission, setSelectedGameForSubmission] = useState<any>(null);
   const [isSubmissionDialogOpen, setIsSubmissionDialogOpen] = useState(false);
   const [isSpinWheelOpen, setIsSpinWheelOpen] = useState(false);
@@ -117,11 +120,28 @@ const Index = () => {
     return wheelNames;
   }, [gameScores]);
 
-  if (loading || gamesLoading) {
+  if (loading || tournamentLoading || gamesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center relative z-10"
            style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
         <div className="text-white text-xl">Loading...</div>
+      </div>
+    );
+  }
+
+  // Show tournament selection if user has no current tournament
+  if (user && !currentTournament) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative z-10"
+           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
+        <div className="text-center text-white">
+          <div className="text-6xl mb-4">🏆</div>
+          <h1 className="text-4xl font-bold mb-4">Welcome to Arcade Tournaments!</h1>
+          <p className="text-xl text-gray-300 mb-8">
+            Create your first tournament or join an existing one to get started.
+          </p>
+          <TournamentSelector />
+        </div>
       </div>
     );
   }
@@ -152,6 +172,7 @@ const Index = () => {
               
               {user ? (
                 <>
+                  <TournamentSelector />
                   <span className="text-gray-300">Welcome, {user.email}</span>
                   <Button variant="outline" onClick={() => setIsSpinWheelOpen(true)}>
                     Spin the Wheel
@@ -161,6 +182,9 @@ const Index = () => {
                   </Button>
                   <Button variant="outline" onClick={() => navigate('/achievements')}>
                     Achievements
+                  </Button>
+                  <Button variant="outline" onClick={() => navigate('/tournaments')}>
+                    Browse Tournaments
                   </Button>
                   <PerformanceModeToggle />
                   {isAdmin && (

@@ -1,10 +1,10 @@
 import React, { useMemo, useCallback } from 'react';
 import { Trophy, Medal, Award, Star } from "lucide-react";
 import { formatScore } from '@/lib/utils';
-import { useGameData } from '@/hooks/useGameData';
+import { useTournamentGameData } from '@/hooks/useTournamentGameData';
 
 const OverallLeaderboard = React.memo(() => {
-  const { leaders, achievementHunters, demolitionManScores, loading } = useGameData();
+  const { leaders, achievementHunters, demolitionManScores, loading } = useTournamentGameData();
 
   const getRankIcon = useCallback((index: number) => {
     switch (index) {
@@ -48,7 +48,7 @@ const OverallLeaderboard = React.memo(() => {
   if (loading) {
     return (
       <div className="p-6">
-        <div className="text-center text-white">Loading leaders...</div>
+          <div className="text-center text-white">Loading leaders...</div>
       </div>
     );
   }
@@ -59,35 +59,35 @@ const OverallLeaderboard = React.memo(() => {
       <div className="flex-1">
         <span className="text-xl font-bold text-white mb-3 block">Overall Leaders</span>
         <div className="space-y-1 overflow-y-auto">
-            {leaders.map((player, index) => (
+          {leaders.map((player, index) => (
               <div key={player.player_name} className="flex items-center gap-3 py-1">
                 {getRankIcon(index)}
                 <div className="flex-1 flex items-baseline">
                   <div className="flex-1">
-                    <div 
-                      className="font-arcade font-bold text-lg animated-gradient"
-                      style={{ animationDelay: `${index * 0.15}s` }}
-                    >
-                      {player.player_name}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {player.game_count} game{player.game_count !== 1 ? 's' : ''}
-                    </div>
-                  </div>
                   <div 
-                    className="font-bold font-arcade text-base animated-gradient"
-                    style={{ animationDelay: `${index * 0.15 + 0.3}s` }}
+                      className="font-arcade font-bold text-lg animated-gradient"
+                    style={{ animationDelay: `${index * 0.15}s` }}
                   >
-                    {formatScore(player.total_ranking_points)}
+                    {player.player_name}
                   </div>
+                  <div className="text-xs text-gray-400">
+                    {player.game_count} game{player.game_count !== 1 ? 's' : ''}
                 </div>
               </div>
-            ))}
-            {leaders.length === 0 && (
-              <div className="text-center text-gray-400 py-4">
-                No scores found yet.
+              <div 
+                    className="font-bold font-arcade text-base animated-gradient"
+                style={{ animationDelay: `${index * 0.15 + 0.3}s` }}
+              >
+                {formatScore(player.total_ranking_points)}
+                  </div>
               </div>
-            )}
+            </div>
+          ))}
+          {leaders.length === 0 && (
+              <div className="text-center text-gray-400 py-4">
+              No scores found yet.
+            </div>
+          )}
         </div>
       </div>
 

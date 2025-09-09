@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { usePerformanceMode } from '@/hooks/usePerformanceMode';
+import { useTournament } from '@/contexts/TournamentContext';
 
 interface Game {
   id: string;
