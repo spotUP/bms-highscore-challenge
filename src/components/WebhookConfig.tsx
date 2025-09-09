@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import { Settings, TestTube, CheckCircle, XCircle } from 'lucide-react';
 
 interface WebhookConfig {
@@ -24,51 +25,187 @@ interface WebhookConfig {
 }
 
 const WebhookConfig: React.FC = () => {
-  const [webhooks, setWebhooks] = useState<WebhookConfig[]>([
-    {
-      id: 'teams',
-      name: 'Microsoft Teams',
-      url: '',
-      enabled: false,
-      events: ['score_submitted', 'achievement_unlocked', 'competition_started', 'competition_ended']
-    },
-    {
-      id: 'discord',
-      name: 'Discord',
-      url: '',
-      enabled: false,
-      events: ['score_submitted', 'achievement_unlocked', 'competition_started', 'competition_ended']
-    },
-    {
-      id: 'slack',
-      name: 'Slack',
-      url: '',
-      enabled: false,
-      events: ['score_submitted', 'achievement_unlocked', 'competition_started', 'competition_ended']
-    }
-  ]);
-  
+  const { user } = useAuth();
+  const [webhooks, setWebhooks] = useState<WebhookConfig[]>([]);
+  const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
-    loadWebhookConfigs();
-  }, []);
+    if (user) {
+      loadWebhookConfigs();
+    }
+  }, [user]);
 
-  const loadWebhookConfigs = () => {
-    // In a real implementation, this would load from a database or environment variables
-    // For now, we'll start with empty URLs and let users configure them
-    setWebhooks(prev => prev.map(webhook => ({
-      ...webhook,
-      url: '',
-      enabled: false
-    })));
+  const loadWebhookConfigs = async () => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+      
+      // First, try to load existing webhook configs for this user
+      const { data: userWebhooks, error } = await supabase
+        .from('webhook_config')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error loading webhook configs:', error);
+        
+        // If the table doesn't exist or we get an error, initialize with defaults
+        initializeDefaultWebhooks();
+        return;
+      }
+
+      // If user has no webhooks, initialize them
+      if (!userWebhooks || userWebhooks.length === 0) {
+        await initializeUserWebhooks();
+        return;
+      }
+
+      // Convert database records to component format
+      const webhookConfigs = [
+        {
+          id: 'teams',
+          name: 'Microsoft Teams',
+          url: '',
+          enabled: false,
+          events: ['score_submitted', 'achievement_unlocked', 'competition_started', 'competition_ended']
+        },
+        {
+          id: 'discord', 
+          name: 'Discord',
+          url: '',
+          enabled: false,
+          events: ['score_submitted', 'achievement_unlocked', 'competition_started', 'competition_ended']
+        },
+        {
+          id: 'slack',
+          name: 'Slack', 
+          url: '',
+          enabled: false,
+          events: ['score_submitted', 'achievement_unlocked', 'competition_started', 'competition_ended']
+        }
+      ];
+
+      // Update with user's actual configurations
+      const updatedWebhooks = webhookConfigs.map(webhook => {
+        const userConfig = userWebhooks.find(uw => uw.platform === webhook.id);
+        if (userConfig) {
+          return {
+            ...webhook,
+            url: userConfig.webhook_url || '',
+            enabled: userConfig.enabled || false,
+            events: userConfig.events || webhook.events
+          };
+        }
+        return webhook;
+      });
+
+      setWebhooks(updatedWebhooks);
+    } catch (error) {
+      console.error('Error in loadWebhookConfigs:', error);
+      initializeDefaultWebhooks();
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const updateWebhook = (id: string, updates: Partial<WebhookConfig>) => {
+  const initializeDefaultWebhooks = () => {
+    setWebhooks([
+      {
+        id: 'teams',
+        name: 'Microsoft Teams',
+        url: '',
+        enabled: false,
+        events: ['score_submitted', 'achievement_unlocked', 'competition_started', 'competition_ended']
+      },
+      {
+        id: 'discord',
+        name: 'Discord',
+        url: '',
+        enabled: false,
+        events: ['score_submitted', 'achievement_unlocked', 'competition_started', 'competition_ended']
+      },
+      {
+        id: 'slack',
+        name: 'Slack',
+        url: '',
+        enabled: false,
+        events: ['score_submitted', 'achievement_unlocked', 'competition_started', 'competition_ended']
+      }
+    ]);
+    setLoading(false);
+  };
+
+  const initializeUserWebhooks = async () => {
+    if (!user) return;
+
+    try {
+      // Call the database function to initialize user webhooks
+      const { error } = await supabase.rpc('initialize_user_webhooks', {
+        p_user_id: user.id
+      });
+
+      if (error) {
+        console.error('Error initializing user webhooks:', error);
+        initializeDefaultWebhooks();
+        return;
+      }
+
+      // Reload configs after initialization
+      loadWebhookConfigs();
+    } catch (error) {
+      console.error('Error in initializeUserWebhooks:', error);
+      initializeDefaultWebhooks();
+    }
+  };
+
+  const updateWebhook = async (id: string, updates: Partial<WebhookConfig>) => {
+    if (!user) return;
+
+    // Update local state immediately for better UX
     setWebhooks(prev => prev.map(webhook => 
       webhook.id === id ? { ...webhook, ...updates } : webhook
     ));
+
+    try {
+      // Save to database
+      const { error } = await supabase.rpc('update_user_webhook_config', {
+        p_user_id: user.id,
+        p_platform: id,
+        p_webhook_url: updates.url,
+        p_enabled: updates.enabled
+      });
+
+      if (error) {
+        console.error('Error updating webhook config:', error);
+        toast({
+          title: "Error",
+          description: "Failed to save webhook configuration",
+          variant: "destructive",
+        });
+        
+        // Reload from database to revert local changes
+        loadWebhookConfigs();
+        return;
+      }
+
+      toast({
+        title: "Success",
+        description: `${webhooks.find(w => w.id === id)?.name} configuration updated`,
+      });
+    } catch (error) {
+      console.error('Error in updateWebhook:', error);
+      toast({
+        title: "Error", 
+        description: "Failed to save webhook configuration",
+        variant: "destructive",
+      });
+      
+      // Reload from database to revert local changes
+      loadWebhookConfigs();
+    }
   };
 
   const testWebhook = async (webhook: WebhookConfig, eventType: string = 'achievement_unlocked') => {
@@ -207,12 +344,49 @@ const WebhookConfig: React.FC = () => {
     return <Badge variant="outline">Ready</Badge>;
   };
 
+  if (!user) {
+    return (
+      <Card className="bg-gray-900 border-white/20">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <Settings className="w-5 h-5" />
+            Webhook Configuration
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <p className="text-gray-400">Please sign in to configure webhooks</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (loading) {
+    return (
+      <Card className="bg-gray-900 border-white/20">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center gap-2">
+            <Settings className="w-5 h-5" />
+            Webhook Configuration
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <p className="text-white">Loading webhook configurations...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className="bg-gray-900 border-white/20">
       <CardHeader>
         <CardTitle className="text-white flex items-center gap-2">
           <Settings className="w-5 h-5" />
           Webhook Configuration
+          <Badge variant="outline" className="ml-2">User-Specific</Badge>
         </CardTitle>
       </CardHeader>
       <CardContent>

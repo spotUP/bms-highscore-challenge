@@ -9,6 +9,7 @@ import { AchievementProvider } from "@/contexts/AchievementContext";
 import { TournamentProvider } from "@/contexts/TournamentContext";
 import HyperspaceEffect from "@/components/HyperspaceEffect";
 import PerformanceWrapper from "@/components/PerformanceWrapper";
+import TournamentAccessGuard from "@/components/TournamentAccessGuard";
 import Index from "./pages/Index";
 import "./styles/performance.css";
 
@@ -20,7 +21,6 @@ const Statistics = lazy(() => import("./pages/Statistics"));
 const PlayerDashboard = lazy(() => import("./pages/PlayerDashboard"));
 const Achievements = lazy(() => import("./pages/Achievements"));
 const DemolitionManSubmit = lazy(() => import("./pages/DemolitionManSubmit"));
-const TournamentLanding = lazy(() => import("./pages/TournamentLanding"));
 
 const queryClient = new QueryClient();
 
@@ -51,7 +51,6 @@ const App = () => (
               <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
                   <Route path="/" element={<Index />} />
-                  <Route path="/tournaments" element={<TournamentLanding />} />
                   <Route path="/mobile-entry" element={<MobileEntry />} />
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/admin" element={<Admin />} />
@@ -60,13 +59,13 @@ const App = () => (
                   <Route path="/achievements" element={<Achievements />} />
                   <Route path="/demolition-man-submit" element={<DemolitionManSubmit />} />
                   
-                  {/* Tournament-scoped routes */}
-                  <Route path="/t/:slug" element={<Index />} />
-                  <Route path="/t/:slug/admin" element={<Admin />} />
-                  <Route path="/t/:slug/statistics" element={<Statistics />} />
-                  <Route path="/t/:slug/achievements" element={<Achievements />} />
-                  <Route path="/t/:slug/mobile-entry" element={<MobileEntry />} />
-                  <Route path="/t/:slug/demolition-man-submit" element={<DemolitionManSubmit />} />
+                  {/* Tournament-scoped routes with access control */}
+                  <Route path="/t/:slug" element={<TournamentAccessGuard><Index /></TournamentAccessGuard>} />
+                  <Route path="/t/:slug/admin" element={<TournamentAccessGuard><Admin /></TournamentAccessGuard>} />
+                  <Route path="/t/:slug/statistics" element={<TournamentAccessGuard><Statistics /></TournamentAccessGuard>} />
+                  <Route path="/t/:slug/achievements" element={<TournamentAccessGuard><Achievements /></TournamentAccessGuard>} />
+                  <Route path="/t/:slug/mobile-entry" element={<TournamentAccessGuard><MobileEntry /></TournamentAccessGuard>} />
+                  <Route path="/t/:slug/demolition-man-submit" element={<TournamentAccessGuard><DemolitionManSubmit /></TournamentAccessGuard>} />
                 </Routes>
               </Suspense>
             </BrowserRouter>

@@ -365,12 +365,12 @@ export const useTournamentGameData = () => {
       gamesChannel.unsubscribe();
       achievementsChannel.unsubscribe();
     };
-  }, [currentTournament, loadScores, loadOverallLeaders, loadDemolitionManScores, loadGames, loadAchievementHunters]);
+  }, [currentTournament?.id]); // Only depend on tournament ID
 
   // Load data when tournament changes
   useEffect(() => {
     loadAllData();
-  }, [loadAllData]);
+  }, [currentTournament?.id]); // Only depend on tournament ID, not the loadAllData function
 
   // Periodic refresh based on performance settings
   useEffect(() => {
@@ -381,7 +381,7 @@ export const useTournamentGameData = () => {
     }, refreshInterval);
 
     return () => clearInterval(interval);
-  }, [loadAllData, refreshInterval]);
+  }, [currentTournament?.id, refreshInterval]); // Don't depend on loadAllData function
 
   // Memoized derived data
   const activeGames = useMemo(() => {

@@ -225,11 +225,6 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
       
       onClose();
       
-      // Refresh the page to update all leaderboards
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
-      
     } catch (error: any) {
       console.error('Error submitting score:', error);
       

@@ -287,11 +287,6 @@ const ScoreManager = () => {
       setIsDialogOpen(false);
       resetForm();
       loadData();
-      
-      // Refresh the page to update all leaderboards
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
     } catch (error: any) {
       console.error('Error saving score:', error);
       

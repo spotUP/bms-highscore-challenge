@@ -4,6 +4,7 @@ import { Menu, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import PerformanceModeToggle from "@/components/PerformanceModeToggle";
+import PublicTournamentBrowser from "@/components/PublicTournamentBrowser";
 
 interface MobileMenuProps {
   onSpinWheel: () => void;
@@ -88,13 +89,18 @@ const MobileMenu = ({ onSpinWheel }: MobileMenuProps) => {
                 </Button>
               </>
             ) : (
-              <Button
-                variant="ghost"
-                onClick={() => handleNavigation(() => navigate('/auth'))}
-                className="w-full justify-start text-left"
-              >
-                Sign In
-              </Button>
+              <>
+                <div className="w-full">
+                  <PublicTournamentBrowser />
+                </div>
+                <Button
+                  variant="ghost"
+                  onClick={() => handleNavigation(() => navigate('/auth'))}
+                  className="w-full justify-start text-left"
+                >
+                  Sign In
+                </Button>
+              </>
             )}
           </div>
         </div>

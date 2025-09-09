@@ -87,10 +87,10 @@ const DemolitionManQRSubmit = () => {
       const { error } = await supabase
         .from('scores')
         .insert({
-          player_name: playerName.trim(),
+          player_name: playerName.trim().toUpperCase(),
           score: Number(score),
           game_id: demolitionManGameId,
-          tournament_id: demolitionManGameId, // Use game_id as tournament_id for now
+          tournament_id: demolitionManGameId, // Use game_id as tournament_id for eternal leaderboard
         });
 
       if (error) throw error;
@@ -104,10 +104,7 @@ const DemolitionManQRSubmit = () => {
       setPlayerName('');
       setScore('');
       
-      // Refresh the page to update leaderboards
-      setTimeout(() => {
-        window.location.reload();
-      }, 2000);
+      // No page refresh needed - parent will handle data updates
     } catch (error: any) {
       console.error('Error submitting score:', error);
       toast({

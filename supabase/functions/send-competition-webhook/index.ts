@@ -215,53 +215,73 @@ const handler = async (req: Request): Promise<Response> => {
       ]
     });
 
-    // Send to Teams
-    const teamsWebhookUrl = Deno.env.get('TEAMS_WEBHOOK_URL');
-    if (teamsWebhookUrl) {
+    // Helper function to send webhook to a specific URL
+    const sendToWebhook = async (webhookUrl: string, message: any, platform: string, label: string) => {
       try {
-        const teamsResponse = await fetch(teamsWebhookUrl, {
+        const response = await fetch(webhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(teamsMessage),
+          body: JSON.stringify(message),
         });
-        console.log('Teams webhook response:', teamsResponse.status);
+        console.log(`${platform} webhook (${label}) response:`, response.status);
+        return { success: response.ok, platform, label };
       } catch (error) {
-        console.error('Teams webhook error:', error);
+        console.error(`${platform} webhook (${label}) error:`, error);
+        return { success: false, platform, label, error };
       }
-    }
+    };
 
-    // Send to Discord
-    const discordWebhookUrl = Deno.env.get('DISCORD_WEBHOOK_URL');
-    if (discordWebhookUrl) {
-      try {
-        const discordResponse = await fetch(discordWebhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(discordMessage),
-        });
-        console.log('Discord webhook response:', discordResponse.status);
-      } catch (error) {
-        console.error('Discord webhook error:', error);
-      }
-    }
+    // Get all enabled webhook configurations for each platform
+    const platforms = ['teams', 'discord', 'slack'];
+    const messages = { teams: teamsMessage, discord: discordMessage, slack: slackMessage };
+    
+    let totalSuccess = 0;
+    let totalFailed = 0;
 
-    // Send to Slack
-    const slackWebhookUrl = Deno.env.get('SLACK_WEBHOOK_URL');
-    if (slackWebhookUrl) {
-      try {
-        const slackResponse = await fetch(slackWebhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(slackMessage),
+    for (const platform of platforms) {
+      const { data: webhookConfigs, error: webhookError } = await supabase
+        .from('webhook_config')
+        .select('*')
+        .eq('platform', platform)
+        .eq('enabled', true)
+        .neq('webhook_url', '')
+        .not('webhook_url', 'is', null);
+
+      if (webhookError) {
+        console.error(`Error fetching ${platform} webhook configs:`, webhookError);
+        // Fallback to environment variable
+        const fallbackUrl = Deno.env.get(`${platform.toUpperCase()}_WEBHOOK_URL`);
+        if (fallbackUrl) {
+          const result = await sendToWebhook(fallbackUrl, messages[platform], platform, 'fallback');
+          if (result.success) totalSuccess++; else totalFailed++;
+        }
+      } else if (webhookConfigs && webhookConfigs.length > 0) {
+        console.log(`Found ${webhookConfigs.length} enabled ${platform} webhook(s)`);
+        
+        const webhookPromises = webhookConfigs.map(async (config, index) => {
+          return sendToWebhook(config.webhook_url, messages[platform], platform, `user-${index + 1}`);
         });
-        console.log('Slack webhook response:', slackResponse.status);
-      } catch (error) {
-        console.error('Slack webhook error:', error);
+
+        const results = await Promise.allSettled(webhookPromises);
+        const successCount = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+        const failureCount = results.length - successCount;
+        
+        totalSuccess += successCount;
+        totalFailed += failureCount;
+        
+        console.log(`${platform} results: ${successCount} succeeded, ${failureCount} failed`);
+      } else {
+        console.log(`No enabled ${platform} webhooks found`);
       }
     }
 
     return new Response(
-      JSON.stringify({ success: true, message: "Competition webhooks sent" }),
+      JSON.stringify({ 
+        success: totalSuccess > 0, 
+        message: `Competition webhooks processed: ${totalSuccess} succeeded, ${totalFailed} failed`,
+        webhooks_sent: totalSuccess,
+        webhooks_failed: totalFailed
+      }),
       {
         status: 200,
         headers: { "Content-Type": "application/json", ...corsHeaders },

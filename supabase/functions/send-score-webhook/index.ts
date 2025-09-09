@@ -21,6 +21,37 @@ const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// Helper function to send webhook to a specific URL
+const sendToWebhook = async (webhookUrl: string, message: any, label: string) => {
+  try {
+    console.log(`Sending webhook to ${label}:`, webhookUrl);
+    console.log(`${label} message payload:`, JSON.stringify(message, null, 2));
+
+    const webhookResponse = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message),
+    });
+
+    console.log(`${label} webhook response status:`, webhookResponse.status);
+
+    if (!webhookResponse.ok) {
+      const errorText = await webhookResponse.text();
+      console.error(`${label} webhook error response:`, errorText);
+      throw new Error(`${label} webhook failed: ${webhookResponse.status} - ${errorText}`);
+    }
+
+    const responseText = await webhookResponse.text();
+    console.log(`${label} webhook success response:`, responseText);
+    return { success: true, response: responseText };
+  } catch (error) {
+    console.error(`${label} webhook failed:`, error);
+    throw error;
+  }
+};
+
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -132,44 +163,52 @@ const handler = async (req: Request): Promise<Response> => {
       ]
     };
 
-    // Send the Teams MessageCard to Microsoft Teams
-    const webhookUrl = Deno.env.get('TEAMS_WEBHOOK_URL') || "https://defaultb880007628fd4e2691f5df32a17ab7.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/feb381c9899444c3937d80295b4afc57/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=5H4ofX0in_nS0DVzRKur5Y4YpXKILSqp2BMUXH4rfKU";
-    
-    console.log("Sending webhook to:", webhookUrl);
-    console.log("Teams message payload:", JSON.stringify(teamsMessage, null, 2));
-    console.log("Webhook data received:", JSON.stringify(webhookData, null, 2));
+    // Get all enabled webhook configurations from all users
+    const { data: webhookConfigs, error: webhookError } = await supabase
+      .from('webhook_config')
+      .select('*')
+      .eq('platform', 'teams')
+      .eq('enabled', true)
+      .neq('webhook_url', '')
+      .not('webhook_url', 'is', null);
 
-    const webhookResponse = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(teamsMessage),
-    });
-
-    console.log("Webhook response status:", webhookResponse.status);
-    console.log("Webhook response headers:", Object.fromEntries(webhookResponse.headers.entries()));
-
-    if (!webhookResponse.ok) {
-      const errorText = await webhookResponse.text();
-      console.error("Webhook error response:", errorText);
-      console.error("Webhook error details:", {
-        status: webhookResponse.status,
-        statusText: webhookResponse.statusText,
-        url: webhookUrl,
-        body: errorText
+    if (webhookError) {
+      console.error("Error fetching webhook configs:", webhookError);
+      // Fallback to environment variable or hardcoded URL
+      const fallbackUrl = Deno.env.get('TEAMS_WEBHOOK_URL') || "https://defaultb880007628fd4e2691f5df32a17ab7.e4.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/feb381c9899444c3937d80295b4afc57/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=5H4ofX0in_nS0DVzRKur5Y4YpXKILSqp2BMUXH4rfKU";
+      await sendToWebhook(fallbackUrl, teamsMessage, "fallback");
+    } else if (!webhookConfigs || webhookConfigs.length === 0) {
+      console.log("No enabled Teams webhooks found");
+      return new Response(JSON.stringify({ 
+        success: true, 
+        message: "No enabled Teams webhooks configured",
+        position: position,
+        gameLogoUrl: gameLogoUrl
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+        },
       });
-      throw new Error(`Webhook failed: ${webhookResponse.status} - ${errorText}`);
-    }
+    } else {
+      // Send to all enabled webhook URLs
+      console.log(`Found ${webhookConfigs.length} enabled Teams webhook(s)`);
+      
+      const webhookPromises = webhookConfigs.map(async (config, index) => {
+        return sendToWebhook(config.webhook_url, teamsMessage, `user-${index + 1}`);
+      });
 
-    const responseText = await webhookResponse.text();
-    console.log("Webhook success response:", responseText);
-    console.log("Power Automate response length:", responseText.length);
-    console.log("Power Automate response type:", typeof responseText);
+      const results = await Promise.allSettled(webhookPromises);
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failureCount = results.filter(r => r.status === 'rejected').length;
+
+      console.log(`Webhook results: ${successCount} succeeded, ${failureCount} failed`);
+    }
 
     return new Response(JSON.stringify({ 
       success: true, 
-      message: "Teams MessageCard sent successfully",
+      message: "Webhooks processed",
       position: position,
       gameLogoUrl: gameLogoUrl
     }), {

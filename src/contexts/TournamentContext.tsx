@@ -17,6 +17,7 @@ export interface Tournament {
   is_active?: boolean;
   logo_url?: string | null;
   theme_color?: string;
+  demolition_man_active?: boolean; // Toggle for Demolition Man leaderboard
 }
 
 export interface TournamentMember {
@@ -52,6 +53,7 @@ interface CreateTournamentData {
   slug: string;
   description?: string;
   is_public?: boolean;
+  demolition_man_active?: boolean;
 }
 
 const TournamentContext = createContext<TournamentContextType | undefined>(undefined);
@@ -211,18 +213,38 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     console.log('Current user:', user?.id);
     
     try {
+      // For anonymous users accessing public tournaments, don't check membership
+      if (!user && tournament.is_public) {
+        console.log('Anonymous user accessing public tournament:', tournament.name);
+        setCurrentTournament(tournament);
+        setCurrentUserRole(null);
+        localStorage.setItem('currentTournamentId', tournament.id);
+        return;
+      }
+
+      // For authenticated users or private tournaments, check membership
+      if (!user) {
+        console.error('User must be authenticated to access private tournaments');
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to access this tournament",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Get user's role in this tournament
       const { data: membership, error } = await supabase
         .from('tournament_members')
         .select('role')
         .eq('tournament_id', tournament.id)
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .eq('is_active', true)
         .single();
 
       console.log('Membership query result:', { membership, error });
 
-      if (error) {
+      if (error && error.code !== 'PGRST116') {
         console.error('Error getting tournament membership:', error);
         toast({
           title: "Error",
@@ -232,9 +254,29 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      console.log('Setting tournament:', tournament.name, 'with role:', membership?.role);
+      // For public tournaments, allow access even without membership
+      if (tournament.is_public) {
+        console.log('Setting public tournament:', tournament.name, 'with role:', membership?.role || 'public_viewer');
+        setCurrentTournament(tournament);
+        setCurrentUserRole(membership?.role || null);
+        localStorage.setItem('currentTournamentId', tournament.id);
+        return;
+      }
+
+      // For private tournaments, require membership
+      if (!membership) {
+        console.error('User is not a member of private tournament');
+        toast({
+          title: "Access Denied",
+          description: "You are not a member of this private tournament",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log('Setting private tournament:', tournament.name, 'with role:', membership.role);
       setCurrentTournament(tournament);
-      setCurrentUserRole(membership?.role || null);
+      setCurrentUserRole(membership.role);
       localStorage.setItem('currentTournamentId', tournament.id);
       
       toast({
@@ -305,12 +347,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   // Update tournament
   const updateTournament = async (id: string, data: Partial<Tournament>): Promise<boolean> => {
     try {
+      console.log('TournamentContext: updateTournament called with:', { id, data });
+      
       const { error } = await supabase
         .from('tournaments')
         .update(data)
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase update error:', error);
+        throw error;
+      }
 
       await refreshTournaments();
       

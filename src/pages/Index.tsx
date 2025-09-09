@@ -13,7 +13,8 @@ import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import SpinTheWheel from "@/components/SpinTheWheel";
 import MobileMenu from "@/components/MobileMenu";
 import PerformanceModeToggle from "@/components/PerformanceModeToggle";
-import TournamentSelector from "@/components/TournamentSelector";
+import TournamentDropdown from "@/components/TournamentDropdown";
+import PublicTournamentBrowser from "@/components/PublicTournamentBrowser";
 import { useTournament } from "@/contexts/TournamentContext";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
@@ -140,7 +141,7 @@ const Index = () => {
           <p className="text-xl text-gray-300 mb-8">
             Create your first tournament or join an existing one to get started.
           </p>
-          <TournamentSelector />
+          <TournamentDropdown />
         </div>
       </div>
     );
@@ -172,8 +173,9 @@ const Index = () => {
               
               {user ? (
                 <>
-                  <TournamentSelector />
+                  <TournamentDropdown />
                   <span className="text-gray-300">Welcome, {user.email}</span>
+                  <PerformanceModeToggle displayType="switch" />
                   <Button variant="outline" onClick={() => setIsSpinWheelOpen(true)}>
                     Spin the Wheel
                   </Button>
@@ -183,10 +185,6 @@ const Index = () => {
                   <Button variant="outline" onClick={() => navigate('/achievements')}>
                     Achievements
                   </Button>
-                  <Button variant="outline" onClick={() => navigate('/tournaments')}>
-                    Browse Tournaments
-                  </Button>
-                  <PerformanceModeToggle />
                   {isAdmin && (
                     <Button variant="outline" onClick={() => navigate('/admin')}>
                       Admin Panel
@@ -197,9 +195,12 @@ const Index = () => {
                   </Button>
                 </>
               ) : (
-                <Button onClick={() => navigate('/auth')} variant="outline">
-                  Sign In
-                </Button>
+                <>
+                  <PublicTournamentBrowser />
+                  <Button onClick={() => navigate('/auth')} variant="outline">
+                    Sign In
+                  </Button>
+                </>
               )}
             </div>
             

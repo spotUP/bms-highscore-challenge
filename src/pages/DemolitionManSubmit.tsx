@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Zap, RefreshCw, ArrowLeft, Trophy } from 'lucide-react';
+import DemolitionManLeaderboard from '@/components/DemolitionManLeaderboard';
 
 const DemolitionManSubmit = () => {
   const { toast } = useToast();
@@ -88,10 +89,10 @@ const DemolitionManSubmit = () => {
       const { error } = await supabase
         .from('scores')
         .insert({
-          player_name: playerName.trim(),
+          player_name: playerName.trim().toUpperCase(),
           score: Number(score),
           game_id: demolitionManGameId,
-          tournament_id: demolitionManGameId, // Use game_id as tournament_id for now
+          tournament_id: demolitionManGameId, // Use game_id as tournament_id for eternal leaderboard
         });
 
       if (error) throw error;
@@ -105,10 +106,9 @@ const DemolitionManSubmit = () => {
       setPlayerName('');
       setScore('');
 
-      // Redirect to main page and refresh after 2 seconds
+      // Redirect to main page after 2 seconds
       setTimeout(() => {
         navigate('/', { replace: true });
-        window.location.reload();
       }, 2000);
     } catch (error: any) {
       console.error('Error submitting score:', error);
@@ -129,8 +129,28 @@ const DemolitionManSubmit = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-arcade-darkBlue via-black to-arcade-darkPurple p-4 flex items-center justify-center">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-arcade-darkBlue via-black to-arcade-darkPurple p-4">
+      {/* Header */}
+      <div className="max-w-6xl mx-auto mb-6">
+        <div className="flex items-center justify-between">
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/')}
+            className="text-white hover:text-arcade-neonCyan"
+          >
+            <ArrowLeft className="mr-2 h-5 w-5" />
+            Back to Main
+          </Button>
+          <h1 className="text-3xl font-bold text-white">🔥 Demolition Man</h1>
+          <div></div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Score Submission Form */}
+        <div className="flex items-center justify-center">
+          <div className="w-full max-w-md">
         <Card className="bg-black/30 border-white/15 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="text-white flex flex-col items-center gap-4">
@@ -214,6 +234,13 @@ const DemolitionManSubmit = () => {
             </div>
           </CardContent>
         </Card>
+          </div>
+        </div>
+
+        {/* Leaderboard */}
+        <div className="flex items-stretch">
+          <DemolitionManLeaderboard />
+        </div>
       </div>
     </div>
   );

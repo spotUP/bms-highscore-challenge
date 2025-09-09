@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.55.0';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +17,41 @@ interface SimpleAchievementRequest {
   score?: number;
 }
 
+// Initialize Supabase client
+const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+// Helper function to send webhook to a specific URL
+const sendToWebhook = async (webhookUrl: string, message: any, label: string) => {
+  try {
+    console.log(`Sending achievement webhook to ${label}:`, webhookUrl);
+
+    const webhookResponse = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message),
+    });
+
+    console.log(`${label} achievement webhook response status:`, webhookResponse.status);
+
+    if (!webhookResponse.ok) {
+      const errorText = await webhookResponse.text();
+      console.error(`${label} achievement webhook error:`, errorText);
+      throw new Error(`${label} achievement webhook failed: ${webhookResponse.status}`);
+    }
+
+    const responseText = await webhookResponse.text();
+    console.log(`${label} achievement webhook success:`, responseText);
+    return { success: true, response: responseText };
+  } catch (error) {
+    console.error(`${label} achievement webhook failed:`, error);
+    throw error;
+  }
+};
+
 const handler = async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -26,23 +62,43 @@ const handler = async (req: Request): Promise<Response> => {
     
     console.log("🏆 New achievement webhook:", data);
 
-    // Get Teams webhook URL
-    const teamsUrl = Deno.env.get('TEAMS_WEBHOOK_URL');
-    console.log("Teams URL exists:", !!teamsUrl);
+    // Get all enabled webhook configurations from all users
+    const { data: webhookConfigs, error: webhookError } = await supabase
+      .from('webhook_config')
+      .select('*')
+      .eq('platform', 'teams')
+      .eq('enabled', true)
+      .neq('webhook_url', '')
+      .not('webhook_url', 'is', null);
 
-    let teamsSuccess = false;
+    if (webhookError) {
+      console.error("Error fetching webhook configs:", webhookError);
+      // Fallback to environment variable
+      const fallbackUrl = Deno.env.get('TEAMS_WEBHOOK_URL');
+      if (fallbackUrl) {
+        console.log("Using fallback Teams webhook URL");
+      } else {
+        console.log("No webhook configurations found and no fallback URL");
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: "No webhooks configured"
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+    }
 
-    if (teamsUrl) {
-      // Calculate total points
-      const totalPoints = data.achievements.reduce((sum, achievement) => sum + achievement.points, 0);
-      
-      // Create header based on number of achievements
-      const headerText = data.achievements.length === 1 
-        ? "🏆 ACHIEVEMENT UNLOCKED!"
-        : `🏆 ${data.achievements.length} ACHIEVEMENTS UNLOCKED!`;
+    // Calculate total points
+    const totalPoints = data.achievements.reduce((sum, achievement) => sum + achievement.points, 0);
+    
+    // Create header based on number of achievements
+    const headerText = data.achievements.length === 1 
+      ? "🏆 ACHIEVEMENT UNLOCKED!"
+      : `🏆 ${data.achievements.length} ACHIEVEMENTS UNLOCKED!`;
 
-      // Create Teams Adaptive Card message
-      const cardBody = [
+    // Create Teams Adaptive Card message
+    const cardBody = [
         {
           "type": "TextBlock",
           "text": headerText,
@@ -154,33 +210,44 @@ const handler = async (req: Request): Promise<Response> => {
         ]
       };
 
-      console.log("Sending to Teams:", JSON.stringify(message, null, 2));
+      console.log("Sending achievement to webhooks:", JSON.stringify(message, null, 2));
 
-      try {
-        const response = await fetch(teamsUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(message),
+      let successCount = 0;
+      let failureCount = 0;
+
+      if (webhookConfigs && webhookConfigs.length > 0) {
+        // Send to all enabled webhook URLs
+        console.log(`Found ${webhookConfigs.length} enabled Teams webhook(s)`);
+        
+        const webhookPromises = webhookConfigs.map(async (config, index) => {
+          return sendToWebhook(config.webhook_url, message, `user-${index + 1}`);
         });
 
-        teamsSuccess = response.ok;
-        console.log("Teams response:", response.status, response.ok);
-        
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Teams error:", errorText);
+        const results = await Promise.allSettled(webhookPromises);
+        successCount = results.filter(r => r.status === 'fulfilled').length;
+        failureCount = results.filter(r => r.status === 'rejected').length;
+
+        console.log(`Achievement webhook results: ${successCount} succeeded, ${failureCount} failed`);
+      } else {
+        // Fallback to environment variable if no user configs found
+        const fallbackUrl = Deno.env.get('TEAMS_WEBHOOK_URL');
+        if (fallbackUrl) {
+          try {
+            await sendToWebhook(fallbackUrl, message, "fallback");
+            successCount = 1;
+          } catch (error) {
+            failureCount = 1;
+          }
+        } else {
+          console.log("No webhook configurations found and no fallback URL");
         }
-      } catch (error) {
-        console.error("Teams fetch error:", error);
       }
-    } else {
-      console.log("No Teams webhook URL configured");
-    }
 
     return new Response(JSON.stringify({
-      success: teamsSuccess,
-      message: teamsSuccess ? "Achievement sent to Teams!" : "No webhook configured or failed",
-      platforms_sent: teamsSuccess ? 1 : 0
+      success: successCount > 0,
+      message: successCount > 0 ? `Achievement sent to ${successCount} webhook(s)!` : "No webhooks configured or all failed",
+      platforms_sent: successCount,
+      platforms_failed: failureCount
     }), {
       status: 200,
       headers: { "Content-Type": "application/json", ...corsHeaders }
