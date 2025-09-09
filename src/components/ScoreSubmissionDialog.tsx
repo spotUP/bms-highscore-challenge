@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAchievements } from "@/hooks/useAchievements";
 import { getGameLogoUrl } from "@/lib/utils";
 import PlayerInsult from "./PlayerInsult";
+import { useTournament } from "@/contexts/TournamentContext";
 
 interface Game {
   id: string;
@@ -30,14 +31,32 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
   const [insultPlayerName, setInsultPlayerName] = useState('');
   const { toast } = useToast();
   const { checkForNewAchievements } = useAchievements();
+  const { currentTournament } = useTournament();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    console.log('ScoreSubmissionDialog: Submitting score', {
+      name: name.trim(),
+      score,
+      game,
+      currentTournament
+    });
+
     if (!name.trim() || !score || !game) {
       toast({
         title: "Error",
         description: "Please fill in all fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!currentTournament) {
+      console.error('ScoreSubmissionDialog: No current tournament selected');
+      toast({
+        title: "Error",
+        description: "No tournament selected. Please select a tournament first.",
         variant: "destructive"
       });
       return;
@@ -93,7 +112,8 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           .from('scores')
           .update({
             score: scoreValue,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            tournament_id: currentTournament?.id
           })
           .eq('id', existingScore.id);
 
@@ -148,7 +168,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
             player_name: trimmedName.toUpperCase(),
             score: scoreValue,
             game_id: game.id,
-            tournament_id: game.id // Use game_id as tournament_id for now
+            tournament_id: currentTournament?.id
           });
 
         if (error) throw error;
