@@ -64,17 +64,51 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // Load user's tournaments
+  // Load user's tournaments (or default tournament for anonymous users)
   const loadUserTournaments = async () => {
+    console.log('Loading tournaments for user:', user?.id || 'anonymous');
+
+    // For anonymous users, load the default tournament
     if (!user) {
-      setUserTournaments([]);
-      setCurrentTournament(null);
-      setCurrentUserRole(null);
-      setLoading(false);
-      return;
+      console.log('Anonymous user detected, loading default tournament');
+      try {
+        const { data: defaultTournament, error } = await supabase
+          .from('tournaments')
+          .select('*')
+          .or('name.eq.Default Arcade Tournament,slug.eq.default-arcade')
+          .eq('is_public', true)
+          .limit(1)
+          .single();
+
+        if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+          console.error('Error loading default tournament:', error);
+        }
+
+        if (defaultTournament) {
+          console.log('Found default tournament:', defaultTournament.name);
+          setUserTournaments([defaultTournament]);
+          setCurrentTournament(defaultTournament);
+          setCurrentUserRole(null); // Anonymous users have no role
+        } else {
+          console.log('No default tournament found');
+          setUserTournaments([]);
+          setCurrentTournament(null);
+          setCurrentUserRole(null);
+        }
+
+        setLoading(false);
+        return;
+      } catch (error) {
+        console.error('Error loading default tournament for anonymous user:', error);
+        setUserTournaments([]);
+        setCurrentTournament(null);
+        setCurrentUserRole(null);
+        setLoading(false);
+        return;
+      }
     }
 
-    console.log('Loading tournaments for user:', user.id);
+    console.log('Loading tournaments for authenticated user:', user.id);
 
     try {
       // Load tournaments from the new tournament system
