@@ -13,18 +13,34 @@ const segmentColors = [
   '#FF9F43', '#10AC84', '#EE5A24', '#0984E3', '#6C5CE7'
 ];
 
+// Fisher-Yates shuffle algorithm
+const shuffleArray = <T,>(array: T[]): T[] => {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+};
+
 const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
   const [isSpinning, setIsSpinning] = useState(false);
   const [currentRotation, setCurrentRotation] = useState(0);
   const [spinVelocity, setSpinVelocity] = useState(0);
+  const [shuffledNames, setShuffledNames] = useState<string[]>([]);
   const wheelRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number>();
 
-  const segmentAngle = 360 / names.length;
+  // Shuffle names when they change
+  useEffect(() => {
+    setShuffledNames(shuffleArray(names));
+  }, [names]);
+
+  const segmentAngle = 360 / shuffledNames.length;
 
   // Smooth physics-based spinning like Wheel of Names
   const spinWheel = () => {
-    if (isSpinning || names.length === 0) return;
+    if (isSpinning || shuffledNames.length === 0) return;
 
     setIsSpinning(true);
     
@@ -52,8 +68,8 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
             // Since segments are positioned clockwise from the top, we need to reverse the calculation
             // Add 1 to account for the offset (pointer points to the correct segment)
             const segmentIndex = Math.floor(normalizedRotation / segmentAngle);
-            const winnerIndex = (names.length - segmentIndex - 1) % names.length;
-            const winner = names[winnerIndex];
+            const winnerIndex = (shuffledNames.length - segmentIndex - 1) % shuffledNames.length;
+            const winner = shuffledNames[winnerIndex];
             
             console.log('Winner calculation:', {
               currentRotation: newRotation,
@@ -62,7 +78,7 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
               segmentIndex,
               winnerIndex,
               winner,
-              names
+              shuffledNames
             });
             
             setTimeout(() => {
@@ -90,7 +106,13 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
     };
   }, []);
 
-  if (names.length === 0) {
+  // Reshuffle names when clicking spin
+  const handleSpin = () => {
+    setShuffledNames(shuffleArray(names));
+    setTimeout(() => spinWheel(), 50); // Small delay to ensure shuffle is complete
+  };
+
+  if (shuffledNames.length === 0) {
     return (
       <div className="text-center text-gray-600">
         <div className="mb-6">
@@ -114,10 +136,10 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
           className="relative w-96 h-96 rounded-full border-4 border-gray-300 shadow-xl"
           style={{
             transform: `rotate(${currentRotation}deg)`,
-            background: `conic-gradient(${names.map((_, index) => {
+            background: `conic-gradient(${shuffledNames.map((_, index) => {
               const color = segmentColors[index % segmentColors.length];
-              const startAngle = (360 / names.length) * index;
-              const endAngle = (360 / names.length) * (index + 1);
+              const startAngle = (360 / shuffledNames.length) * index;
+              const endAngle = (360 / shuffledNames.length) * (index + 1);
               return `${color} ${startAngle}deg ${endAngle}deg`;
             }).join(', ')})`,
             transition: isSpinning ? 'none' : 'transform 0.2s ease-out',
@@ -132,7 +154,7 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
           </div>
 
           {/* Player names - positioned like Wheel of Names */}
-          {names.map((name, index) => {
+          {shuffledNames.map((name, index) => {
             const segmentCenterAngle = segmentAngle * index + segmentAngle / 2;
             // Position names in the middle of each segment
             const radius = 120; // Middle of the segment
@@ -177,7 +199,7 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
 
       {/* Spin Button - clean and simple like Wheel of Names */}
       <Button
-        onClick={spinWheel}
+        onClick={handleSpin}
         disabled={isSpinning}
         className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-lg px-8 py-4 rounded-lg shadow-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
       >
@@ -194,10 +216,10 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
       {/* Player Info - minimal like Wheel of Names */}
       <div className="text-center">
         <p className="text-gray-600 text-sm">
-          {names.length} entr{names.length !== 1 ? 'ies' : 'y'} ready to spin
+          {shuffledNames.length} entr{shuffledNames.length !== 1 ? 'ies' : 'y'} ready to spin
         </p>
         <p className="text-gray-500 text-xs mt-1">
-          Players with more games have higher chances
+          Names are shuffled randomly for each spin
         </p>
       </div>
     </div>

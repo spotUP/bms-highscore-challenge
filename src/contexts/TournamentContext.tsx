@@ -179,7 +179,29 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         setCurrentUserRole(membership?.role || null);
         localStorage.setItem('currentTournamentId', selectedTournament.id);
       } else {
-        console.log('No tournaments found or selected');
+        console.log('No tournaments found for user, loading default public tournament...');
+        // If authenticated user has no tournaments, load the default public tournament
+        try {
+          const { data: defaultTournament, error } = await supabase
+            .from('tournaments')
+            .select('*')
+            .or('name.eq.Default Arcade Tournament,slug.eq.default-arcade')
+            .eq('is_public', true)
+            .limit(1)
+            .single();
+
+          if (defaultTournament && !error) {
+            console.log('Found default tournament for new user:', defaultTournament.name);
+            setUserTournaments([defaultTournament]);
+            setCurrentTournament(defaultTournament);
+            setCurrentUserRole(null); // No membership role in default tournament
+            localStorage.setItem('currentTournamentId', defaultTournament.id);
+          } else {
+            console.log('No default tournament found for new user');
+          }
+        } catch (error) {
+          console.error('Error loading default tournament for new user:', error);
+        }
       }
     } catch (error: any) {
       console.error('Error loading tournaments:', error);

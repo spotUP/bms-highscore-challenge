@@ -60,8 +60,8 @@ const handler = async (req: Request): Promise<Response> => {
       const { error: roleError } = await supabase
         .from('user_roles')
         .insert({ 
-          user_id: inviteData.user.id, 
-          role: role
+          user_id: inviteData.user.id, // This is already a UUID from auth.users
+          role: role as any // Cast to avoid TypeScript issues
         });
 
       if (roleError) {
@@ -87,10 +87,24 @@ const handler = async (req: Request): Promise<Response> => {
 
   } catch (error: any) {
     console.error("Error in invite-user function:", error);
+    console.error("Error details:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+      statusCode: error.statusCode
+    });
+    
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message,
+        error: error.message || "Unknown error",
+        errorCode: error.code,
+        errorDetails: error.details,
+        hint: error.hint,
+        fullError: error.toString(),
         details: "Failed to invite user"
       }),
       {

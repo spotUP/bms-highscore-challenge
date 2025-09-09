@@ -48,6 +48,15 @@ interface Score {
   isNew?: boolean;
 }
 
+const shuffleArray = (array: string[]) => {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  };
+
 const Index = () => {
   const { user, loading, signOut, isAdmin } = useAuth();
   const { currentTournament, loading: tournamentLoading } = useTournament();
@@ -120,6 +129,10 @@ const Index = () => {
     
     return wheelNames;
   }, [gameScores]);
+
+  const getRandomizedLeaderboardNames = useMemo(() => {
+    return shuffleArray(getLeaderboardNames);
+  }, [getLeaderboardNames]);
 
   if (loading || tournamentLoading || gamesLoading) {
     return (
@@ -223,6 +236,18 @@ const Index = () => {
                 const logoUrl = getGameLogoUrl(game.logo_url) || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
                 
                 const filtered = gameScores[game.id] || [];
+                
+                // Debug logging for joust specifically
+                if (game.name.toLowerCase().includes('joust')) {
+                  console.log('🎮 Joust Debug Info:', {
+                    gameName: game.name,
+                    gameId: game.id,
+                    scoresForThisGame: filtered,
+                    allGameScores: gameScores,
+                    totalGames: games.length
+                  });
+                }
+                
                 return (
                 <section key={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full flex-1 min-w-0'}`}>
                   {/* Card containing logo, scores and QR code */}
@@ -298,7 +323,7 @@ const Index = () => {
         <SpinTheWheel
           isOpen={isSpinWheelOpen}
           onClose={() => setIsSpinWheelOpen(false)}
-          leaderboardNames={getLeaderboardNames}
+          leaderboardNames={getRandomizedLeaderboardNames}
         />
       </div>
     </div>

@@ -108,14 +108,25 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         }
         
         // Update existing score with higher score
-        const { error } = await supabase
+        const updateData = {
+          score: scoreValue,
+          updated_at: new Date().toISOString(),
+          tournament_id: currentTournament?.id
+        };
+        
+        console.log('🔄 Updating existing score:', { 
+          existingScoreId: existingScore.id,
+          updateData,
+          existingScore 
+        });
+        
+        const { data: updatedData, error } = await supabase
           .from('scores')
-          .update({
-            score: scoreValue,
-            updated_at: new Date().toISOString(),
-            tournament_id: currentTournament?.id
-          })
-          .eq('id', existingScore.id);
+          .update(updateData)
+          .eq('id', existingScore.id)
+          .select();
+
+        console.log('🔄 Update result:', { updatedData, error });
 
         if (error) throw error;
 
@@ -162,14 +173,21 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         setShowPlayerInsult(true);
       } else {
         // Insert new score for this player/game combination
-        const { error } = await supabase
+        const scoreData = {
+          player_name: trimmedName.toUpperCase(),
+          score: scoreValue,
+          game_id: game.id,
+          tournament_id: currentTournament?.id
+        };
+        
+        console.log('💾 Inserting new score:', scoreData);
+        
+        const { data: insertedData, error } = await supabase
           .from('scores')
-          .insert({
-            player_name: trimmedName.toUpperCase(),
-            score: scoreValue,
-            game_id: game.id,
-            tournament_id: currentTournament?.id
-          });
+          .insert(scoreData)
+          .select();
+
+        console.log('💾 Insert result:', { insertedData, error });
 
         if (error) throw error;
         
