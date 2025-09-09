@@ -696,26 +696,22 @@ const Admin = () => {
                     <CardTitle className={getTypographyStyle('h4')}>Tournament Statistics</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                       <div className="text-center">
                         <div className="text-2xl font-bold text-arcade-neonCyan">{games.length}</div>
                         <div className="text-sm text-gray-400">Games</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-arcade-neonCyan">{scores.length}</div>
-                        <div className="text-sm text-gray-400">Total Scores</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-arcade-neonCyan">
-                          {new Set(scores.map(s => s.player_name)).size}
-                        </div>
-                        <div className="text-sm text-gray-400">Players</div>
                       </div>
                       <div className="text-center">
                         <div className="text-2xl font-bold text-arcade-neonCyan">
                           {currentTournament.is_public ? 'Public' : 'Private'}
                         </div>
                         <div className="text-sm text-gray-400">Visibility</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-arcade-neonCyan">
+                          {currentUserRole === 'owner' ? 'Owner' : currentUserRole === 'admin' ? 'Admin' : 'Member'}
+                        </div>
+                        <div className="text-sm text-gray-400">Your Role</div>
                       </div>
                     </div>
                   </CardContent>
