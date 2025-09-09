@@ -31,9 +31,10 @@ BEGIN
   RAISE NOTICE '  Default: %', default_tournament_id;
   RAISE NOTICE '  BMS: %', bms_tournament_id;
 
-  -- Temporarily disable the achievement trigger to prevent issues during copy
-  RAISE NOTICE 'Disabling achievement trigger temporarily...';
-  ALTER TABLE public.scores DISABLE TRIGGER check_achievements_on_game_play;
+  -- Temporarily disable ALL triggers on scores table to prevent constraint violations
+  -- The achievement triggers try to insert into player_achievements without tournament_id
+  RAISE NOTICE 'Disabling all triggers on scores table temporarily...';
+  ALTER TABLE public.scores DISABLE TRIGGER ALL;
 
   -- Step 1: Copy games (if they don't already exist)
   RAISE NOTICE 'Copying games...';
@@ -130,7 +131,8 @@ BEGIN
   GET DIAGNOSTICS row_count_var = ROW_COUNT;
   RAISE NOTICE 'Copied % achievements', row_count_var;
 
-  -- Step 4: Copy player achievements manually (since trigger is disabled)
+  -- Step 4: Copy player achievements manually (since triggers are disabled)
+  -- We need to copy these manually to ensure tournament_id is set correctly
   RAISE NOTICE 'Copying player achievements manually...';
   INSERT INTO public.player_achievements (
     player_name,
@@ -203,9 +205,9 @@ BEGIN
   GET DIAGNOSTICS row_count_var = ROW_COUNT;
   RAISE NOTICE 'Copied % player stats', row_count_var;
 
-  -- Re-enable the achievement trigger
-  RAISE NOTICE 'Re-enabling achievement trigger...';
-  ALTER TABLE public.scores ENABLE TRIGGER check_achievements_on_game_play;
+  -- Re-enable ALL triggers on scores table
+  RAISE NOTICE 'Re-enabling all triggers on scores table...';
+  ALTER TABLE public.scores ENABLE TRIGGER ALL;
 
   RAISE NOTICE '✅ Score copy completed successfully!';
   RAISE NOTICE '📊 All data has been successfully copied from Default Arcade Tournament to BMS Highscore Challenge!';
