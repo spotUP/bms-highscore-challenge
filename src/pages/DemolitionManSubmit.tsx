@@ -91,6 +91,7 @@ const DemolitionManSubmit = () => {
           player_name: playerName.trim(),
           score: Number(score),
           game_id: demolitionManGameId,
+          tournament_id: demolitionManGameId, // Use game_id as tournament_id for now
         });
 
       if (error) throw error;

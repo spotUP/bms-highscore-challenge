@@ -769,6 +769,10 @@ export type Database = {
         Args: { p_enabled?: boolean; p_platform: string; p_webhook_url: string }
         Returns: undefined
       }
+      user_is_member: {
+        Args: { p_tournament_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       achievement_type:

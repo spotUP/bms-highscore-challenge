@@ -271,7 +271,8 @@ const ScoreManager = () => {
             .insert({
               player_name: formData.player_name.toUpperCase(),
               score: scoreValue,
-              game_id: formData.game_id
+              game_id: formData.game_id,
+              tournament_id: formData.game_id // Use game_id as tournament_id for now
             });
 
           if (error) throw error;

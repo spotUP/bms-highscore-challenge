@@ -147,7 +147,8 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           .insert({
             player_name: trimmedName.toUpperCase(),
             score: scoreValue,
-            game_id: game.id
+            game_id: game.id,
+            tournament_id: game.id // Use game_id as tournament_id for now
           });
 
         if (error) throw error;
