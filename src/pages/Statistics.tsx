@@ -118,13 +118,13 @@ const Statistics = () => {
   const getRankIcon = (rank: number) => {
     switch (rank) {
       case 1:
-        return <Trophy className="w-5 h-5 text-yellow-400" />;
+        return <Trophy className="w-12 h-12 text-yellow-400" />;
       case 2:
-        return <Medal className="w-5 h-5 text-gray-300" />;
+        return <Medal className="w-12 h-12 text-gray-300" />;
       case 3:
-        return <Award className="w-5 h-5 text-orange-600" />;
+        return <Award className="w-12 h-12 text-orange-600" />;
       default:
-        return <span className="w-5 h-5 flex items-center justify-center text-sm font-bold text-white">#{rank}</span>;
+        return <span className="w-12 h-12 flex items-center justify-center text-3xl font-bold text-white">#{rank}</span>;
     }
   };
 
@@ -276,7 +276,7 @@ const Statistics = () => {
                           <div className="flex items-center gap-3">
                             {getRankIcon(player.final_rank)}
                             <div>
-                              <p className="font-semibold text-white text-lg">{player.player_name}</p>
+                              <p className="font-semibold text-white text-2xl">{player.player_name}</p>
                               <p className="text-sm text-gray-400">{player.games_played} games</p>
                             </div>
                           </div>

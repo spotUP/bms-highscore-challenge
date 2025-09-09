@@ -1,69 +1,125 @@
-import React, { useState, useCallback } from 'react';
-import { getGameLogoUrl } from '@/lib/utils';
+import React, { useState, useEffect } from 'react';
+import { usePerformanceMode } from '@/hooks/usePerformanceMode';
 
 interface OptimizedImageProps {
-  src: string | null;
+  src: string;
   alt: string;
   className?: string;
-  fallbackIcon?: string;
+  fallbackText?: string;
+  onLoad?: () => void;
   onError?: () => void;
 }
 
-const OptimizedImage: React.FC<OptimizedImageProps> = React.memo(({
+const OptimizedImage: React.FC<OptimizedImageProps> = ({
   src,
   alt,
   className = '',
-  fallbackIcon = '🎮',
-  onError
+  fallbackText,
+  onLoad,
+  onError,
 }) => {
-  const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const { isRaspberryPi, isLowEnd } = usePerformanceMode();
 
-  const handleError = useCallback(() => {
-    setImageError(true);
-    onError?.();
-  }, [onError]);
+  useEffect(() => {
+    // Preload image with proper error handling
+    const img = new Image();
+    
+    img.onload = () => {
+      setImageLoaded(true);
+      onLoad?.();
+    };
+    
+    img.onerror = () => {
+      setImageError(true);
+      onError?.();
+    };
+    
+    img.src = src;
+    
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+    };
+  }, [src, onLoad, onError]);
 
-  const handleLoad = useCallback(() => {
-    setImageLoaded(true);
-  }, []);
+  // Determine image rendering strategy based on device
+  const getImageProps = () => {
+    const baseProps = {
+      alt,
+      className,
+      loading: 'lazy' as const,
+      decoding: 'async' as const,
+    };
 
-  // If no src or image failed to load, show fallback
-  if (!src || imageError) {
+    if (isRaspberryPi) {
+      return {
+        ...baseProps,
+        // Optimize for Pi's GPU capabilities
+        style: {
+          imageRendering: '-webkit-optimize-contrast',
+          imageRendering: 'optimize-contrast',
+          // Force hardware acceleration
+          transform: 'translateZ(0)',
+          willChange: 'auto',
+        },
+      };
+    }
+
+    if (isLowEnd) {
+      return {
+        ...baseProps,
+        style: {
+          // Disable expensive image filters
+          filter: 'none',
+        },
+      };
+    }
+
+    return baseProps;
+  };
+
+  if (imageError && fallbackText) {
     return (
-      <div 
-        className={`flex items-center justify-center bg-gray-800 border border-gray-600 rounded-lg ${className}`}
-        title={alt}
-      >
-        <span className="text-2xl opacity-60">{fallbackIcon}</span>
+      <div className={className} style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,0,0,0.3)',
+        borderRadius: '8px',
+        padding: '16px',
+        minWidth: '200px',
+      }}>
+        <span style={{ color: 'white', fontWeight: 'bold', textAlign: 'center' }}>
+          {fallbackText}
+        </span>
       </div>
     );
   }
 
-  const optimizedSrc = getGameLogoUrl(src);
+  if (!imageLoaded) {
+    return (
+      <div className={className} style={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        backgroundColor: 'rgba(0,0,0,0.1)',
+        borderRadius: '8px',
+      }}>
+        <div style={{ 
+          width: '20px', 
+          height: '20px', 
+          border: '2px solid #ccc',
+          borderTop: '2px solid #666',
+          borderRadius: '50%',
+          animation: isLowEnd ? 'none' : 'spin 1s linear infinite',
+        }} />
+      </div>
+    );
+  }
 
-  return (
-    <div className={`relative ${className}`}>
-      {!imageLoaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-800 border border-gray-600 rounded-lg animate-pulse">
-          <span className="text-2xl opacity-60">{fallbackIcon}</span>
-        </div>
-      )}
-      <img
-        src={optimizedSrc || undefined}
-        alt={alt}
-        className={`w-full h-full object-cover rounded-lg transition-opacity duration-300 ${
-          imageLoaded ? 'opacity-100' : 'opacity-0'
-        }`}
-        onError={handleError}
-        onLoad={handleLoad}
-        loading="lazy"
-        decoding="async"
-      />
-    </div>
-  );
-});
-
-OptimizedImage.displayName = 'OptimizedImage';
+  return <img src={src} {...getImageProps()} />;
+};
 
 export default OptimizedImage;

@@ -1,0 +1,115 @@
+/* Performance optimizations for low-end devices like Raspberry Pi */
+
+/* Disable expensive animations on low-end devices */
+.performance-mode {
+  /* Disable all animations and transitions */
+  *, *::before, *::after {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+  }
+  
+  /* Disable expensive CSS effects */
+  .backdrop-blur-sm {
+    backdrop-filter: none !important;
+  }
+  
+  .animate-glow,
+  .animate-gold-shine,
+  .animate-silver-shine,
+  .animate-bronze-shine {
+    animation: none !important;
+  }
+  
+  /* Static colorful text for performance mode - reliable and visible */
+  .animated-gradient {
+    /* Remove all gradient effects */
+    background: none !important;
+    background-clip: unset !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: #00ffff !important; /* Cyan color for static appeal */
+    color: #00ffff !important;
+    animation: none !important;
+    
+    /* Add subtle text shadow for better visibility and depth */
+    text-shadow: 0 0 3px rgba(0, 255, 255, 0.3), 0 1px 1px rgba(0, 0, 0, 0.8) !important;
+  }
+  
+  /* Alternate colors for different elements to add variety */
+  .animated-gradient:nth-child(even) {
+    -webkit-text-fill-color: #ff00ff !important; /* Magenta for even elements */
+    color: #ff00ff !important;
+    text-shadow: 0 0 3px rgba(255, 0, 255, 0.3), 0 1px 1px rgba(0, 0, 0, 0.8) !important;
+  }
+  
+  .animated-gradient:nth-child(3n) {
+    -webkit-text-fill-color: #ffff00 !important; /* Yellow for every 3rd element */
+    color: #ffff00 !important;
+    text-shadow: 0 0 3px rgba(255, 255, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.8) !important;
+  }
+  
+  /* Ensure all text elements have proper contrast in performance mode */
+  .font-arcade {
+    color: #ffffff !important;
+    background: transparent !important;
+  }
+  
+  /* Fix any other text color issues */
+  .text-white,
+  .text-gray-100,
+  .text-gray-200,
+  .text-gray-300 {
+    color: #ffffff !important;
+  }
+  
+  /* Disable transform effects that can cause repaints */
+  .hover\\:scale-102:hover,
+  .hover\\:scale-\\[1\\.02\\]:hover {
+    transform: none !important;
+  }
+  
+  /* Optimize shadows */
+  .shadow-lg,
+  .shadow-xl {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3) !important;
+  }
+}
+
+/* Raspberry Pi specific optimizations */
+.raspberry-pi-mode {
+  /* Force GPU acceleration for better performance on ARM */
+  .leaderboard-entry,
+  .game-card,
+  .overall-leaderboard {
+    transform: translateZ(0);
+    will-change: auto;
+  }
+  
+  /* Reduce font smoothing for better rendering on lower resolution displays */
+  * {
+    -webkit-font-smoothing: auto;
+    -moz-osx-font-smoothing: auto;
+  }
+  
+  /* Optimize for 720p/1080p displays common on Pi setups */
+  .game-logo {
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: optimize-contrast;
+  }
+}
+
+/* Disable complex CSS features that are slow on ARM */
+@media (max-width: 1920px) and (-webkit-min-device-pixel-ratio: 1) {
+  .low-end-device {
+    /* Disable complex filters */
+    filter: none !important;
+    
+    /* Simplify backgrounds */
+    background-attachment: scroll !important;
+    
+    /* Disable 3D transforms */
+    transform-style: flat !important;
+    perspective: none !important;
+  }
+}

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
+import PerformanceModeToggle from "@/components/PerformanceModeToggle";
 
 interface MobileMenuProps {
   onSpinWheel: () => void;
@@ -48,6 +49,27 @@ const MobileMenu = ({ onSpinWheel }: MobileMenuProps) => {
                 >
                   Spin the Wheel
                 </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => handleNavigation(() => navigate('/statistics'))}
+                  className="w-full justify-start text-left"
+                >
+                  Statistics
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => handleNavigation(() => navigate('/achievements'))}
+                  className="w-full justify-start text-left"
+                >
+                  Achievements
+                </Button>
+                <div className="py-1">
+                  <PerformanceModeToggle 
+                    variant="ghost" 
+                    className="w-full justify-start text-left"
+                    showText={true}
+                  />
+                </div>
                 {isAdmin && (
                   <Button
                     variant="ghost"

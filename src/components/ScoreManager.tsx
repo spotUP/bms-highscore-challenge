@@ -67,7 +67,7 @@ const ScoreManager = () => {
   // Load scores and games
   const loadData = async () => {
     try {
-      // Load games
+      // Load games (excluding Demolition Man which has its own manager)
       const { data: gamesData, error: gamesError } = await supabase
         .from('games')
         .select('id, name')
@@ -87,7 +87,7 @@ const ScoreManager = () => {
       if (competitionsError) throw competitionsError;
       setCompetitions(competitionsData || []);
 
-      // Load current scores with game names
+      // Load current scores with game names (excluding Demolition Man)
       const { data: scoresData, error: scoresError } = await supabase
         .from('scores')
         .select(`
@@ -364,7 +364,8 @@ const ScoreManager = () => {
       <CardHeader>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 flex-1">
-            <CardTitle className="text-white">Scores Management</CardTitle>
+            <CardTitle className="text-white">Challenge Scores Management</CardTitle>
+            <span className="text-sm text-gray-400">Current competition and historical scores</span>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
               <Select value={selectedCompetition} onValueChange={setSelectedCompetition}>
                 <SelectTrigger className="bg-black/50 border-white/20 text-white w-48">
@@ -481,11 +482,11 @@ const ScoreManager = () => {
                 {scores.map((score, index) => (
                   <TableRow key={score.id} className="border-white/20">
                     <TableCell 
-                      className="font-arcade font-bold text-lg animated-gradient"
+                      className="font-arcade font-bold text-2xl animated-gradient"
                       style={{ animationDelay: `${index * 0.1}s` }}
                     >{score.player_name}</TableCell>
                     <TableCell 
-                      className="font-bold font-arcade animated-gradient"
+                      className="font-bold font-arcade text-xl animated-gradient"
                       style={{ animationDelay: `${index * 0.1 + 0.2}s` }}
                     >
                       {formatScore(score.score)}
@@ -527,11 +528,11 @@ const ScoreManager = () => {
                 {competitionScores.map((score, index) => (
                   <TableRow key={score.id} className="border-white/20">
                     <TableCell 
-                      className="font-arcade font-bold text-lg animated-gradient"
+                      className="font-arcade font-bold text-2xl animated-gradient"
                       style={{ animationDelay: `${index * 0.1}s` }}
                     >{score.player_name}</TableCell>
                     <TableCell 
-                      className="font-bold font-arcade animated-gradient"
+                      className="font-bold font-arcade text-xl animated-gradient"
                       style={{ animationDelay: `${index * 0.1 + 0.2}s` }}
                     >
                       {formatScore(score.score)}

@@ -276,9 +276,9 @@ const MobileEntry = () => {
         onComplete={() => setShowPlayerInsult(false)} 
       />
       <div {...pageLayout}>
-        <PageContainer className="max-w-md mx-auto space-y-6 pt-8">
+        <PageContainer className="max-w-md mx-auto space-y-3 pt-8">
           <div className="text-center">
-            <h1 className={getTypographyStyle('h2') + " mb-2"}>
+            <h1 className={getTypographyStyle('h2') + " mb-1"}>
               Submit Score
             </h1>
           <div className="flex justify-center">
@@ -286,10 +286,10 @@ const MobileEntry = () => {
               <img 
                 src={logoUrl} 
                 alt={game.name} 
-                className="h-12 w-auto object-contain"
+                className="h-24 w-auto object-contain"
               />
             ) : (
-              <div className="h-12 flex items-center justify-center bg-black/30 rounded-lg px-4">
+              <div className="h-24 flex items-center justify-center bg-black/30 rounded-lg px-4">
                 <span className="text-white font-bold">{game.name}</span>
               </div>
             )}

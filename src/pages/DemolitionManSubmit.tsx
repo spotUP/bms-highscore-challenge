@@ -16,28 +16,42 @@ const DemolitionManSubmit = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [demolitionManGameId, setDemolitionManGameId] = useState<string | null>(null);
 
-  // Find Demolition Man game ID
+  // Find or create Demolition Man game ID
   useEffect(() => {
-    const findDemolitionManGame = async () => {
+    const findOrCreateDemolitionManGame = async () => {
       try {
+        // First try to find existing game
         const { data: games, error } = await supabase
           .from('games')
           .select('id, name')
           .eq('name', 'Demolition Man')
           .single();
 
-        if (error) {
-          console.log('Demolition Man game not found in database yet');
+        if (games && !error) {
+          setDemolitionManGameId(games.id);
           return;
         }
 
-        setDemolitionManGameId(games.id);
+        // If not found, try to call the function to ensure it exists
+        const { data: gameId, error: createError } = await supabase
+          .rpc('ensure_demolition_man_game');
+
+        if (createError) {
+          console.error('Error ensuring Demolition Man game exists:', createError);
+          console.log('The ensure_demolition_man_game function may not be deployed yet');
+          // Still set to null so user gets helpful error message
+          setDemolitionManGameId(null);
+          return;
+        }
+
+        setDemolitionManGameId(gameId);
+        console.log('Demolition Man game ensured in database with ID:', gameId);
       } catch (error) {
-        console.error('Error finding Demolition Man game:', error);
+        console.error('Error with Demolition Man game setup:', error);
       }
     };
 
-    findDemolitionManGame();
+    findOrCreateDemolitionManGame();
   }, []);
 
   const handleSubmitScore = async () => {
@@ -61,8 +75,8 @@ const DemolitionManSubmit = () => {
 
     if (!demolitionManGameId) {
       toast({
-        title: "Error",
-        description: "Demolition Man game not found. Please add it to the database first.",
+        title: "⚠️ Setup Required",
+        description: "Demolition Man game needs to be added to the database first. Please contact an admin.",
         variant: "destructive",
       });
       return;

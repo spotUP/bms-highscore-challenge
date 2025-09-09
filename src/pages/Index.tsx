@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { supabase } from "@/integrations/supabase/client";
+import { useGameData } from "@/hooks/useGameData";
 import { getGameLogoUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import OverallLeaderboard from "@/components/OverallLeaderboard";
 import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import SpinTheWheel from "@/components/SpinTheWheel";
 import MobileMenu from "@/components/MobileMenu";
+import PerformanceModeToggle from "@/components/PerformanceModeToggle";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -48,137 +49,61 @@ const Index = () => {
   const { user, loading, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const [games, setGames] = useState<Game[]>([]);
-  const [gamesLoading, setGamesLoading] = useState(true);
-  const [scores, setScores] = useState<Score[]>([]);
-  const [selectedGameForSubmission, setSelectedGameForSubmission] = useState<Game | null>(null);
+  const { activeGames: games, gameScores, loading: gamesLoading, refetch } = useGameData();
+  const [selectedGameForSubmission, setSelectedGameForSubmission] = useState<any>(null);
   const [isSubmissionDialogOpen, setIsSubmissionDialogOpen] = useState(false);
   const [isSpinWheelOpen, setIsSpinWheelOpen] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Load games from database
-  const loadGames = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('games')
-        .select('*')
-        .eq('is_active', true)
-        .eq('include_in_challenge', true)
-        .order('name', { ascending: true });
-
-      if (error) throw error;
-      setGames(data || []);
-    } catch (error) {
-      console.error('Error loading games:', error);
-      // Fallback to hardcoded games if database fails
-      setGames([
-        { id: "pacman", name: "Pac-Man", logo_url: null, is_active: true },
-        { id: "spaceinvaders", name: "Space Invaders", logo_url: null, is_active: true },
-        { id: "tetris", name: "Tetris", logo_url: null, is_active: true },
-        { id: "donkeykong", name: "Donkey Kong", logo_url: null, is_active: true },
-      ]);
-    } finally {
-      setGamesLoading(false);
-    }
-  };
-
-  // Load scores from database
-  const loadScores = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('scores')
-        .select('*')
-        .order('score', { ascending: false });
-
-      if (error) throw error;
-      setScores(data || []);
-    } catch (error) {
-      console.error('Error loading scores:', error);
-    }
-  };
-
-  useEffect(() => {
-    loadGames();
-    loadScores();
-    
-    // Set up real-time subscription for scores
-    const scoresChannel = supabase
-      .channel('scores-changes')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'scores' 
-        }, 
-        (payload) => {
-          console.log('Index: Score change detected:', payload.eventType, payload);
-          loadScores(); // Reload scores when changes occur
-        }
-      )
-      .subscribe((status) => {
-        console.log('Index: Scores subscription status:', status);
-        if (status === 'SUBSCRIBED') {
-          console.log('Index: Successfully subscribed to score changes');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('Index: Error subscribing to score changes');
-        }
-      });
-
-    // Set up real-time subscription for games
-    const gamesChannel = supabase
-      .channel('games-changes')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'games' 
-        }, 
-        (payload) => {
-          console.log('Index: Game change detected:', payload.eventType, payload);
-          loadGames(); // Reload games when changes occur
-        }
-      )
-      .subscribe((status) => {
-        console.log('Index: Games subscription status:', status);
-        if (status === 'SUBSCRIBED') {
-          console.log('Index: Successfully subscribed to game changes');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('Index: Error subscribing to game changes');
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(scoresChannel);
-      supabase.removeChannel(gamesChannel);
-    };
-  }, []);
-
-  // Clock update effect
+  // Clock update effect - Optimized to reduce re-renders
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentTime(new Date());
+      const now = new Date();
+      setCurrentTime(prevTime => {
+        // Only update if the time display actually changed (seconds)
+        const prevDisplay = prevTime.toLocaleTimeString('en-GB', { 
+          hour12: false, 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          second: '2-digit' 
+        });
+        const newDisplay = now.toLocaleTimeString('en-GB', { 
+          hour12: false, 
+          hour: '2-digit', 
+          minute: '2-digit', 
+          second: '2-digit' 
+        });
+        return prevDisplay !== newDisplay ? now : prevTime;
+      });
     }, 1000);
 
     return () => clearInterval(timer);
   }, []);
 
-  const handleGameLogoClick = (game: Game) => {
+  const handleGameLogoClick = useCallback((game: Game) => {
     setSelectedGameForSubmission(game);
     setIsSubmissionDialogOpen(true);
-  };
+  }, []);
 
-  const handleScoreSubmitted = () => {
-    loadScores(); // Reload scores after submission
-  };
+  const handleScoreSubmitted = useCallback(() => {
+    refetch(); // Reload all data after submission
+  }, [refetch]);
 
   // Get player names for the wheel - each player appears once per game they have scores for
-  const getLeaderboardNames = () => {
+  const getLeaderboardNames = useMemo(() => {
     const playerGameCounts = new Map<string, number>();
     
     // Count how many different games each player has scores for
-    scores.forEach(score => {
-      const currentCount = playerGameCounts.get(score.player_name) || 0;
-      playerGameCounts.set(score.player_name, currentCount + 1);
+    Object.values(gameScores).forEach(gameScoreList => {
+      const playersInGame = new Set();
+      gameScoreList.forEach(score => {
+        playersInGame.add(score.player_name);
+      });
+      
+      playersInGame.forEach(playerName => {
+        const currentCount = playerGameCounts.get(playerName as string) || 0;
+        playerGameCounts.set(playerName as string, currentCount + 1);
+      });
     });
     
     // Create array where each player appears once per game they have scores for
@@ -190,7 +115,7 @@ const Index = () => {
     });
     
     return wheelNames;
-  };
+  }, [gameScores]);
 
   if (loading || gamesLoading) {
     return (
@@ -202,71 +127,77 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen text-white p-4 md:p-8 relative z-10"
+    <div className="min-h-screen text-white p-3 md:p-4 relative z-10"
          style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-      <div className="w-full space-y-8">
-        <div className="flex justify-between items-center">
-          <h1 className="text-4xl md:text-6xl font-bold animated-gradient leading-tight py-2">
+      <div className="w-full space-y-4">
+        <div className="flex items-center">
+          {/* Left aligned title */}
+          <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight">
             Arcade High Scores
           </h1>
           
-          {/* Desktop Menu */}
-          <div className="hidden md:flex gap-4 items-center">
-            {/* Digital Clock */}
-            <div className="font-arcade font-bold text-lg animated-gradient">
-              {currentTime.toLocaleTimeString('en-GB', { 
-                hour12: false, 
-                hour: '2-digit', 
-                minute: '2-digit', 
-                second: '2-digit' 
-              })}
+          {/* Right aligned navigation */}
+          <div className="ml-auto flex items-center">
+            {/* Desktop Menu */}
+            <div className="hidden md:flex gap-4 items-center">
+              {/* Digital Clock */}
+              <div className="font-arcade font-bold text-lg animated-gradient">
+                {currentTime.toLocaleTimeString('en-GB', { 
+                  hour12: false, 
+                  hour: '2-digit', 
+                  minute: '2-digit', 
+                  second: '2-digit' 
+                })}
+              </div>
+              
+              {user ? (
+                <>
+                  <span className="text-gray-300">Welcome, {user.email}</span>
+                  <Button variant="outline" onClick={() => setIsSpinWheelOpen(true)}>
+                    Spin the Wheel
+                  </Button>
+                  <Button variant="outline" onClick={() => navigate('/statistics')}>
+                    Statistics
+                  </Button>
+                  <Button variant="outline" onClick={() => navigate('/achievements')}>
+                    Achievements
+                  </Button>
+                  <PerformanceModeToggle />
+                  {isAdmin && (
+                    <Button variant="outline" onClick={() => navigate('/admin')}>
+                      Admin Panel
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={signOut}>
+                    Sign Out
+                  </Button>
+                </>
+              ) : (
+                <Button onClick={() => navigate('/auth')} variant="outline">
+                  Sign In
+                </Button>
+              )}
             </div>
             
-            {user ? (
-              <>
-                <span className="text-gray-300">Welcome, {user.email}</span>
-                <Button variant="outline" onClick={() => setIsSpinWheelOpen(true)}>
-                  Spin the Wheel
-                </Button>
-                <Button variant="outline" onClick={() => navigate('/statistics')}>
-                  Statistics
-                </Button>
-                {isAdmin && (
-                  <Button variant="outline" onClick={() => navigate('/admin')}>
-                    Admin Panel
-                  </Button>
-                )}
-                <Button variant="ghost" onClick={signOut}>
-                  Sign Out
-                </Button>
-              </>
-            ) : (
-              <Button onClick={() => navigate('/auth')} variant="outline">
-                Sign In
-              </Button>
-            )}
+            {/* Mobile Menu */}
+            <MobileMenu onSpinWheel={() => setIsSpinWheelOpen(true)} />
           </div>
-          
-          {/* Mobile Menu */}
-          <MobileMenu onSpinWheel={() => setIsSpinWheelOpen(true)} />
         </div>
         
-        <div className={`grid gap-4 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-12rem)] grid-cols-1 lg:grid-cols-6'}`}>
+        <div className={`grid gap-4 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-8rem)] grid-cols-1 lg:grid-cols-5'}`}>
           {/* Left column - Overall Leaderboard (smaller) */}
           <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-1'}`}>
             <OverallLeaderboard />
           </div>
           
-          {/* Right column - Game content (much more space) */}
-          <div className={`${isMobile ? 'order-1' : 'h-full lg:col-span-5'}`}>
+          {/* Right column - Game content (4 games instead of 5) */}
+          <div className={`${isMobile ? 'order-1' : 'h-full lg:col-span-4'}`}>
             <div className={`${isMobile ? 'flex flex-col space-y-6' : 'flex gap-3 h-full'}`}>
-              {games.map((game) => {
+              {games.slice(0, 4).map((game) => {
                 // Get logo URL - convert local paths to Supabase Storage URLs
                 const logoUrl = getGameLogoUrl(game.logo_url) || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
                 
-                const filtered = scores
-                  .filter((score) => score.game_id === game.id)
-                  .sort((a, b) => b.score - a.score);
+                const filtered = gameScores[game.id] || [];
                 return (
                 <section key={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full flex-1 min-w-0'}`}>
                   {/* Card containing logo, scores and QR code */}
@@ -275,7 +206,7 @@ const Index = () => {
                     onClick={() => handleGameLogoClick(game)}
                     title={`Click to submit score for ${game.name}`}
                   >
-                      <CardHeader className="pb-3">
+                      <CardHeader className="pb-1 pt-2">
                         {/* Game logo inside card header */}
                         <div className="flex justify-center">
                           <div className="transition-transform duration-200">
@@ -283,17 +214,17 @@ const Index = () => {
                               <img 
                                 src={logoUrl} 
                                 alt={game.name} 
-                                className="h-16 md:h-20 w-auto object-contain max-w-full"
+                                className="h-32 md:h-40 w-auto object-contain max-w-full"
                               />
                             ) : (
-                              <div className="h-16 md:h-20 flex items-center justify-center bg-black/30 rounded-lg px-4 min-w-[200px]">
-                                <span className="text-white font-bold text-center">{game.name}</span>
+                              <div className="h-32 md:h-40 flex items-center justify-center bg-black/30 rounded-lg px-4 min-w-[300px]">
+                                <span className="text-white font-bold text-center text-xl">{game.name}</span>
                               </div>
                             )}
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="flex-1 flex flex-col">
+                      <CardContent className="flex-1 flex flex-col pt-1">
                         {/* Scores section - scrollable if needed */}
                         <div className="flex-1 overflow-y-auto mb-4">
                           <div className="space-y-2">
@@ -303,7 +234,7 @@ const Index = () => {
                                 rank={index + 1}
                                 name={score.player_name}
                                 score={score.score}
-                                isNewScore={score.isNew}
+                                isNewScore={false}
                               />
                             ))}
                             {filtered.length === 0 && (
@@ -342,7 +273,7 @@ const Index = () => {
         <SpinTheWheel
           isOpen={isSpinWheelOpen}
           onClose={() => setIsSpinWheelOpen(false)}
-          leaderboardNames={getLeaderboardNames()}
+          leaderboardNames={getLeaderboardNames}
         />
       </div>
     </div>

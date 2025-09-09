@@ -260,16 +260,16 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
             Enter your player name and score for {game.name}. Your score will be added to the leaderboard.
           </DialogDescription>
           {/* Game logo header */}
-          <div className="flex justify-center mb-4">
+          <div className="flex justify-center mb-1">
             <div className="transition-transform duration-200">
               {getGameLogoUrl(game.logo_url) ? (
                 <img 
                   src={getGameLogoUrl(game.logo_url)!} 
                   alt={game.name} 
-                  className="h-16 w-auto object-contain"
+                  className="h-32 w-auto object-contain"
                 />
               ) : (
-                <div className="h-16 flex items-center justify-center bg-black/30 rounded-lg px-4 transition-colors">
+                <div className="h-32 flex items-center justify-center bg-black/30 rounded-lg px-4 transition-colors">
                   <span className="text-white font-bold text-lg">{game.name}</span>
                 </div>
               )}

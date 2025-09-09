@@ -3,10 +3,13 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AchievementProvider } from "@/contexts/AchievementContext";
+import HyperspaceEffect from "@/components/HyperspaceEffect";
+import PerformanceWrapper from "@/components/PerformanceWrapper";
 import Index from "./pages/Index";
+import "./styles/performance.css";
 
 // Lazy load heavy components
 const MobileEntry = lazy(() => import("./pages/MobileEntry"));
@@ -14,6 +17,7 @@ const Auth = lazy(() => import("./pages/Auth"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Statistics = lazy(() => import("./pages/Statistics"));
 const PlayerDashboard = lazy(() => import("./pages/PlayerDashboard"));
+const Achievements = lazy(() => import("./pages/Achievements"));
 const DemolitionManSubmit = lazy(() => import("./pages/DemolitionManSubmit"));
 
 const queryClient = new QueryClient();
@@ -30,28 +34,32 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <AchievementProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter
-            future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true,
-            }}
-          >
-            <Suspense fallback={<LoadingSpinner />}>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/mobile-entry" element={<MobileEntry />} />
-                <Route path="/auth" element={<Auth />} />
-                <Route path="/admin" element={<Admin />} />
-                <Route path="/statistics" element={<Statistics />} />
-                <Route path="/player" element={<PlayerDashboard />} />
-                <Route path="/demolition-man-submit" element={<DemolitionManSubmit />} />
-              </Routes>
-            </Suspense>
-          </BrowserRouter>
-        </TooltipProvider>
+        <PerformanceWrapper>
+          <TooltipProvider>
+            <HyperspaceEffect />
+            <Toaster />
+            <Sonner />
+            <BrowserRouter
+              future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true,
+              }}
+            >
+              <Suspense fallback={<LoadingSpinner />}>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/mobile-entry" element={<MobileEntry />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/admin" element={<Admin />} />
+                  <Route path="/statistics" element={<Statistics />} />
+                  <Route path="/player" element={<PlayerDashboard />} />
+                  <Route path="/achievements" element={<Achievements />} />
+                  <Route path="/demolition-man-submit" element={<DemolitionManSubmit />} />
+                </Routes>
+              </Suspense>
+            </BrowserRouter>
+          </TooltipProvider>
+        </PerformanceWrapper>
       </AchievementProvider>
     </AuthProvider>
   </QueryClientProvider>
