@@ -6,6 +6,7 @@ DECLARE
   default_tournament_id UUID;
   bms_tournament_id UUID;
   row_count_var INTEGER;
+  trigger_row record;
 BEGIN
   -- Find tournament IDs automatically
   SELECT id INTO default_tournament_id
@@ -38,13 +39,13 @@ BEGIN
   -- Disable specific user triggers that cause issues during bulk operations
   -- List all triggers first for debugging
   RAISE NOTICE 'Available triggers on scores table:';
-  FOR trigger_rec IN
+  FOR trigger_row IN
     SELECT trigger_name
     FROM information_schema.triggers
     WHERE event_object_table = 'scores'
     AND trigger_name NOT LIKE 'RI_%'  -- Exclude system referential integrity triggers
   LOOP
-    RAISE NOTICE '  - %', trigger_rec.trigger_name;
+    RAISE NOTICE '  - %', trigger_row.trigger_name;
   END LOOP;
 
   -- Disable achievement-related triggers
@@ -67,15 +68,15 @@ BEGIN
   END IF;
 
   -- Try to disable any other achievement-related triggers
-  FOR trigger_rec IN
+  FOR trigger_row IN
     SELECT trigger_name
     FROM information_schema.triggers
     WHERE event_object_table = 'scores'
     AND trigger_name LIKE '%achievement%'
     AND trigger_name NOT LIKE 'RI_%'
   LOOP
-    RAISE NOTICE 'Disabling additional achievement trigger: %', trigger_rec.trigger_name;
-    EXECUTE 'ALTER TABLE public.scores DISABLE TRIGGER ' || trigger_rec.trigger_name;
+    RAISE NOTICE 'Disabling additional achievement trigger: %', trigger_row.trigger_name;
+    EXECUTE 'ALTER TABLE public.scores DISABLE TRIGGER ' || trigger_row.trigger_name;
   END LOOP;
 
   -- Step 1: Copy games (if they don't already exist)
@@ -269,15 +270,15 @@ BEGIN
   END IF;
 
   -- Re-enable any other achievement-related triggers we disabled
-  FOR trigger_rec IN
+  FOR trigger_row IN
     SELECT trigger_name
     FROM information_schema.triggers
     WHERE event_object_table = 'scores'
     AND trigger_name LIKE '%achievement%'
     AND trigger_name NOT LIKE 'RI_%'
   LOOP
-    RAISE NOTICE 'Re-enabling achievement trigger: %', trigger_rec.trigger_name;
-    EXECUTE 'ALTER TABLE public.scores ENABLE TRIGGER ' || trigger_rec.trigger_name;
+    RAISE NOTICE 'Re-enabling achievement trigger: %', trigger_row.trigger_name;
+    EXECUTE 'ALTER TABLE public.scores ENABLE TRIGGER ' || trigger_row.trigger_name;
   END LOOP;
 
   RAISE NOTICE '✅ Score copy completed successfully!';
