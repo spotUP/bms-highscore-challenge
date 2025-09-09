@@ -28,7 +28,6 @@ const TournamentSelector = () => {
     description: '',
     slug: '',
     is_public: false,
-    theme_color: '#1a1a2e'
   });
   const [joinSlug, setJoinSlug] = useState('');
 
@@ -41,7 +40,6 @@ const TournamentSelector = () => {
       description: createForm.description.trim() || undefined,
       slug: createForm.slug.trim().toLowerCase(),
       is_public: createForm.is_public,
-      theme_color: createForm.theme_color
     });
 
     if (success) {
@@ -50,7 +48,6 @@ const TournamentSelector = () => {
         description: '',
         slug: '',
         is_public: false,
-        theme_color: '#1a1a2e'
       });
       setIsDialogOpen(false);
     }

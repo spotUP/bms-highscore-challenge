@@ -19,7 +19,6 @@ interface PublicTournament {
   created_at: string;
   member_count?: number;
   // Optional properties that may not exist in database
-  theme_color?: string;
   logo_url?: string | null;
 }
 
@@ -46,7 +45,6 @@ const TournamentLanding = () => {
       const tournaments = data?.map(tournament => ({
         ...tournament,
         member_count: 0, // TODO: Get member count separately if needed
-        theme_color: '#1a1a2e', // Default theme color
         logo_url: null // Default logo url
       })) || [];
 

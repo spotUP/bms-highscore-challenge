@@ -49,10 +49,9 @@ interface TournamentContextType {
 
 interface CreateTournamentData {
   name: string;
-  description?: string;
   slug: string;
+  description?: string;
   is_public?: boolean;
-  theme_color?: string;
 }
 
 const TournamentContext = createContext<TournamentContextType | undefined>(undefined);
@@ -227,9 +226,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         .from('tournaments')
         .insert({
           ...data,
-          owner_id: user.id,
+          created_by: user.id,
           is_public: data.is_public ?? false,
-          theme_color: data.theme_color ?? '#1a1a2e',
         })
         .select()
         .single();
