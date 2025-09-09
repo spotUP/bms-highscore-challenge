@@ -31,6 +31,10 @@ BEGIN
   RAISE NOTICE '  Default: %', default_tournament_id;
   RAISE NOTICE '  BMS: %', bms_tournament_id;
 
+  -- Temporarily disable the achievement trigger to prevent issues during copy
+  RAISE NOTICE 'Disabling achievement trigger temporarily...';
+  ALTER TABLE public.scores DISABLE TRIGGER check_achievements_on_game_play;
+
   -- Step 1: Copy games (if they don't already exist)
   RAISE NOTICE 'Copying games...';
   INSERT INTO public.games (
@@ -126,8 +130,8 @@ BEGIN
   GET DIAGNOSTICS row_count_var = ROW_COUNT;
   RAISE NOTICE 'Copied % achievements', row_count_var;
 
-  -- Step 4: Copy player achievements
-  RAISE NOTICE 'Copying player achievements...';
+  -- Step 4: Copy player achievements manually (since trigger is disabled)
+  RAISE NOTICE 'Copying player achievements manually...';
   INSERT INTO public.player_achievements (
     player_name,
     achievement_id,
@@ -152,7 +156,13 @@ BEGIN
   LEFT JOIN public.games g2 ON g2.name = g.name AND g2.tournament_id = bms_tournament_id
   JOIN public.achievements a ON pa.achievement_id = a.id
   JOIN public.achievements a2 ON a2.name = a.name AND a2.tournament_id = bms_tournament_id
-  WHERE pa.tournament_id = default_tournament_id;
+  WHERE pa.tournament_id = default_tournament_id
+    AND NOT EXISTS (
+      SELECT 1 FROM public.player_achievements pa2
+      WHERE pa2.player_name = pa.player_name
+        AND pa2.achievement_id = a2.id
+        AND pa2.tournament_id = bms_tournament_id
+    );
 
   GET DIAGNOSTICS row_count_var = ROW_COUNT;
   RAISE NOTICE 'Copied % player achievements', row_count_var;
@@ -192,6 +202,10 @@ BEGIN
 
   GET DIAGNOSTICS row_count_var = ROW_COUNT;
   RAISE NOTICE 'Copied % player stats', row_count_var;
+
+  -- Re-enable the achievement trigger
+  RAISE NOTICE 'Re-enabling achievement trigger...';
+  ALTER TABLE public.scores ENABLE TRIGGER check_achievements_on_game_play;
 
   RAISE NOTICE '✅ Score copy completed successfully!';
   RAISE NOTICE '📊 All data has been successfully copied from Default Arcade Tournament to BMS Highscore Challenge!';
