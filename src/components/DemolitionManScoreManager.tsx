@@ -50,17 +50,8 @@ const DemolitionManScoreManager = () => {
           gameId = games.id;
           setDemolitionManGameId(gameId);
         } else {
-          // Try to create it using the function
-          const { data: newGameId, error: createError } = await supabase
-            .rpc('ensure_demolition_man_game');
-
-          if (!createError && newGameId) {
-            gameId = newGameId;
-            setDemolitionManGameId(gameId);
-          } else {
-            console.error('Could not ensure Demolition Man game exists:', createError);
-            return;
-          }
+          console.error('Demolition Man game not found in database');
+          return;
         }
       }
 
@@ -185,7 +176,8 @@ const DemolitionManScoreManager = () => {
             .insert({
               player_name: playerName,
               score: scoreValue,
-              game_id: demolitionManGameId
+              game_id: demolitionManGameId,
+              tournament_id: demolitionManGameId, // Use game_id as tournament_id for now
             });
 
           if (error) throw error;

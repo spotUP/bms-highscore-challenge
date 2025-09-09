@@ -56,10 +56,10 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
     if (isRaspberryPi) {
       return {
         ...baseProps,
+        src,
         // Optimize for Pi's GPU capabilities
         style: {
-          imageRendering: '-webkit-optimize-contrast',
-          imageRendering: 'optimize-contrast',
+          imageRendering: 'pixelated' as const,
           // Force hardware acceleration
           transform: 'translateZ(0)',
           willChange: 'auto',
@@ -70,6 +70,7 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
     if (isLowEnd) {
       return {
         ...baseProps,
+        src,
         style: {
           // Disable expensive image filters
           filter: 'none',
@@ -77,7 +78,10 @@ const OptimizedImage: React.FC<OptimizedImageProps> = ({
       };
     }
 
-    return baseProps;
+    return {
+      ...baseProps,
+      src,
+    };
   };
 
   if (imageError && fallbackText) {

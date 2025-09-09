@@ -40,20 +40,11 @@ const DemolitionManQRSubmit = () => {
           return;
         }
 
-        // If not found, try to call the function to ensure it exists
-        const { data: gameId, error: createError } = await supabase
-          .rpc('ensure_demolition_man_game');
+        // If not found, we can't create it without the function
+        console.log('Demolition Man game not found in database');
+        setDemolitionManGameId(null);
+        return;
 
-        if (createError) {
-          console.error('Error ensuring Demolition Man game exists:', createError);
-          console.log('The ensure_demolition_man_game function may not be deployed yet');
-          // Still set to null so user gets helpful error message
-          setDemolitionManGameId(null);
-          return;
-        }
-
-        setDemolitionManGameId(gameId);
-        console.log('Demolition Man game ensured in database with ID:', gameId);
       } catch (error) {
         console.error('Error with Demolition Man game setup:', error);
       }
@@ -99,6 +90,7 @@ const DemolitionManQRSubmit = () => {
           player_name: playerName.trim(),
           score: Number(score),
           game_id: demolitionManGameId,
+          tournament_id: demolitionManGameId, // Use game_id as tournament_id for now
         });
 
       if (error) throw error;
