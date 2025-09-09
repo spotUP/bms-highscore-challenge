@@ -333,8 +333,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         .from('tournaments')
         .select('id, name, slug, description, is_public, created_by, created_at, updated_at')
         .eq('slug', slug)
-        .eq('is_active', true)
         .single();
+
+      if (tournamentError) throw tournamentError;
 
       if (tournamentError) throw tournamentError;
 
