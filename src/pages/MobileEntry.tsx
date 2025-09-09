@@ -8,6 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAchievements } from "@/hooks/useAchievements";
 import { getGameLogoUrl } from "@/lib/utils";
 import PlayerInsult from "@/components/PlayerInsult";
+import { useTournament } from "@/contexts/TournamentContext";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -43,6 +44,7 @@ const MobileEntry = () => {
   const [showPlayerInsult, setShowPlayerInsult] = useState(false);
   const [insultPlayerName, setInsultPlayerName] = useState('');
   const { checkForNewAchievements } = useAchievements();
+  const { currentTournament } = useTournament();
 
   // Load game from database
   useEffect(() => {
@@ -124,6 +126,12 @@ const MobileEntry = () => {
       return;
     }
 
+    if (!currentTournament) {
+      toast.error("No tournament selected. Please select a tournament first.");
+      setIsSubmitting(false);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -202,7 +210,7 @@ const MobileEntry = () => {
             player_name: name.toUpperCase(),
             score: scoreValue,
             game_id: game.id,
-            tournament_id: game.id // Use game_id as tournament_id for now
+            tournament_id: currentTournament?.id
           });
 
         if (error) throw error;
