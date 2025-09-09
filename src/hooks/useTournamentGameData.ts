@@ -66,9 +66,14 @@ export const useTournamentGameData = () => {
 
   // Load games for current tournament
   const loadGames = useCallback(async () => {
-    if (!currentTournament) return;
+    console.log('useTournamentGameData: loadGames called, currentTournament:', currentTournament);
+    if (!currentTournament) {
+      console.log('useTournamentGameData: No current tournament, skipping');
+      return;
+    }
 
     try {
+      console.log('useTournamentGameData: Loading games for tournament:', currentTournament.id);
       // Load games with tournament_id filter
       const { data, error } = await supabase
         .from('games')
@@ -77,9 +82,12 @@ export const useTournamentGameData = () => {
         .eq('is_active', true)
         .order('name', { ascending: true });
 
+      console.log('useTournamentGameData: Games query result:', { data, error });
+
       if (error) throw error;
-      
+
       setState(prev => ({ ...prev, games: data || [] }));
+      console.log('useTournamentGameData: Successfully loaded', data?.length || 0, 'games');
     } catch (error) {
       console.error('Error loading games:', error);
       setState(prev => ({ ...prev, error: 'Failed to load games' }));
@@ -88,9 +96,14 @@ export const useTournamentGameData = () => {
 
   // Load scores for current tournament
   const loadScores = useCallback(async () => {
-    if (!currentTournament) return;
+    console.log('useTournamentGameData: loadScores called, currentTournament:', currentTournament);
+    if (!currentTournament) {
+      console.log('useTournamentGameData: No current tournament, skipping scores');
+      return;
+    }
 
     try {
+      console.log('useTournamentGameData: Loading scores for tournament:', currentTournament.id);
       // Load scores with tournament_id filter
       const { data, error } = await supabase
         .from('scores')
@@ -99,9 +112,12 @@ export const useTournamentGameData = () => {
         .order('score', { ascending: false })
         .limit(500);
 
+      console.log('useTournamentGameData: Scores query result:', { data: data?.slice(0, 3), error, totalCount: data?.length });
+
       if (error) throw error;
-      
+
       setState(prev => ({ ...prev, scores: data || [] }));
+      console.log('useTournamentGameData: Successfully loaded', data?.length || 0, 'scores');
     } catch (error) {
       console.error('Error loading scores:', error);
       setState(prev => ({ ...prev, error: 'Failed to load scores' }));

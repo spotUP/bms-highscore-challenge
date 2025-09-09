@@ -85,12 +85,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         }
 
         if (defaultTournament) {
-          console.log('Found default tournament:', defaultTournament.name);
+          console.log('Found default tournament:', defaultTournament.name, 'ID:', defaultTournament.id);
           setUserTournaments([defaultTournament]);
           setCurrentTournament(defaultTournament);
           setCurrentUserRole(null); // Anonymous users have no role
         } else {
-          console.log('No default tournament found');
+          console.log('No default tournament found, checking all tournaments...');
+          // Debug: Check what tournaments exist
+          const { data: allTournaments } = await supabase
+            .from('tournaments')
+            .select('id, name, slug, is_public');
+          console.log('All tournaments:', allTournaments);
           setUserTournaments([]);
           setCurrentTournament(null);
           setCurrentUserRole(null);
