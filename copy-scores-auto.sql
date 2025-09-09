@@ -5,11 +5,7 @@ DO $$
 DECLARE
   default_tournament_id UUID;
   bms_tournament_id UUID;
-  game_count INTEGER := 0;
-  score_count INTEGER := 0;
-  achievement_count INTEGER := 0;
-  player_achievement_count INTEGER := 0;
-  player_count INTEGER := 0;
+  row_count_var INTEGER;
 BEGIN
   -- Find tournament IDs automatically
   SELECT id INTO default_tournament_id
@@ -64,8 +60,8 @@ BEGIN
         AND g2.name = g.name
     );
 
-  GET DIAGNOSTICS game_count = ROW_COUNT;
-  RAISE NOTICE 'Copied % games', game_count;
+  GET DIAGNOSTICS row_count_var = ROW_COUNT;
+  RAISE NOTICE 'Copied % games', row_count_var;
 
   -- Step 2: Copy scores with new game IDs
   RAISE NOTICE 'Copying scores...';
@@ -89,8 +85,8 @@ BEGIN
   JOIN public.games g2 ON g2.name = g.name AND g2.tournament_id = bms_tournament_id
   WHERE s.tournament_id = default_tournament_id;
 
-  GET DIAGNOSTICS score_count = ROW_COUNT;
-  RAISE NOTICE 'Copied % scores', score_count;
+  GET DIAGNOSTICS row_count_var = ROW_COUNT;
+  RAISE NOTICE 'Copied % scores', row_count_var;
 
   -- Step 3: Copy achievements
   RAISE NOTICE 'Copying achievements...';
@@ -127,8 +123,8 @@ BEGIN
         AND a2.name = a.name
     );
 
-  GET DIAGNOSTICS achievement_count = ROW_COUNT;
-  RAISE NOTICE 'Copied % achievements', achievement_count;
+  GET DIAGNOSTICS row_count_var = ROW_COUNT;
+  RAISE NOTICE 'Copied % achievements', row_count_var;
 
   -- Step 4: Copy player achievements
   RAISE NOTICE 'Copying player achievements...';
@@ -158,8 +154,8 @@ BEGIN
   JOIN public.achievements a2 ON a2.name = a.name AND a2.tournament_id = bms_tournament_id
   WHERE pa.tournament_id = default_tournament_id;
 
-  GET DIAGNOSTICS player_achievement_count = ROW_COUNT;
-  RAISE NOTICE 'Copied % player achievements', player_achievement_count;
+  GET DIAGNOSTICS row_count_var = ROW_COUNT;
+  RAISE NOTICE 'Copied % player achievements', row_count_var;
 
   -- Step 5: Copy player stats
   RAISE NOTICE 'Copying player stats...';
@@ -194,16 +190,11 @@ BEGIN
         AND ps2.player_name = ps.player_name
     );
 
-  GET DIAGNOSTICS player_count = ROW_COUNT;
-  RAISE NOTICE 'Copied % player stats', player_count;
+  GET DIAGNOSTICS row_count_var = ROW_COUNT;
+  RAISE NOTICE 'Copied % player stats', row_count_var;
 
   RAISE NOTICE '✅ Score copy completed successfully!';
-  RAISE NOTICE '📊 Summary:';
-  RAISE NOTICE '  • Games: %', game_count;
-  RAISE NOTICE '  • Scores: %', score_count;
-  RAISE NOTICE '  • Achievements: %', achievement_count;
-  RAISE NOTICE '  • Player Achievements: %', player_achievement_count;
-  RAISE NOTICE '  • Player Stats: %', player_count;
+  RAISE NOTICE '📊 All data has been successfully copied from Default Arcade Tournament to BMS Highscore Challenge!';
 
 END $$;
 
