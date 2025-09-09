@@ -78,40 +78,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     console.log('Loading tournaments for user:', user.id);
 
     try {
-      // First check if new tournament tables exist
-      const { data: tablesCheck, error: tablesError } = await supabase
-        .from('tournament_members')
-        .select('id')
-        .limit(1);
-
-      console.log('Tournament tables check:', { tablesCheck, tablesError });
-
-      if (tablesError && tablesError.code === '42P01') {
-        // Tournament tables don't exist yet - use legacy mode
-        console.log('Tournament tables not found, using legacy mode');
-        
-        // Create a virtual "default tournament" that represents the current single-tournament setup
-        const defaultTournament = {
-          id: 'legacy-default',
-          name: 'Arcade High Scores',
-          slug: 'default',
-          description: 'Your current arcade tournament',
-          is_public: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-
-        setUserTournaments([defaultTournament]);
-        setCurrentTournament(defaultTournament);
-        setCurrentUserRole('admin'); // Assume admin role in legacy mode
-        localStorage.setItem('currentTournamentId', defaultTournament.id);
-        
-        console.log('Legacy mode: Set default tournament');
-        setLoading(false);
-        return;
-      }
-
-      // New tournament system is available
+      // Load tournaments from the new tournament system
       const { data: memberships, error } = await supabase
         .from('tournament_members')
         .select(`
@@ -171,28 +138,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     console.log('Current user:', user?.id);
     
     try {
-      const isLegacyMode = tournament.id === 'legacy-default';
-      
-      if (isLegacyMode) {
-        // Legacy mode: no need to check membership
-        console.log('Legacy mode: Setting tournament directly');
-        setCurrentTournament(tournament);
-        setCurrentUserRole('admin'); // Assume admin role in legacy mode
-        localStorage.setItem('currentTournamentId', tournament.id);
-        
-        toast({
-          title: "Tournament Selected",
-          description: `Selected ${tournament.name}`,
-        });
-        
-        // Trigger a page refresh to update all data
-        setTimeout(() => {
-          window.location.reload();
-        }, 100);
-        return;
-      }
-      
-      // New mode: Get user's role in this tournament
+      // Get user's role in this tournament
       const { data: membership, error } = await supabase
         .from('tournament_members')
         .select('role')

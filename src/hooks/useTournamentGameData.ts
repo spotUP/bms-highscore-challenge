@@ -69,38 +69,17 @@ export const useTournamentGameData = () => {
     if (!currentTournament) return;
 
     try {
-      const isLegacyMode = currentTournament.id === 'legacy-default';
+      // Load games with tournament_id filter
+      const { data, error } = await supabase
+        .from('games')
+        .select('id, name, logo_url, is_active, include_in_challenge, tournament_id')
+        .eq('tournament_id', currentTournament.id)
+        .eq('is_active', true)
+        .order('name', { ascending: true });
+
+      if (error) throw error;
       
-      if (isLegacyMode) {
-        // Legacy mode: load games without tournament_id filter
-        const { data, error } = await supabase
-          .from('games')
-          .select('id, name, logo_url, is_active, include_in_challenge')
-          .eq('is_active', true)
-          .order('name', { ascending: true });
-
-        if (error) throw error;
-        
-        // Add legacy tournament_id for compatibility
-        const gamesWithTournamentId = data?.map(game => ({
-          ...game,
-          tournament_id: currentTournament.id
-        })) || [];
-        
-        setState(prev => ({ ...prev, games: gamesWithTournamentId }));
-      } else {
-        // New mode: load games with tournament_id filter
-        const { data, error } = await supabase
-          .from('games')
-          .select('id, name, logo_url, is_active, include_in_challenge, tournament_id')
-          .eq('tournament_id', currentTournament.id)
-          .eq('is_active', true)
-          .order('name', { ascending: true });
-
-        if (error) throw error;
-        
-        setState(prev => ({ ...prev, games: data || [] }));
-      }
+      setState(prev => ({ ...prev, games: data || [] }));
     } catch (error) {
       console.error('Error loading games:', error);
       setState(prev => ({ ...prev, error: 'Failed to load games' }));
@@ -112,38 +91,17 @@ export const useTournamentGameData = () => {
     if (!currentTournament) return;
 
     try {
-      const isLegacyMode = currentTournament.id === 'legacy-default';
+      // Load scores with tournament_id filter
+      const { data, error } = await supabase
+        .from('scores')
+        .select('id, player_name, score, game_id, tournament_id, created_at')
+        .eq('tournament_id', currentTournament.id)
+        .order('score', { ascending: false })
+        .limit(500);
+
+      if (error) throw error;
       
-      if (isLegacyMode) {
-        // Legacy mode: load scores without tournament_id filter
-        const { data, error } = await supabase
-          .from('scores')
-          .select('id, player_name, score, game_id, created_at')
-          .order('score', { ascending: false })
-          .limit(500);
-
-        if (error) throw error;
-        
-        // Add legacy tournament_id for compatibility
-        const scoresWithTournamentId = data?.map(score => ({
-          ...score,
-          tournament_id: currentTournament.id
-        })) || [];
-        
-        setState(prev => ({ ...prev, scores: scoresWithTournamentId }));
-      } else {
-        // New mode: load scores with tournament_id filter
-        const { data, error } = await supabase
-          .from('scores')
-          .select('id, player_name, score, game_id, tournament_id, created_at')
-          .eq('tournament_id', currentTournament.id)
-          .order('score', { ascending: false })
-          .limit(500);
-
-        if (error) throw error;
-        
-        setState(prev => ({ ...prev, scores: data || [] }));
-      }
+      setState(prev => ({ ...prev, scores: data || [] }));
     } catch (error) {
       console.error('Error loading scores:', error);
       setState(prev => ({ ...prev, error: 'Failed to load scores' }));
@@ -155,44 +113,19 @@ export const useTournamentGameData = () => {
     if (!currentTournament) return;
 
     try {
-      const isLegacyMode = currentTournament.id === 'legacy-default';
-      let scores;
-      let error;
-
-      if (isLegacyMode) {
-        // Legacy mode: load scores without tournament_id filter
-        const result = await supabase
-          .from('scores')
-          .select(`
-            player_name, 
-            score,
-            game_id,
-            games!inner(include_in_challenge, name)
-          `)
-          .eq('games.include_in_challenge', true)
-          .order('created_at', { ascending: false })
-          .limit(500);
-        
-        scores = result.data;
-        error = result.error;
-      } else {
-        // New mode: load scores with tournament_id filter
-        const result = await supabase
-          .from('scores')
-          .select(`
-            player_name, 
-            score,
-            game_id,
-            games!inner(include_in_challenge, name)
-          `)
-          .eq('tournament_id', currentTournament.id)
-          .eq('games.include_in_challenge', true)
-          .order('created_at', { ascending: false })
-          .limit(500);
-        
-        scores = result.data;
-        error = result.error;
-      }
+      // Load scores with tournament_id filter
+      const { data: scores, error } = await supabase
+        .from('scores')
+        .select(`
+          player_name, 
+          score,
+          game_id,
+          games!inner(include_in_challenge, name)
+        `)
+        .eq('tournament_id', currentTournament.id)
+        .eq('games.include_in_challenge', true)
+        .order('created_at', { ascending: false })
+        .limit(500);
 
       if (error) throw error;
 
@@ -257,34 +190,14 @@ export const useTournamentGameData = () => {
     if (!currentTournament) return;
 
     try {
-      const isLegacyMode = currentTournament.id === 'legacy-default';
-      let data;
-      let error;
-
-      if (isLegacyMode) {
-        // Legacy mode: load achievements without tournament_id filter
-        const result = await supabase
-          .from('player_achievements')
-          .select(`
-            player_name,
-            achievements!inner(points)
-          `);
-        
-        data = result.data;
-        error = result.error;
-      } else {
-        // New mode: load achievements with tournament_id filter
-        const result = await supabase
-          .from('player_achievements')
-          .select(`
-            player_name,
-            achievements!inner(points)
-          `)
-          .eq('tournament_id', currentTournament.id);
-        
-        data = result.data;
-        error = result.error;
-      }
+      // Load achievements with tournament_id filter
+      const { data, error } = await supabase
+        .from('player_achievements')
+        .select(`
+          player_name,
+          achievements!inner(points)
+        `)
+        .eq('tournament_id', currentTournament.id);
 
       if (error) throw error;
 
@@ -318,44 +231,19 @@ export const useTournamentGameData = () => {
     if (!currentTournament) return;
 
     try {
-      const isLegacyMode = currentTournament.id === 'legacy-default';
-      let scoreData;
-      let error;
-
-      if (isLegacyMode) {
-        // Legacy mode: load Demolition Man scores without tournament_id filter
-        const result = await supabase
-          .from('scores')
-          .select(`
-            player_name,
-            score,
-            created_at,
-            games!inner(name)
-          `)
-          .eq('games.name', 'Demolition Man')
-          .order('score', { ascending: false })
-          .limit(5);
-        
-        scoreData = result.data;
-        error = result.error;
-      } else {
-        // New mode: load Demolition Man scores with tournament_id filter
-        const result = await supabase
-          .from('scores')
-          .select(`
-            player_name,
-            score,
-            created_at,
-            games!inner(name)
-          `)
-          .eq('tournament_id', currentTournament.id)
-          .eq('games.name', 'Demolition Man')
-          .order('score', { ascending: false })
-          .limit(5);
-        
-        scoreData = result.data;
-        error = result.error;
-      }
+      // Load Demolition Man scores with tournament_id filter
+      const { data: scoreData, error } = await supabase
+        .from('scores')
+        .select(`
+          player_name,
+          score,
+          created_at,
+          games!inner(name)
+        `)
+        .eq('tournament_id', currentTournament.id)
+        .eq('games.name', 'Demolition Man')
+        .order('score', { ascending: false })
+        .limit(5);
 
       if (error) throw error;
 
@@ -406,8 +294,6 @@ export const useTournamentGameData = () => {
   useEffect(() => {
     if (!currentTournament) return;
 
-    const isLegacyMode = currentTournament.id === 'legacy-default';
-
     const scoresChannel = supabase
       .channel(`scores-${currentTournament.id}`)
       .on(
@@ -416,7 +302,7 @@ export const useTournamentGameData = () => {
           event: '*',
           schema: 'public',
           table: 'scores',
-          ...(isLegacyMode ? {} : { filter: `tournament_id=eq.${currentTournament.id}` }),
+          filter: `tournament_id=eq.${currentTournament.id}`,
         },
         () => {
           loadScores();
@@ -434,7 +320,7 @@ export const useTournamentGameData = () => {
           event: '*',
           schema: 'public',
           table: 'games',
-          ...(isLegacyMode ? {} : { filter: `tournament_id=eq.${currentTournament.id}` }),
+          filter: `tournament_id=eq.${currentTournament.id}`,
         },
         () => {
           loadGames();
@@ -450,7 +336,7 @@ export const useTournamentGameData = () => {
           event: '*',
           schema: 'public',
           table: 'player_achievements',
-          ...(isLegacyMode ? {} : { filter: `tournament_id=eq.${currentTournament.id}` }),
+          filter: `tournament_id=eq.${currentTournament.id}`,
         },
         () => {
           loadAchievementHunters();
