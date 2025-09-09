@@ -17,7 +17,6 @@ export interface Tournament {
   is_active?: boolean;
   logo_url?: string | null;
   theme_color?: string;
-  max_members?: number;
 }
 
 export interface TournamentMember {
@@ -54,7 +53,6 @@ interface CreateTournamentData {
   slug: string;
   is_public?: boolean;
   theme_color?: string;
-  max_members?: number;
 }
 
 const TournamentContext = createContext<TournamentContextType | undefined>(undefined);
@@ -217,7 +215,6 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           owner_id: user.id,
           is_public: data.is_public ?? false,
           theme_color: data.theme_color ?? '#1a1a2e',
-          max_members: data.max_members ?? 1000,
         })
         .select()
         .single();

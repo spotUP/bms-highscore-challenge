@@ -37,19 +37,17 @@ const TournamentLanding = () => {
     try {
       const { data, error } = await supabase
         .from('tournaments')
-        .select(`
-          *,
-          tournament_members(count)
-        `)
+        .select('*')
         .eq('is_public', true)
-        .eq('is_active', true)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
       const tournaments = data?.map(tournament => ({
         ...tournament,
-        member_count: tournament.tournament_members?.[0]?.count || 0
+        member_count: 0, // TODO: Get member count separately if needed
+        theme_color: '#1a1a2e', // Default theme color
+        logo_url: null // Default logo url
       })) || [];
 
       setPublicTournaments(tournaments);
