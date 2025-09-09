@@ -69,6 +69,18 @@ const TournamentSelector = () => {
     setIsJoining(false);
   };
 
+  const handleSwitchTournament = async (tournament: any) => {
+    console.log('Attempting to switch to tournament:', tournament);
+    if (tournament.id !== currentTournament?.id) {
+      try {
+        await switchTournament(tournament);
+        setIsDialogOpen(false);
+      } catch (error) {
+        console.error('Error in handleSwitchTournament:', error);
+      }
+    }
+  };
+
   const generateSlug = (name: string) => {
     return name
       .toLowerCase()
@@ -133,12 +145,7 @@ const TournamentSelector = () => {
                       ? 'bg-blue-900/30 border-blue-600' 
                       : 'bg-gray-800/50 border-gray-700 hover:bg-gray-700/50'
                   }`}
-                  onClick={() => {
-                    if (tournament.id !== currentTournament?.id) {
-                      switchTournament(tournament);
-                      setIsDialogOpen(false);
-                    }
-                  }}
+                  onClick={() => handleSwitchTournament(tournament)}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">

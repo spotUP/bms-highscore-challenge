@@ -75,6 +75,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    console.log('Loading tournaments for user:', user.id);
+
     try {
       const { data: memberships, error } = await supabase
         .from('tournament_members')
@@ -85,28 +87,37 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         .eq('user_id', user.id)
         .eq('is_active', true);
 
+      console.log('Tournament memberships result:', { memberships, error });
+
       if (error) throw error;
 
       const tournaments = memberships?.map(m => m.tournaments).filter(Boolean) || [];
+      console.log('Found tournaments:', tournaments);
       setUserTournaments(tournaments);
 
       // Get current tournament from localStorage or use the first available
       const storedTournamentId = localStorage.getItem('currentTournamentId');
+      console.log('Stored tournament ID:', storedTournamentId);
       let selectedTournament = null;
 
       if (storedTournamentId) {
         selectedTournament = tournaments.find(t => t.id === storedTournamentId);
+        console.log('Found stored tournament:', selectedTournament);
       }
 
       if (!selectedTournament && tournaments.length > 0) {
         selectedTournament = tournaments[0];
+        console.log('Using first tournament:', selectedTournament);
       }
 
       if (selectedTournament) {
         const membership = memberships?.find(m => m.tournament_id === selectedTournament.id);
+        console.log('Setting current tournament:', selectedTournament.name, 'with role:', membership?.role);
         setCurrentTournament(selectedTournament);
         setCurrentUserRole(membership?.role || null);
         localStorage.setItem('currentTournamentId', selectedTournament.id);
+      } else {
+        console.log('No tournaments found or selected');
       }
     } catch (error: any) {
       console.error('Error loading tournaments:', error);
@@ -122,6 +133,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   // Switch to a different tournament
   const switchTournament = async (tournament: Tournament) => {
+    console.log('switchTournament called with:', tournament);
+    console.log('Current user:', user?.id);
+    
     try {
       // Get user's role in this tournament
       const { data: membership, error } = await supabase
@@ -132,14 +146,27 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         .eq('is_active', true)
         .single();
 
+      console.log('Membership query result:', { membership, error });
+
       if (error) {
         console.error('Error getting tournament membership:', error);
+        toast({
+          title: "Error",
+          description: `Failed to get tournament membership: ${error.message}`,
+          variant: "destructive",
+        });
         return;
       }
 
+      console.log('Setting tournament:', tournament.name, 'with role:', membership?.role);
       setCurrentTournament(tournament);
       setCurrentUserRole(membership?.role || null);
       localStorage.setItem('currentTournamentId', tournament.id);
+      
+      toast({
+        title: "Tournament Switched",
+        description: `Switched to ${tournament.name}`,
+      });
       
       // Trigger a page refresh to update all data
       setTimeout(() => {
