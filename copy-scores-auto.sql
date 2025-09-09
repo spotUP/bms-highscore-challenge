@@ -31,10 +31,52 @@ BEGIN
   RAISE NOTICE '  Default: %', default_tournament_id;
   RAISE NOTICE '  BMS: %', bms_tournament_id;
 
-  -- Temporarily disable ALL triggers on scores table to prevent constraint violations
-  -- The achievement triggers try to insert into player_achievements without tournament_id
-  RAISE NOTICE 'Disabling all triggers on scores table temporarily...';
-  ALTER TABLE public.scores DISABLE TRIGGER ALL;
+  -- Temporarily disable user triggers on scores table to prevent constraint violations
+  -- We can't disable system triggers (RI_ConstraintTrigger), so we disable specific user triggers
+  RAISE NOTICE 'Disabling user triggers on scores table temporarily...';
+
+  -- Disable specific user triggers that cause issues during bulk operations
+  -- List all triggers first for debugging
+  RAISE NOTICE 'Available triggers on scores table:';
+  FOR trigger_rec IN
+    SELECT trigger_name
+    FROM information_schema.triggers
+    WHERE event_object_table = 'scores'
+    AND trigger_name NOT LIKE 'RI_%'  -- Exclude system referential integrity triggers
+  LOOP
+    RAISE NOTICE '  - %', trigger_rec.trigger_name;
+  END LOOP;
+
+  -- Disable achievement-related triggers
+  IF EXISTS (
+    SELECT 1 FROM information_schema.triggers
+    WHERE event_object_table = 'scores'
+    AND trigger_name = 'check_achievements_on_score'
+  ) THEN
+    RAISE NOTICE 'Disabling trigger: check_achievements_on_score';
+    ALTER TABLE public.scores DISABLE TRIGGER check_achievements_on_score;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.triggers
+    WHERE event_object_table = 'scores'
+    AND trigger_name = 'check_achievements_on_game_play'
+  ) THEN
+    RAISE NOTICE 'Disabling trigger: check_achievements_on_game_play';
+    ALTER TABLE public.scores DISABLE TRIGGER check_achievements_on_game_play;
+  END IF;
+
+  -- Try to disable any other achievement-related triggers
+  FOR trigger_rec IN
+    SELECT trigger_name
+    FROM information_schema.triggers
+    WHERE event_object_table = 'scores'
+    AND trigger_name LIKE '%achievement%'
+    AND trigger_name NOT LIKE 'RI_%'
+  LOOP
+    RAISE NOTICE 'Disabling additional achievement trigger: %', trigger_rec.trigger_name;
+    EXECUTE 'ALTER TABLE public.scores DISABLE TRIGGER ' || trigger_rec.trigger_name;
+  END LOOP;
 
   -- Step 1: Copy games (if they don't already exist)
   RAISE NOTICE 'Copying games...';
@@ -205,9 +247,38 @@ BEGIN
   GET DIAGNOSTICS row_count_var = ROW_COUNT;
   RAISE NOTICE 'Copied % player stats', row_count_var;
 
-  -- Re-enable ALL triggers on scores table
-  RAISE NOTICE 'Re-enabling all triggers on scores table...';
-  ALTER TABLE public.scores ENABLE TRIGGER ALL;
+  -- Re-enable the user triggers we disabled
+  RAISE NOTICE 'Re-enabling user triggers on scores table...';
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.triggers
+    WHERE event_object_table = 'scores'
+    AND trigger_name = 'check_achievements_on_score'
+  ) THEN
+    RAISE NOTICE 'Re-enabling trigger: check_achievements_on_score';
+    ALTER TABLE public.scores ENABLE TRIGGER check_achievements_on_score;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.triggers
+    WHERE event_object_table = 'scores'
+    AND trigger_name = 'check_achievements_on_game_play'
+  ) THEN
+    RAISE NOTICE 'Re-enabling trigger: check_achievements_on_game_play';
+    ALTER TABLE public.scores ENABLE TRIGGER check_achievements_on_game_play;
+  END IF;
+
+  -- Re-enable any other achievement-related triggers we disabled
+  FOR trigger_rec IN
+    SELECT trigger_name
+    FROM information_schema.triggers
+    WHERE event_object_table = 'scores'
+    AND trigger_name LIKE '%achievement%'
+    AND trigger_name NOT LIKE 'RI_%'
+  LOOP
+    RAISE NOTICE 'Re-enabling achievement trigger: %', trigger_rec.trigger_name;
+    EXECUTE 'ALTER TABLE public.scores ENABLE TRIGGER ' || trigger_rec.trigger_name;
+  END LOOP;
 
   RAISE NOTICE '✅ Score copy completed successfully!';
   RAISE NOTICE '📊 All data has been successfully copied from Default Arcade Tournament to BMS Highscore Challenge!';
