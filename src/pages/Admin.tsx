@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,7 +46,7 @@ interface Game {
 
 const Admin = () => {
   const { user, isAdmin, loading } = useAuth();
-  const { currentTournament, hasPermission } = useTournament();
+  const { currentTournament, hasPermission, updateTournament, deleteTournament, refreshTournaments, currentUserRole } = useTournament();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [games, setGames] = useState<Game[]>([]);
@@ -255,7 +256,7 @@ const Admin = () => {
 
       if (fetchError) throw fetchError;
 
-      const gamesToUpdate = gamesWithPlaceholders?.filter(game => 
+      const gamesToUpdate = gamesWithPlaceholders?.filter(game =>
         isPlaceholderLogo(game.logo_url)
       ) || [];
 
@@ -292,6 +293,61 @@ const Admin = () => {
       toast({
         title: "Error",
         description: "Failed to clean up placeholder logos",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Update tournament
+  const handleUpdateTournament = async () => {
+    if (!currentTournament) return;
+
+    try {
+      const success = await updateTournament(currentTournament.id, {
+        name: currentTournament.name,
+        slug: currentTournament.slug,
+        description: currentTournament.description,
+        is_public: currentTournament.is_public,
+      });
+
+      if (success) {
+        toast({
+          title: "Success",
+          description: "Tournament updated successfully"
+        });
+        // Refresh tournaments to get updated data
+        await refreshTournaments();
+      }
+    } catch (error) {
+      console.error('Error updating tournament:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update tournament",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Delete tournament
+  const handleDeleteTournament = async () => {
+    if (!currentTournament) return;
+
+    try {
+      const success = await deleteTournament(currentTournament.id);
+
+      if (success) {
+        toast({
+          title: "Success",
+          description: "Tournament deleted successfully"
+        });
+        // Navigate back to home since the tournament is deleted
+        navigate('/');
+      }
+    } catch (error) {
+      console.error('Error deleting tournament:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete tournament",
         variant: "destructive"
       });
     }
@@ -343,7 +399,7 @@ const Admin = () => {
         </PageHeader>
 
         <Tabs defaultValue="games" className="w-full">
-          <TabsList className="grid w-full grid-cols-6 bg-gray-900 border border-white/20">
+          <TabsList className="grid w-full grid-cols-7 bg-gray-900 border border-white/20">
             <TabsTrigger value="games" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
               <Gamepad2 className="w-4 h-4 mr-2" />
               Games
@@ -351,6 +407,10 @@ const Admin = () => {
             <TabsTrigger value="scores" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
               <BarChart3 className="w-4 h-4 mr-2" />
               Scores
+            </TabsTrigger>
+            <TabsTrigger value="tournament" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
+              <Settings className="w-4 h-4 mr-2" />
+              Tournament
             </TabsTrigger>
             <TabsTrigger value="webhooks" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
               <Webhook className="w-4 h-4 mr-2" />
@@ -516,6 +576,151 @@ const Admin = () => {
               <ScoreManager />
               <DemolitionManScoreManager />
               <DemolitionManQRSubmit />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="tournament" className="mt-6">
+            <div className="space-y-6">
+              <Card className={getCardStyle('primary')}>
+                <CardHeader>
+                  <CardTitle className={getTypographyStyle('h3')}>Tournament Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {currentTournament && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="tournament-name" className="text-white">Tournament Name</Label>
+                          <Input
+                            id="tournament-name"
+                            value={currentTournament.name}
+                            onChange={(e) => setCurrentTournament({ ...currentTournament, name: e.target.value })}
+                            className="bg-gray-800 border-gray-700 text-white"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="tournament-slug" className="text-white">Slug</Label>
+                          <Input
+                            id="tournament-slug"
+                            value={currentTournament.slug}
+                            onChange={(e) => setCurrentTournament({ ...currentTournament, slug: e.target.value })}
+                            className="bg-gray-800 border-gray-700 text-white"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="tournament-description" className="text-white">Description</Label>
+                        <Textarea
+                          id="tournament-description"
+                          value={currentTournament.description || ''}
+                          onChange={(e) => setCurrentTournament({ ...currentTournament, description: e.target.value })}
+                          className="bg-gray-800 border-gray-700 text-white min-h-[100px]"
+                          placeholder="Enter tournament description..."
+                        />
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="tournament-public"
+                          checked={currentTournament.is_public}
+                          onCheckedChange={(checked) => setCurrentTournament({ ...currentTournament, is_public: checked })}
+                        />
+                        <Label htmlFor="tournament-public" className="text-white">
+                          Make tournament public (visible to all users)
+                        </Label>
+                      </div>
+
+                      <div className="flex gap-2 pt-4">
+                        <Button
+                          onClick={handleUpdateTournament}
+                          className={getButtonStyle('primary')}
+                          disabled={!currentTournament.name.trim() || !currentTournament.slug.trim()}
+                        >
+                          Save Changes
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="destructive"
+                              disabled={currentUserRole !== 'owner'}
+                            >
+                              Delete Tournament
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="bg-gray-900 border-gray-700">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="text-white">Delete Tournament</AlertDialogTitle>
+                              <AlertDialogDescription className="text-gray-300">
+                                Are you sure you want to delete "{currentTournament.name}"? This action cannot be undone and will permanently delete:
+                                <br /><br />
+                                • All games and scores
+                                <br />
+                                • All achievements and player progress
+                                <br />
+                                • All tournament members and invitations
+                                <br /><br />
+                                This action is irreversible.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel className="bg-gray-700 text-white hover:bg-gray-600">
+                                Cancel
+                              </AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={handleDeleteTournament}
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                              >
+                                Delete Tournament
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </>
+                  )}
+
+                  {!currentTournament && (
+                    <div className="text-center py-8 text-gray-400">
+                      <Settings className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                      <p>No tournament selected</p>
+                      <p className="text-sm">Please select a tournament to manage its settings</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {currentTournament && (
+                <Card className={getCardStyle('secondary')}>
+                  <CardHeader>
+                    <CardTitle className={getTypographyStyle('h4')}>Tournament Statistics</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-arcade-neonCyan">{games.length}</div>
+                        <div className="text-sm text-gray-400">Games</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-arcade-neonCyan">{scores.length}</div>
+                        <div className="text-sm text-gray-400">Total Scores</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-arcade-neonCyan">
+                          {new Set(scores.map(s => s.player_name)).size}
+                        </div>
+                        <div className="text-sm text-gray-400">Players</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-arcade-neonCyan">
+                          {currentTournament.is_public ? 'Public' : 'Private'}
+                        </div>
+                        <div className="text-sm text-gray-400">Visibility</div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </TabsContent>
 
