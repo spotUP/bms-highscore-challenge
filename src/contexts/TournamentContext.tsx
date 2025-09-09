@@ -79,6 +79,18 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
     try {
       // Load tournaments from the new tournament system
+      // Try a simpler query first to test basic access
+      console.log('Testing basic tournament_members access...');
+      const { data: basicTest, error: basicError } = await supabase
+        .from('tournament_members')
+        .select('id, user_id, tournament_id, role, is_active')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .limit(1);
+
+      console.log('Basic test result:', { basicTest, basicError });
+
+      // Now try the full query
       const { data: memberships, error } = await supabase
         .from('tournament_members')
         .select(`
@@ -93,8 +105,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         code: error?.code,
         message: error?.message,
         details: error?.details,
-        hint: error?.hint
+        hint: error?.hint,
+        fullError: error
       });
+      console.log('Error keys:', Object.keys(error || {}));
+      console.log('Error stringified:', JSON.stringify(error, null, 2));
 
       if (error) throw error;
 
