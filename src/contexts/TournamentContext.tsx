@@ -122,9 +122,23 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
     } catch (error: any) {
       console.error('Error loading tournaments:', error);
+      
+      let errorMessage = "Failed to load tournaments";
+      let errorDetails = "";
+      
+      if (error.code === '42P01') {
+        errorMessage = "Tournament tables not found";
+        errorDetails = "The multiuser migration may not have been applied correctly.";
+      } else if (error.code === '42501') {
+        errorMessage = "Permission denied";
+        errorDetails = "You may not have access to tournament data. Check your user permissions.";
+      } else if (error.message) {
+        errorDetails = error.message;
+      }
+      
       toast({
-        title: "Error",
-        description: "Failed to load tournaments",
+        title: errorMessage,
+        description: errorDetails || "Please check the console for more details.",
         variant: "destructive",
       });
     } finally {
