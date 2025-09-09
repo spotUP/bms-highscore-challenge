@@ -8,21 +8,23 @@ export interface Tournament {
   name: string;
   description: string | null;
   slug: string;
-  owner_id: string;
+  created_by: string; // This is what the database has, not owner_id
   is_public: boolean;
-  is_active: boolean;
-  logo_url: string | null;
-  theme_color: string;
-  max_members: number;
   created_at: string;
   updated_at: string;
+  // Optional properties that may not exist in database
+  owner_id?: string;
+  is_active?: boolean;
+  logo_url?: string | null;
+  theme_color?: string;
+  max_members?: number;
 }
 
 export interface TournamentMember {
   id: string;
   tournament_id: string;
   user_id: string;
-  role: 'owner' | 'admin' | 'moderator' | 'player';
+  role: 'owner' | 'admin' | 'member'; // Updated to match database enum
   joined_at: string;
   invited_by: string | null;
   is_active: boolean;
@@ -39,9 +41,9 @@ interface TournamentContextType {
   deleteTournament: (id: string) => Promise<boolean>;
   joinTournament: (slug: string) => Promise<boolean>;
   leaveTournament: (tournamentId: string) => Promise<boolean>;
-  inviteUser: (tournamentId: string, email: string, role?: 'player' | 'moderator' | 'admin') => Promise<boolean>;
+  inviteUser: (tournamentId: string, email: string, role?: 'admin' | 'member') => Promise<boolean>;
   removeMember: (tournamentId: string, userId: string) => Promise<boolean>;
-  updateMemberRole: (tournamentId: string, userId: string, role: 'player' | 'moderator' | 'admin') => Promise<boolean>;
+  updateMemberRole: (tournamentId: string, userId: string, role: 'admin' | 'member') => Promise<boolean>;
   refreshTournaments: () => Promise<void>;
   hasPermission: (permission: 'view' | 'edit' | 'admin' | 'owner') => boolean;
 }
@@ -329,7 +331,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       // First, find the tournament
       const { data: tournament, error: tournamentError } = await supabase
         .from('tournaments')
-        .select('*')
+        .select('id, name, slug, description, is_public, created_by, created_at, updated_at')
         .eq('slug', slug)
         .eq('is_active', true)
         .single();
@@ -358,7 +360,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         .insert({
           tournament_id: tournament.id,
           user_id: user.id,
-          role: 'player',
+          role: 'member' as const, // Use valid enum value
           is_active: true,
         });
 
@@ -416,7 +418,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   };
 
   // Invite user to tournament
-  const inviteUser = async (tournamentId: string, email: string, role: 'player' | 'moderator' | 'admin' = 'player'): Promise<boolean> => {
+  const inviteUser = async (tournamentId: string, email: string, role: 'member' | 'admin' = 'member'): Promise<boolean> => {
     try {
       const { error } = await supabase
         .from('tournament_invitations')
@@ -425,6 +427,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           email: email.toLowerCase(),
           role,
           invited_by: user?.id,
+          token: crypto.randomUUID(),
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days
         });
 
       if (error) throw error;
@@ -475,7 +479,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   };
 
   // Update member role
-  const updateMemberRole = async (tournamentId: string, userId: string, role: 'player' | 'moderator' | 'admin'): Promise<boolean> => {
+  const updateMemberRole = async (tournamentId: string, userId: string, role: 'member' | 'admin'): Promise<boolean> => {
     try {
       const { error } = await supabase
         .from('tournament_members')

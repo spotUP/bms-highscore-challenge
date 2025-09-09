@@ -84,10 +84,11 @@ const StopCompetition: React.FC<StopCompetitionProps> = ({ onCompetitionStopped,
         throw error;
       }
 
-      if (data && data.success) {
+      const result = data as any;
+      if (result && result.success) {
         toast({
           title: "Competition Archived!",
-          description: `Competition "${data.competition_name}" has been successfully archived. ${data.total_players} players, ${data.total_games} games, ${data.total_scores} scores saved.`,
+          description: `Competition "${result.competition_name}" has been successfully archived. ${result.total_players} players, ${result.total_games} games, ${result.total_scores} scores saved.`,
         });
 
         // Send competition ended webhook
@@ -105,7 +106,7 @@ const StopCompetition: React.FC<StopCompetitionProps> = ({ onCompetitionStopped,
         setTimeout(() => {
           sendCompetitionEndedWebhook(
             gamesForWebhook,
-            data.competition_name,
+            (result as any)?.competition_name || "Unknown Competition",
             undefined, // duration - could be calculated if we track start time
             scores.length,
             winnerData
@@ -115,10 +116,9 @@ const StopCompetition: React.FC<StopCompetitionProps> = ({ onCompetitionStopped,
         setIsOpen(false);
         setHasGames(false); // Hide button since games will be cleared
         onCompetitionStopped?.();
-      } else if (data && data.error) {
-        throw new Error(data.error);
       } else {
-        throw new Error('Failed to archive competition - no data returned');
+        const errorResult = result as any;
+        throw new Error(errorResult?.error || 'Failed to archive competition - no data returned');
       }
     } catch (error) {
       console.error('Error stopping competition:', error);

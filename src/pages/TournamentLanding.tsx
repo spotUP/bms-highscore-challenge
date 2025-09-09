@@ -16,10 +16,11 @@ interface PublicTournament {
   description: string | null;
   slug: string;
   is_public: boolean;
-  theme_color: string;
-  logo_url: string | null;
   created_at: string;
   member_count?: number;
+  // Optional properties that may not exist in database
+  theme_color?: string;
+  logo_url?: string | null;
 }
 
 const TournamentLanding = () => {

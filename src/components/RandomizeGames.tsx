@@ -173,7 +173,7 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
       const updateResults = await Promise.all(updatePromises);
       
       // Check for any update errors
-      const hasErrors = updateResults.some(result => result.error);
+      const hasErrors = updateResults.some(result => result && 'error' in result && result.error);
       if (hasErrors) {
         console.error('Error updating games:', updateResults);
         toast({

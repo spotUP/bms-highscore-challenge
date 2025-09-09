@@ -109,7 +109,7 @@ const ResetFunctions = () => {
   };
 
   return (
-    <Card className={getCardStyle('warning')}>
+    <Card className={getCardStyle('secondary')}>
       <CardHeader>
         <CardTitle className={`${getTypographyStyle('h3')} flex items-center gap-2 text-red-400`}>
           <AlertTriangle className="w-5 h-5" />
@@ -127,7 +127,7 @@ const ResetFunctions = () => {
             <Button
               onClick={resetCompetitionScores}
               disabled={isResettingCompetition}
-              className={`${getButtonStyle('warning')} w-full`}
+              className={`${getButtonStyle('secondary')} w-full bg-yellow-600 hover:bg-yellow-700`}
             >
               <RotateCcw className="w-4 h-4 mr-2" />
               {isResettingCompetition ? "Resetting Competition..." : "Reset Competition"}
@@ -143,7 +143,7 @@ const ResetFunctions = () => {
             <Button
               onClick={resetAllAchievements}
               disabled={isResettingAchievements}
-              className={`${getButtonStyle('destructive')} w-full`}
+              className={`${getButtonStyle('secondary')} w-full bg-red-600 hover:bg-red-700`}
             >
               <Trash2 className="w-4 h-4 mr-2" />
               {isResettingAchievements ? "Resetting All..." : "Reset All Achievements"}

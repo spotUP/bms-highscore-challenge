@@ -153,7 +153,7 @@ const WebhookConfig: React.FC = () => {
         lastTest: {
           success: result.success,
           timestamp: new Date().toISOString(),
-          error: result.error
+          error: result.success ? undefined : (result as any).error
         }
       });
 
@@ -165,7 +165,7 @@ const WebhookConfig: React.FC = () => {
       } else {
         toast({
           title: "Webhook Test Failed",
-          description: result.error || "Unknown error occurred",
+          description: (result as any).error || "Unknown error occurred",
           variant: "destructive"
         });
       }

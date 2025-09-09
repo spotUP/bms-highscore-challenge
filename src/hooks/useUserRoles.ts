@@ -45,7 +45,7 @@ export const useUserRoles = () => {
       const role = data?.role || 'user';
       setUserRole(role);
       setIsAdmin(role === 'admin');
-      setIsModerator(role === 'moderator' || role === 'admin');
+      setIsModerator(role === 'admin'); // Only admin for now since moderator doesn't exist in enum
     } catch (error) {
       console.error('Error loading user role:', error);
     } finally {
