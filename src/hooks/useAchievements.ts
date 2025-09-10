@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAchievement } from '@/contexts/AchievementContext';
+import { useTournament } from '@/contexts/TournamentContext';
 
 interface Achievement {
   id: string;
@@ -13,15 +14,22 @@ interface Achievement {
 
 export const useAchievements = () => {
   const { showAchievementNotification } = useAchievement();
+  const { currentTournament } = useTournament();
 
   const checkForNewAchievements = useCallback(async (playerName: string) => {
     try {
-      console.log('🎯 Achievement system called for:', playerName);
+      console.log('🎯 Achievement system called for:', playerName, 'tournament:', currentTournament?.id);
       
-      // Use a SQL query to safely check and retrieve new achievements
-      // This avoids TypeScript type issues while the tables are being set up
+      // Only check achievements if we have a current tournament
+      if (!currentTournament) {
+        console.log('⚠️ No current tournament - skipping achievements');
+        return;
+      }
+      
+      // Use the new tournament-scoped achievement function
       try {
-        const { data: newAchievements, error } = await (supabase as any).rpc('get_recent_achievements', {
+        const { data: newAchievements, error } = await (supabase as any).rpc('get_recent_achievements_by_tournament', {
+          p_tournament_id: currentTournament.id,
           p_player_name: playerName.toUpperCase(),
           p_since_minutes: 1 // Check for achievements in last minute
         });
@@ -52,17 +60,17 @@ export const useAchievements = () => {
           // Send single webhook with all achievements
           sendMultipleAchievementsWebhook(playerName, newAchievements);
         } else {
-          console.log('📭 No new achievements found for', playerName);
+          console.log('📭 No new achievements found for player', playerName, 'in tournament', currentTournament.id);
         }
       } catch (error) {
-        console.log('⚠️ Achievement RPC not available - set up achievement system first');
-        console.log('📖 Run simple-achievement-setup.sql in your Supabase SQL Editor');
+        console.log('⚠️ Tournament-scoped achievement system not available - run migration first');
+        console.log('📖 Run 20250910191000_tournament_creator_achievements.sql migration');
         console.log('🔧 Error details:', error);
       }
     } catch (error) {
       console.error('Error in checkForNewAchievements:', error);
     }
-  }, [showAchievementNotification]);
+  }, [showAchievementNotification, currentTournament]);
 
   const sendMultipleAchievementsWebhook = useCallback(async (
     playerName: string, 
@@ -83,6 +91,7 @@ export const useAchievements = () => {
           games (name)
         `)
         .eq('player_name', playerName.toUpperCase())
+        .eq('tournament_id', currentTournament?.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -131,6 +140,7 @@ export const useAchievements = () => {
           games (name)
         `)
         .eq('player_name', playerName.toUpperCase())
+        .eq('tournament_id', currentTournament?.id)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();

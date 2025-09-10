@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Plus, Wrench, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe } from "lucide-react";
+import { Pencil, Trash2, Plus, Wrench, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy } from "lucide-react";
 import { isPlaceholderLogo, formatScore } from "@/lib/utils";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import GameLogoSuggestions, { GameLogoSuggestionsRef } from "@/components/GameLogoSuggestions";
@@ -28,6 +28,7 @@ import DemolitionManQRSubmit from "@/components/DemolitionManQRSubmit";
 import DemolitionManEnsure from "@/components/DemolitionManEnsure";
 import DemolitionManScoreManager from "@/components/DemolitionManScoreManager";
 import PerformanceToggle from "@/components/PerformanceToggle";
+import AchievementManager from "@/components/AchievementManager";
 import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from "@/utils/designSystem";
 import { useUserRoles } from "@/hooks/useUserRoles";
 import { useTournament } from "@/contexts/TournamentContext";
@@ -40,6 +41,7 @@ interface Game {
   logo_url: string | null;
   is_active: boolean;
   include_in_challenge: boolean;
+  tournament_id: string;
   created_at: string;
   updated_at: string;
 }
@@ -55,6 +57,7 @@ const CreateTournamentForm = () => {
     is_public: false,
     demolition_man_active: false,
   });
+  const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
 
   const generateSlug = (name: string) => {
     return name
@@ -63,6 +66,33 @@ const CreateTournamentForm = () => {
       .replace(/\s+/g, '-')
       .replace(/-+/g, '-')
       .trim();
+  };
+
+  const checkSlugAvailability = async (slug: string) => {
+    if (!slug.trim()) {
+      setSlugAvailable(null);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('tournaments')
+        .select('id')
+        .eq('slug', slug.trim().toLowerCase())
+        .single();
+
+      if (error && error.code === 'PGRST116') {
+        // No rows returned - slug is available
+        setSlugAvailable(true);
+      } else if (data) {
+        // Slug exists
+        setSlugAvailable(false);
+      } else {
+        setSlugAvailable(null);
+      }
+    } catch (error) {
+      setSlugAvailable(null);
+    }
   };
 
   const handleCreateTournament = async () => {
@@ -76,7 +106,7 @@ const CreateTournamentForm = () => {
     }
 
     setIsCreating(true);
-    const success = await createTournament({
+    const tournament = await createTournament({
       name: createForm.name.trim(),
       description: createForm.description.trim() || undefined,
       slug: createForm.slug.trim().toLowerCase(),
@@ -84,7 +114,7 @@ const CreateTournamentForm = () => {
       demolition_man_active: createForm.demolition_man_active,
     });
 
-    if (success) {
+    if (tournament) {
       setCreateForm({
         name: '',
         description: '',
@@ -137,16 +167,46 @@ const CreateTournamentForm = () => {
 
         <div>
           <Label htmlFor="slug" className="text-white">Tournament Slug</Label>
-          <Input
-            id="slug"
-            value={createForm.slug}
-            onChange={(e) => setCreateForm(prev => ({ ...prev, slug: generateSlug(e.target.value) }))}
-            placeholder="my-awesome-tournament"
-            className="bg-black/50 border-gray-700 text-white"
-          />
+          <div className="relative">
+            <Input
+              id="slug"
+              value={createForm.slug}
+              onChange={(e) => {
+                const newSlug = generateSlug(e.target.value);
+                setCreateForm(prev => ({ ...prev, slug: newSlug }));
+                // Debounce slug availability check
+                setTimeout(() => checkSlugAvailability(newSlug), 500);
+              }}
+              placeholder="my-awesome-tournament"
+              className={`bg-black/50 border-gray-700 text-white ${
+                slugAvailable === false ? 'border-red-500' : 
+                slugAvailable === true ? 'border-green-500' : ''
+              }`}
+            />
+            {slugAvailable === true && (
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-green-500">
+                ✓
+              </div>
+            )}
+            {slugAvailable === false && (
+              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500">
+                ✗
+              </div>
+            )}
+          </div>
           <p className="text-xs text-gray-500 mt-1">
             URL: /t/{createForm.slug || 'tournament-slug'}
           </p>
+          {slugAvailable === false && (
+            <p className="text-xs text-red-500 mt-1">
+              This slug is already taken. Please choose a different one.
+            </p>
+          )}
+          {slugAvailable === true && (
+            <p className="text-xs text-green-500 mt-1">
+              This slug is available!
+            </p>
+          )}
         </div>
 
         <div>
@@ -188,7 +248,7 @@ const CreateTournamentForm = () => {
 
         <Button 
           onClick={handleCreateTournament}
-          disabled={!createForm.name.trim() || !createForm.slug.trim() || isCreating}
+          disabled={!createForm.name.trim() || !createForm.slug.trim() || isCreating || slugAvailable === false}
           className="w-full"
         >
           {isCreating ? 'Creating...' : 'Create Tournament'}
@@ -200,7 +260,7 @@ const CreateTournamentForm = () => {
 
 const Admin = () => {
   const { user, isAdmin, loading } = useAuth();
-  const { currentTournament, userTournaments, hasPermission, updateTournament, deleteTournament, refreshTournaments, currentUserRole } = useTournament();
+  const { currentTournament, userTournaments, hasPermission, updateTournament, deleteTournament, refreshTournaments, currentUserRole, cloneTournament, switchTournament } = useTournament();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [games, setGames] = useState<Game[]>([]);
@@ -231,6 +291,26 @@ const Admin = () => {
       navigate('/');
     }
   }, [user, isAdmin, hasPermission, loading, navigate]);
+
+  // Handle tournament switching
+  useEffect(() => {
+    const handleTournamentSwitch = async (event: CustomEvent) => {
+      const tournamentId = event.detail;
+      const tournament = userTournaments.find(t => t.id === tournamentId);
+      if (tournament) {
+        await switchTournament(tournament);
+        toast({
+          title: "Tournament Switched",
+          description: `Now managing "${tournament.name}"`,
+        });
+      }
+    };
+
+    window.addEventListener('tournament:switch', handleTournamentSwitch as EventListener);
+    return () => {
+      window.removeEventListener('tournament:switch', handleTournamentSwitch as EventListener);
+    };
+  }, [userTournaments, toast, switchTournament]);
 
   // Load games and their scores from all user tournaments
   const loadGames = async () => {
@@ -706,14 +786,13 @@ const Admin = () => {
         </PageHeader>
 
         <Tabs defaultValue="games" className="w-full">
-          <TabsList className="grid w-full grid-cols-6 bg-gray-900 border border-white/20">
+          <TabsList className="grid w-full grid-cols-7 bg-gray-900 border border-white/20">
             <TabsTrigger value="games" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
               <Gamepad2 className="w-4 h-4 mr-2" />
               Games & Scores
             </TabsTrigger>
             <TabsTrigger value="create-tournament" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
-              <Plus className="w-4 h-4 mr-2" />
-              Create Tournament
+              Tournaments
             </TabsTrigger>
             <TabsTrigger value="webhooks" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
               <Webhook className="w-4 h-4 mr-2" />
@@ -722,6 +801,14 @@ const Admin = () => {
             <TabsTrigger value="system" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
               <TestTube className="w-4 h-4 mr-2" />
               System
+            </TabsTrigger>
+            <TabsTrigger value="clone" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
+              <Settings className="w-4 h-4 mr-2" />
+              Clone
+            </TabsTrigger>
+            <TabsTrigger value="achievements" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
+              <Trophy className="w-4 h-4 mr-2" />
+              Achievements
             </TabsTrigger>
             <TabsTrigger value="users" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
               <Users className="w-4 h-4 mr-2" />
@@ -1012,7 +1099,111 @@ const Admin = () => {
           </TabsContent>
 
           <TabsContent value="create-tournament" className="mt-6">
-            <CreateTournamentForm />
+            <div className="space-y-6">
+              {/* Tournament Management Section */}
+              <Card className={getCardStyle('primary')}>
+                <CardHeader>
+                  <CardTitle className={getTypographyStyle('h3')}>Manage Tournaments</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="text-sm text-gray-300 mb-4">
+                      You have access to {userTournaments.length} tournament{userTournaments.length !== 1 ? 's' : ''}.
+                    </div>
+                    
+                    <div className="grid gap-4">
+                      {userTournaments.map((tournament) => (
+                        <div key={tournament.id} className="flex items-center justify-between p-4 bg-black/30 rounded-lg border border-white/10">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="font-semibold text-white">{tournament.name}</h4>
+                              {tournament.id === currentTournament?.id && (
+                                <span className="px-2 py-1 text-xs bg-arcade-neonCyan text-black rounded">Current</span>
+                              )}
+                              {tournament.is_public && (
+                                <div title="Public Tournament">
+                                  <Globe className="w-4 h-4 text-green-400" />
+                                </div>
+                              )}
+                              {!tournament.is_public && (
+                                <div title="Private Tournament">
+                                  <Lock className="w-4 h-4 text-yellow-400" />
+                                </div>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-400 mb-1">Slug: /t/{tournament.slug}</p>
+                            {tournament.description && (
+                              <p className="text-sm text-gray-300">{tournament.description}</p>
+                            )}
+                            <p className="text-xs text-gray-500">
+                              Created: {new Date(tournament.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                // Switch to this tournament
+                                const event = new CustomEvent('tournament:switch', { detail: tournament.id });
+                                window.dispatchEvent(event);
+                              }}
+                              disabled={tournament.id === currentTournament?.id}
+                            >
+                              {tournament.id === currentTournament?.id ? 'Current' : 'Switch To'}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                // Edit tournament - could open a dialog or navigate to edit page
+                                toast({
+                                  title: "Edit Tournament",
+                                  description: `Edit functionality for "${tournament.name}" would go here`,
+                                });
+                              }}
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  disabled={tournament.id === currentTournament?.id}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent className="bg-gray-900 text-white border-white/20">
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete Tournament</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete "{tournament.name}"? This action cannot be undone and will remove all games, scores, and members.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeleteTournament()}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Create New Tournament Section */}
+              <CreateTournamentForm />
+            </div>
           </TabsContent>
 
           <TabsContent value="webhooks" className="mt-6">
@@ -1032,6 +1223,81 @@ const Admin = () => {
               <DemolitionManEnsure />
               <ResetFunctions />
             </div>
+          </TabsContent>
+
+          <TabsContent value="clone" className="mt-6">
+            <Card className={getCardStyle('primary')}>
+              <CardHeader>
+                <CardTitle className={getTypographyStyle('h3')}>Clone Tournament</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-white">Source Tournament</Label>
+                    <Select
+                      value={currentTournament?.id || (userTournaments[0]?.id || '')}
+                      onValueChange={() => {}}
+                      disabled
+                    >
+                      <SelectTrigger className="bg-black/50 border-white/20 text-white">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-gray-900 border-white/20">
+                        {userTournaments.map((tournament) => (
+                          <SelectItem key={tournament.id} value={tournament.id} className="text-white">
+                            {tournament.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-gray-500 mt-1">Clones from the currently selected tournament.</p>
+                  </div>
+                  <div>
+                    <Label className="text-white">New Slug</Label>
+                    <Input id="clone-slug" placeholder="default-arcade" className="bg-black/50 border-white/20 text-white" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-white">New Name</Label>
+                  <Input id="clone-name" placeholder="Default Arcade Tournament" className="bg-black/50 border-white/20 text-white" />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch id="clone-public" defaultChecked />
+                  <Label htmlFor="clone-public">Make Public</Label>
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                  onClick={async () => {
+                    const slugEl = document.getElementById('clone-slug') as HTMLInputElement | null;
+                    const nameEl = document.getElementById('clone-name') as HTMLInputElement | null;
+                    const pubEl = document.getElementById('clone-public') as HTMLInputElement | null;
+                    const slug = (slugEl?.value || '').trim().toLowerCase();
+                    const name = (nameEl?.value || '').trim();
+                    const isPublic = !!pubEl?.checked;
+                    if (!currentTournament || !slug || !name) {
+                      toast({ title: 'Error', description: 'Provide name and slug, and select a source.', variant: 'destructive' });
+                      return;
+                    }
+                    const created = await cloneTournament(currentTournament.id, {
+                      name,
+                      slug,
+                      is_public: isPublic,
+                    });
+                    if (created) {
+                      await refreshTournaments();
+                      toast({ title: 'Cloned', description: `Created ${name}` });
+                    }
+                  }}
+                >
+                  Clone Tournament
+                </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="achievements" className="mt-6">
+            <AchievementManager />
           </TabsContent>
 
           <TabsContent value="users" className="mt-6">

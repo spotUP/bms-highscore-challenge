@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface PerformanceInfo {
   isLowEnd: boolean;
@@ -65,6 +66,7 @@ const detectLowEndDevice = (): boolean => {
 };
 
 export const usePerformanceMode = (): PerformanceInfo => {
+  const queryClient = useQueryClient();
   const [performanceInfo, setPerformanceInfo] = useState<PerformanceInfo>({
     isLowEnd: false,
     isRaspberryPi: false,
@@ -77,7 +79,8 @@ export const usePerformanceMode = (): PerformanceInfo => {
     enableTransitions: true,
     togglePerformanceMode: (enabled: boolean) => {
       localStorage.setItem('performance-mode', enabled ? 'enabled' : 'disabled');
-      window.location.reload(); // Reload to apply changes
+      // Force re-render by updating state instead of reloading
+      setPerformanceInfo(prev => ({ ...prev, isPerformanceMode: enabled }));
     },
   });
 
@@ -113,7 +116,8 @@ export const usePerformanceMode = (): PerformanceInfo => {
       enableTransitions: !shouldOptimize,
       togglePerformanceMode: (enabled: boolean) => {
         localStorage.setItem('performance-mode', enabled ? 'enabled' : 'disabled');
-        window.location.reload(); // Reload to apply changes
+        // Update state to trigger re-render with new performance settings
+        setPerformanceInfo(prev => ({ ...prev, isPerformanceMode: enabled }));
       },
     });
   }, []);
@@ -124,5 +128,6 @@ export const usePerformanceMode = (): PerformanceInfo => {
 // Helper function to toggle performance mode manually
 export const togglePerformanceMode = (enabled: boolean) => {
   localStorage.setItem('performance-mode', enabled ? 'enabled' : 'disabled');
-  window.location.reload(); // Reload to apply changes
+  // Dispatch a custom event to notify components of the change
+  window.dispatchEvent(new CustomEvent('performanceModeChanged', { detail: { enabled } }));
 };

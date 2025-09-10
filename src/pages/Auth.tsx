@@ -104,7 +104,8 @@ export default function Auth() {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    // Remove annoying loading state
+    // setIsLoading(true);
 
     try {
       const { error } = await signIn(email, password, remember);
@@ -128,7 +129,7 @@ export default function Auth() {
         description: "An unexpected error occurred"
       });
     } finally {
-      setIsLoading(false);
+      // setIsLoading(false);
     }
   };
 
@@ -340,8 +341,8 @@ export default function Auth() {
                     <Checkbox id="remember-me" checked={remember} onCheckedChange={(v) => setRemember(Boolean(v))} />
                     <Label htmlFor="remember-me">Remember me</Label>
                   </div>
-                  <Button type="submit" variant="outline" disabled={isLoading}>
-                  {isLoading ? 'Signing in...' : 'Sign In'}
+                  <Button type="submit" variant="outline">
+                  Sign In
                   </Button>
                 </div>
                 <div className="text-center mt-4">

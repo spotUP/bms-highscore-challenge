@@ -53,3 +53,5 @@ create policy "tournaments_select_public_owner_or_member" on public.tournaments
   );
 
 
+
+

@@ -81,16 +81,17 @@ const MobileEntry = () => {
     loadGame();
   }, [gameId]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen text-white p-4 flex items-center justify-center relative z-10"
-           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-        <div className="text-center">
-          <div className="text-xl">Loading...</div>
-        </div>
-      </div>
-    );
-  }
+  // Remove annoying loading screen - show content immediately
+  // if (loading) {
+  //   return (
+  //     <div className="min-h-screen text-white p-4 flex items-center justify-center relative z-10"
+  //          style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
+  //       <div className="text-center">
+  //         <div className="text-xl">Loading...</div>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   if (!game) {
     return (

@@ -2,18 +2,19 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface Tournament {
   id: string;
   name: string;
   description: string | null;
   slug: string;
-  created_by: string; // This is what the database has, not owner_id
+  created_by: string; // This is what the database actually has
   is_public: boolean;
   created_at: string;
   updated_at: string;
   // Optional properties that may not exist in database
-  owner_id?: string;
+  owner_id?: string; // Alias for created_by for compatibility
   is_active?: boolean;
   logo_url?: string | null;
   theme_color?: string;
@@ -37,6 +38,7 @@ interface TournamentContextType {
   loading: boolean;
   switchTournament: (tournament: Tournament) => void;
   createTournament: (data: CreateTournamentData) => Promise<Tournament | null>;
+  cloneTournament: (sourceTournamentId: string, data: CreateTournamentData) => Promise<Tournament | null>;
   updateTournament: (id: string, data: Partial<Tournament>) => Promise<boolean>;
   deleteTournament: (id: string) => Promise<boolean>;
   joinTournament: (slug: string) => Promise<boolean>;
@@ -65,6 +67,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Load user's tournaments (or default tournament for anonymous users)
   const loadUserTournaments = async () => {
@@ -133,14 +136,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       // Now try the full query
       const { data: memberships, error } = await supabase
         .from('tournament_members')
-        .select(`
-          *,
-          tournaments (*)
-        `)
+        .select('tournament_id, role')
         .eq('user_id', user.id)
         .eq('is_active', true);
 
-      console.log('Tournament memberships result:', { memberships, error });
+      console.log('Tournament memberships (ids only) result:', { memberships, error });
       console.log('Error details:', {
         code: error?.code,
         message: error?.message,
@@ -153,8 +153,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
-      const tournaments = memberships?.map(m => m.tournaments).filter(Boolean) || [];
-      console.log('Found tournaments:', tournaments);
+      const tournamentIds = (memberships || []).map((m: any) => m.tournament_id);
+      let tournaments: any[] = [];
+      if (tournamentIds.length > 0) {
+        const { data: tList, error: tErr } = await supabase
+          .from('tournaments')
+          .select('*')
+          .in('id', tournamentIds);
+        if (tErr) throw tErr;
+        tournaments = tList || [];
+      }
+      console.log('Found tournaments by ids:', tournaments);
       setUserTournaments(tournaments);
 
       // Selection priority:
@@ -190,7 +199,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       if (selectedTournament) {
-        const membership = memberships?.find(m => m.tournament_id === selectedTournament.id);
+        const membership = memberships?.find((m: any) => m.tournament_id === selectedTournament.id);
         console.log('Setting current tournament:', selectedTournament.name, 'with role:', membership?.role);
         setCurrentTournament(selectedTournament);
         setCurrentUserRole(membership?.role || null);
@@ -323,10 +332,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         description: `Switched to ${tournament.name}`,
       });
       
-      // Trigger a page refresh to update all data
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
+      // Invalidate React Query cache to update all data
+      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
+      queryClient.invalidateQueries({ queryKey: ['scores'] });
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['achievements'] });
     } catch (error: any) {
       console.error('Error switching tournament:', error);
       toast({
@@ -342,10 +352,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     if (!user) return null;
 
     try {
+      // Extract demolition_man_active from data since it's not in the database schema
+      const { demolition_man_active, ...tournamentData } = data;
+      
       const { data: tournament, error } = await supabase
         .from('tournaments')
         .insert({
-          ...data,
+          ...tournamentData,
           created_by: user.id,
           is_public: data.is_public ?? false,
         })
@@ -374,9 +387,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       return tournament;
     } catch (error: any) {
       console.error('Error creating tournament:', error);
+      
+      let errorMessage = "Failed to create tournament";
+      if (error.code === '23505' && error.message.includes('tournaments_slug_key')) {
+        errorMessage = "A tournament with this slug already exists. Please choose a different slug.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Error",
-        description: error.message || "Failed to create tournament",
+        description: errorMessage,
         variant: "destructive",
       });
       return null;
@@ -414,6 +435,38 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         variant: "destructive",
       });
       return false;
+    }
+  };
+
+  // Clone tournament (minimal safe clone: create new tournament and set current user as owner)
+  const cloneTournament = async (
+    sourceTournamentId: string,
+    data: CreateTournamentData
+  ): Promise<Tournament | null> => {
+    if (!user) return null;
+
+    try {
+      const res = await fetch('/functions/v1/clone-tournament', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourceTournamentId,
+          name: data.name,
+          slug: data.slug,
+          is_public: data.is_public ?? false,
+          created_by: user.id,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || 'Failed to clone');
+
+      await refreshTournaments();
+      toast({ title: 'Success', description: 'Tournament cloned successfully' });
+      return json.tournament as Tournament;
+    } catch (error: any) {
+      console.error('Error cloning tournament:', error);
+      toast({ title: 'Error', description: error.message || 'Failed to clone tournament', variant: 'destructive' });
+      return null;
     }
   };
 
@@ -682,6 +735,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     loading,
     switchTournament,
     createTournament,
+    cloneTournament,
     updateTournament,
     deleteTournament,
     joinTournament,

@@ -134,14 +134,15 @@ const Index = () => {
     return shuffleArray(getLeaderboardNames);
   }, [getLeaderboardNames]);
 
-  if (loading || tournamentLoading || gamesLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center relative z-10"
-           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-        <div className="text-white text-xl">Loading...</div>
-      </div>
-    );
-  }
+  // Remove annoying loading screen - show content immediately
+  // if (loading || tournamentLoading || gamesLoading) {
+  //   return (
+  //     <div className="min-h-screen flex items-center justify-center relative z-10"
+  //          style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
+  //       <div className="text-white text-xl">Loading...</div>
+  //     </div>
+  //   );
+  // }
 
   // Show tournament selection if user has no current tournament
   if (user && !currentTournament) {

@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, Plus, Zap } from "lucide-react";
 import { formatScore } from '@/lib/utils';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface DemolitionScore {
   id: string;
@@ -29,6 +30,7 @@ const DemolitionManScoreManager = () => {
     score: ""
   });
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Load Demolition Man game ID and scores
   const loadData = async () => {
@@ -193,10 +195,10 @@ const DemolitionManScoreManager = () => {
       resetForm();
       loadData();
       
-      // Refresh the page to update all leaderboards
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      // Invalidate React Query cache to update all leaderboards
+      queryClient.invalidateQueries({ queryKey: ['scores'] });
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
     } catch (error: any) {
       console.error('Error saving Demolition Man score:', error);
       toast({
@@ -227,10 +229,10 @@ const DemolitionManScoreManager = () => {
 
       loadData();
       
-      // Refresh the page to update all leaderboards
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      // Invalidate React Query cache to update all leaderboards
+      queryClient.invalidateQueries({ queryKey: ['scores'] });
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['tournaments'] });
     } catch (error: any) {
       console.error('Error deleting Demolition Man score:', error);
       toast({
