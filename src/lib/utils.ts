@@ -94,10 +94,11 @@ export function getGameLogoUrl(logoUrl: string | null): string | null {
     return logoUrl;
   }
   
-  // If it's a local path, convert to Supabase Storage URL
+  // If it's a local path, convert to Supabase Storage URL using env domain
   if (logoUrl.startsWith('/game-logos/')) {
     const fileName = logoUrl.substring('/game-logos/'.length);
-    return `https://tnsgrwntmnzpaifmutqh.supabase.co/storage/v1/object/public/game-logos/${fileName}`;
+    const base = (import.meta as any)?.env?.VITE_SUPABASE_URL || 'https://tnsgrwntmnzpaifmutqh.supabase.co';
+    return `${base}/storage/v1/object/public/game-logos/${fileName}`;
   }
   
   // If it's a placeholder URL, return null to trigger fallback
