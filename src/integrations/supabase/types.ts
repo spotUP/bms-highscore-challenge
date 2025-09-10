@@ -19,6 +19,7 @@ export type Database = {
           badge_color: string
           badge_icon: string
           created_at: string | null
+          created_by: string
           criteria: Json
           description: string
           id: string
@@ -33,6 +34,7 @@ export type Database = {
           badge_color: string
           badge_icon: string
           created_at?: string | null
+          created_by: string
           criteria: Json
           description: string
           id?: string
@@ -47,6 +49,7 @@ export type Database = {
           badge_color?: string
           badge_icon?: string
           created_at?: string | null
+          created_by?: string
           criteria?: Json
           description?: string
           id?: string
@@ -66,6 +69,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      achievements_backup_20240910: {
+        Row: {
+          badge_color: string | null
+          badge_icon: string | null
+          created_at: string | null
+          criteria: Json | null
+          description: string | null
+          id: string | null
+          is_active: boolean | null
+          name: string | null
+          points: number | null
+          tournament_id: string | null
+          type: Database["public"]["Enums"]["achievement_type"] | null
+          updated_at: string | null
+        }
+        Insert: {
+          badge_color?: string | null
+          badge_icon?: string | null
+          created_at?: string | null
+          criteria?: Json | null
+          description?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          name?: string | null
+          points?: number | null
+          tournament_id?: string | null
+          type?: Database["public"]["Enums"]["achievement_type"] | null
+          updated_at?: string | null
+        }
+        Update: {
+          badge_color?: string | null
+          badge_icon?: string | null
+          created_at?: string | null
+          criteria?: Json | null
+          description?: string | null
+          id?: string | null
+          is_active?: boolean | null
+          name?: string | null
+          points?: number | null
+          tournament_id?: string | null
+          type?: Database["public"]["Enums"]["achievement_type"] | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       competition_games: {
         Row: {
@@ -312,8 +360,9 @@ export type Database = {
           id: string
           player_name: string
           score_id: string | null
-          tournament_id: string
+          tournament_id: string | null
           unlocked_at: string | null
+          user_id: string | null
         }
         Insert: {
           achievement_id: string
@@ -321,8 +370,9 @@ export type Database = {
           id?: string
           player_name: string
           score_id?: string | null
-          tournament_id: string
+          tournament_id?: string | null
           unlocked_at?: string | null
+          user_id?: string | null
         }
         Update: {
           achievement_id?: string
@@ -330,8 +380,9 @@ export type Database = {
           id?: string
           player_name?: string
           score_id?: string | null
-          tournament_id?: string
+          tournament_id?: string | null
           unlocked_at?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -372,6 +423,7 @@ export type Database = {
           total_scores: number
           tournament_id: string
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -387,6 +439,7 @@ export type Database = {
           total_scores?: number
           tournament_id: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -402,6 +455,7 @@ export type Database = {
           total_scores?: number
           tournament_id?: string
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -637,6 +691,7 @@ export type Database = {
         Row: {
           created_at: string | null
           created_by: string | null
+          demolition_man_active: boolean | null
           description: string | null
           id: string
           is_public: boolean
@@ -647,6 +702,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           created_by?: string | null
+          demolition_man_active?: boolean | null
           description?: string | null
           id?: string
           is_public?: boolean
@@ -657,6 +713,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           created_by?: string | null
+          demolition_man_active?: boolean | null
           description?: string | null
           id?: string
           is_public?: boolean
@@ -698,6 +755,39 @@ export type Database = {
           id: string
           platform: string
           updated_at: string | null
+          user_id: string
+          webhook_url: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          enabled?: boolean | null
+          events?: string[] | null
+          id?: string
+          platform: string
+          updated_at?: string | null
+          user_id: string
+          webhook_url?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          enabled?: boolean | null
+          events?: string[] | null
+          id?: string
+          platform?: string
+          updated_at?: string | null
+          user_id?: string
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
+      webhook_config_backup: {
+        Row: {
+          created_at: string | null
+          enabled: boolean | null
+          events: string[] | null
+          id: string
+          platform: string
+          updated_at: string | null
           webhook_url: string | null
         }
         Insert: {
@@ -725,17 +815,90 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_achievement_name_constraint: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       archive_current_competition: {
         Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      check_and_award_achievements_for_player: {
+        Args:
+          | {
+              p_game_id: string
+              p_is_first_place?: boolean
+              p_player_name: string
+              p_score: number
+              p_score_id?: string
+              p_tournament_id: string
+            }
+          | {
+              p_game_id: string
+              p_is_first_place?: boolean
+              p_player_name: string
+              p_score: number
+              p_tournament_id: string
+            }
+        Returns: Json
+      }
+      check_and_award_achievements_for_user: {
+        Args:
+          | {
+              p_game_id: string
+              p_is_first_place?: boolean
+              p_player_name: string
+              p_score: number
+              p_score_id?: string
+              p_tournament_id: string
+              p_user_id: string
+            }
+          | {
+              p_game_id: string
+              p_is_first_place?: boolean
+              p_player_name: string
+              p_score: number
+              p_tournament_id: string
+              p_user_id: string
+            }
         Returns: Json
       }
       check_score_submission_rate_limit: {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      create_default_achievements_for_tournament: {
+        Args: { p_tournament_id: string }
+        Returns: undefined
+      }
+      create_tournament_achievement: {
+        Args: {
+          p_badge_color?: string
+          p_badge_icon?: string
+          p_criteria?: Json
+          p_description: string
+          p_name: string
+          p_points?: number
+          p_tournament_id: string
+          p_type: Database["public"]["Enums"]["achievement_type"]
+        }
+        Returns: string
+      }
+      delete_tournament_achievement: {
+        Args: { p_achievement_id: string }
+        Returns: boolean
+      }
       ensure_demolition_man_game: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      find_duplicate_achievements: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          count: number
+          name: string
+          tournament_id: string
+        }[]
       }
       get_public_username: {
         Args: { user_uuid: string }
@@ -753,6 +916,56 @@ export type Database = {
           unlocked_at: string
         }[]
       }
+      get_recent_achievements_by_tournament: {
+        Args: {
+          p_player_name: string
+          p_since_minutes?: number
+          p_tournament_id: string
+        }
+        Returns: {
+          achievement_description: string
+          achievement_id: string
+          achievement_name: string
+          badge_color: string
+          badge_icon: string
+          points: number
+          unlocked_at: string
+        }[]
+      }
+      get_recent_achievements_for_user: {
+        Args: {
+          p_since_minutes?: number
+          p_tournament_id: string
+          p_user_id: string
+        }
+        Returns: {
+          achievement_description: string
+          achievement_id: string
+          achievement_name: string
+          badge_color: string
+          badge_icon: string
+          points: number
+          unlocked_at: string
+        }[]
+      }
+      get_tournament_achievements: {
+        Args: { p_tournament_id: string }
+        Returns: {
+          badge_color: string
+          badge_icon: string
+          created_at: string | null
+          created_by: string
+          criteria: Json
+          description: string
+          id: string
+          is_active: boolean
+          name: string
+          points: number
+          tournament_id: string
+          type: Database["public"]["Enums"]["achievement_type"]
+          updated_at: string | null
+        }[]
+      }
       get_user_role: {
         Args: { user_id: string }
         Returns: string
@@ -761,9 +974,39 @@ export type Database = {
         Args: { tournament_id: string; user_id: string }
         Returns: Database["public"]["Enums"]["tournament_role"]
       }
+      initialize_user_webhooks: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
       is_admin: {
         Args: { user_id: string }
         Returns: boolean
+      }
+      is_tournament_member: {
+        Args: { p_roles?: string[]; p_tournament: string; p_user: string }
+        Returns: boolean
+      }
+      update_tournament_achievement: {
+        Args: {
+          p_achievement_id: string
+          p_badge_color?: string
+          p_badge_icon?: string
+          p_criteria?: Json
+          p_description?: string
+          p_is_active?: boolean
+          p_name?: string
+          p_points?: number
+        }
+        Returns: boolean
+      }
+      update_user_webhook_config: {
+        Args: {
+          p_enabled?: boolean
+          p_platform: string
+          p_user_id: string
+          p_webhook_url: string
+        }
+        Returns: undefined
       }
       update_webhook_config: {
         Args: { p_enabled?: boolean; p_platform: string; p_webhook_url: string }
