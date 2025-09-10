@@ -149,7 +149,14 @@ do $$ begin
   ) then
     execute 'create policy "scores_select_public_or_member" on public.scores
       for select using (
-        exists (select 1 from public.tournaments t where t.id = scores.tournament_id and (t.is_public = true or public.is_tournament_member(auth.uid(), t.id)))
+        exists (
+          select 1 from public.tournaments t
+          where t.id = scores.tournament_id
+            and (
+              t.is_public = true
+              or public.is_tournament_member(auth.uid(), t.id)
+            )
+        )
       )';
   end if;
 end $$;
@@ -159,11 +166,17 @@ do $$ begin
   if not exists (
     select 1 from pg_policies where schemaname='public' and tablename='scores' and policyname='scores_insert_own_member'
   ) then
-    execute 'create policy "scores_insert_own_member" on public.scores
+    execute 'create policy "scores_insert_member" on public.scores
       for insert with check (
         auth.uid() is not null
-        and user_id = auth.uid()
-        and exists (select 1 from public.tournaments t where t.id = scores.tournament_id and (t.is_public = true or public.is_tournament_member(auth.uid(), t.id)))
+        and exists (
+          select 1 from public.tournaments t
+          where t.id = scores.tournament_id
+            and (
+              t.is_public = true
+              or public.is_tournament_member(auth.uid(), t.id)
+            )
+        )
       )';
   end if;
 end $$;
@@ -173,11 +186,11 @@ do $$ begin
   if not exists (
     select 1 from pg_policies where schemaname='public' and tablename='scores' and policyname='scores_modify_owner_or_admin'
   ) then
-    execute 'create policy "scores_modify_owner_or_admin" on public.scores
+    execute 'create policy "scores_modify_admin" on public.scores
       for all using (
-        user_id = auth.uid() or public.is_tournament_member(auth.uid(), tournament_id, array[''owner'',''admin''])
+        public.is_tournament_member(auth.uid(), tournament_id, array[''owner'',''admin''])
       ) with check (
-        user_id = auth.uid() or public.is_tournament_member(auth.uid(), tournament_id, array[''owner'',''admin''])
+        public.is_tournament_member(auth.uid(), tournament_id, array[''owner'',''admin''])
       )';
   end if;
 end $$;
