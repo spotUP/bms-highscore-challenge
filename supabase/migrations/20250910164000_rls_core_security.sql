@@ -17,7 +17,7 @@ as $$
       and tm.is_active = true
       and (
         p_roles is null
-        or tm.role = any (p_roles)
+        or tm.role::text = any (p_roles)
       )
   );
 $$;
