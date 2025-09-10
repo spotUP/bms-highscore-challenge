@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +17,7 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [remember, setRemember] = useState(true);
   const [username, setUsername] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -105,7 +107,7 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
-      const { error } = await signIn(email, password);
+      const { error } = await signIn(email, password, remember);
       if (error) {
         toast({
           variant: "destructive",
@@ -333,9 +335,15 @@ export default function Auth() {
                     required
                   />
                 </div>
-                <Button type="submit" variant="outline" className="w-full" disabled={isLoading}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="remember-me" checked={remember} onCheckedChange={(v) => setRemember(Boolean(v))} />
+                    <Label htmlFor="remember-me">Remember me</Label>
+                  </div>
+                  <Button type="submit" variant="outline" disabled={isLoading}>
                   {isLoading ? 'Signing in...' : 'Sign In'}
-                </Button>
+                  </Button>
+                </div>
                 <div className="text-center mt-4">
                   <Button
                     type="button"

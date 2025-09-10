@@ -8,9 +8,65 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// Allow runtime switching between persistent and non-persistent auth storage.
+// When `remember me` is disabled, we store Supabase auth in sessionStorage.
+// Otherwise, we default to localStorage for long-lived sessions.
+const REMEMBER_ME_KEY = "auth_remember_me";
+
+const dynamicStorage = {
+  getItem(key: string) {
+    try {
+      const remember = localStorage.getItem(REMEMBER_ME_KEY) !== 'false';
+      return (remember ? localStorage : sessionStorage).getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem(key: string, value: string) {
+    try {
+      const remember = localStorage.getItem(REMEMBER_ME_KEY) !== 'false';
+      (remember ? localStorage : sessionStorage).setItem(key, value);
+    } catch {
+      // ignore write errors
+    }
+  },
+  removeItem(key: string) {
+    try {
+      // Remove from both to avoid leftovers when toggling
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+  }
+} as Storage;
+
+export function setRememberMe(remember: boolean) {
+  try {
+    localStorage.setItem(REMEMBER_ME_KEY, remember ? 'true' : 'false');
+    // When changing preference, clear existing tokens from the opposite storage
+    // Supabase keys are prefixed with 'sb-' by default
+    const clearOpposite = (storage: Storage) => {
+      const keys: string[] = [];
+      for (let i = 0; i < storage.length; i++) {
+        const k = storage.key(i);
+        if (k && k.startsWith('sb-')) keys.push(k);
+      }
+      keys.forEach(k => storage.removeItem(k));
+    };
+    if (remember) {
+      clearOpposite(sessionStorage);
+    } else {
+      clearOpposite(localStorage);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: localStorage,
+    storage: dynamicStorage,
     persistSession: true,
     autoRefreshToken: true,
   }

@@ -157,19 +157,36 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       console.log('Found tournaments:', tournaments);
       setUserTournaments(tournaments);
 
-      // Get current tournament from localStorage or use the first available
+      // Selection priority:
+      // 1) Previously stored selection
+      // 2) Tournament flagged is_active (if schema provides it)
+      // 3) Most recently updated tournament
+      // 4) First available
+      let selectedTournament: any = null;
+
       const storedTournamentId = localStorage.getItem('currentTournamentId');
       console.log('Stored tournament ID:', storedTournamentId);
-      let selectedTournament = null;
-
       if (storedTournamentId) {
-        selectedTournament = tournaments.find(t => t.id === storedTournamentId);
+        selectedTournament = tournaments.find(t => t.id === storedTournamentId) || null;
         console.log('Found stored tournament:', selectedTournament);
       }
 
+      if (!selectedTournament) {
+        const activeTournament = tournaments.find((t: any) => t && (t as any).is_active === true);
+        if (activeTournament) {
+          selectedTournament = activeTournament;
+          console.log('Using active tournament flag:', selectedTournament);
+        }
+      }
+
       if (!selectedTournament && tournaments.length > 0) {
-        selectedTournament = tournaments[0];
-        console.log('Using first tournament:', selectedTournament);
+        const byUpdatedAt = [...tournaments].sort((a: any, b: any) => {
+          const aTime = a?.updated_at ? new Date(a.updated_at).getTime() : 0;
+          const bTime = b?.updated_at ? new Date(b.updated_at).getTime() : 0;
+          return bTime - aTime;
+        });
+        selectedTournament = byUpdatedAt[0] || tournaments[0];
+        console.log('Using most recently updated/first tournament:', selectedTournament);
       }
 
       if (selectedTournament) {
