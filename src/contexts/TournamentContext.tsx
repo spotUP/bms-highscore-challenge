@@ -355,7 +355,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       // Extract demolition_man_active from data since it's not in the database schema
       const { demolition_man_active, ...tournamentData } = data;
       
-      const { data: tournament, error } = await supabase
+      // Try initial insert
+      let { data: tournament, error } = await supabase
         .from('tournaments')
         .insert({
           ...tournamentData,
@@ -364,6 +365,26 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         })
         .select()
         .single();
+
+      // If slug is duplicate, retry once with a short random suffix
+      if (error && error.code === '23505' && (error.message || '').includes('tournaments_slug_key')) {
+        const suffix = Math.random().toString(36).slice(2, 6);
+        const retrySlug = `${tournamentData.slug}-${suffix}`.toLowerCase();
+        const retryPayload = {
+          ...tournamentData,
+          slug: retrySlug,
+          created_by: user.id,
+          is_public: data.is_public ?? false,
+        };
+        console.warn('Slug duplicate detected. Retrying with slug:', retrySlug);
+        const retry = await supabase
+          .from('tournaments')
+          .insert(retryPayload)
+          .select()
+          .single();
+        tournament = retry.data as any;
+        error = retry.error as any;
+      }
 
       if (error) throw error;
 
@@ -389,8 +410,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       console.error('Error creating tournament:', error);
       
       let errorMessage = "Failed to create tournament";
-      if (error.code === '23505' && error.message.includes('tournaments_slug_key')) {
+      if (error.code === '23505' && (error.message || '').includes('tournaments_slug_key')) {
         errorMessage = "A tournament with this slug already exists. Please choose a different slug.";
+      } else if (error.code === '42501') {
+        errorMessage = "Permission denied when creating tournament. Your account may lack insert rights or RLS blocked the action.";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -446,26 +469,43 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     if (!user) return null;
 
     try {
-      const res = await fetch('/functions/v1/clone-tournament', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      console.log('Calling clone-tournament function with:', {
+        sourceTournamentId,
+        name: data.name,
+        slug: data.slug,
+        is_public: data.is_public ?? false,
+        created_by: user.id,
+      });
+
+      const { data: result, error } = await supabase.functions.invoke('clone-tournament', {
+        body: {
           sourceTournamentId,
           name: data.name,
           slug: data.slug,
           is_public: data.is_public ?? false,
           created_by: user.id,
-        }),
+        },
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || 'Failed to clone');
+      
+      console.log('Clone function response:', { result, error });
+      
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw new Error(error.message || 'Failed to clone tournament');
+      }
+
+      if (!result || !result.tournament) {
+        console.error('Invalid response from clone function:', result);
+        throw new Error('Invalid response from clone function');
+      }
 
       await refreshTournaments();
       toast({ title: 'Success', description: 'Tournament cloned successfully' });
-      return json.tournament as Tournament;
+      return result.tournament as Tournament;
     } catch (error: any) {
       console.error('Error cloning tournament:', error);
-      toast({ title: 'Error', description: error.message || 'Failed to clone tournament', variant: 'destructive' });
+      const errorMessage = error.message || error.toString() || 'Failed to clone tournament';
+      toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
       return null;
     }
   };

@@ -4,15 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil, Trash2, Plus, Shuffle } from "lucide-react";
+import { Pencil, Trash2, Plus, Shuffle, ChevronDown, ChevronUp } from "lucide-react";
 import { useTournament } from "@/contexts/TournamentContext";
 import { useQueryClient } from '@tanstack/react-query';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface Achievement {
   id: string;
@@ -45,8 +46,17 @@ const ACHIEVEMENT_TYPES = [
 const DEFAULT_ICONS = ['🏆', '🥇', '🎯', '⭐', '💎', '🔥', '⚡', '🎮', '👑', '🏅', '🌟', '💫'];
 const DEFAULT_COLORS = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE'];
 
+interface Game {
+  id: string;
+  name: string;
+  logo_url: string | null;
+}
+
 const AchievementManager = () => {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [games, setGames] = useState<Game[]>([]);
+  const [selectedGameId, setSelectedGameId] = useState<string>('all');
+  const [expandedGames, setExpandedGames] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [editingAchievement, setEditingAchievement] = useState<Achievement | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -64,16 +74,52 @@ const AchievementManager = () => {
   const { currentTournament } = useTournament();
   const queryClient = useQueryClient();
 
+  // Load games for the current tournament
+  const loadGames = async () => {
+    if (!currentTournament) return [];
+    
+    const { data, error } = await supabase
+      .from('games')
+      .select('id, name, logo_url')
+      .eq('tournament_id', currentTournament.id)
+      .order('name', { ascending: true });
+      
+    if (error) {
+      console.error('Error loading games:', error);
+      return [];
+    }
+    
+    return data || [];
+  };
+
   // Load achievements for current tournament
   const loadAchievements = async () => {
-    if (!currentTournament) return;
+    if (!currentTournament) {
+      console.log('No current tournament selected');
+      return;
+    }
     
     try {
       setLoading(true);
+      
+      // Load games first
+      const gamesData = await loadGames();
+      setGames(gamesData);
+      
+      // Initialize expanded state for games
+      const initialExpandedState = gamesData.reduce((acc, game) => ({
+        ...acc,
+        [game.id]: false
+      }), {});
+      setExpandedGames(initialExpandedState);
+      
+      // Load all achievements
       const { data, error } = await supabase.rpc('get_tournament_achievements' as any, {
         p_tournament_id: currentTournament.id
       });
 
+      console.log('RPC get_tournament_achievements result:', { data, error });
+      
       if (error) throw error;
       setAchievements((data as Achievement[]) || []);
     } catch (error: any) {
@@ -106,16 +152,6 @@ const AchievementManager = () => {
     setEditingAchievement(null);
   };
 
-  const openEditDialog = (achievement: Achievement) => {
-    setEditingAchievement(achievement);
-    setFormData({
-      name: achievement.name,
-      description: achievement.description,
-      type: achievement.type,
-      badge_icon: achievement.badge_icon,
-      badge_color: achievement.badge_color,
-      criteria: JSON.stringify(achievement.criteria, null, 2),
-      points: achievement.points,
       is_active: achievement.is_active
     });
     setIsDialogOpen(true);
@@ -614,5 +650,66 @@ const AchievementManager = () => {
     </Card>
   );
 };
+
+// Separate component for the achievements table
+const AchievementsTable = ({ 
+  achievements, 
+  onEdit, 
+  onDelete, 
+  onToggleStatus 
+}: { 
+  achievements: Achievement[];
+  onEdit: (achievement: Achievement) => void;
+  onDelete: (id: string) => void;
+  onToggleStatus: (achievement: Achievement) => void;
+}) => (
+  <Table>
+    <TableHeader>
+      <TableRow>
+        <TableHead>Icon</TableHead>
+        <TableHead>Name</TableHead>
+        <TableHead>Description</TableHead>
+        <TableHead>Type</TableHead>
+        <TableHead>Points</TableHead>
+        <TableHead>Status</TableHead>
+        <TableHead>Unlocks</TableHead>
+        <TableHead>Actions</TableHead>
+      </TableRow>
+    </TableHeader>
+    <TableBody>
+      {achievements.map((achievement) => (
+        <TableRow key={achievement.id}>
+          <TableCell>
+            <div 
+              className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
+              style={{ backgroundColor: achievement.badge_color }}
+            >
+              {achievement.badge_icon}
+            </div>
+          </TableCell>
+          <TableCell className="font-medium">{achievement.name}</TableCell>
+          <TableCell>{achievement.description}</TableCell>
+          <TableCell>
+            <span className="px-2 py-1 bg-gray-800 rounded text-xs">
+              {achievement.type}
+            </span>
+          </TableCell>
+          <TableCell>{achievement.points}</TableCell>
+          <TableCell>
+            <div className="flex items-center space-x-2">
+              <Switch 
+                checked={achievement.is_active} 
+                onCheckedChange={() => onToggleStatus(achievement)}
+              />
+              <span className={achievement.is_active ? 'text-green-500' : 'text-gray-500'}>
+                {achievement.is_active ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+          </TableCell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </Table>
+);
 
 export default AchievementManager;

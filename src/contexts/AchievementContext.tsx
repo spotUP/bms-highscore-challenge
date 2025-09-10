@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useRef, useEffect } from 'react';
 import AchievementNotification from '@/components/AchievementNotification';
 
 interface Achievement {
@@ -24,16 +24,40 @@ interface AchievementProviderProps {
 export const AchievementProvider: React.FC<AchievementProviderProps> = ({ children }) => {
   const [currentAchievement, setCurrentAchievement] = useState<Achievement | null>(null);
   const [isNotificationVisible, setIsNotificationVisible] = useState(false);
+  const notificationQueue = useRef<Achievement[]>([]);
+  const isProcessing = useRef(false);
 
-  const showAchievementNotification = useCallback((achievement: Achievement) => {
-    setCurrentAchievement(achievement);
+  const processQueue = useCallback(() => {
+    if (notificationQueue.current.length === 0 || isProcessing.current) {
+      return;
+    }
+
+    isProcessing.current = true;
+    const nextAchievement = notificationQueue.current.shift()!;
+    setCurrentAchievement(nextAchievement);
     setIsNotificationVisible(true);
   }, []);
 
+  const showAchievementNotification = useCallback((achievement: Achievement) => {
+    // Add to queue
+    notificationQueue.current.push(achievement);
+    
+    // If nothing is showing, process the queue
+    if (!isProcessing.current) {
+      processQueue();
+    }
+  }, [processQueue]);
+
   const hideAchievementNotification = useCallback(() => {
     setIsNotificationVisible(false);
-    setCurrentAchievement(null);
-  }, []);
+    
+    // After hiding, process the next notification in the queue
+    setTimeout(() => {
+      isProcessing.current = false;
+      setCurrentAchievement(null);
+      processQueue();
+    }, 300); // Match this with the animation duration in AchievementNotification
+  }, [processQueue]);
 
   return (
     <AchievementContext.Provider value={{
@@ -45,6 +69,7 @@ export const AchievementProvider: React.FC<AchievementProviderProps> = ({ childr
       {/* Achievement Notification */}
       {isNotificationVisible && currentAchievement && (
         <AchievementNotification
+          key={currentAchievement.id + Date.now()} // Ensure re-render for each notification
           achievement={currentAchievement}
           onClose={hideAchievementNotification}
         />

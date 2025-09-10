@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Plus, Wrench, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy } from "lucide-react";
+import { Pencil, Trash2, Plus, Wrench, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy } from "lucide-react";
 import { isPlaceholderLogo, formatScore } from "@/lib/utils";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import GameLogoSuggestions, { GameLogoSuggestionsRef } from "@/components/GameLogoSuggestions";
@@ -28,7 +28,7 @@ import DemolitionManQRSubmit from "@/components/DemolitionManQRSubmit";
 import DemolitionManEnsure from "@/components/DemolitionManEnsure";
 import DemolitionManScoreManager from "@/components/DemolitionManScoreManager";
 import PerformanceToggle from "@/components/PerformanceToggle";
-import AchievementManager from "@/components/AchievementManager";
+import AchievementManagerV2 from "@/components/AchievementManagerV2";
 import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from "@/utils/designSystem";
 import { useUserRoles } from "@/hooks/useUserRoles";
 import { useTournament } from "@/contexts/TournamentContext";
@@ -247,7 +247,7 @@ const CreateTournamentForm = () => {
         </div>
 
         <Button 
-          onClick={handleCreateTournament}
+          onClick={handleCreateTournament} 
           disabled={!createForm.name.trim() || !createForm.slug.trim() || isCreating || slugAvailable === false}
           className="w-full"
         >
@@ -256,6 +256,15 @@ const CreateTournamentForm = () => {
       </CardContent>
     </Card>
   );
+};
+
+const generateRandomString = (length: number) => {
+  const characters = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return result;
 };
 
 const Admin = () => {
@@ -716,19 +725,17 @@ const Admin = () => {
   };
 
   // Delete tournament
-  const handleDeleteTournament = async () => {
-    if (!currentTournament) return;
+  const handleDeleteTournament = async (tournamentId: string) => {
+    if (!tournamentId) return;
 
     try {
-      const success = await deleteTournament(currentTournament.id);
+      const success = await deleteTournament(tournamentId);
 
       if (success) {
         toast({
           title: "Success",
           description: "Tournament deleted successfully"
         });
-        // Navigate back to home since the tournament is deleted
-        navigate('/');
       }
     } catch (error) {
       console.error('Error deleting tournament:', error);
@@ -786,7 +793,7 @@ const Admin = () => {
         </PageHeader>
 
         <Tabs defaultValue="games" className="w-full">
-          <TabsList className="grid w-full grid-cols-7 bg-gray-900 border border-white/20">
+          <TabsList className="grid w-full grid-cols-6 bg-gray-900 border border-white/20">
             <TabsTrigger value="games" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
               <Gamepad2 className="w-4 h-4 mr-2" />
               Games & Scores
@@ -801,10 +808,6 @@ const Admin = () => {
             <TabsTrigger value="system" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
               <TestTube className="w-4 h-4 mr-2" />
               System
-            </TabsTrigger>
-            <TabsTrigger value="clone" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
-              <Settings className="w-4 h-4 mr-2" />
-              Clone
             </TabsTrigger>
             <TabsTrigger value="achievements" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
               <Trophy className="w-4 h-4 mr-2" />
@@ -1152,6 +1155,80 @@ const Admin = () => {
                             >
                               {tournament.id === currentTournament?.id ? 'Current' : 'Switch To'}
                             </Button>
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                >
+                                  <Copy className="w-4 h-4" />
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="bg-gray-900 text-white border-white/20">
+                                <DialogHeader>
+                                  <DialogTitle>Clone Tournament</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <div>
+                                    <Label className="text-white">Source Tournament</Label>
+                                    <Input 
+                                      value={tournament.name}
+                                      disabled
+                                      className="bg-black/50 border-white/20 text-white"
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-white">New Name</Label>
+                                    <Input 
+                                      id={`clone-name-${tournament.id}`}
+                                      placeholder={`${tournament.name} (Copy)`}
+                                      className="bg-black/50 border-white/20 text-white" 
+                                    />
+                                  </div>
+                                  <div>
+                                    <Label className="text-white">New Slug</Label>
+                                    <Input 
+                                      id="clone-new-slug"
+                                      defaultValue={`${currentTournament.slug}-copy-${generateRandomString(4)}`}
+                                      className="bg-black/50 border-white/20 text-white" 
+                                    />
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <Switch id={`clone-public-${tournament.id}`} defaultChecked={tournament.is_public} />
+                                    <Label htmlFor={`clone-public-${tournament.id}`}>Make Public</Label>
+                                  </div>
+                                  <div className="flex justify-end space-x-2 pt-4">
+                                    <Button variant="outline" onClick={() => {}}>
+                                      Cancel
+                                    </Button>
+                                    <Button
+                                      onClick={async () => {
+                                        const nameEl = document.getElementById(`clone-name-${tournament.id}`) as HTMLInputElement;
+                                        const slugEl = document.getElementById(`clone-slug-${tournament.id}`) as HTMLInputElement;
+                                        const pubEl = document.getElementById(`clone-public-${tournament.id}`) as HTMLInputElement;
+                                        
+                                        const name = nameEl?.value?.trim() || `${tournament.name} (Copy)`;
+                                        const slug = slugEl?.value?.trim() || `${tournament.slug}-${generateRandomString(4)}`;
+                                        const isPublic = !!pubEl?.checked;
+                                        
+                                        const created = await cloneTournament(tournament.id, {
+                                          name,
+                                          slug,
+                                          is_public: isPublic,
+                                        });
+                                        
+                                        if (created) {
+                                          await refreshTournaments();
+                                          toast({ title: 'Success', description: `Cloned "${tournament.name}" as "${name}"` });
+                                        }
+                                      }}
+                                    >
+                                      Clone Tournament
+                                    </Button>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
                             <Button
                               size="sm"
                               variant="outline"
@@ -1185,7 +1262,7 @@ const Admin = () => {
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction
-                                    onClick={() => handleDeleteTournament()}
+                                    onClick={() => handleDeleteTournament(tournament.id)}
                                     className="bg-red-600 hover:bg-red-700"
                                   >
                                     Delete
@@ -1296,12 +1373,12 @@ const Admin = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="achievements" className="mt-6">
-            <AchievementManager />
-          </TabsContent>
-
           <TabsContent value="users" className="mt-6">
             <UserManagement />
+          </TabsContent>
+
+          <TabsContent value="achievements" className="mt-6">
+            <AchievementManagerV2 />
           </TabsContent>
 
           <TabsContent value="demolition" className="mt-6">

@@ -177,7 +177,13 @@ DECLARE
 BEGIN
   -- Get the user_id from the score record (assuming scores table has user_id)
   -- If scores table doesn't have user_id, we'll need to get it from tournament membership
-  score_user_id := NEW.user_id;
+  -- Do NOT directly reference NEW.user_id, because the scores table may not have this column.
+  -- Safely attempt to read a user_id from NEW via JSON, which won't error if the column is missing.
+  BEGIN
+    score_user_id := (to_jsonb(NEW)->>'user_id')::uuid;
+  EXCEPTION WHEN others THEN
+    score_user_id := NULL;
+  END;
   
   -- If no user_id in scores table, try to get it from current auth context
   IF score_user_id IS NULL THEN

@@ -70,7 +70,7 @@ export default function Auth() {
       return;
     }
 
-    // Check for valid reset tokens (from either search params or hash)
+    // Check for valid tokens (from either search params or hash)
     const finalType = type || hashType;
     const finalAccessToken = accessToken || hashAccessToken;
     const finalRefreshToken = refreshToken || hashRefreshToken;
@@ -95,6 +95,29 @@ export default function Auth() {
           console.log('Session set successfully for password reset');
           // Clean up the URL
           window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      });
+    } else if ((finalType === 'signup' || finalType === 'magiclink') && finalAccessToken && finalRefreshToken) {
+      console.log('Handling signup/magiclink redirect; setting session');
+      supabase.auth.setSession({
+        access_token: finalAccessToken,
+        refresh_token: finalRefreshToken
+      }).then(({ data, error }) => {
+        if (error) {
+          console.error('Error setting session after signup:', error);
+          toast({
+            variant: "destructive",
+            title: "Sign in link error",
+            description: "There was a problem completing sign in. Please try again."
+          });
+        } else {
+          toast({
+            title: "Welcome!",
+            description: "Your account has been confirmed and you are signed in."
+          });
+          // Clean up URL and navigate home
+          window.history.replaceState({}, document.title, window.location.pathname);
+          navigate('/');
         }
       });
     } else {
