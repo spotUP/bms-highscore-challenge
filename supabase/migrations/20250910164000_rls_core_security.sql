@@ -47,12 +47,12 @@ do $$ begin
   if not exists (
     select 1 from pg_policies where schemaname='public' and tablename='tournaments' and policyname='tournaments_select_public_or_member'
   ) then
-    execute $$ create policy "tournaments_select_public_or_member" on public.tournaments
+    execute 'create policy "tournaments_select_public_or_member" on public.tournaments
       for select using (
         is_public = true
         or created_by = auth.uid()
         or public.is_tournament_member(auth.uid(), id)
-      ) $$;
+      )';
   end if;
 end $$;
 
@@ -61,10 +61,10 @@ do $$ begin
   if not exists (
     select 1 from pg_policies where schemaname='public' and tablename='tournaments' and policyname='tournaments_insert_owner'
   ) then
-    execute $$ create policy "tournaments_insert_owner" on public.tournaments
+    execute 'create policy "tournaments_insert_owner" on public.tournaments
       for insert with check (
         auth.uid() is not null and created_by = auth.uid()
-      ) $$;
+      )';
   end if;
 end $$;
 
@@ -73,12 +73,12 @@ do $$ begin
   if not exists (
     select 1 from pg_policies where schemaname='public' and tablename='tournaments' and policyname='tournaments_modify_owner_or_admin'
   ) then
-    execute $$ create policy "tournaments_modify_owner_or_admin" on public.tournaments
+    execute 'create policy "tournaments_modify_owner_or_admin" on public.tournaments
       for all using (
-        created_by = auth.uid() or public.is_tournament_member(auth.uid(), id, array['owner','admin'])
+        created_by = auth.uid() or public.is_tournament_member(auth.uid(), id, array[''owner'',''admin''])
       ) with check (
-        created_by = auth.uid() or public.is_tournament_member(auth.uid(), id, array['owner','admin'])
-      ) $$;
+        created_by = auth.uid() or public.is_tournament_member(auth.uid(), id, array[''owner'',''admin''])
+      )';
   end if;
 end $$;
 
@@ -88,10 +88,10 @@ do $$ begin
   if not exists (
     select 1 from pg_policies where schemaname='public' and tablename='tournament_members' and policyname='tm_select_self_or_admin'
   ) then
-    execute $$ create policy "tm_select_self_or_admin" on public.tournament_members
+    execute 'create policy "tm_select_self_or_admin" on public.tournament_members
       for select using (
-        user_id = auth.uid() or public.is_tournament_member(auth.uid(), tournament_id, array['owner','admin'])
-      ) $$;
+        user_id = auth.uid() or public.is_tournament_member(auth.uid(), tournament_id, array[''owner'',''admin''])
+      )';
   end if;
 end $$;
 
@@ -100,19 +100,17 @@ do $$ begin
   if not exists (
     select 1 from pg_policies where schemaname='public' and tablename='tournament_members' and policyname='tm_insert_self_public_or_admin'
   ) then
-    execute $$ create policy "tm_insert_self_public_or_admin" on public.tournament_members
+    execute 'create policy "tm_insert_self_public_or_admin" on public.tournament_members
       for insert with check (
         (
-          -- self-join public tournaments
           auth.uid() is not null
           and user_id = auth.uid()
           and exists (select 1 from public.tournaments t where t.id = tournament_id and t.is_public = true)
         )
         or (
-          -- admins/owners can add members
-          public.is_tournament_member(auth.uid(), tournament_id, array['owner','admin'])
+          public.is_tournament_member(auth.uid(), tournament_id, array[''owner'',''admin''])
         )
-      ) $$;
+      )';
   end if;
 end $$;
 
@@ -121,12 +119,12 @@ do $$ begin
   if not exists (
     select 1 from pg_policies where schemaname='public' and tablename='tournament_members' and policyname='tm_update_self_or_admin'
   ) then
-    execute $$ create policy "tm_update_self_or_admin" on public.tournament_members
+    execute 'create policy "tm_update_self_or_admin" on public.tournament_members
       for update using (
-        user_id = auth.uid() or public.is_tournament_member(auth.uid(), tournament_id, array['owner','admin'])
+        user_id = auth.uid() or public.is_tournament_member(auth.uid(), tournament_id, array[''owner'',''admin''])
       ) with check (
-        user_id = auth.uid() or public.is_tournament_member(auth.uid(), tournament_id, array['owner','admin'])
-      ) $$;
+        user_id = auth.uid() or public.is_tournament_member(auth.uid(), tournament_id, array[''owner'',''admin''])
+      )';
   end if;
 end $$;
 
@@ -135,10 +133,10 @@ do $$ begin
   if not exists (
     select 1 from pg_policies where schemaname='public' and tablename='tournament_members' and policyname='tm_delete_admin'
   ) then
-    execute $$ create policy "tm_delete_admin" on public.tournament_members
+    execute 'create policy "tm_delete_admin" on public.tournament_members
       for delete using (
-        public.is_tournament_member(auth.uid(), tournament_id, array['owner','admin'])
-      ) $$;
+        public.is_tournament_member(auth.uid(), tournament_id, array[''owner'',''admin''])
+      )';
   end if;
 end $$;
 
@@ -149,10 +147,10 @@ do $$ begin
   if not exists (
     select 1 from pg_policies where schemaname='public' and tablename='scores' and policyname='scores_select_public_or_member'
   ) then
-    execute $$ create policy "scores_select_public_or_member" on public.scores
+    execute 'create policy "scores_select_public_or_member" on public.scores
       for select using (
         exists (select 1 from public.tournaments t where t.id = scores.tournament_id and (t.is_public = true or public.is_tournament_member(auth.uid(), t.id)))
-      ) $$;
+      )';
   end if;
 end $$;
 
@@ -161,12 +159,12 @@ do $$ begin
   if not exists (
     select 1 from pg_policies where schemaname='public' and tablename='scores' and policyname='scores_insert_own_member'
   ) then
-    execute $$ create policy "scores_insert_own_member" on public.scores
+    execute 'create policy "scores_insert_own_member" on public.scores
       for insert with check (
         auth.uid() is not null
         and user_id = auth.uid()
         and exists (select 1 from public.tournaments t where t.id = scores.tournament_id and (t.is_public = true or public.is_tournament_member(auth.uid(), t.id)))
-      ) $$;
+      )';
   end if;
 end $$;
 
@@ -175,12 +173,12 @@ do $$ begin
   if not exists (
     select 1 from pg_policies where schemaname='public' and tablename='scores' and policyname='scores_modify_owner_or_admin'
   ) then
-    execute $$ create policy "scores_modify_owner_or_admin" on public.scores
+    execute 'create policy "scores_modify_owner_or_admin" on public.scores
       for all using (
-        user_id = auth.uid() or public.is_tournament_member(auth.uid(), tournament_id, array['owner','admin'])
+        user_id = auth.uid() or public.is_tournament_member(auth.uid(), tournament_id, array[''owner'',''admin''])
       ) with check (
-        user_id = auth.uid() or public.is_tournament_member(auth.uid(), tournament_id, array['owner','admin'])
-      ) $$;
+        user_id = auth.uid() or public.is_tournament_member(auth.uid(), tournament_id, array[''owner'',''admin''])
+      )';
   end if;
 end $$;
 
