@@ -13,6 +13,7 @@ interface Game {
   logo_url: string | null;
   include_in_challenge: boolean;
   is_active: boolean;
+  tournament_id?: string | null;
 }
 
 interface Score {
@@ -21,6 +22,7 @@ interface Score {
   player_name: string;
   score: number;
   created_at: string;
+  tournament_id?: string | null;
 }
 
 interface Achievement {
@@ -31,12 +33,15 @@ interface Achievement {
   badge_color: string;
   points: number;
   type: string;
+  tournament_id?: string | null;
 }
 
 interface PlayerAchievement {
   player_name: string;
   achievement_id: string;
   unlocked_at: string;
+  tournament_id?: string | null;
+  game_id?: string | null;
 }
 
 // Cache for storing fetched data
@@ -79,7 +84,7 @@ export const useOptimizedData = (options: UseOptimizedDataOptions = {}) => {
     try {
       const { data, error } = await supabase
         .from('games')
-        .select('id, name, logo_url, include_in_challenge, is_active')
+        .select('id, name, logo_url, include_in_challenge, is_active, tournament_id')
         .eq('is_active', true)
         .order('name');
 
@@ -106,7 +111,7 @@ export const useOptimizedData = (options: UseOptimizedDataOptions = {}) => {
     try {
       const { data, error } = await supabase
         .from('scores')
-        .select('id, game_id, player_name, score, created_at')
+        .select('id, game_id, player_name, score, created_at, tournament_id')
         .order('created_at', { ascending: false })
         .limit(1000); // Limit to prevent excessive data
 
@@ -133,7 +138,7 @@ export const useOptimizedData = (options: UseOptimizedDataOptions = {}) => {
     try {
       const { data, error } = await supabase
         .from('achievements')
-        .select('id, name, description, badge_icon, badge_color, points, type')
+        .select('id, name, description, badge_icon, badge_color, points, type, tournament_id')
         .order('points', { ascending: false });
 
       if (error) throw error;
@@ -159,8 +164,9 @@ export const useOptimizedData = (options: UseOptimizedDataOptions = {}) => {
     try {
       const { data, error } = await supabase
         .from('player_achievements')
-        .select('player_name, achievement_id, unlocked_at')
-        .order('unlocked_at', { ascending: false });
+        .select('player_name, achievement_id, unlocked_at, created_at, tournament_id')
+        .order('unlocked_at', { ascending: false })
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       

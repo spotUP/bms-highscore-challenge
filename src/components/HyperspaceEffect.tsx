@@ -1,9 +1,16 @@
 import React, { useRef, useEffect } from 'react';
 import { usePerformanceMode } from '@/hooks/usePerformanceMode';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const HyperspaceEffect = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { enableAnimations, particleCount, isRaspberryPi } = usePerformanceMode();
+  const { theme } = useTheme();
+
+  // Disable the hyperspace background when Tron theme is active
+  if (theme === 'tron') {
+    return null;
+  }
 
   useEffect(() => {
     const canvas = canvasRef.current;

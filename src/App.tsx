@@ -7,7 +7,9 @@ import { Suspense, lazy, useEffect } from "react";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AchievementProvider } from "@/contexts/AchievementContext";
 import { TournamentProvider } from "@/contexts/TournamentContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import HyperspaceEffect from "@/components/HyperspaceEffect";
+import VHSOverlay from "@/components/VHSOverlay";
 import PerformanceWrapper from "@/components/PerformanceWrapper";
 import TournamentAccessGuard from "@/components/TournamentAccessGuard";
 import Index from "./pages/Index";
@@ -37,9 +39,11 @@ const App = () => (
     <AuthProvider>
       <TournamentProvider>
         <AchievementProvider>
+          <ThemeProvider>
           <PerformanceWrapper>
             <TooltipProvider>
             <HyperspaceEffect />
+            <VHSOverlay />
             <Toaster />
             <Sonner />
             <BrowserRouter
@@ -71,6 +75,7 @@ const App = () => (
             </BrowserRouter>
             </TooltipProvider>
           </PerformanceWrapper>
+          </ThemeProvider>
         </AchievementProvider>
       </TournamentProvider>
     </AuthProvider>

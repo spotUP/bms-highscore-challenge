@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -514,11 +515,8 @@ const Admin = () => {
       });
     } catch (error) {
       console.error('Error updating challenge inclusion:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update challenge inclusion",
-        variant: "destructive"
-      });
+      const msg = `Failed to update challenge inclusion: ${String((error as any)?.message || error)}`;
+      toast({ title: 'Error', description: msg, variant: 'destructive', action: (<ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>) });
     }
   };
 
@@ -536,7 +534,8 @@ const Admin = () => {
       toast({ title: 'Success', description: 'Game marked as Active' });
     } catch (error) {
       console.error('Error setting game active:', error);
-      toast({ title: 'Error', description: 'Failed to make game active', variant: 'destructive' });
+      const msg = `Failed to make game active: ${String((error as any)?.message || error)}`;
+      toast({ title: 'Error', description: msg, variant: 'destructive', action: (<ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>) });
     }
   };
 
@@ -554,7 +553,8 @@ const Admin = () => {
       toast({ title: 'Success', description: 'Game marked as Inactive' });
     } catch (error) {
       console.error('Error setting game inactive:', error);
-      toast({ title: 'Error', description: 'Failed to make game inactive', variant: 'destructive' });
+      const msg = `Failed to make game inactive: ${String((error as any)?.message || error)}`;
+      toast({ title: 'Error', description: msg, variant: 'destructive', action: (<ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>) });
     }
   };
 
@@ -759,10 +759,14 @@ const Admin = () => {
       setDeleteScoreDialog({ open: false, scoreId: '' });
     } catch (error) {
       console.error('Error deleting score:', error);
+      const msg = `Failed to delete score: ${String((error as any)?.message || error)}`;
       toast({
         title: "Error",
-        description: "Failed to delete score",
-        variant: "destructive"
+        description: msg,
+        variant: "destructive",
+        action: (
+          <ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>
+        )
       });
     }
   };
@@ -781,7 +785,8 @@ const Admin = () => {
       setInlineGameNames(prev => { const c = { ...prev }; delete c[gameId]; return c; });
       loadGames();
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.message || 'Failed to update game', variant: 'destructive' });
+      const msg = err?.message || 'Failed to update game';
+      toast({ title: 'Error', description: msg, variant: 'destructive', action: (<ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>) });
     }
   };
 
@@ -804,7 +809,8 @@ const Admin = () => {
       setInlineScoreEdits(prev => { const c = { ...prev }; delete c[scoreId]; return c; });
       loadGames();
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.message || 'Failed to update score', variant: 'destructive' });
+      const msg = err?.message || 'Failed to update score';
+      toast({ title: 'Error', description: msg, variant: 'destructive', action: (<ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>) });
     }
   };
 
@@ -823,7 +829,8 @@ const Admin = () => {
       toast({ title: 'Added', description: 'Score added' });
       loadGames();
     } catch (err: any) {
-      toast({ title: 'Error', description: err?.message || 'Failed to add score', variant: 'destructive' });
+      const msg = err?.message || 'Failed to add score';
+      toast({ title: 'Error', description: msg, variant: 'destructive', action: (<ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>) });
     }
   };
 
@@ -958,11 +965,8 @@ const Admin = () => {
       }
     } catch (error) {
       console.error('Error deleting tournament:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete tournament",
-        variant: "destructive"
-      });
+      const msg = `Failed to delete tournament: ${String((error as any)?.message || error)}`;
+      toast({ title: 'Error', description: msg, variant: 'destructive', action: (<ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>) });
     }
   };
 

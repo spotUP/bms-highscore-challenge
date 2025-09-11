@@ -4,6 +4,7 @@ import { Menu, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import PerformanceModeToggle from "@/components/PerformanceModeToggle";
+import ThemeSelector from "@/components/ThemeSelector";
 import PublicTournamentBrowser from "@/components/PublicTournamentBrowser";
 
 interface MobileMenuProps {
@@ -70,6 +71,9 @@ const MobileMenu = ({ onSpinWheel }: MobileMenuProps) => {
                     className="w-full justify-start text-left"
                     showText={true}
                   />
+                </div>
+                <div className="py-1">
+                  <ThemeSelector />
                 </div>
                 {isAdmin && (
                   <Button

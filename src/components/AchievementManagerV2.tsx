@@ -103,7 +103,7 @@ const AchievementManagerV2 = () => {
   });
 
   const { toast } = useToast();
-  const { currentTournament } = useTournament();
+  const { currentTournament, userTournaments, switchTournament } = useTournament();
   const queryClient = useQueryClient();
 
   // Load games from the database
@@ -221,13 +221,8 @@ const AchievementManagerV2 = () => {
     return acc;
   }, {} as Record<string, Achievement[]>);
   
-  // Filter achievements based on selected game
-  const filteredAchievements = selectedGameId === 'all' 
-    ? achievements 
-    : achievements.filter(a => {
-        const achievementGameId = a.criteria?.game_id || 'general';
-        return achievementGameId === selectedGameId;
-      });
+  // Tournament-only view: show all achievements for the current tournament
+  const filteredAchievements = achievements;
 
   // Toggle expanded state for a game
   const toggleGameExpanded = (gameId: string) => {
@@ -542,15 +537,41 @@ const AchievementManagerV2 = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col space-y-4">
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold">Achievement Manager</h2>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={openCreateDialog}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Achievement
-              </Button>
-            </DialogTrigger>
+        <div className="flex justify-between items-center gap-3">
+          <div className="flex flex-col gap-2">
+            <h2 className="text-2xl font-bold">Achievement Manager</h2>
+            {/* Compact tournament selector (defaults to active) - stacked under title */}
+            <div className="hidden md:block">
+              <Label htmlFor="tournament-select" className="sr-only">Tournament</Label>
+              <Select
+                value={currentTournament?.id || ''}
+                onValueChange={async (value) => {
+                  if (!currentTournament || value === currentTournament.id) return;
+                  const target = (userTournaments || []).find(t => t.id === value);
+                  if (target) {
+                    await switchTournament(target);
+                  }
+                }}
+              >
+                <SelectTrigger id="tournament-select" className="min-w-[240px] bg-secondary/40 border-white/20 text-white">
+                  <SelectValue placeholder="Select Tournament" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-900 border-white/20">
+                  {(userTournaments || []).map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={openCreateDialog}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Achievement
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>
@@ -761,41 +782,17 @@ const AchievementManagerV2 = () => {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
         
-        <div className="w-full max-w-xs">
-          <Label htmlFor="game-filter">Filter by Game</Label>
-          <Select 
-            value={selectedGameId} 
-            onValueChange={setSelectedGameId}
-          >
-            <SelectTrigger id="game-filter" className="w-full">
-              <SelectValue placeholder="Select a game" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Games</SelectItem>
-              <SelectItem value="general">General Achievements</SelectItem>
-              {games.map(game => (
-                <SelectItem key={game.id} value={game.id}>
-                  {game.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Tournament-scoped view only; game filter removed */}
       </div>
 
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
             <div>
-              <CardTitle>
-                {selectedGameId === 'all' 
-                  ? 'All Achievements' 
-                  : selectedGameId === 'general' 
-                    ? 'General Achievements' 
-                    : `Achievements for ${games.find(g => g.id === selectedGameId)?.name || 'Selected Game'}`}
-              </CardTitle>
+              <CardTitle>All Achievements</CardTitle>
               <CardDescription>
                 {filteredAchievements.length} achievement{filteredAchievements.length !== 1 ? 's' : ''} found
               </CardDescription>
@@ -812,95 +809,14 @@ const AchievementManagerV2 = () => {
               No achievements found. Create your first achievement!
             </div>
           ) : (
-            <div className="space-y-4">
-              {selectedGameId === 'all' ? (
-                // Show all achievements grouped by game
-                <div className="space-y-6">
-                  {/* General achievements */}
-                  {groupedAchievements['general']?.length > 0 && (
-                    <div className="border rounded-lg overflow-hidden">
-                      <div 
-                        className="flex items-center justify-between p-4 bg-gray-900 cursor-pointer"
-                        onClick={() => toggleGameExpanded('general')}
-                      >
-                        <h3 className="text-lg font-semibold">General Achievements</h3>
-                        {expandedGames['general'] ? (
-                          <ChevronUp className="w-5 h-5" />
-                        ) : (
-                          <ChevronDown className="w-5 h-5" />
-                        )}
-                      </div>
-                      <Collapsible open={expandedGames['general']}>
-                        <CollapsibleContent>
-                          <AchievementsTable 
-                            achievements={groupedAchievements['general']} 
-                            onEdit={handleEditAchievement}
-                            onDelete={handleDeleteAchievement}
-                            onToggleStatus={toggleAchievementStatus}
-                            getTypeIcon={getTypeIcon}
-                            getCriteriaDisplay={getCriteriaDisplay}
-                          />
-                        </CollapsibleContent>
-                      </Collapsible>
-                    </div>
-                  )}
-                  
-                  {/* Game-specific achievements */}
-                  {games.map(game => (
-                    groupedAchievements[game.id]?.length > 0 && (
-                      <div key={game.id} className="border rounded-lg overflow-hidden">
-                        <div 
-                          className="flex items-center justify-between p-4 bg-gray-900 cursor-pointer"
-                          onClick={() => toggleGameExpanded(game.id)}
-                        >
-                          <div className="flex items-center space-x-3">
-                            {game.logo_url ? (
-                              <img 
-                                src={game.logo_url} 
-                                alt={game.name}
-                                className="w-8 h-8 object-cover rounded"
-                              />
-                            ) : (
-                              <div className="w-8 h-8 bg-gray-800 rounded flex items-center justify-center">
-                                🎮
-                              </div>
-                            )}
-                            <h3 className="text-lg font-semibold">{game.name}</h3>
-                          </div>
-                          {expandedGames[game.id] ? (
-                            <ChevronUp className="w-5 h-5" />
-                          ) : (
-                            <ChevronDown className="w-5 h-5" />
-                          )}
-                        </div>
-                        <Collapsible open={expandedGames[game.id]}>
-                          <CollapsibleContent>
-                            <AchievementsTable 
-                              achievements={groupedAchievements[game.id]} 
-                              onEdit={handleEditAchievement}
-                              onDelete={handleDeleteAchievement}
-                              onToggleStatus={toggleAchievementStatus}
-                              getTypeIcon={getTypeIcon}
-                              getCriteriaDisplay={getCriteriaDisplay}
-                            />
-                          </CollapsibleContent>
-                        </Collapsible>
-                      </div>
-                    )
-                  ))}
-                </div>
-              ) : (
-                // Show filtered achievements in a simple table
-                <AchievementsTable 
-                  achievements={filteredAchievements} 
-                  onEdit={handleEditAchievement}
-                  onDelete={handleDeleteAchievement}
-                  onToggleStatus={toggleAchievementStatus}
-                  getTypeIcon={getTypeIcon}
-                  getCriteriaDisplay={getCriteriaDisplay}
-                />
-              )}
-            </div>
+            <AchievementsTable 
+              achievements={filteredAchievements} 
+              onEdit={handleEditAchievement}
+              onDelete={handleDeleteAchievement}
+              onToggleStatus={toggleAchievementStatus}
+              getTypeIcon={getTypeIcon}
+              getCriteriaDisplay={getCriteriaDisplay}
+            />
           )}
         </CardContent>
       </Card>

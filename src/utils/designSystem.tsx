@@ -7,7 +7,7 @@ export const DESIGN_SYSTEM = {
   // Layout
   layout: {
     container: "min-h-screen text-white p-4 md:p-8 relative z-10",
-    background: "radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)",
+    background: "var(--page-bg, radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%))",
     content: "w-full space-y-8",
     maxWidth: "max-w-7xl mx-auto",
   },
@@ -104,7 +104,7 @@ export const getPageLayout = () => ({
 export const getCardStyle = (variant: 'primary' | 'secondary' = 'primary', interactive = false) => {
   const base = DESIGN_SYSTEM.cards[variant];
   const hover = interactive ? DESIGN_SYSTEM.cards.interactive : DESIGN_SYSTEM.cards.hover;
-  return `${base} ${hover}`;
+  return `${base} ${hover} theme-card`;
 };
 
 export const getButtonStyle = (variant: 'primary' | 'secondary' | 'ghost' | 'outline' | 'arcade' = 'secondary') => {

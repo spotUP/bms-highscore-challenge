@@ -1,4 +1,67 @@
+@keyframes tronGlowBtn {
+  0%   { box-shadow: 0 0 16px rgba(0,255,255,0.28), inset 0 0 10px rgba(0,255,255,0.16); border-color: rgba(0,255,255,0.75); }
+  50%  { box-shadow: 0 0 30px rgba(0,255,255,0.55), inset 0 0 14px rgba(0,255,255,0.22); border-color: rgba(0,255,255,0.95); }
+  100% { box-shadow: 0 0 16px rgba(0,255,255,0.28), inset 0 0 10px rgba(0,255,255,0.16); border-color: rgba(0,255,255,0.75); }
+}
+
+/* ===================== VHS Overlay ===================== */
+.vhs-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10; /* above content, below toasts/menus */
+}
+.vhs-layer {
+  position: absolute;
+  inset: 0;
+}
+/* Horizontal scanlines */
+.vhs-scanlines {
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.04) 0px,
+    rgba(255,255,255,0.04) 1px,
+    transparent 2px,
+    transparent 3px
+  );
+  mix-blend-mode: overlay;
+  opacity: 0.25;
+}
+/* Global flicker */
+@keyframes vhsFlicker {
+  0%, 100% { opacity: 0.06; filter: none; }
+  50% { opacity: 0.12; filter: saturate(1.1) contrast(1.03); }
+}
+.vhs-flicker {
+  background: linear-gradient(0deg, transparent, transparent);
+  animation: vhsFlicker 2.8s ease-in-out infinite;
+}
+/* Random glitch bars */
+@keyframes vhsBars {
+  0%   { background-position: 0 0; opacity: 0; }
+  5%   { background-position: 0 20%; opacity: 0.18; }
+  10%  { background-position: 0 40%; opacity: 0.08; }
+  15%  { background-position: 0 60%; opacity: 0.2; }
+  20%  { background-position: 0 80%; opacity: 0.05; }
+  25%  { background-position: 0 30%; opacity: 0.16; }
+  30%  { background-position: 0 50%; opacity: 0.09; }
+  35%  { background-position: 0 70%; opacity: 0.14; }
+  40%  { background-position: 0 10%; opacity: 0.05; }
+  100% { background-position: 0 100%; opacity: 0; }
+}
+.vhs-glitchbars {
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 255, 255, 0.12) 0 3px,
+      transparent 3px 6px
+    );
+  mix-blend-mode: screen;
+  opacity: 0.08;
+  animation: vhsBars 7s linear infinite;
+}
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P:wght@400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -91,6 +154,27 @@
   animation: gradientShift 4s ease-in-out infinite;
 }
 
+/* Disable animated gradient text in Tron theme */
+body.theme-tron .animated-gradient {
+  animation: none !important;
+  background: none !important;
+  -webkit-text-fill-color: inherit !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+/* Override arcade font to futuristic Orbitron in Tron theme */
+body.theme-tron .font-arcade {
+  font-family: 'Orbitron', sans-serif !important;
+  letter-spacing: 0.04em;
+}
+
+/* Ensure QR/code visuals don't animate (safety net) */
+body.theme-tron canvas,
+body.theme-tron img,
+body.theme-tron svg {
+  animation: none !important;
+}
+
 /* Removed hyperspace CSS - now using Canvas-based effect */
 
 /* Gradient border animations */
@@ -180,6 +264,271 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ===================== THEMES ===================== */
+/* Default/current theme maps to existing palette */
+body.theme-current {
+  --page-bg: radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%);
+}
+.theme-current .theme-card {
+  background-color: rgba(0,0,0,0.3);
+  border-color: rgba(255,255,255,0.2);
+}
+
+/* Modern Light */
+body.theme-modern-light {
+  --background: 0 0% 100%;
+  --foreground: 222.2 47.4% 11.2%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 47.4% 11.2%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 47.4% 11.2%;
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 221.2 83.2% 53.3%;
+  --page-bg: radial-gradient(ellipse at center, rgba(255,255,255,0.95) 0%, rgba(240,242,247,0.9) 100%);
+}
+.theme-modern-light .theme-card {
+  background-color: rgba(255,255,255,0.9);
+  border-color: rgba(0,0,0,0.08);
+  color: hsl(var(--foreground));
+}
+
+/* Modern Dark */
+body.theme-modern-dark {
+  --background: 222 47% 7%;
+  --foreground: 210 40% 96%;
+  --card: 222 47% 9%;
+  --card-foreground: 210 40% 96%;
+  --popover: 222 47% 9%;
+  --popover-foreground: 210 40% 96%;
+  --primary: 199 89% 48%;
+  --primary-foreground: 210 40% 96%;
+  --secondary: 217 33% 17%;
+  --secondary-foreground: 210 40% 96%;
+  --muted: 217 33% 17%;
+  --muted-foreground: 215 20% 70%;
+  --accent: 220 50% 20%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 210 40% 96%;
+  --border: 215 28% 28%;
+  --input: 215 28% 28%;
+  --ring: 199 89% 48%;
+  --page-bg: radial-gradient(ellipse at center, rgba(10,12,20,0.95) 0%, rgba(12,16,28,0.9) 100%);
+}
+.theme-modern-dark .theme-card {
+  background-color: rgba(12,16,28,0.9);
+  border-color: rgba(255,255,255,0.08);
+}
+
+/* TRON Futuristic */
+body.theme-tron {
+  --background: 215 100% 3%;
+  --foreground: 180 100% 90%;
+  --card: 215 100% 6%;
+  --card-foreground: 180 100% 90%;
+  --primary: 180 100% 50%; /* neon cyan */
+  --primary-foreground: 215 100% 3%;
+  --secondary: 205 100% 12%;
+  --secondary-foreground: 180 100% 90%;
+  --muted: 205 90% 10%;
+  --muted-foreground: 180 50% 70%;
+  --accent: 290 100% 50%; /* neon magenta */
+  --accent-foreground: 215 100% 3%;
+  --border: 180 100% 35%;
+  --input: 180 100% 35%;
+  --ring: 180 100% 50%;
+  /* Make inner page background transparent so the grid overlay is visible */
+  --page-bg: transparent;
+  font-family: 'Orbitron', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+/* Holographic grid overlay */
+body.theme-tron::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(transparent 0%, rgba(0,255,255,0.12) 2%, transparent 2%) 0 0 / 100% 24px,
+    linear-gradient(90deg, transparent 0%, rgba(0,255,255,0.12) 2%, transparent 2%) 0 0 / 24px 100%;
+  pointer-events: none;
+  z-index: 0;
+  transform: perspective(1200px) rotateX(58deg) scale(1.2);
+  transform-origin: center top;
+  opacity: 0.9;
+}
+.theme-tron .theme-card {
+  background: linear-gradient(180deg, rgba(0,10,20,0.9), rgba(0,20,30,0.9));
+  border: 2px solid rgba(0, 255, 255, 0.85);
+  box-shadow: 0 0 24px rgba(0, 255, 255, 0.35), inset 0 0 18px rgba(0,255,255,0.2);
+  border-radius: 0; /* Tron is sharp */
+  /* Square corners */
+  clip-path: none;
+  border-radius: 0;
+  position: relative;
+  /* Seamless dual-scan gradients for smooth loop */
+  background-image:
+    linear-gradient(90deg, rgba(0,255,255,0) 0%, rgba(0,255,255,0.08) 40%, rgba(0,255,255,0.16) 50%, rgba(0,255,255,0.08) 60%, rgba(0,255,255,0) 100%),
+    linear-gradient(90deg, rgba(0,255,255,0) 0%, rgba(0,255,255,0.08) 40%, rgba(0,255,255,0.16) 50%, rgba(0,255,255,0.08) 60%, rgba(0,255,255,0) 100%);
+  background-size: 200% 100%, 200% 100%;
+  background-position: 0% 0, 100% 0;
+  animation: tronScan 6s linear infinite;
+  /* Left inset glow rail */
+  box-shadow: inset 6px 0 18px rgba(0,255,255,0.25), 0 0 24px rgba(0,255,255,0.2);
+}
+.theme-tron .theme-card::before { content: none; }
+.theme-tron .theme-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 1px solid rgba(0, 255, 255, 0.35);
+  /* Square corners for outline as well */
+  clip-path: none;
+  border-radius: 0;
+  box-shadow: 0 0 18px rgba(0,255,255,0.2);
+  animation: tronGlow 4s ease-in-out infinite;
+}
+.theme-tron .theme-card:hover {
+  box-shadow: 0 0 18px rgba(0, 255, 255, 0.3), inset 0 0 14px rgba(0,255,255,0.16);
+  transform: translateY(-1px);
+}
+
+/* Tron Buttons */
+.theme-tron .theme-button {
+  position: relative;
+  background: linear-gradient(180deg, rgba(0, 25, 35, 0.98), rgba(0, 18, 28, 0.98));
+  color: #b7ffff;
+  border: 2px solid rgba(0, 255, 255, 0.9) !important;
+  border-radius: 0 !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  clip-path: none;
+  box-shadow: 0 0 22px rgba(0, 255, 255, 0.45), inset 0 0 14px rgba(0, 255, 255, 0.2);
+}
+.theme-tron .theme-button::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1.5px solid rgba(0,255,255,0.75);
+  clip-path: none;
+  border-radius: 0;
+  pointer-events: none;
+  box-shadow: 0 0 18px rgba(0,255,255,0.35);
+  animation: tronGlowBtn 3.6s ease-in-out infinite;
+}
+.theme-tron .theme-button::before { content: none; }
+.theme-tron .theme-button:hover {
+  background: linear-gradient(180deg, rgba(0, 35, 50, 0.98), rgba(0, 22, 34, 0.98));
+  box-shadow: 0 0 28px rgba(0, 255, 255, 0.55), inset 0 0 16px rgba(0, 255, 255, 0.25);
+}
+.theme-tron .theme-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0,255,255,0.55), 0 0 28px rgba(0,255,255,0.5);
+}
+
+/* Select popover and options */
+body.theme-tron [role="listbox"] {
+  background: rgba(0, 15, 25, 0.95);
+  border: 1.5px solid rgba(0,255,255,0.45);
+  box-shadow: 0 0 14px rgba(0,255,255,0.25), inset 0 0 8px rgba(0,255,255,0.12);
+}
+body.theme-tron [role="option"] {
+  color: #b7ffff;
+}
+body.theme-tron [role="option"][data-highlighted],
+body.theme-tron [role="option"]:hover {
+  background: rgba(0, 255, 255, 0.12);
+}
+
+/* Scan animation */
+@keyframes tronScan {
+  0%   { background-position: 0% 0, 100% 0; }
+  100% { background-position: 100% 0, 0% 0; }
+}
+
+/* Pulsing border glow */
+@keyframes tronGlow {
+  0%   { box-shadow: 0 0 12px rgba(0,255,255,0.18), inset 0 0 10px rgba(0,255,255,0.12); border-color: rgba(0,255,255,0.35); }
+  50%  { box-shadow: 0 0 26px rgba(0,255,255,0.45), inset 0 0 14px rgba(0,255,255,0.2);  border-color: rgba(0,255,255,0.65); }
+  100% { box-shadow: 0 0 12px rgba(0,255,255,0.18), inset 0 0 10px rgba(0,255,255,0.12); border-color: rgba(0,255,255,0.35); }
+}
+
+/* Tabs (Radix) */
+.theme-tron [role="tablist"] {
+  border-bottom: 2px solid rgba(0,255,255,0.5);
+  box-shadow: 0 6px 12px -6px rgba(0,255,255,0.25);
+}
+.theme-tron [role="tab"] {
+  color: #9ff;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.theme-tron [role="tab"][data-state="active"] {
+  color: #fff;
+  border-bottom: 2px solid rgba(0,255,255,0.9);
+  text-shadow: 0 0 8px rgba(0,255,255,0.7);
+}
+
+/* Tables */
+.theme-tron table {
+  border: 1.5px solid rgba(0,255,255,0.35);
+  box-shadow: 0 0 12px rgba(0,255,255,0.2);
+}
+.theme-tron th {
+  background: rgba(0, 25, 35, 0.85);
+  color: #b7ffff;
+}
+.theme-tron td {
+  border-top: 1px solid rgba(0,255,255,0.15);
+}
+
+/* Recharts (axes/grid/labels) */
+.theme-tron .recharts-cartesian-grid line { stroke: rgba(0,255,255,0.25); }
+.theme-tron .recharts-cartesian-axis line { stroke: rgba(0,255,255,0.6); }
+.theme-tron .recharts-cartesian-axis-tick-value tspan { fill: #b7ffff; }
+.theme-tron .recharts-legend-item-text { fill: #b7ffff; }
+
+/* Tron MAGENTA accent (togglable) */
+body.tron-magenta .theme-card {
+  border-color: rgba(255, 0, 170, 0.9);
+  box-shadow: 0 0 26px rgba(255, 0, 170, 0.45), inset 0 0 18px rgba(255,0,170,0.22);
+  background-image:
+    linear-gradient(90deg, rgba(255,0,170,0) 0%, rgba(255,0,170,0.1) 40%, rgba(255,0,170,0.2) 50%, rgba(255,0,170,0.1) 60%, rgba(255,0,170,0) 100%),
+    linear-gradient(90deg, rgba(255,0,170,0) 0%, rgba(255,0,170,0.1) 40%, rgba(255,0,170,0.2) 50%, rgba(255,0,170,0.1) 60%, rgba(255,0,170,0) 100%);
+  background-size: 200% 100%, 200% 100%;
+  background-position: 0% 0, 100% 0;
+}
+body.tron-magenta .theme-card::after { box-shadow: 0 0 18px rgba(255,0,170,0.22); border-color: rgba(255,0,170,0.4); animation: tronGlowMag 4s ease-in-out infinite; }
+body.tron-magenta .theme-card::before { background: rgba(255,0,170,0.95); box-shadow: 0 0 12px rgba(255,0,170,0.9), 0 0 22px rgba(255,0,170,0.6); }
+body.tron-magenta .theme-button { border-color: rgba(255,0,170,0.95) !important; box-shadow: 0 0 26px rgba(255,0,170,0.55), inset 0 0 14px rgba(255,0,170,0.25); }
+body.tron-magenta .theme-button::after { border-color: rgba(255,0,170,0.8); box-shadow: 0 0 22px rgba(255,0,170,0.45); animation: tronGlowBtnMag 3.6s ease-in-out infinite; }
+@keyframes tronGlowMag {
+  0%   { box-shadow: 0 0 12px rgba(255,0,170,0.2), inset 0 0 10px rgba(255,0,170,0.12); border-color: rgba(255,0,170,0.4); }
+  50%  { box-shadow: 0 0 26px rgba(255,0,170,0.5), inset 0 0 14px rgba(255,0,170,0.2); border-color: rgba(255,0,170,0.8); }
+  100% { box-shadow: 0 0 12px rgba(255,0,170,0.2), inset 0 0 10px rgba(255,0,170,0.12); border-color: rgba(255,0,170,0.4); }
+}
+@keyframes tronGlowBtnMag {
+  0%   { box-shadow: 0 0 16px rgba(255,0,170,0.35), inset 0 0 10px rgba(255,0,170,0.2); border-color: rgba(255,0,170,0.8); }
+  50%  { box-shadow: 0 0 30px rgba(255,0,170,0.6), inset 0 0 14px rgba(255,0,170,0.28); border-color: rgba(255,0,170,0.95); }
+  100% { box-shadow: 0 0 16px rgba(255,0,170,0.35), inset 0 0 10px rgba(255,0,170,0.2); border-color: rgba(255,0,170,0.8); }
+}
+body.tron-magenta .theme-button::before { content: none; }
+body.tron-magenta [role="tablist"] { border-bottom-color: rgba(255,0,170,0.55); box-shadow: 0 6px 12px -6px rgba(255,0,170,0.35); }
+body.tron-magenta table { border-color: rgba(255,0,170,0.35); box-shadow: 0 0 12px rgba(255,0,170,0.25); }
+body.tron-magenta .recharts-cartesian-grid line { stroke: rgba(255,0,170,0.25); }
+body.tron-magenta .recharts-cartesian-axis line { stroke: rgba(255,0,170,0.6); }
 
 /* Custom Styles */
 @keyframes neonGlow {

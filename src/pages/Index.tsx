@@ -12,6 +12,7 @@ import OverallLeaderboard from "@/components/OverallLeaderboard";
 import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import SpinTheWheel from "@/components/SpinTheWheel";
 import MobileMenu from "@/components/MobileMenu";
+import ThemeSelector from "@/components/ThemeSelector";
 import PerformanceModeToggle from "@/components/PerformanceModeToggle";
 import TournamentDropdown from "@/components/TournamentDropdown";
 import PublicTournamentBrowser from "@/components/PublicTournamentBrowser";
@@ -134,6 +135,20 @@ const Index = () => {
     return shuffleArray(getLeaderboardNames);
   }, [getLeaderboardNames]);
 
+  // Deterministic style for Tron edge runner per card
+  const getRunnerStyle = (seed: string) => {
+    let h = 0;
+    for (let i = 0; i < seed.length; i++) {
+      h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+    }
+    const delay = (h % 2000) / 1000; // 0-2s
+    const duration = 7 + ((h >> 3) % 4000) / 1000; // 7-11s
+    return {
+      ['--runner-delay' as any]: `${delay}s`,
+      ['--runner-duration' as any]: `${duration}s`,
+    } as React.CSSProperties;
+  };
+
   // Remove annoying loading screen - show content immediately
   // if (loading || tournamentLoading || gamesLoading) {
   //   return (
@@ -163,7 +178,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen text-white p-3 md:p-4 relative z-10"
-         style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
+         style={{ background: 'var(--page-bg)' }}>
       <div className="w-full space-y-4">
         <div className="flex items-center">
           {/* Left aligned title */}
@@ -184,6 +199,8 @@ const Index = () => {
                   second: '2-digit' 
                 })}
               </div>
+              {/* Theme Selector */}
+              <ThemeSelector />
               
               {user ? (
                 <>
@@ -194,9 +211,6 @@ const Index = () => {
                   </Button>
                   <Button variant="outline" onClick={() => navigate('/statistics')}>
                     Statistics
-                  </Button>
-                  <Button variant="outline" onClick={() => navigate('/achievements')}>
-                    Achievements
                   </Button>
                   {isAdmin && (
                     <Button variant="outline" onClick={() => navigate('/admin')}>
@@ -252,7 +266,8 @@ const Index = () => {
                 <section key={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full flex-1 min-w-0'}`}>
                   {/* Card containing logo, scores and QR code */}
                   <Card 
-                    className="bg-black/30 border-white/20 flex-1 flex flex-col cursor-pointer hover:scale-[1.02] transition-transform duration-200"
+                    className="bg-black/30 border-white/20 theme-card flex-1 flex flex-col cursor-pointer hover:scale-[1.02] transition-transform duration-200"
+                    style={getRunnerStyle(game.id)}
                     onClick={() => handleGameLogoClick(game)}
                     title={`Click to submit score for ${game.name}`}
                   >
