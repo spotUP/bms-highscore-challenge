@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
+import { dlog } from '@/lib/debug';
 
 export interface Tournament {
   id: string;
@@ -71,11 +72,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   // Load user's tournaments (or default tournament for anonymous users)
   const loadUserTournaments = async () => {
-    console.log('Loading tournaments for user:', user?.id || 'anonymous');
+    dlog('Loading tournaments for user:', user?.id || 'anonymous');
 
     // For anonymous users, load the default tournament
     if (!user) {
-      console.log('Anonymous user detected, loading default tournament');
+      dlog('Anonymous user detected, loading default tournament');
       try {
         const { data: defaultTournament, error } = await supabase
           .from('tournaments')
@@ -90,17 +91,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         }
 
         if (defaultTournament) {
-          console.log('Found default tournament:', defaultTournament.name, 'ID:', defaultTournament.id);
+          dlog('Found default tournament:', defaultTournament.name, 'ID:', defaultTournament.id);
           setUserTournaments([defaultTournament]);
           setCurrentTournament(defaultTournament);
           setCurrentUserRole(null); // Anonymous users have no role
         } else {
-          console.log('No default tournament found, checking all tournaments...');
+          dlog('No default tournament found, checking all tournaments...');
           // Debug: Check what tournaments exist
           const { data: allTournaments } = await supabase
             .from('tournaments')
             .select('id, name, slug, is_public');
-          console.log('All tournaments:', allTournaments);
+          dlog('All tournaments:', allTournaments);
           setUserTournaments([]);
           setCurrentTournament(null);
           setCurrentUserRole(null);
@@ -118,12 +119,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    console.log('Loading tournaments for authenticated user:', user.id);
+    dlog('Loading tournaments for authenticated user:', user.id);
 
     try {
       // Load tournaments from the new tournament system
       // Try a simpler query first to test basic access
-      console.log('Testing basic tournament_members access...');
+      dlog('Testing basic tournament_members access...');
       const { data: basicTest, error: basicError } = await supabase
         .from('tournament_members')
         .select('id, user_id, tournament_id, role, is_active')
@@ -131,7 +132,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         .eq('is_active', true)
         .limit(1);
 
-      console.log('Basic test result:', { basicTest, basicError });
+      dlog('Basic test result:', { basicTest, basicError });
 
       // Now try the full query
       const { data: memberships, error } = await supabase
@@ -140,16 +141,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         .eq('user_id', user.id)
         .eq('is_active', true);
 
-      console.log('Tournament memberships (ids only) result:', { memberships, error });
-      console.log('Error details:', {
+      dlog('Tournament memberships (ids only) result:', { memberships, error });
+      dlog('Error details:', {
         code: error?.code,
         message: error?.message,
         details: error?.details,
         hint: error?.hint,
         fullError: error
       });
-      console.log('Error keys:', Object.keys(error || {}));
-      console.log('Error stringified:', JSON.stringify(error, null, 2));
+      dlog('Error keys:', Object.keys(error || {}));
+      dlog('Error stringified:', JSON.stringify(error, null, 2));
 
       if (error) throw error;
 
@@ -163,7 +164,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         if (tErr) throw tErr;
         tournaments = tList || [];
       }
-      console.log('Found tournaments by ids:', tournaments);
+      dlog('Found tournaments by ids:', tournaments);
       setUserTournaments(tournaments);
 
       // Selection priority:
@@ -174,17 +175,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       let selectedTournament: any = null;
 
       const storedTournamentId = localStorage.getItem('currentTournamentId');
-      console.log('Stored tournament ID:', storedTournamentId);
+      dlog('Stored tournament ID:', storedTournamentId);
       if (storedTournamentId) {
         selectedTournament = tournaments.find(t => t.id === storedTournamentId) || null;
-        console.log('Found stored tournament:', selectedTournament);
+        dlog('Found stored tournament:', selectedTournament);
       }
 
       if (!selectedTournament) {
         const activeTournament = tournaments.find((t: any) => t && (t as any).is_active === true);
         if (activeTournament) {
           selectedTournament = activeTournament;
-          console.log('Using active tournament flag:', selectedTournament);
+          dlog('Using active tournament flag:', selectedTournament);
         }
       }
 
@@ -195,17 +196,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           return bTime - aTime;
         });
         selectedTournament = byUpdatedAt[0] || tournaments[0];
-        console.log('Using most recently updated/first tournament:', selectedTournament);
+        dlog('Using most recently updated/first tournament:', selectedTournament);
       }
 
       if (selectedTournament) {
         const membership = memberships?.find((m: any) => m.tournament_id === selectedTournament.id);
-        console.log('Setting current tournament:', selectedTournament.name, 'with role:', membership?.role);
+        dlog('Setting current tournament:', selectedTournament.name, 'with role:', membership?.role);
         setCurrentTournament(selectedTournament);
         setCurrentUserRole(membership?.role || null);
         localStorage.setItem('currentTournamentId', selectedTournament.id);
       } else {
-        console.log('No tournaments found for user, loading default public tournament...');
+        dlog('No tournaments found for user, loading default public tournament...');
         // If authenticated user has no tournaments, load the default public tournament
         try {
           const { data: defaultTournament, error } = await supabase
@@ -217,13 +218,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             .single();
 
           if (defaultTournament && !error) {
-            console.log('Found default tournament for new user:', defaultTournament.name);
+            dlog('Found default tournament for new user:', defaultTournament.name);
             setUserTournaments([defaultTournament]);
             setCurrentTournament(defaultTournament);
             setCurrentUserRole(null); // No membership role in default tournament
             localStorage.setItem('currentTournamentId', defaultTournament.id);
           } else {
-            console.log('No default tournament found for new user');
+            dlog('No default tournament found for new user');
           }
         } catch (error) {
           console.error('Error loading default tournament for new user:', error);
@@ -257,13 +258,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   // Switch to a different tournament
   const switchTournament = async (tournament: Tournament) => {
-    console.log('switchTournament called with:', tournament);
-    console.log('Current user:', user?.id);
+    dlog('switchTournament called with:', tournament);
+    dlog('Current user:', user?.id);
     
     try {
       // For anonymous users accessing public tournaments, don't check membership
       if (!user && tournament.is_public) {
-        console.log('Anonymous user accessing public tournament:', tournament.name);
+        dlog('Anonymous user accessing public tournament:', tournament.name);
         setCurrentTournament(tournament);
         setCurrentUserRole(null);
         localStorage.setItem('currentTournamentId', tournament.id);
@@ -290,7 +291,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         .eq('is_active', true)
         .single();
 
-      console.log('Membership query result:', { membership, error });
+      dlog('Membership query result:', { membership, error });
 
       if (error && error.code !== 'PGRST116') {
         console.error('Error getting tournament membership:', error);
@@ -304,7 +305,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
       // For public tournaments, allow access even without membership
       if (tournament.is_public) {
-        console.log('Setting public tournament:', tournament.name, 'with role:', membership?.role || 'public_viewer');
+        dlog('Setting public tournament:', tournament.name, 'with role:', membership?.role || 'public_viewer');
         setCurrentTournament(tournament);
         setCurrentUserRole(membership?.role || null);
         localStorage.setItem('currentTournamentId', tournament.id);
@@ -322,7 +323,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      console.log('Setting private tournament:', tournament.name, 'with role:', membership.role);
+      dlog('Setting private tournament:', tournament.name, 'with role:', membership.role);
       setCurrentTournament(tournament);
       setCurrentUserRole(membership.role);
       localStorage.setItem('currentTournamentId', tournament.id);

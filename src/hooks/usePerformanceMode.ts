@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { dlog } from '@/lib/debug';
 
 interface PerformanceInfo {
   isLowEnd: boolean;
@@ -94,7 +95,7 @@ export const usePerformanceMode = (): PerformanceInfo => {
     
     const shouldOptimize = isLowEnd || forcePerformanceMode;
     
-    console.log('Performance Detection:', {
+    dlog('Performance Detection:', {
       isRaspberryPi,
       isLowEnd,
       forcePerformanceMode,

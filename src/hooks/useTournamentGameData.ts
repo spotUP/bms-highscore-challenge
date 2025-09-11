@@ -1,7 +1,8 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { usePerformanceMode } from '@/hooks/usePerformanceMode';
 import { useTournament } from '@/contexts/TournamentContext';
+import { dlog } from '@/lib/debug';
 
 interface Game {
   id: string;
@@ -66,14 +67,14 @@ export const useTournamentGameData = () => {
 
   // Load games for current tournament
   const loadGames = useCallback(async () => {
-    console.log('useTournamentGameData: loadGames called, currentTournament:', currentTournament);
+    dlog('useTournamentGameData: loadGames called, currentTournament:', currentTournament);
     if (!currentTournament) {
-      console.log('useTournamentGameData: No current tournament, skipping');
+      dlog('useTournamentGameData: No current tournament, skipping');
       return;
     }
 
     try {
-      console.log('useTournamentGameData: Loading games for tournament:', currentTournament.id);
+      dlog('useTournamentGameData: Loading games for tournament:', currentTournament.id);
       // Load games with tournament_id filter
       const { data, error } = await supabase
         .from('games')
@@ -82,12 +83,12 @@ export const useTournamentGameData = () => {
         .eq('is_active', true)
         .order('name', { ascending: true });
 
-      console.log('useTournamentGameData: Games query result:', { data, error });
+      dlog('useTournamentGameData: Games query result:', { data, error });
 
       if (error) throw error;
 
       setState(prev => ({ ...prev, games: data || [] }));
-      console.log('useTournamentGameData: Successfully loaded', data?.length || 0, 'games');
+      dlog('useTournamentGameData: Successfully loaded', data?.length || 0, 'games');
     } catch (error) {
       console.error('Error loading games:', error);
       setState(prev => ({ ...prev, error: 'Failed to load games' }));
@@ -96,14 +97,14 @@ export const useTournamentGameData = () => {
 
   // Load scores for current tournament
   const loadScores = useCallback(async () => {
-    console.log('useTournamentGameData: loadScores called, currentTournament:', currentTournament);
+    dlog('useTournamentGameData: loadScores called, currentTournament:', currentTournament);
     if (!currentTournament) {
-      console.log('useTournamentGameData: No current tournament, skipping scores');
+      dlog('useTournamentGameData: No current tournament, skipping scores');
       return;
     }
 
     try {
-      console.log('useTournamentGameData: Loading scores for tournament:', currentTournament.id);
+      dlog('useTournamentGameData: Loading scores for tournament:', currentTournament.id);
       // Load scores with tournament_id filter
       const { data, error } = await supabase
         .from('scores')
@@ -112,12 +113,12 @@ export const useTournamentGameData = () => {
         .order('score', { ascending: false })
         .limit(500);
 
-      console.log('useTournamentGameData: Scores query result:', { data: data?.slice(0, 3), error, totalCount: data?.length });
+      dlog('useTournamentGameData: Scores query result:', { data: data?.slice(0, 3), error, totalCount: data?.length });
 
       if (error) throw error;
 
       setState(prev => ({ ...prev, scores: data || [] }));
-      console.log('useTournamentGameData: Successfully loaded', data?.length || 0, 'scores');
+      dlog('useTournamentGameData: Successfully loaded', data?.length || 0, 'scores');
     } catch (error) {
       console.error('Error loading scores:', error);
       setState(prev => ({ ...prev, error: 'Failed to load scores' }));
@@ -306,6 +307,19 @@ export const useTournamentGameData = () => {
     loadAllData();
   }, [loadAllData]);
 
+  // Debounced refetch to avoid burst updates from realtime events
+  const debouncedRef = useRef<number | null>(null);
+  const debouncedRefetch = useCallback(() => {
+    if (debouncedRef.current) {
+      clearTimeout(debouncedRef.current);
+    }
+    // Batch multiple events within 300ms into a single reload
+    debouncedRef.current = window.setTimeout(() => {
+      debouncedRef.current = null;
+      refetch();
+    }, 300);
+  }, [refetch]);
+
   // Set up subscriptions for real-time updates
   useEffect(() => {
     if (!currentTournament) return;
@@ -321,9 +335,7 @@ export const useTournamentGameData = () => {
           filter: `tournament_id=eq.${currentTournament.id}`,
         },
         () => {
-          loadScores();
-          loadOverallLeaders();
-          loadDemolitionManScores();
+          debouncedRefetch();
         }
       )
       .subscribe();
@@ -339,7 +351,7 @@ export const useTournamentGameData = () => {
           filter: `tournament_id=eq.${currentTournament.id}`,
         },
         () => {
-          loadGames();
+          debouncedRefetch();
         }
       )
       .subscribe();
@@ -355,7 +367,7 @@ export const useTournamentGameData = () => {
           filter: `tournament_id=eq.${currentTournament.id}`,
         },
         () => {
-          loadAchievementHunters();
+          debouncedRefetch();
         }
       )
       .subscribe();
@@ -364,8 +376,12 @@ export const useTournamentGameData = () => {
       scoresChannel.unsubscribe();
       gamesChannel.unsubscribe();
       achievementsChannel.unsubscribe();
+      if (debouncedRef.current) {
+        clearTimeout(debouncedRef.current);
+        debouncedRef.current = null;
+      }
     };
-  }, [currentTournament?.id]); // Only depend on tournament ID
+  }, [currentTournament?.id, debouncedRefetch]); // Only depend on tournament ID and debouncedRefetch
 
   // Load data when tournament changes
   useEffect(() => {

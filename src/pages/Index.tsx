@@ -17,6 +17,7 @@ import PerformanceModeToggle from "@/components/PerformanceModeToggle";
 import TournamentDropdown from "@/components/TournamentDropdown";
 import PublicTournamentBrowser from "@/components/PublicTournamentBrowser";
 import { useTournament } from "@/contexts/TournamentContext";
+import { dlog } from "@/lib/debug";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -253,7 +254,7 @@ const Index = () => {
                 
                 // Debug logging for joust specifically
                 if (game.name.toLowerCase().includes('joust')) {
-                  console.log('🎮 Joust Debug Info:', {
+                  dlog('🎮 Joust Debug Info:', {
                     gameName: game.name,
                     gameId: game.id,
                     scoresForThisGame: filtered,

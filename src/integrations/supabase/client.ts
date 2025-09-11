@@ -3,14 +3,17 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const SUPABASE_PUBLISHABLE_KEY = (
+  (import.meta.env as any).VITE_SUPABASE_ANON_KEY ||
+  (import.meta.env as any).VITE_SUPABASE_PUBLISHABLE_KEY
+) as string | undefined;
 
 // Warn if env vars are missing so we don't unknowingly rely on fallback keys
 (() => {
   const missingUrl = !SUPABASE_URL;
   const missingKey = !SUPABASE_PUBLISHABLE_KEY;
   if (missingUrl || missingKey) {
-    const msg = "[supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. These are required. Check your .env and deployment environment.";
+    const msg = "[supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY (or legacy VITE_SUPABASE_PUBLISHABLE_KEY). Check your .env and deployment environment.";
     // eslint-disable-next-line no-console
     console.error(msg);
     throw new Error(msg);
