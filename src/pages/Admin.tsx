@@ -988,7 +988,9 @@ const Admin = () => {
           <p className="text-xl text-gray-300 mb-8">
             Select a tournament to access the admin panel.
           </p>
-          <TournamentSelector />
+          <div className="mt-4">
+            <p className="text-gray-300">Please select a tournament from the menu above.</p>
+          </div>
         </div>
       </div>
     );

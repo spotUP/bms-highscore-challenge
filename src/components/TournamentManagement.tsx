@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from '@/integrations/supabase/client';
-import { useTournament } from '@/contexts/TournamentContext';
+import { useTournament, Tournament } from '@/contexts/TournamentContext';
 import { useToast } from '@/hooks/use-toast';
 import { Globe, Lock, Users, Trophy, Search, Plus, Settings, Crown, Shield, User } from 'lucide-react';
 import { getButtonStyle, getCardStyle, getTypographyStyle } from '@/utils/designSystem';
@@ -36,6 +36,8 @@ const TournamentManagement = () => {
     deleteTournament,
     currentUserRole
   } = useTournament();
+  
+  const [editTournament, setEditTournament] = useState<Tournament | null>(null);
   
   const { toast } = useToast();
   const [publicTournaments, setPublicTournaments] = useState<PublicTournament[]>([]);
@@ -141,18 +143,21 @@ const TournamentManagement = () => {
   const handleUpdateTournament = async () => {
     if (!currentTournament) return;
     
+    const dataToUpdate = editTournament || currentTournament;
+    
     const updateData = {
-      name: currentTournament.name,
-      description: currentTournament.description,
-      slug: currentTournament.slug,
-      is_public: currentTournament.is_public,
-      demolition_man_active: currentTournament.demolition_man_active,
+      name: dataToUpdate.name,
+      description: dataToUpdate.description,
+      slug: dataToUpdate.slug,
+      is_public: dataToUpdate.is_public,
+      demolition_man_active: dataToUpdate.demolition_man_active,
     };
     
     console.log('Updating tournament with data:', updateData);
     
     const success = await updateTournament(currentTournament.id, updateData);
     if (success) {
+      setEditTournament(null); // Reset edit state
       toast({
         title: "Tournament Updated",
         description: "Tournament settings have been saved successfully.",
@@ -221,8 +226,12 @@ const TournamentManagement = () => {
                       <Label htmlFor="tournament-name" className="text-white">Tournament Name</Label>
                       <Input
                         id="tournament-name"
-                        value={currentTournament.name}
-                        onChange={(e) => updateTournament({ ...currentTournament, name: e.target.value })}
+                        value={editTournament?.name || currentTournament.name}
+                        onChange={(e) => {
+                          if (currentTournament) {
+                            setEditTournament({ ...currentTournament, ...editTournament, name: e.target.value });
+                          }
+                        }}
                         className="bg-gray-800 border-gray-700 text-white"
                       />
                     </div>
@@ -230,8 +239,12 @@ const TournamentManagement = () => {
                       <Label htmlFor="tournament-slug" className="text-white">Slug</Label>
                       <Input
                         id="tournament-slug"
-                        value={currentTournament.slug}
-                        onChange={(e) => updateTournament({ ...currentTournament, slug: e.target.value })}
+                        value={editTournament?.slug || currentTournament.slug}
+                        onChange={(e) => {
+                          if (currentTournament) {
+                            setEditTournament({ ...currentTournament, ...editTournament, slug: e.target.value });
+                          }
+                        }}
                         className="bg-gray-800 border-gray-700 text-white"
                       />
                     </div>
@@ -241,8 +254,12 @@ const TournamentManagement = () => {
                     <Label htmlFor="tournament-description" className="text-white">Description</Label>
                     <Textarea
                       id="tournament-description"
-                      value={currentTournament.description || ''}
-                      onChange={(e) => updateTournament({ ...currentTournament, description: e.target.value })}
+                      value={editTournament?.description || currentTournament.description || ''}
+                      onChange={(e) => {
+                        if (currentTournament) {
+                          setEditTournament({ ...currentTournament, ...editTournament, description: e.target.value });
+                        }
+                      }}
                       className="bg-gray-800 border-gray-700 text-white min-h-[100px]"
                       placeholder="Enter tournament description..."
                     />
@@ -351,7 +368,7 @@ const TournamentManagement = () => {
                             ) : (
                               <Lock className="w-4 h-4 text-gray-400" />
                             )}
-                            {getRoleIcon(tournament.role || 'member')}
+                            {getRoleIcon('member')}
                           </div>
                           {tournament.description && (
                             <p className="text-sm text-gray-400 mb-2">{tournament.description}</p>
