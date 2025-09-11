@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.8.1] - 2025-09-11
+
+Maintenance release to publish a GitHub Release via the new workflow. Contents are identical to v1.8.0.
+
 ## [v1.8.0] - 2025-09-11
 
 ### Added
