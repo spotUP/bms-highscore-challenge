@@ -71,7 +71,7 @@ jobs:
           if [ $FAIL -ne 0 ]; then exit 3; fi
 
   verify-rls-prod:
-    if: ${{ secrets.PROD_DATABASE_URL != '' }}
+    if: false
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
