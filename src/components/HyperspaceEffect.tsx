@@ -6,16 +6,11 @@ const HyperspaceEffect = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { enableAnimations, particleCount, isRaspberryPi } = usePerformanceMode();
   const { theme } = useTheme();
-
-  // Disable the hyperspace background when Tron theme is active
-  if (theme === 'tron') {
-    return null;
-  }
+  const disabled = theme === 'tron';
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const context = canvas.getContext('2d');
     if (!context) return;
 
@@ -146,13 +141,21 @@ const HyperspaceEffect = () => {
     
     const animate = (currentTime: number) => {
       if (currentTime - lastFrameTime >= frameInterval) {
-        loop();
+        if (!disabled && enableAnimations) {
+          loop();
+        } else {
+          // Clear frame when disabled
+          context.save();
+          context.fillStyle = 'rgb(0, 0, 0)';
+          context.fillRect(0, 0, canvasWidth, canvasHeight);
+          context.restore();
+        }
         lastFrameTime = currentTime;
       }
       animationId = requestAnimationFrame(animate);
     };
-    
-    if (enableAnimations) {
+
+    if (enableAnimations || disabled) {
       animationId = requestAnimationFrame(animate);
     }
 
@@ -163,13 +166,13 @@ const HyperspaceEffect = () => {
       }
       window.removeEventListener('resize', resize);
     };
-  }, [enableAnimations, particleCount, isRaspberryPi]);
+  }, [enableAnimations, particleCount, isRaspberryPi, disabled]);
 
   return (
     <canvas
       ref={canvasRef}
       className="fixed inset-0 pointer-events-none"
-      style={{ zIndex: -1 }}
+      style={{ zIndex: -1, display: disabled ? 'none' : 'block' }}
     />
   );
 };
