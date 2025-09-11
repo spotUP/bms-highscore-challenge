@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from 'react';
-import { BrowserMultiFormatReader } from '@zxing/library';
+import React from 'react';
+import { QrReader } from 'react-qr-reader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -10,32 +10,17 @@ interface QRScannerProps {
 }
 
 const QRScanner = ({ isOpen, onClose, onScan }: QRScannerProps) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const codeReader = useRef<BrowserMultiFormatReader>();
-
-  useEffect(() => {
-    if (isOpen && videoRef.current) {
-      codeReader.current = new BrowserMultiFormatReader();
-      
-      codeReader.current.decodeFromVideoDevice(undefined, videoRef.current, (result, error) => {
-        if (result) {
-          onScan(result.getText());
-          onClose();
-          toast.success("QR Code scanned successfully!");
-        }
-        if (error && error.name !== 'NotFoundException') {
-          console.error(error);
-          toast.error("Error scanning QR code");
-        }
-      });
+  const handleScan = (result: any, error: any) => {
+    if (result?.text) {
+      onScan(result.text);
+      onClose();
+      toast.success("QR Code scanned successfully!");
     }
-
-    return () => {
-      if (codeReader.current) {
-        codeReader.current.reset();
-      }
-    };
-  }, [isOpen, onScan, onClose]);
+    if (error) {
+      console.error(error);
+      toast.error("Error scanning QR code");
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -44,12 +29,11 @@ const QRScanner = ({ isOpen, onClose, onScan }: QRScannerProps) => {
           <DialogTitle className="text-arcade-neonCyan">Scan QR Code to Submit Score</DialogTitle>
         </DialogHeader>
         <div className="w-full aspect-square">
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover rounded"
-            autoPlay
-            playsInline
-            muted
+          <QrReader
+            constraints={{ facingMode: 'environment' }}
+            onResult={handleScan}
+            
+            className="w-full h-full"
           />
         </div>
       </DialogContent>
