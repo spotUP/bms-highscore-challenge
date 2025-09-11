@@ -29,12 +29,22 @@ async function runMigration() {
   console.log('Starting to apply migration...');
 
   try {
-    // Read the migration SQL file
-    const migrationPath = path.join(
-      __dirname, 
-      '../supabase/migrations/20250910212000_add_achievement_functions.sql'
-    );
-    
+    // Determine migration file path from CLI arg or fallback to previous default
+    const argPath = process.argv[2];
+    const migrationPath = argPath
+      ? path.isAbsolute(argPath)
+        ? argPath
+        : path.join(process.cwd(), argPath)
+      : path.join(
+          __dirname,
+          '../supabase/migrations/20250910212000_add_achievement_functions.sql'
+        );
+
+    if (!fs.existsSync(migrationPath)) {
+      console.error(`Migration file not found: ${migrationPath}`);
+      process.exit(1);
+    }
+
     const sql = fs.readFileSync(migrationPath, 'utf8');
     
     // Split the SQL into individual statements
