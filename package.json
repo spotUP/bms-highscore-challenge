@@ -6,9 +6,8 @@
   "scripts": {
     "predev": "tsx scripts/check-env.ts",
     "dev": "vite",
-    "prebuild": "echo 'Skipping env check for external builders'",
+    "prebuild": "tsx scripts/check-env.ts",
     "build": "vite build",
-    "build:simple": "vite build --mode production",
     "build:dev": "vite build --mode development",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . || true",
