@@ -2,25 +2,18 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://tnsgrwntmnzpaifmutqh.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRuc2dyd250bW56cGFpZm11dHFoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ5OTgyNjksImV4cCI6MjA3MDU3NDI2OX0.o-yVR7YDsJGJ9Yrvp-MFZGDnXcEVl1AKdx-73h-dHzM";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
 
 // Warn if env vars are missing so we don't unknowingly rely on fallback keys
 (() => {
-  try {
-    const missingUrl = !import.meta.env.VITE_SUPABASE_URL;
-    const missingKey = !import.meta.env.VITE_SUPABASE_ANON_KEY;
-    if (missingUrl || missingKey) {
-      const msg = "[supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Using fallback values. Set env vars to avoid shipping project-specific defaults.";
-      // eslint-disable-next-line no-console
-      if (import.meta.env.PROD) {
-        console.error(msg);
-      } else {
-        console.warn(msg);
-      }
-    }
-  } catch {
-    // ignore
+  const missingUrl = !SUPABASE_URL;
+  const missingKey = !SUPABASE_PUBLISHABLE_KEY;
+  if (missingUrl || missingKey) {
+    const msg = "[supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. These are required. Check your .env and deployment environment.";
+    // eslint-disable-next-line no-console
+    console.error(msg);
+    throw new Error(msg);
   }
 })();
 
@@ -83,7 +76,7 @@ export function setRememberMe(remember: boolean) {
   }
 }
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+export const supabase = createClient<Database>(SUPABASE_URL!, SUPABASE_PUBLISHABLE_KEY!, {
   auth: {
     storage: dynamicStorage,
     persistSession: true,
