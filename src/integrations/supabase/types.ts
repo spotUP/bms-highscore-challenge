@@ -599,6 +599,27 @@ export type Database = {
           },
         ]
       }
+      signup_trigger_logs: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       tournament_invitations: {
         Row: {
           accepted_at: string | null
@@ -823,6 +844,15 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      check_and_award_achievements: {
+        Args: {
+          p_game_id: string
+          p_is_first_place?: boolean
+          p_player_name: string
+          p_score: number
+        }
+        Returns: Json
+      }
       check_and_award_achievements_for_player: {
         Args:
           | {
@@ -985,6 +1015,10 @@ export type Database = {
       is_tournament_member: {
         Args: { p_roles?: string[]; p_tournament: string; p_user: string }
         Returns: boolean
+      }
+      populate_default_achievements: {
+        Args: { p_tournament_id: string }
+        Returns: undefined
       }
       update_tournament_achievement: {
         Args: {
