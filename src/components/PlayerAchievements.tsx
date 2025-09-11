@@ -78,24 +78,34 @@ const PlayerAchievements: React.FC<PlayerAchievementsProps> = ({ playerName }) =
   const getAchievementProgress = (achievement: Achievement) => {
     if (!playerStats) return 0;
 
-    switch (achievement.type) {
-      case 'first_score':
-        return playerStats.total_scores > 0 ? 100 : 0;
-      case 'first_place':
-        const targetPlaces = achievement.criteria?.game_count || 1;
-        return Math.min((playerStats.first_place_count / targetPlaces) * 100, 100);
-      case 'score_milestone':
-        const targetScore = achievement.criteria?.min_score || 0;
-        return Math.min((playerStats.best_score / targetScore) * 100, 100);
-      case 'game_master':
-        const targetGames = achievement.criteria?.game_count || 1;
-        return Math.min((playerStats.total_games_played / targetGames) * 100, 100);
-      case 'consistent_player':
-        const targetScores = achievement.criteria?.min_scores || 1;
-        return Math.min((playerStats.total_scores / targetScores) * 100, 100);
-      default:
-        return 0;
+    if (achievement.type === 'first_score') {
+      return playerStats.total_scores > 0 ? 100 : 0;
     }
+    if (achievement.type === 'first_place') {
+      return Math.min(
+        (playerStats.first_place_count / (achievement.criteria?.game_count || 1)) * 100,
+        100
+      );
+    }
+    if (achievement.type === 'score_milestone') {
+      return Math.min(
+        (playerStats.best_score / (achievement.criteria?.min_score || 0)) * 100,
+        100
+      );
+    }
+    if (achievement.type === 'game_master') {
+      return Math.min(
+        (playerStats.total_games_played / (achievement.criteria?.game_count || 1)) * 100,
+        100
+      );
+    }
+    if (achievement.type === 'consistent_player') {
+      return Math.min(
+        (playerStats.total_scores / (achievement.criteria?.min_scores || 1)) * 100,
+        100
+      );
+    }
+    return 0;
   };
 
   const getTotalPoints = () => {
