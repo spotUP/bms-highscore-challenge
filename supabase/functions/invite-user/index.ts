@@ -4,11 +4,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.55.0';
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
 interface InviteUserRequest {
-  email: string;
-  role: string;
+  action?: 'health';
+  email?: string;
+  role?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -18,35 +20,105 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { email, role }: InviteUserRequest = await req.json();
+    // Accept health via GET or POST
+    let action: InviteUserRequest['action'] | undefined = undefined;
+    let email: string | undefined = undefined;
+    let role: string | undefined = undefined;
+
+    if (req.method === 'GET') {
+      const url = new URL(req.url);
+      const qAction = url.searchParams.get('action');
+      action = (qAction as any) || undefined;
+    } else {
+      try {
+        const body: InviteUserRequest = await req.json();
+        action = body?.action;
+        email = body?.email;
+        role = body?.role as any;
+      } catch (_e) {
+        // Fallback to health if body is missing/invalid
+        action = 'health';
+      }
+    }
     
-    console.log("Inviting user:", { email, role });
+    console.log("invite-user: request received", { action, email_present: !!email, role });
 
-    // Validate input
+    // Resolve environment (used by both flows)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    // Health check endpoint
+    if (action === 'health') {
+      const hasSupabaseUrl = !!supabaseUrl;
+      const hasServiceKey = !!supabaseServiceKey;
+      const configured = hasSupabaseUrl && hasServiceKey;
+      return new Response(JSON.stringify({
+        success: configured,
+        configured,
+        hasSupabaseUrl,
+        hasServiceKey
+      }), { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
+
+    // Validate input for invite action
     if (!email || !role) {
-      throw new Error("Email and role are required");
+      return new Response(JSON.stringify({ success: false, error: "Email and role are required" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
-
     if (!['admin', 'moderator', 'user'].includes(role)) {
-      throw new Error("Invalid role specified");
+      return new Response(JSON.stringify({ success: false, error: "Invalid role specified" }), { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } });
     }
 
-    // Initialize Supabase client with service role key
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing required env vars for invite-user function', {
+        hasSupabaseUrl: !!supabaseUrl,
+        hasServiceKey: !!supabaseServiceKey
+      });
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Server not configured: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY"
+      }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
+
+    const redirectBase = Deno.env.get('SITE_URL')
+      || Deno.env.get('PUBLIC_SITE_URL')
+      || req.headers.get('origin')
+      || 'http://localhost:8080';
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Invite the user
-    const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${Deno.env.get('SUPABASE_URL')}/auth/callback`
-    });
-
-    if (inviteError) {
-      console.error("Error inviting user:", inviteError);
-      throw new Error(`Failed to invite user: ${inviteError.message}`);
+    // Try to send an email invite first (requires Email provider + SMTP)
+    let inviteData: any = null;
+    let inviteError: any = null;
+    try {
+      const res = await supabase.auth.admin.inviteUserByEmail(email, {
+        redirectTo: `${redirectBase.replace(/\/$/, '')}/auth`
+      });
+      inviteData = res.data;
+      inviteError = res.error;
+    } catch (e: any) {
+      inviteError = e;
     }
 
-    console.log("User invited successfully:", inviteData);
+    let usedFallback = false;
+    if (inviteError) {
+      console.warn("Email invite failed, falling back to link generation:", inviteError?.message || inviteError);
+      const alt = await (supabase as any).auth.admin.generateLink({
+        type: 'invite',
+        email,
+        options: {
+          redirectTo: `${redirectBase.replace(/\/$/, '')}/auth`
+        }
+      });
+      if (alt.error) {
+        console.error("Error generating invite link:", alt.error);
+        throw new Error(`Failed to invite user: ${alt.error.message}`);
+      }
+      inviteData = alt.data;
+      usedFallback = true;
+      console.log("Invite link generated successfully (fallback):", inviteData);
+    } else {
+      console.log("Invitation email requested successfully:", inviteData);
+    }
     
     // Log email sending status
     if (inviteData.user) {
@@ -56,7 +128,7 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     // Set the user's role
-    if (inviteData.user) {
+    if (inviteData?.user) {
       const { error: roleError } = await supabase
         .from('user_roles')
         .insert({ 
@@ -75,8 +147,13 @@ const handler = async (req: Request): Promise<Response> => {
 
     return new Response(JSON.stringify({ 
       success: true,
-      message: `User ${email} invited successfully with role ${role}`,
-      user: inviteData.user
+      message: usedFallback
+        ? `Invite link generated for ${email} with role ${role}`
+        : `Invitation email sent to ${email} with role ${role}`,
+      user: inviteData?.user || null,
+      action_link: usedFallback
+        ? (inviteData?.properties?.action_link || inviteData?.action_link || null)
+        : null
     }), {
       status: 200,
       headers: {

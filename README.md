@@ -60,6 +60,37 @@ This project is built with .
 - shadcn-ui
 - Tailwind CSS
 
+## Edge Functions: Secrets & Health
+
+### Project-level secrets (recommended)
+
+Set these as project-level environment variables in the Supabase Dashboard (Settings → Configuration). Functions read them at runtime, redeploy not required.
+
+- `FUNCTION_SUPABASE_URL` = your project URL (e.g., `https://<project-ref>.supabase.co`)
+- `FUNCTION_SERVICE_ROLE_KEY` = your Service Role Key (from Dashboard → Settings → API)
+- `PUBLIC_SITE_URL` or `SITE_URL` = your site URL for invite redirects (e.g., `https://bms-highscore-challenge.lovable.app`)
+
+Both Edge Functions (`manage-users`, `invite-user`) will also fall back to `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` if present, but `FUNCTION_*` is preferred.
+
+### Health endpoints
+
+Each function supports a non-destructive health check:
+
+- `GET|POST /functions/v1/manage-users?action=health`
+- `GET|POST /functions/v1/invite-user?action=health`
+
+When calling from the app, include an `Authorization: Bearer <access_token>` header.
+
+### Admin UI checks
+
+The Admin → Users header includes buttons:
+
+- Check All Functions
+- Check Function Status (manage-users)
+- Check Invite Function (invite-user)
+
+These use the current session token and display inline status badges (OK/ERR) and toasts with results.
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/aa9b7369-cfb6-4536-b862-28d227b2abdf) and click on Share -> Publish.

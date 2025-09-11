@@ -14,6 +14,7 @@ import { Pencil, Trash2, Plus, Shuffle, ChevronDown, ChevronUp } from "lucide-re
 import { useTournament } from "@/contexts/TournamentContext";
 import { useQueryClient } from '@tanstack/react-query';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
 type AchievementType = 
   | 'first_score' 
@@ -400,15 +401,16 @@ const AchievementManagerV2 = () => {
     }
   };
 
-  // Delete an achievement
-  const deleteAchievement = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this achievement?')) return;
-    
+  // Delete an achievement via confirmation dialog
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const handleDeleteAchievement = (id: string) => setDeleteDialog({ open: true, id });
+  const confirmDeleteAchievement = async () => {
+    if (!deleteDialog.id) return;
     try {
       const { error } = await supabase
         .from('achievements')
         .delete()
-        .eq('id', id);
+        .eq('id', deleteDialog.id);
         
       if (error) throw error;
       
@@ -576,6 +578,17 @@ const AchievementManagerV2 = () => {
                     <p className="text-xs text-red-500">An achievement with this name already exists in this tournament.</p>
                   )}
                 </div>
+
+      <ConfirmationDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+        title="Delete Achievement"
+        description="Are you sure you want to delete this achievement? This action cannot be undone."
+        confirmText="Delete Achievement"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={confirmDeleteAchievement}
+      />
 
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>
@@ -822,7 +835,7 @@ const AchievementManagerV2 = () => {
                           <AchievementsTable 
                             achievements={groupedAchievements['general']} 
                             onEdit={handleEditAchievement}
-                            onDelete={deleteAchievement}
+                            onDelete={handleDeleteAchievement}
                             onToggleStatus={toggleAchievementStatus}
                             getTypeIcon={getTypeIcon}
                             getCriteriaDisplay={getCriteriaDisplay}
@@ -865,7 +878,7 @@ const AchievementManagerV2 = () => {
                             <AchievementsTable 
                               achievements={groupedAchievements[game.id]} 
                               onEdit={handleEditAchievement}
-                              onDelete={deleteAchievement}
+                              onDelete={handleDeleteAchievement}
                               onToggleStatus={toggleAchievementStatus}
                               getTypeIcon={getTypeIcon}
                               getCriteriaDisplay={getCriteriaDisplay}
@@ -881,7 +894,7 @@ const AchievementManagerV2 = () => {
                 <AchievementsTable 
                   achievements={filteredAchievements} 
                   onEdit={handleEditAchievement}
-                  onDelete={deleteAchievement}
+                  onDelete={handleDeleteAchievement}
                   onToggleStatus={toggleAchievementStatus}
                   getTypeIcon={getTypeIcon}
                   getCriteriaDisplay={getCriteriaDisplay}

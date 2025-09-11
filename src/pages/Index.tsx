@@ -187,9 +187,8 @@ const Index = () => {
               
               {user ? (
                 <>
-                  <TournamentDropdown />
-                  <span className="text-gray-300">Welcome, {user.email}</span>
                   <PerformanceModeToggle displayType="switch" />
+                  <TournamentDropdown />
                   <Button variant="outline" onClick={() => setIsSpinWheelOpen(true)}>
                     Spin the Wheel
                   </Button>

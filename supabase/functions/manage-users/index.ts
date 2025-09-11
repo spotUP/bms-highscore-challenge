@@ -4,10 +4,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.55.0';
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
 interface ManageUsersRequest {
-  action: 'list' | 'delete';
+  action: 'health' | 'list' | 'delete';
   user_id?: string;
 }
 
@@ -18,13 +19,61 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const { action, user_id }: ManageUsersRequest = await req.json();
-    
+    // Accept health via GET or POST
+    let action: ManageUsersRequest["action"] | undefined = undefined;
+    let user_id: string | undefined = undefined;
+
+    if (req.method === 'GET') {
+      const url = new URL(req.url);
+      const qAction = url.searchParams.get('action');
+      action = (qAction as any) || undefined;
+    } else {
+      try {
+        const body = await req.json();
+        action = body?.action;
+        user_id = body?.user_id;
+      } catch (e) {
+        // If JSON parse fails, fall back to health
+        action = 'health';
+      }
+    }
+
     console.log("Managing users:", { action, user_id });
 
-    // Initialize Supabase client with service role key
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    // Read env vars first (support project-level secrets without SUPABASE_ prefix)
+    const supabaseUrl = Deno.env.get('FUNCTION_SUPABASE_URL') || Deno.env.get('SUPABASE_URL');
+    const supabaseServiceKey = Deno.env.get('FUNCTION_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+    // Health check endpoint does not require client calls
+    if (action === 'health') {
+      const hasSupabaseUrl = !!supabaseUrl;
+      const hasServiceKey = !!supabaseServiceKey;
+      const usedFunctionNames = !!Deno.env.get('FUNCTION_SUPABASE_URL') || !!Deno.env.get('FUNCTION_SERVICE_ROLE_KEY');
+      const configured = hasSupabaseUrl && hasServiceKey;
+      return new Response(JSON.stringify({
+        success: configured,
+        configured,
+        hasSupabaseUrl,
+        hasServiceKey,
+        usedFunctionNames
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders }
+      });
+    }
+
+    // For other actions, require env and initialize client
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing required env vars for manage-users function', {
+        hasSupabaseUrl: !!supabaseUrl,
+        hasServiceKey: !!supabaseServiceKey
+      });
+      return new Response(JSON.stringify({
+        success: false,
+        error: "Server not configured: missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY"
+      }), { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } });
+    }
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     if (action === 'list') {

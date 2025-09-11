@@ -5,21 +5,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, RotateCcw, AlertTriangle } from "lucide-react";
 import { getCardStyle, getButtonStyle, getTypographyStyle } from "@/utils/designSystem";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
 const ResetFunctions = () => {
   const { toast } = useToast();
   const [isResettingAchievements, setIsResettingAchievements] = useState(false);
   const [isResettingCompetition, setIsResettingCompetition] = useState(false);
 
+  // Dialog states
+  const [resetAchievementsStep1, setResetAchievementsStep1] = useState(false);
+  const [resetAchievementsStep2, setResetAchievementsStep2] = useState(false);
+  const [resetCompetitionStep1, setResetCompetitionStep1] = useState(false);
+  const [resetCompetitionStep2, setResetCompetitionStep2] = useState(false);
+
   const resetAllAchievements = async () => {
-    if (!confirm('⚠️ Are you sure you want to reset ALL achievements and player stats? This action cannot be undone!')) {
-      return;
-    }
-
-    if (!confirm('🚨 FINAL WARNING: This will delete ALL player achievements and statistics permanently. Are you absolutely sure?')) {
-      return;
-    }
-
     setIsResettingAchievements(true);
     
     try {
@@ -57,14 +56,6 @@ const ResetFunctions = () => {
   };
 
   const resetCompetitionScores = async () => {
-    if (!confirm('⚠️ Are you sure you want to reset all scores for the current competition? This will also reset all achievements and player stats.')) {
-      return;
-    }
-
-    if (!confirm('🚨 FINAL WARNING: This will delete ALL scores, achievements, and player statistics for the current competition. Are you absolutely sure?')) {
-      return;
-    }
-
     setIsResettingCompetition(true);
     
     try {
@@ -109,6 +100,7 @@ const ResetFunctions = () => {
   };
 
   return (
+    <>
     <Card className={getCardStyle('secondary')}>
       <CardHeader>
         <CardTitle className={`${getTypographyStyle('h3')} flex items-center gap-2 text-red-400`}>
@@ -125,7 +117,7 @@ const ResetFunctions = () => {
               Games marked "Include in Challenge" will have their scores cleared.
             </p>
             <Button
-              onClick={resetCompetitionScores}
+              onClick={() => setResetCompetitionStep1(true)}
               disabled={isResettingCompetition}
               className={`${getButtonStyle('secondary')} w-full bg-yellow-600 hover:bg-yellow-700`}
             >
@@ -141,7 +133,7 @@ const ResetFunctions = () => {
               for ALL players across ALL games. This cannot be undone!
             </p>
             <Button
-              onClick={resetAllAchievements}
+              onClick={() => setResetAchievementsStep1(true)}
               disabled={isResettingAchievements}
               className={`${getButtonStyle('secondary')} w-full bg-red-600 hover:bg-red-700`}
             >
@@ -163,6 +155,55 @@ const ResetFunctions = () => {
         </div>
       </CardContent>
     </Card>
+    
+    {/* Confirmation Dialogs: Reset Competition (2-step) */}
+    <ConfirmationDialog
+      open={resetCompetitionStep1}
+      onOpenChange={setResetCompetitionStep1}
+      title="Reset Competition?"
+      description="Are you sure you want to reset all scores for the current competition? This will also reset achievements and player stats for the competition."
+      confirmText="Yes, Continue"
+      cancelText="Cancel"
+      onConfirm={() => {
+        setResetCompetitionStep1(false);
+        setResetCompetitionStep2(true);
+      }}
+    />
+    <ConfirmationDialog
+      open={resetCompetitionStep2}
+      onOpenChange={setResetCompetitionStep2}
+      title="Final Warning"
+      description="🚨 This will delete ALL scores, achievements, and player statistics for the current competition. This action cannot be undone."
+      confirmText="Delete Everything"
+      cancelText="Cancel"
+      variant="destructive"
+      onConfirm={resetCompetitionScores}
+    />
+
+    {/* Confirmation Dialogs: Reset All Achievements (2-step) */}
+    <ConfirmationDialog
+      open={resetAchievementsStep1}
+      onOpenChange={setResetAchievementsStep1}
+      title="Reset All Achievements?"
+      description="Are you sure you want to reset ALL achievements and player stats? This is a global action."
+      confirmText="Yes, Continue"
+      cancelText="Cancel"
+      onConfirm={() => {
+        setResetAchievementsStep1(false);
+        setResetAchievementsStep2(true);
+      }}
+    />
+    <ConfirmationDialog
+      open={resetAchievementsStep2}
+      onOpenChange={setResetAchievementsStep2}
+      title="Final Warning"
+      description="🚨 This will delete ALL player achievements and statistics permanently across ALL games. This action cannot be undone."
+      confirmText="Delete All"
+      cancelText="Cancel"
+      variant="destructive"
+      onConfirm={resetAllAchievements}
+    />
+    </>
   );
 };
 

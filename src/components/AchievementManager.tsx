@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, Plus, Shuffle, ChevronDown, ChevronUp } from "lucide-react";
 import { useTournament } from "@/contexts/TournamentContext";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { useQueryClient } from '@tanstack/react-query';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
@@ -152,6 +153,16 @@ const AchievementManager = () => {
     setEditingAchievement(null);
   };
 
+  const openEditDialog = (achievement: Achievement) => {
+    setEditingAchievement(achievement);
+    setFormData({
+      name: achievement.name,
+      description: achievement.description,
+      type: achievement.type,
+      badge_icon: achievement.badge_icon,
+      badge_color: achievement.badge_color,
+      criteria: JSON.stringify(achievement.criteria ?? {}),
+      points: achievement.points,
       is_active: achievement.is_active
     });
     setIsDialogOpen(true);
@@ -336,14 +347,13 @@ const AchievementManager = () => {
     }
   };
 
-  const deleteAchievement = async (achievementId: string) => {
-    if (!confirm('Are you sure you want to delete this achievement? This will deactivate it but preserve existing unlocks.')) {
-      return;
-    }
-
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const handleDeleteAchievement = (id: string) => setDeleteDialog({ open: true, id });
+  const confirmDeleteAchievement = async () => {
+    if (!deleteDialog.id) return;
     try {
       const { error } = await supabase.rpc('delete_tournament_achievement' as any, {
-        p_achievement_id: achievementId
+        p_achievement_id: deleteDialog.id
       });
 
       if (error) throw error;
@@ -413,6 +423,7 @@ const AchievementManager = () => {
   }
 
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex justify-between items-center">
@@ -628,7 +639,7 @@ const AchievementManager = () => {
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={() => deleteAchievement(achievement.id)}
+                        onClick={() => handleDeleteAchievement(achievement.id)}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -648,6 +659,17 @@ const AchievementManager = () => {
         </Table>
       </CardContent>
     </Card>
+    <ConfirmationDialog
+      open={deleteDialog.open}
+      onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+      title="Delete Achievement"
+      description="Are you sure you want to delete this achievement? This will deactivate it but preserve existing unlocks."
+      confirmText="Delete Achievement"
+      cancelText="Cancel"
+      variant="destructive"
+      onConfirm={confirmDeleteAchievement}
+    />
+    </>
   );
 };
 

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { formatScore } from '@/lib/utils';
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
 interface Score {
   id: string;
@@ -319,15 +320,16 @@ const ScoreManager = () => {
     }
   };
 
-  // Delete score
-  const deleteScore = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this score?')) return;
-
+  // Delete score via confirmation dialog
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const handleDeleteScore = (id: string) => setDeleteDialog({ open: true, id });
+  const confirmDeleteScore = async () => {
+    if (!deleteDialog.id) return;
     try {
       const { error } = await supabase
         .from('scores')
         .delete()
-        .eq('id', id);
+        .eq('id', deleteDialog.id);
 
       if (error) throw error;
       
@@ -356,6 +358,7 @@ const ScoreManager = () => {
   }
 
   return (
+    <>
     <Card className="bg-black/50 border-white/20">
       <CardHeader>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -503,7 +506,7 @@ const ScoreManager = () => {
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => deleteScore(score.id)}
+                          onClick={() => handleDeleteScore(score.id)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -565,6 +568,17 @@ const ScoreManager = () => {
         </Table>
       </CardContent>
     </Card>
+    <ConfirmationDialog
+      open={deleteDialog.open}
+      onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+      title="Delete Score"
+      description="Are you sure you want to delete this score? This action cannot be undone."
+      confirmText="Delete Score"
+      cancelText="Cancel"
+      variant="destructive"
+      onConfirm={confirmDeleteScore}
+    />
+  </>
   );
 };
 

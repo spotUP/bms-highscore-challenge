@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { Pencil, Trash2, Plus, Zap } from "lucide-react";
 import { formatScore } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
@@ -209,16 +210,19 @@ const DemolitionManScoreManager = () => {
     }
   };
 
-  const deleteScore = async (scoreId: string) => {
-    if (!confirm('Are you sure you want to delete this Demolition Man score?')) {
-      return;
-    }
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; scoreId: string | null }>({ open: false, scoreId: null });
 
+  const handleDeleteScore = (scoreId: string) => {
+    setDeleteDialog({ open: true, scoreId });
+  };
+
+  const confirmDeleteScore = async () => {
+    if (!deleteDialog.scoreId) return;
     try {
       const { error } = await supabase
         .from('scores')
         .delete()
-        .eq('id', scoreId);
+        .eq('id', deleteDialog.scoreId);
 
       if (error) throw error;
 
@@ -262,6 +266,7 @@ const DemolitionManScoreManager = () => {
   }
 
   return (
+    <>
     <Card className="bg-red-900/20 border-red-700/50">
       <CardHeader>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -372,7 +377,7 @@ const DemolitionManScoreManager = () => {
                     <Button
                       size="sm"
                       variant="destructive"
-                      onClick={() => deleteScore(score.id)}
+                      onClick={() => handleDeleteScore(score.id)}
                       className="bg-red-800 hover:bg-red-700"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -392,6 +397,17 @@ const DemolitionManScoreManager = () => {
         </Table>
       </CardContent>
     </Card>
+    <ConfirmationDialog
+      open={deleteDialog.open}
+      onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+      title="Delete Score"
+      description="Are you sure you want to delete this Demolition Man score? This action cannot be undone."
+      confirmText="Delete Score"
+      cancelText="Cancel"
+      variant="destructive"
+      onConfirm={confirmDeleteScore}
+    />
+    </>
   );
 };
 

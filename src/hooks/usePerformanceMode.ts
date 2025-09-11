@@ -118,8 +118,34 @@ export const usePerformanceMode = (): PerformanceInfo => {
         localStorage.setItem('performance-mode', enabled ? 'enabled' : 'disabled');
         // Update state to trigger re-render with new performance settings
         setPerformanceInfo(prev => ({ ...prev, isPerformanceMode: enabled }));
+        // Broadcast so other hook consumers update too
+        window.dispatchEvent(new CustomEvent('performanceModeChanged', { detail: { enabled } }));
       },
     });
+  }, []);
+
+  // Listen for global performance mode changes (broadcast by togglePerformanceMode)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      try {
+        const custom = e as CustomEvent<{ enabled: boolean }>;
+        const enabled = !!custom.detail?.enabled;
+        setPerformanceInfo(prev => ({
+          ...prev,
+          isPerformanceMode: enabled,
+          enableAnimations: !enabled,
+          particleCount: enabled ? 200 : 800,
+          refreshInterval: enabled ? 60000 : 30000,
+          enableBlur: !enabled,
+          enableGradients: !enabled,
+          enableTransitions: !enabled,
+        }));
+      } catch {}
+    };
+    window.addEventListener('performanceModeChanged', handler as EventListener);
+    return () => {
+      window.removeEventListener('performanceModeChanged', handler as EventListener);
+    };
   }, []);
 
   return performanceInfo;

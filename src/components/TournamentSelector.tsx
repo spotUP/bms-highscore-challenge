@@ -100,7 +100,6 @@ const TournamentSelector = () => {
     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" className="flex items-center gap-2">
-          <Trophy className="w-4 h-4" />
           {currentTournament ? (
             <>
               {currentTournament.name}
