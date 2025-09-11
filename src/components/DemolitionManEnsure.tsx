@@ -16,7 +16,9 @@ const DemolitionManEnsure: React.FC = () => {
         .from('games')
         .select('id, name')
         .eq('name', 'Demolition Man')
-        .single();
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
 
       if (data && !error) {
         setGameExists(true);
@@ -40,7 +42,9 @@ const DemolitionManEnsure: React.FC = () => {
         .from('games')
         .select('id')
         .eq('name', 'Demolition Man')
-        .single();
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
 
       let gameId;
       

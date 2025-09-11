@@ -1,3 +1,6 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P:wght@400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&display=swap');
+
 @keyframes tronGlowBtn {
   0%   { box-shadow: 0 0 16px rgba(0,255,255,0.28), inset 0 0 10px rgba(0,255,255,0.16); border-color: rgba(0,255,255,0.75); }
   50%  { box-shadow: 0 0 30px rgba(0,255,255,0.55), inset 0 0 14px rgba(0,255,255,0.22); border-color: rgba(0,255,255,0.95); }
@@ -60,9 +63,6 @@
   opacity: 0.08;
   animation: vhsBars 7s linear infinite;
 }
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P:wght@400&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

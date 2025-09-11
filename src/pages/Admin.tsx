@@ -26,6 +26,7 @@ import StopCompetition from "@/components/StopCompetition";
 import WebhookConfig from "@/components/WebhookConfig";
 import UserManagement from "@/components/UserManagement";
 import ResetFunctions from "@/components/ResetFunctions";
+import StorageTester from "@/components/StorageTester";
 import DemolitionManQRSubmit from "@/components/DemolitionManQRSubmit";
 import DemolitionManEnsure from "@/components/DemolitionManEnsure";
 import DemolitionManScoreManager from "@/components/DemolitionManScoreManager";
@@ -1260,6 +1261,7 @@ const Admin = () => {
               </Card>
               <DemolitionManEnsure />
               <ResetFunctions />
+              <StorageTester />
             </div>
           </TabsContent>
           <TabsContent value="achievements" className="mt-6"><AchievementManagerV2 /></TabsContent>

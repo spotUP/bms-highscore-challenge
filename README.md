@@ -1,3 +1,16 @@
+### Storage Ops
+
+For storage setup, policies, and verification:
+
+- Run one-click verification:
+
+```
+npm run verify-storage
+```
+
+- See `SECURITY_UPDATES.md` section "Storage Verification: Status and How-To" for current status, RLS policies, and smoke test steps.
+- See `docs/STORAGE_OPS.md` for quick troubleshooting and common tasks (upload tests, signed URLs, SDK download).
+
 # Welcome to your Lovable project
 
 ## Project info
@@ -35,6 +48,19 @@ npm i
 # Step 4: Start the development server with auto-reloading and an instant preview.
 npm run dev
 ```
+
+### Storage Ops
+
+For storage setup, policies, and verification:
+
+- Run one-click verification:
+
+```
+npm run verify-storage
+```
+
+- See `SECURITY_UPDATES.md` section "Storage Verification: Status and How-To" for current status, RLS policies, and smoke test steps.
+- See `docs/STORAGE_OPS.md` for quick troubleshooting and common tasks (upload tests, signed URLs, SDK download).
 
 **Edit a file directly in GitHub**
 

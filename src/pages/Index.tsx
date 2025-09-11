@@ -4,6 +4,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTournamentGameData } from "@/hooks/useTournamentGameData";
 import { getGameLogoUrl } from "@/lib/utils";
+import StorageImage from "@/components/StorageImage";
+import { parseStorageObjectUrl } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LeaderboardEntry from "@/components/LeaderboardEntry";
@@ -249,6 +251,8 @@ const Index = () => {
               {games.slice(0, 4).map((game) => {
                 // Get logo URL - convert local paths to Supabase Storage URLs
                 const logoUrl = getGameLogoUrl(game.logo_url) || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
+                const storageRef = logoUrl && logoUrl.includes('supabase.co/storage/') ? parseStorageObjectUrl(logoUrl) : null;
+                const isPublicObject = !!(logoUrl && logoUrl.includes('/storage/v1/object/public/'));
                 
                 const filtered = gameScores[game.id] || [];
                 
@@ -277,11 +281,21 @@ const Index = () => {
                         <div className="flex justify-center">
                           <div className="transition-transform duration-200">
                             {logoUrl ? (
-                              <img 
-                                src={logoUrl} 
-                                alt={game.name} 
-                                className="h-32 md:h-40 w-auto object-contain max-w-full"
-                              />
+                              storageRef && !isPublicObject ? (
+                                <StorageImage
+                                  bucket={storageRef.bucket}
+                                  path={storageRef.path}
+                                  alt={game.name}
+                                  className="h-32 md:h-40 w-auto object-contain max-w-full"
+                                  expiresIn={300}
+                                />
+                              ) : (
+                                <img 
+                                  src={logoUrl} 
+                                  alt={game.name} 
+                                  className="h-32 md:h-40 w-auto object-contain max-w-full"
+                                />
+                              )
                             ) : (
                               <div className="h-32 md:h-40 flex items-center justify-center bg-black/30 rounded-lg px-4 min-w-[300px]">
                                 <span className="text-white font-bold text-center text-xl">{game.name}</span>

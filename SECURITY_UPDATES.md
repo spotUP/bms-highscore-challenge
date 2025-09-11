@@ -88,3 +88,45 @@ If you need assistance:
 1. Check the [Supabase Documentation](https://supabase.com/docs)
 2. Review the error logs in your Supabase Dashboard
 3. Contact Supabase Support if needed
+
+---
+
+## 6. Storage Verification: Status and How-To
+
+Status (2025-09-11): Completed and verified for private bucket `user-uploads`.
+
+What’s in place
+- Private bucket `user-uploads` with per-file limit (50MB) and allowed MIME types (image/*, application/pdf) set via API.
+- RLS enabled on `storage.objects` with per-user folder access policies.
+- App-side Storage tester and signed-image previews in place.
+
+Re-verify anytime
+```
+npm run verify-storage
+```
+This checks:
+- Bucket exists and is private
+- Allowed MIME types and per-file limit
+- RLS enabled on `storage.objects` and policies present (via execute_sql RPC)
+
+UI smoke test (Admin → System → Storage Tester)
+- Upload an image/PDF to `user-uploads/{auth.uid}/...`
+- Confirm thumbnail appears (signed URL)
+- “Open” (signed URL) and “Download” (SDK) succeed
+- “Delete” removes the object
+- Attempt to list another user’s folder: should be blocked
+
+Key RLS policies on `storage.objects` (roles: authenticated)
+- INSERT (WITH CHECK):
+  `bucket_id = 'user-uploads' AND (storage.foldername(name))[1] = auth.uid()::text`
+- SELECT (USING):
+  `bucket_id = 'user-uploads' AND (storage.foldername(name))[1] = auth.uid()::text`
+- UPDATE (USING + WITH CHECK) [optional if not renaming/moving]:
+  same predicate as above
+- DELETE (USING):
+  `bucket_id = 'user-uploads' AND (storage.foldername(name))[1] = auth.uid()::text`
+
+Notes
+- Private objects must be accessed via signed URLs or SDK downloads; direct GETs will 400/401 by design.
+- If Storage policies must be edited, prefer the Supabase Dashboard (Storage bucket Policies tab or Database → Tables → storage.objects → Policies). Owner scope is required.
+- If database credentials were ever shared externally, rotate the Postgres password in Dashboard → Project Settings → Database → Reset Password and update any direct Postgres clients.
