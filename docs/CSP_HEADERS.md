@@ -1,15 +1,10 @@
-# Production CSP Headers
+# Security Headers Configuration
 
-To enforce Content Security Policy (including `frame-ancestors`), set CSP via HTTP response headers at your hosting layer. The meta tag in `index.html` is helpful in dev but cannot enforce `frame-ancestors`.
+This document provides ready-to-use security header configurations for different hosting platforms. These headers help protect your application from common web vulnerabilities.
 
-Example (Netlify `_headers` file):
+## Vercel
 
-```
-/*
-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-eval' https: blob:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' https: data:; connect-src 'self' https: wss:; worker-src 'self' blob:; media-src 'self' https: data:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'
-```
-
-Example (Vercel `vercel.json`):
+Create or update `vercel.json` in your project root:
 
 ```json
 {
@@ -18,8 +13,32 @@ Example (Vercel `vercel.json`):
       "source": "/(.*)",
       "headers": [
         {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(), microphone=(), geolocation=()"
+        },
+        {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-eval' https: blob:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' https: data:; connect-src 'self' https: wss:; worker-src 'self' blob:; media-src 'self' https: data:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' https: data:; connect-src 'self' https: wss:; media-src 'self' https: data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
         }
       ]
     }
@@ -27,15 +46,79 @@ Example (Vercel `vercel.json`):
 }
 ```
 
-Example (Nginx):
+## Netlify
 
+Create or update `netlify.toml` in your project root:
+
+```toml
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = """
+      default-src 'self';
+      script-src 'self' 'unsafe-inline' 'unsafe-eval' https:;
+      style-src 'self' 'unsafe-inline' https:;
+      img-src 'self' data: blob: https:;
+      font-src 'self' https: data:;
+      connect-src 'self' https: wss:;
+      media-src 'self' https: data:;
+      object-src 'none';
+      frame-ancestors 'none';
+      base-uri 'self';
+      form-action 'self';
+    """
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
 ```
-add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval' https: blob:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' https: data:; connect-src 'self' https: wss:; worker-src 'self' blob:; media-src 'self' https: data:; object-src 'none'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'" always;
+
+## Nginx
+
+Add to your server configuration:
+
+```nginx
+add_header X-Content-Type-Options          "nosniff" always;
+add_header X-Frame-Options                "DENY" always;
+add_header X-XSS-Protection               "1; mode=block" always;
+add_header Referrer-Policy                "strict-origin-when-cross-origin" always;
+add_header Permissions-Policy             "camera=(), microphone=(), geolocation=()" always;
+add_header Strict-Transport-Security      "max-age=63072000; includeSubDomains; preload" always;
+add_header Content-Security-Policy        "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' https: data:; connect-src 'self' https: wss:; media-src 'self' https: data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'" always;
 ```
 
-Notes:
+## Customization Notes
 
-- Adjust `connect-src` to include your Supabase URL.
-- If you load remote images or fonts, add their origins to `img-src`/`font-src`.
-- Avoid `'unsafe-eval'` if you do not need it; Vite dev may require it, production often does not. Test and remove if possible.
-- For iFrames you want to allow, add their origins to `frame-ancestors`.
+1. **Content Security Policy (CSP)**:
+   - Add domains to `connect-src` if you use external APIs
+   - Add domains to `img-src` for external images
+   - Add domains to `font-src` for external fonts
+   - Adjust `script-src` and `style-src` policies based on your needs
+
+2. **Frame Options**:
+   - Set to `DENY` to prevent all framing
+   - Use `SAMEORIGIN` to allow framing by the same site
+   - Or specify allowed origins: `frame-ancestors 'self' example.com`
+
+3. **Feature Policy**:
+   - Enable only the browser features your app needs
+   - Example: `geolocation=(self 'https://maps.example.com')`
+
+4. **Testing**:
+   - Use browser developer tools to check for CSP violations
+   - Test in staging before production
+   - Consider using `Content-Security-Policy-Report-Only` initially
+
+## Verification
+
+After deployment, verify headers are set correctly using:
+
+```bash
+curl -I https://your-site.com/
+```
+
+Or use online tools like:
+- [Security Headers](https://securityheaders.com/)
+- [Mozilla Observatory](https://observatory.mozilla.org/)
