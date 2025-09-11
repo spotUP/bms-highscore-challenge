@@ -120,6 +120,34 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  const resendInvite = async (user: User) => {
+    try {
+      const role = getUserRole(user.id) || 'user';
+      const { data, error } = await supabase.functions.invoke('invite-user', {
+        body: { email: user.email, role }
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        if (data.action_link) {
+          try { await navigator.clipboard.writeText(data.action_link); } catch {}
+          toast({
+            title: 'Invite re-sent',
+            description: `A fresh invite link was generated and copied to your clipboard for ${user.email}.`,
+          });
+        } else {
+          toast({ title: 'Invite re-sent', description: `A new invite has been prepared for ${user.email}.` });
+        }
+      } else {
+        throw new Error(data?.error || 'Failed to resend invite');
+      }
+    } catch (err: any) {
+      console.error('Resend invite failed:', err);
+      toast({ variant: 'destructive', title: 'Error', description: err?.message || 'Failed to resend invite' });
+    }
+  };
+
   const checkAllFunctionsHealth = async (opts?: { silent?: boolean }) => {
     try {
       const { data: sess } = await supabase.auth.getSession();
@@ -735,6 +763,16 @@ const UserManagement: React.FC = () => {
                           >
                             <Trash2 className="w-3 h-3" />
                           </Button>
+                          {!user.email_confirmed_at && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => resendInvite(user)}
+                              className="text-arcade-neonCyan hover:text-cyan-300"
+                            >
+                              Resend Invite
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

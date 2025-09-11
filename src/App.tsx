@@ -18,6 +18,8 @@ import "./styles/performance.css";
 // Lazy load heavy components
 const MobileEntry = lazy(() => import("./pages/MobileEntry"));
 const Auth = lazy(() => import("./pages/Auth"));
+const AuthVerify = lazy(() => import("./pages/AuthVerify"));
+const LinkExpired = lazy(() => import("./pages/LinkExpired"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Statistics = lazy(() => import("./pages/Statistics"));
 const PlayerDashboard = lazy(() => import("./pages/PlayerDashboard"));
@@ -57,6 +59,8 @@ const App = () => (
                   <Route path="/" element={<Index />} />
                   <Route path="/mobile-entry" element={<MobileEntry />} />
                   <Route path="/auth" element={<Auth />} />
+                  <Route path="/auth/verify" element={<AuthVerify />} />
+                  <Route path="/auth/expired" element={<LinkExpired />} />
                   <Route path="/admin" element={<Admin />} />
                   <Route path="/statistics" element={<Statistics />} />
                   <Route path="/player" element={<PlayerDashboard />} />

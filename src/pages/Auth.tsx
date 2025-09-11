@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -52,18 +52,37 @@ export default function Auth() {
     // Handle error cases from hash
     if (error) {
       if (errorCode === 'otp_expired') {
+        // Prefer type from hash (Supabase uses hash fragment), fallback to search param
+        const expiredType = (hashType || type) === 'recovery' ? 'recovery' : 'invite';
         toast({
           variant: "destructive",
-          title: "Reset link expired",
-          description: "This password reset link has expired. Please request a new one."
+          title: "Link expired",
+          description: "Your link expired or was auto-clicked by a scanner. You can verify using the 6-digit code."
         });
-        setShowForgotPassword(true);
+        // Send the user to the code verification page with a preselected flow and email if we have it
+        let forwardUrl = `/auth/verify?type=${expiredType}`;
+        if (expiredType === 'recovery') {
+          try {
+            const last = localStorage.getItem('last_reset_email');
+            if (last) forwardUrl += `&email=${encodeURIComponent(last)}`;
+          } catch {}
+        }
+        navigate(forwardUrl);
       } else {
         toast({
           variant: "destructive",
           title: "Reset link error",
           description: errorDescription || "There was an error with the password reset link."
         });
+        const errType = (hashType || type) === 'recovery' ? 'recovery' : 'invite';
+        let expiredUrl = `/auth/expired?type=${errType}&error=${encodeURIComponent(error)}&description=${encodeURIComponent(errorDescription || '')}`;
+        if (errType === 'recovery') {
+          try {
+            const last = localStorage.getItem('last_reset_email');
+            if (last) expiredUrl += `&email=${encodeURIComponent(last)}`;
+          } catch {}
+        }
+        navigate(expiredUrl);
       }
       // Clean up the URL
       window.history.replaceState({}, document.title, window.location.pathname);
@@ -190,6 +209,8 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
+      // Persist the last reset email so we can prefill on /auth/verify if link is expired
+      try { localStorage.setItem('last_reset_email', resetEmail); } catch {}
       const { error } = await resetPassword(resetEmail);
       if (error) {
         toast({
@@ -421,6 +442,10 @@ export default function Auth() {
               </form>
             </TabsContent>
           </Tabs>
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            If your email link expired or was auto-clicked by a scanner, you can
+            <Link to="/auth/verify" className="ml-1 underline">verify using the 6-digit code</Link>.
+          </div>
         </CardContent>
       </Card>
 
