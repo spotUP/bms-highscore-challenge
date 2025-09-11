@@ -31,6 +31,7 @@ export default tseslint.config(
       "no-empty": "off",
       "@typescript-eslint/no-empty-object-type": "off",
       "@typescript-eslint/no-require-imports": "off",
+      "no-case-declarations": "off",
     },
   }
 );

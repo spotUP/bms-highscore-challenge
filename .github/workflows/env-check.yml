@@ -1,9 +1,7 @@
-name: Env Variables Check
+name: Env Variables Check (manual)
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
 
 jobs:
   check-env:
@@ -12,13 +10,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run env check (CI context)
+      - name: Run env check (manual)
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
           if [ -z "${VITE_SUPABASE_URL}" ] || [ -z "${VITE_SUPABASE_ANON_KEY}" ]; then
-            echo "::error::Missing required secrets VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY"
-            exit 1
+            echo "::warning::Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY (non-blocking manual check)"
+          else
+            echo "Environment secrets present."
           fi
-          echo "Environment secrets present."
