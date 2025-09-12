@@ -169,7 +169,7 @@ const Index = () => {
            style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
         <div className="text-center text-white">
           <div className="text-6xl mb-4">🏆</div>
-          <h1 className="text-4xl font-bold mb-4">Welcome to Arcade Tournaments!</h1>
+          <h1 className="text-4xl font-bold mb-4">Welcome to Retro Ranks!</h1>
           <p className="text-xl text-gray-300 mb-8">
             Create your first tournament or join an existing one to get started.
           </p>
@@ -186,7 +186,7 @@ const Index = () => {
         <div className="flex items-center">
           {/* Left aligned title */}
           <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight">
-            Arcade High Scores
+            Retro Ranks
           </h1>
           
           {/* Right aligned navigation */}
