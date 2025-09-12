@@ -1,4 +1,6 @@
 name: Vercel CLI Deploy (Production)
+# This workflow is compatible with Vercel CLI v48+.
+# Important: use --project and --scope (not --project-id / --org-id).
 
 on:
   push:
@@ -37,18 +39,20 @@ jobs:
       - name: Pull Vercel environment info
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_SCOPE: ${{ secrets.VERCEL_ORG_ID }}
         run: |
+          # Configure project and team scope; --project accepts project name or ID; --scope accepts team slug or ID
           vercel pull --yes --environment=production \
             --token "$VERCEL_TOKEN" \
-            --project-id "$VERCEL_PROJECT_ID" \
-            --org-id "$VERCEL_ORG_ID"
+            --project "$VERCEL_PROJECT" \
+            --scope "$VERCEL_SCOPE"
 
       - name: Build project (Production)
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          # After `vercel pull`, .vercel/project.json contains project and org info
           vercel build --prod --token "$VERCEL_TOKEN"
 
       - name: Deploy prebuilt artifacts to Production
