@@ -124,3 +124,5 @@ The project is deployed at https://retroranks.com using Vercel with custom domai
 ## I want to use a custom domain - is that possible?
 
 This project uses a custom domain (retroranks.com) deployed on Vercel for optimal performance and reliability.
+
+Deployment test: 2025-09-12T17:16:28+02:00
