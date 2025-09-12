@@ -36,17 +36,18 @@ jobs:
           npm i -g vercel@latest
           vercel --version
 
+      - name: Link Vercel Project
+        run: |
+          mkdir -p .vercel
+          echo '{"projectId":"${{ secrets.VERCEL_PROJECT_ID }}","orgId":"${{ secrets.VERCEL_ORG_ID }}"}' > .vercel/project.json
+          echo "Created .vercel/project.json to link the project."
+
       - name: Pull Vercel environment info
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_PROJECT: ${{ secrets.VERCEL_PROJECT_ID }}
-          VERCEL_SCOPE: ${{ secrets.VERCEL_ORG_ID }}
         run: |
-          # Configure project and team scope; --project accepts project name or ID; --scope accepts team slug or ID
-          vercel pull --yes --environment=production \
-            --token "$VERCEL_TOKEN" \
-            --project "$VERCEL_PROJECT" \
-            --scope "$VERCEL_SCOPE"
+          # Now that the project is linked via project.json, pull the environment variables.
+          vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
 
       - name: Build project (Production)
         env:
