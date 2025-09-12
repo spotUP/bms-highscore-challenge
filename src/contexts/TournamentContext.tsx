@@ -20,6 +20,7 @@ export interface Tournament {
   logo_url?: string | null;
   theme_color?: string;
   demolition_man_active?: boolean; // Toggle for Demolition Man leaderboard
+  is_locked?: boolean; // New: lock/unlock tournaments (default false)
 }
 
 export interface TournamentMember {
@@ -115,7 +116,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           // Debug: Check what tournaments exist
           const { data: allTournaments } = await supabase
             .from('tournaments')
-            .select('id, name, slug, is_public');
+            .select('id, name, slug, is_public')
+            .eq('is_public', true);
           dlog('All tournaments:', allTournaments);
           // Show all public tournaments in the selector for anonymous users
           setUserTournaments(allTournaments || []);
