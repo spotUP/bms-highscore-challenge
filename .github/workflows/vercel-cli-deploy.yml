@@ -67,3 +67,5 @@ jobs:
       - name: Output deployment URL
         run: |
           echo "Production deployment: ${{ steps.deploy.outputs.url }}"
+
+# Forcing re-index: Fri Sep 12 19:06:35 CEST 2025
