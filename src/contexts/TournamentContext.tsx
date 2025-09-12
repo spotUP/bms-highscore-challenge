@@ -117,7 +117,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             .from('tournaments')
             .select('id, name, slug, is_public');
           dlog('All tournaments:', allTournaments);
-          setUserTournaments([]);
+          // Show all public tournaments in the selector for anonymous users
+          setUserTournaments(allTournaments || []);
           setCurrentTournament(null);
           setCurrentUserRole(null);
         }
