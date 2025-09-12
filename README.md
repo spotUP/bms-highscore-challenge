@@ -134,3 +134,5 @@ Deployment test: 2025-09-12T18:56:10+02:00
 Deployment test: 2025-09-12T19:04:40+02:00
 
 Deployment test with updated git author: Fri Sep 12 19:52:17 CEST 2025
+
+Final deployment trigger with correct author email: Fri Sep 12 19:54:18 CEST 2025
