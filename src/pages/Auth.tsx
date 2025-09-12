@@ -344,7 +344,7 @@ export default function Auth() {
       <div className="flex items-center justify-center min-h-screen">
         <Card className={getCardStyle('primary') + " w-full max-w-md mx-4"}>
           <CardHeader className="text-center">
-            <CardTitle className={getTypographyStyle('h2')}>Arcade Highscores</CardTitle>
+            <CardTitle className={getTypographyStyle('h2')}>Retro Ranks</CardTitle>
             <CardDescription className="text-gray-400">
               Sign in to your account or create a new one
             </CardDescription>
