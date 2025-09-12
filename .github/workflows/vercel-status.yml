@@ -14,16 +14,22 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
       - name: Check required secrets
         id: check_secrets
         run: |
           missing=0
-          for var in VERCEL_TOKEN VERCEL_PROJECT_ID; do
-            if [ -z "${{ secrets[format('{0}', var)] }}" ]; then
-              echo "::warning::Missing required secret: $var"
-              missing=1
-            fi
-          done
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "::warning::Missing required secret: VERCEL_TOKEN"
+            missing=1
+          fi
+          if [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]; then
+            echo "::warning::Missing required secret: VERCEL_PROJECT_ID"
+            missing=1
+          fi
           echo "missing=$missing" >> $GITHUB_OUTPUT
       - name: Exit if missing secrets
         if: steps.check_secrets.outputs.missing == '1'
@@ -42,6 +48,21 @@ jobs:
             echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
           else
             echo "pr_number=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fetch Vercel project info
+        id: project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          INFO=$(curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID" || true)
+          NAME=$(echo "$INFO" | jq -r '.name // empty')
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          if [ -n "$NAME" ]; then
+            echo "Project: $NAME ($VERCEL_PROJECT_ID)"
+          else
+            echo "::warning::Could not fetch project info for $VERCEL_PROJECT_ID"
           fi
 
       - name: Poll Vercel for deployment
@@ -89,15 +110,20 @@ jobs:
           STATE: ${{ steps.poll.outputs.state }}
           URL: ${{ steps.poll.outputs.url }}
           SHA: ${{ steps.ctx.outputs.sha }}
+          PROJECT_NAME: ${{ steps.project.outputs.name }}
+          PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
           TITLE="Vercel deployment for $SHA: $STATE"
-          BODY="Deployment state: **$STATE**\n\nURL: ${URL:-N/A}"
-          gh pr comment "$PR_NUMBER" --body "$TITLE
-
-$BODY" || echo "::warning::Failed to comment on PR"
+          BODY="Project: ${PROJECT_NAME:-unknown} (${PROJECT_ID:-unset})\n\nDeployment state: **$STATE**\n\nURL: ${URL:-N/A}"
+          COMMENT="$TITLE\n\n$BODY"
+          gh pr comment "$PR_NUMBER" --body "$COMMENT" || echo "::warning::Failed to comment on PR"
 
       - name: Log deployment status (push to main)
         if: steps.ctx.outputs.pr_number == ''
+        env:
+          PROJECT_NAME: ${{ steps.project.outputs.name }}
+          PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
+          echo "Project: ${PROJECT_NAME:-unknown} (${PROJECT_ID:-unset})"
           echo "Deployment state: ${{ steps.poll.outputs.state }}"
           echo "URL: ${{ steps.poll.outputs.url }}"
