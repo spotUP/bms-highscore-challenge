@@ -23,7 +23,7 @@ export default function Auth() {
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [isPasswordReset, setIsPasswordReset] = useState(false);
-  const { signIn, signUp, resetPassword } = useAuth();
+  const { signIn, signUp, resetPassword, user, isAdmin } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -143,6 +143,25 @@ export default function Auth() {
       console.log('Not a password reset flow or missing parameters');
     }
   }, [searchParams, toast]);
+
+  // If already signed in, redirect away from the Auth page
+  useEffect(() => {
+    if (!user) return; // only act when logged in
+    if (isPasswordReset) return; // don't redirect during password reset flow
+
+    // Avoid interfering if URL contains auth tokens (handled by the effect above)
+    const hasAuthTokens = window.location.search.includes('access_token=') || window.location.hash.includes('access_token=');
+    if (hasAuthTokens) return;
+
+    try {
+      const saved = localStorage.getItem('lastPath');
+      // Don’t redirect back to the auth page
+      const dest = saved && !saved.startsWith('/auth') ? saved : (isAdmin ? '/admin' : '/');
+      navigate(dest, { replace: true });
+    } catch {
+      navigate(isAdmin ? '/admin' : '/', { replace: true });
+    }
+  }, [user, isAdmin, isPasswordReset, navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
