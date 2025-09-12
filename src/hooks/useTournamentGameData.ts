@@ -225,10 +225,10 @@ export const useTournamentGameData = () => {
         acc[item.player_name].count += 1;
         acc[item.player_name].total_points += item.achievements.points;
         return acc;
-      }, {}) || {};
+      }, {} as Record<string, { count: number; total_points: number }>) || {};
 
       const achievementHunters = Object.entries(achievementStats)
-        .map(([player_name, stats]) => ({
+        .map(([player_name, stats]: [string, { count: number; total_points: number }]) => ({
           player_name,
           achievement_count: stats.count,
           total_points: stats.total_points,
