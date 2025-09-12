@@ -78,13 +78,28 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     if (!user) {
       dlog('Anonymous user detected, loading default tournament');
       try {
-        const { data: defaultTournament, error } = await supabase
+        let defaultTournament: any | null = null;
+        let error: any = null;
+        const { data: bySlug, error: errSlug } = await supabase
           .from('tournaments')
           .select('*')
-          .or('name.eq.Default Arcade Tournament,slug.eq.default-arcade')
+          .eq('slug', 'default-arcade')
           .eq('is_public', true)
           .limit(1)
-          .single();
+          .maybeSingle();
+        if (bySlug) {
+          defaultTournament = bySlug;
+        } else {
+          const { data: byName, error: errName } = await supabase
+            .from('tournaments')
+            .select('*')
+            .eq('name', 'Default Arcade Tournament')
+            .eq('is_public', true)
+            .limit(1)
+            .maybeSingle();
+          defaultTournament = byName;
+          error = errSlug || errName || null;
+        }
 
         if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
           console.error('Error loading default tournament:', error);
@@ -209,13 +224,28 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         dlog('No tournaments found for user, loading default public tournament...');
         // If authenticated user has no tournaments, load the default public tournament
         try {
-          const { data: defaultTournament, error } = await supabase
+          let defaultTournament: any | null = null;
+          let error: any = null;
+          const { data: bySlug, error: errSlug } = await supabase
             .from('tournaments')
             .select('*')
-            .or('name.eq.Default Arcade Tournament,slug.eq.default-arcade')
+            .eq('slug', 'default-arcade')
             .eq('is_public', true)
             .limit(1)
-            .single();
+            .maybeSingle();
+          if (bySlug) {
+            defaultTournament = bySlug;
+          } else {
+            const { data: byName, error: errName } = await supabase
+              .from('tournaments')
+              .select('*')
+              .eq('name', 'Default Arcade Tournament')
+              .eq('is_public', true)
+              .limit(1)
+              .maybeSingle();
+            defaultTournament = byName;
+            error = errSlug || errName || null;
+          }
 
           if (defaultTournament && !error) {
             dlog('Found default tournament for new user:', defaultTournament.name);
