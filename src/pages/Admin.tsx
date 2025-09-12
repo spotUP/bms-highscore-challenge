@@ -315,12 +315,16 @@ const Admin = () => {
   // Redirect if not admin
   useEffect(() => {
     // Wait for both auth and tournament context to finish loading before deciding
-    if (!loading && !tournamentsLoading) {
-      if (!user || (!isAdmin && !hasPermission('admin'))) {
-        navigate('/');
+    if (loading || tournamentsLoading) return;
+    // Add a short delay to allow isAdmin/currentUserRole to resolve after session restoration
+    const timer = setTimeout(() => {
+      const isAuthorized = !!user && (isAdmin || hasPermission('admin') || currentUserRole === 'owner');
+      if (!isAuthorized) {
+        navigate('/', { replace: true });
       }
-    }
-  }, [user, isAdmin, hasPermission, loading, tournamentsLoading, navigate]);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [user, isAdmin, currentUserRole, hasPermission, loading, tournamentsLoading, navigate]);
 
   // Direct tournament switching (no global event/listener)
 
