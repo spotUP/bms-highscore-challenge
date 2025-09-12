@@ -53,7 +53,11 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          # After `vercel pull`, .vercel/project.json contains project and org info
+          # Load environment variables from the file created by `vercel pull`
+          # so they are available to the `prebuild` script.
+          if [ -f .vercel/.env.production.local ]; then
+            export $(cat .vercel/.env.production.local | xargs)
+          fi
           vercel build --prod --token "$VERCEL_TOKEN"
 
       - name: Deploy prebuilt artifacts to Production
