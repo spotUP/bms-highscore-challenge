@@ -11,11 +11,11 @@ npm run verify-storage
 - See `SECURITY_UPDATES.md` section "Storage Verification: Status and How-To" for current status, RLS policies, and smoke test steps.
 - See `docs/STORAGE_OPS.md` for quick troubleshooting and common tasks (upload tests, signed URLs, SDK download).
 
-# Welcome to your Lovable project
+# RetroRanks - Arcade Highscore Challenge
 
 ## Project info
 
-**URL**: https://lovable.dev/projects/aa9b7369-cfb6-4536-b862-28d227b2abdf
+**URL**: https://retroranks.com
 
 ## How can I edit this code?
 
@@ -23,7 +23,7 @@ There are several ways of editing your application.
 
 **Use Lovable**
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/aa9b7369-cfb6-4536-b862-28d227b2abdf) and start prompting.
+Visit RetroRanks at https://retroranks.com to experience the ultimate arcade gaming leaderboard platform.
 
 Changes made via Lovable will be committed automatically to this repo.
 
@@ -94,7 +94,7 @@ Set these as project-level environment variables in the Supabase Dashboard (Sett
 
 - `FUNCTION_SUPABASE_URL` = your project URL (e.g., `https://<project-ref>.supabase.co`)
 - `FUNCTION_SERVICE_ROLE_KEY` = your Service Role Key (from Dashboard → Settings → API)
-- `PUBLIC_SITE_URL` or `SITE_URL` = your site URL for invite redirects (e.g., `https://bms-highscore-challenge.lovable.app`)
+- `PUBLIC_SITE_URL` or `SITE_URL` = your site URL for invite redirects (e.g., `https://retroranks.com`)
 
 Both Edge Functions (`manage-users`, `invite-user`) will also fall back to `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` if present, but `FUNCTION_*` is preferred.
 
@@ -119,8 +119,8 @@ These use the current session token and display inline status badges (OK/ERR) an
 
 ## How can I deploy this project?
 
-Simply open [Lovable](https://lovable.dev/projects/aa9b7369-cfb6-4536-b862-28d227b2abdf) and click on Share -> Publish.
+The project is deployed at https://retroranks.com using Vercel with custom domain configuration.
 
 ## I want to use a custom domain - is that possible?
 
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+This project uses a custom domain (retroranks.com) deployed on Vercel for optimal performance and reliability.
