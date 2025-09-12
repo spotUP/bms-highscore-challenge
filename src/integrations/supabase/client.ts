@@ -8,17 +8,9 @@ const SUPABASE_PUBLISHABLE_KEY = (
   (import.meta.env as any).VITE_SUPABASE_PUBLISHABLE_KEY
 ) as string | undefined;
 
-// Warn if env vars are missing so we don't unknowingly rely on fallback keys
-(() => {
-  const missingUrl = !SUPABASE_URL;
-  const missingKey = !SUPABASE_PUBLISHABLE_KEY;
-  if (missingUrl || missingKey) {
-    const msg = "[supabase] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY (or legacy VITE_SUPABASE_PUBLISHABLE_KEY). Check your .env and deployment environment.";
-    // eslint-disable-next-line no-console
-    console.error(msg);
-    throw new Error(msg);
-  }
-})();
+// Check for missing env vars and provide helpful guidance
+const missingUrl = !SUPABASE_URL;
+const missingKey = !SUPABASE_PUBLISHABLE_KEY;
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
@@ -79,10 +71,33 @@ export function setRememberMe(remember: boolean) {
   }
 }
 
-export const supabase = createClient<Database>(SUPABASE_URL!, SUPABASE_PUBLISHABLE_KEY!, {
+// Create mock client for missing env vars or real client
+const mockClient = {
   auth: {
-    storage: dynamicStorage,
-    persistSession: true,
-    autoRefreshToken: true,
-  }
-});
+    getSession: () => Promise.resolve({ data: { session: null }, error: null }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+    signUp: () => Promise.resolve({ data: null, error: { message: "Supabase not configured. Please add environment variables." } }),
+    signInWithPassword: () => Promise.resolve({ data: null, error: { message: "Supabase not configured. Please add environment variables." } }),
+    signOut: () => Promise.resolve({ error: null })
+  },
+  from: () => ({
+    select: () => Promise.resolve({ data: [], error: { message: "Supabase not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY environment variables." } }),
+    insert: () => Promise.resolve({ data: null, error: { message: "Supabase not configured. Please add environment variables." } }),
+    update: () => Promise.resolve({ data: null, error: { message: "Supabase not configured. Please add environment variables." } }),
+    delete: () => Promise.resolve({ data: null, error: { message: "Supabase not configured. Please add environment variables." } })
+  })
+};
+
+export const supabase = (missingUrl || missingKey) 
+  ? mockClient as any
+  : createClient<Database>(SUPABASE_URL!, SUPABASE_PUBLISHABLE_KEY!, {
+      auth: {
+        storage: dynamicStorage,
+        persistSession: true,
+        autoRefreshToken: true,
+      }
+    });
+
+if (missingUrl || missingKey) {
+  console.error("[supabase] Missing environment variables. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your deployment environment.");
+}
