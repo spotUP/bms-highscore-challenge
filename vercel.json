@@ -35,6 +35,14 @@
     }
   ],
   "rewrites": [
-    { "source": "/(.*)", "destination": "/" }
+    { "source": "/((?!api/|.*\\.).*)", "destination": "/index.html" }
+  ],
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "www.retroranks.com" }],
+      "destination": "https://retroranks.com/$1",
+      "permanent": true
+    }
   ]
 }
