@@ -159,7 +159,7 @@ export const ScoreNotificationsListener: React.FC = () => {
             .eq('id', pa.achievement_id)
             .single();
 
-          if (achievement) {
+          if (achievement && showAchievementNotification) {
             showAchievementNotification({
               id: achievement.id,
               name: achievement.name,
@@ -180,7 +180,7 @@ export const ScoreNotificationsListener: React.FC = () => {
       if (scoreChannelRef.current) supabase.removeChannel(scoreChannelRef.current);
       if (achievementChannelRef.current) supabase.removeChannel(achievementChannelRef.current);
     };
-  }, [currentTournament, showAchievementNotification]);
+  }, [currentTournament?.id]); // Only depend on tournament ID, not the function
 
   return (
     <>
