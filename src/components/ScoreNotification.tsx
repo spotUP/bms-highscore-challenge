@@ -107,37 +107,25 @@ export const ScoreNotificationsListener: React.FC = () => {
 
           // Show the toast notification
           console.log('ScoreNotificationsListener: Showing toast notification');
-          toast.success(
-            <ScoreNotification
-              playerName={submission.player_name}
-              score={submission.score}
-              gameName={game.name}
-              gameLogoUrl={game.logo_url}
-              isHighScore={submission.is_high_score}
-              scoreDiff={
-                submission.is_high_score && submission.previous_high_score
-                  ? submission.score - submission.previous_high_score
-                  : null
-              }
-            />,
-            {
+          try {
+            toast.success(`${submission.player_name} scored ${submission.score.toLocaleString()} in ${game.name}!`, {
               duration: 5000,
               position: 'top-center',
-              style: {
-                background: 'rgba(0, 0, 0, 0.9)',
-                border: '1px solid #00f0ff',
-                color: 'white',
-                padding: '12px 16px',
-                borderRadius: '8px',
-                maxWidth: '90vw',
-              },
-            }
-          );
+            });
+            console.log('ScoreNotificationsListener: Toast called successfully');
+          } catch (toastError) {
+            console.error('ScoreNotificationsListener: Toast error:', toastError);
+          }
 
           // Trigger global celebration modal + confetti
           console.log('ScoreNotificationsListener: Triggering celebration modal for:', submission.player_name);
-          setInsultPlayerName(submission.player_name);
-          setShowPlayerInsult(true);
+          try {
+            setInsultPlayerName(submission.player_name);
+            setShowPlayerInsult(true);
+            console.log('ScoreNotificationsListener: Modal state updated successfully');
+          } catch (modalError) {
+            console.error('ScoreNotificationsListener: Modal error:', modalError);
+          }
         }
       )
       .subscribe((status) => {

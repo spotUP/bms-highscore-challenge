@@ -233,21 +233,30 @@ const MobileEntry = () => {
         previous_high_score: previousHighScore
       });
       
-      const { error: submissionError } = await supabase
-        .from('score_submissions')
-        .insert({
-          player_name: name.toUpperCase(),
-          score: scoreValue,
-          game_id: game.id,
-          tournament_id: currentTournament?.id,
-          is_high_score: isHighScore,
-          previous_high_score: previousHighScore
-        });
-        
-      if (submissionError) {
-        console.error('MobileEntry: Error recording score submission:', submissionError);
-      } else {
-        console.log('MobileEntry: Score submission recorded successfully');
+      try {
+        const { error: submissionError } = await supabase
+          .from('score_submissions')
+          .insert({
+            player_name: name.toUpperCase(),
+            score: scoreValue,
+            game_id: game.id,
+            tournament_id: currentTournament?.id,
+            is_high_score: isHighScore,
+            previous_high_score: previousHighScore
+          });
+          
+        if (submissionError) {
+          console.error('MobileEntry: Error recording score submission:', submissionError);
+          // Temporary debugging alert
+          alert(`Realtime submission failed: ${submissionError.message}`);
+        } else {
+          console.log('MobileEntry: Score submission recorded successfully');
+          // Temporary debugging alert
+          alert('Realtime submission recorded successfully!');
+        }
+      } catch (realtimeError) {
+        console.error('MobileEntry: Realtime submission exception:', realtimeError);
+        alert(`Realtime exception: ${realtimeError.message}`);
       }
       
       // Show message for all players
