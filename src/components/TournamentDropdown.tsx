@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useTournament } from "@/contexts/TournamentContext";
-import { Lock, Unlock } from "lucide-react";
+import { Lock, Unlock, Plus } from "lucide-react";
 
 const TournamentDropdown = () => {
   const {
@@ -11,11 +11,19 @@ const TournamentDropdown = () => {
     switchTournament,
     hasPermission,
     updateTournament,
+    createTournament,
   } = useTournament();
 
   const [toggling, setToggling] = useState(false);
+  const [newBracketName, setNewBracketName] = useState('');
+  const [showNewBracketInput, setShowNewBracketInput] = useState(false);
 
   const handleTournamentChange = async (tournamentId: string) => {
+    if (tournamentId === 'new') {
+      setShowNewBracketInput(true);
+      return;
+    }
+    
     const selectedTournament = userTournaments.find(t => t.id === tournamentId);
     if (selectedTournament && selectedTournament.id !== currentTournament?.id) {
       try {
@@ -23,6 +31,27 @@ const TournamentDropdown = () => {
       } catch (error) {
         console.error('Error switching tournament:', error);
       }
+    }
+  };
+
+  const handleCreateNewBracket = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBracketName.trim()) return;
+    
+    try {
+      const slug = newBracketName.toLowerCase().replace(/\s+/g, '-').replace(/[^\w\-]+/g, '');
+      const newTournament = await createTournament({
+        name: newBracketName,
+        slug: slug,
+        is_public: false
+      });
+      
+      if (newTournament) {
+        setNewBracketName('');
+        setShowNewBracketInput(false);
+      }
+    } catch (error) {
+      console.error('Error creating new tournament:', error);
     }
   };
 
@@ -39,25 +68,44 @@ const TournamentDropdown = () => {
     }
   };
 
-  if (!currentTournament || userTournaments.length <= 1) {
-    return null; // Don't show dropdown if no tournament or only one tournament
+  if (!currentTournament && userTournaments.length === 0) {
+    return (
+      <Button 
+        variant="outline" 
+        size="sm"
+        onClick={() => setShowNewBracketInput(true)}
+        className="bg-secondary/40 border-white/20 text-white"
+      >
+        <Plus className="w-4 h-4 mr-2" />
+        Create New Bracket
+      </Button>
+    );
   }
 
   return (
     <div className="flex items-center gap-2">
       <Select 
-        value={currentTournament.id} 
+        value={currentTournament?.id || ''}
         onValueChange={handleTournamentChange}
       >
         <SelectTrigger className="bg-secondary/40 border-white/20 text-white min-w-[240px]">
           <div className="flex items-center gap-2">
-            {currentTournament.is_locked ? (
+            {currentTournament?.is_locked && (
               <Lock className="w-4 h-4 text-yellow-400" />
-            ) : null}
+            )}
             <SelectValue placeholder="Select Tournament" />
           </div>
         </SelectTrigger>
         <SelectContent className="bg-gray-900 border-white/20">
+          <SelectItem 
+            value="new"
+            className="text-white focus:bg-gray-800 focus:text-white"
+          >
+            <div className="flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              <span>Create New Bracket</span>
+            </div>
+          </SelectItem>
           {userTournaments.map((tournament) => (
             <SelectItem 
               key={tournament.id} 
@@ -74,11 +122,54 @@ const TournamentDropdown = () => {
           ))}
         </SelectContent>
       </Select>
-      {hasPermission('admin') && (
+
+      {showNewBracketInput && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-gray-900 p-6 rounded-lg border border-white/20 w-full max-w-md">
+            <h3 className="text-lg font-medium text-white mb-4">Create New Bracket</h3>
+            <form onSubmit={handleCreateNewBracket} className="space-y-4">
+              <div>
+                <label htmlFor="bracketName" className="block text-sm font-medium text-gray-300 mb-1">
+                  Bracket Name
+                </label>
+                <input
+                  id="bracketName"
+                  type="text"
+                  value={newBracketName}
+                  onChange={(e) => setNewBracketName(e.target.value)}
+                  placeholder="Enter bracket name"
+                  className="w-full px-3 py-2 bg-gray-800 border border-white/20 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={() => {
+                    setShowNewBracketInput(false);
+                    setNewBracketName('');
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={!newBracketName.trim()}
+                >
+                  Create Bracket
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {hasPermission('admin') && currentTournament && (
         <Button
-          onClick={toggleLock}
           variant="outline"
           size="sm"
+          onClick={toggleLock}
           disabled={toggling}
           title={currentTournament.is_locked ? 'Unlock tournament' : 'Lock tournament'}
         >

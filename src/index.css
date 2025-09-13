@@ -7,6 +7,93 @@
   100% { box-shadow: 0 0 16px rgba(0,255,255,0.28), inset 0 0 10px rgba(0,255,255,0.16); border-color: rgba(0,255,255,0.75); }
 }
 
+/* ================= Bracket animations ================= */
+@keyframes connectorDraw {
+  from { stroke-dashoffset: 100; }
+  to   { stroke-dashoffset: 0; }
+}
+.connector-path {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: connectorDraw 1200ms cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+@keyframes boingOnce {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+.boing {
+  transform-origin: center;
+  animation: boingOnce 800ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* ================= Page entry animations ================= */
+@keyframes flyInLeft {
+  from { opacity: 0; transform: translateX(-24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes flyInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes flyInDown {
+  from { opacity: 0; transform: translateY(-16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fly-in-left  { animation: flyInLeft 900ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+.fly-in-right { animation: flyInRight 1000ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+.fly-in-down  { animation: flyInDown 800ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both; }
+
+/* Off-screen slide-in animation for right panels */
+@keyframes flyInRightOffscreen {
+  from { opacity: 0; transform: translateX(100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.fly-in-right-offscreen {
+  animation: flyInRightOffscreen 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  overflow-anchor: none;
+  contain: layout paint;
+  position: relative;
+  z-index: 0;
+}
+
+/* Off-screen slide-in animation for left panels */
+@keyframes flyInLeftOffscreen {
+  from { opacity: 0; transform: translateX(-100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.fly-in-left-offscreen {
+  animation: flyInLeftOffscreen 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  overflow-anchor: none;
+  contain: layout paint;
+  position: relative;
+  z-index: 0;
+}
+
+/* Small animation delay utilities for gentle staggering */
+.anim-delay-50 { animation-delay: 50ms; }
+.anim-delay-100 { animation-delay: 100ms; }
+
+/* ================= Tron theme refinements ================= */
+.theme-tron .theme-button:hover,
+.theme-tron button:hover {
+  color: #ffffff !important;
+}
+.theme-tron .theme-button,
+.theme-tron button {
+  border-radius: 6px !important; /* slightly rounded corners */
+}
+.theme-tron .theme-button {
+  box-shadow: 0 0 16px rgba(0, 255, 255, 0.28), inset 0 0 10px rgba(0,255,255,0.15);
+}
+.theme-tron .theme-button::after {
+  box-shadow: 0 0 14px rgba(0,255,255,0.25);
+}
+
 /* ===================== VHS Overlay ===================== */
 .vhs-overlay {
   position: fixed;
@@ -268,11 +355,12 @@ body.theme-tron svg {
 /* ===================== THEMES ===================== */
 /* Default/current theme maps to existing palette */
 body.theme-current {
-  --page-bg: radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%);
+  --page-bg: transparent;
 }
 .theme-current .theme-card {
-  background-color: rgba(0,0,0,0.3);
+  background-color: rgba(0,0,0,0.45);
   border-color: rgba(255,255,255,0.2);
+  backdrop-filter: blur(1px);
 }
 
 /* Modern Light */
@@ -299,9 +387,10 @@ body.theme-modern-light {
   --page-bg: radial-gradient(ellipse at center, rgba(255,255,255,0.95) 0%, rgba(240,242,247,0.9) 100%);
 }
 .theme-modern-light .theme-card {
-  background-color: rgba(255,255,255,0.9);
+  background-color: rgba(255,255,255,0.85);
   border-color: rgba(0,0,0,0.08);
   color: hsl(var(--foreground));
+  backdrop-filter: blur(1px);
 }
 
 /* Modern Dark */
@@ -328,8 +417,9 @@ body.theme-modern-dark {
   --page-bg: radial-gradient(ellipse at center, rgba(10,12,20,0.95) 0%, rgba(12,16,28,0.9) 100%);
 }
 .theme-modern-dark .theme-card {
-  background-color: rgba(12,16,28,0.9);
+  background-color: rgba(12,16,28,0.85);
   border-color: rgba(255,255,255,0.08);
+  backdrop-filter: blur(1px);
 }
 
 /* TRON Futuristic */
@@ -369,7 +459,7 @@ body.theme-tron::before {
   opacity: 0.9;
 }
 .theme-tron .theme-card {
-  background: linear-gradient(180deg, rgba(0,10,20,0.9), rgba(0,20,30,0.9));
+  background: linear-gradient(180deg, rgba(0,10,20,0.85), rgba(0,20,30,0.85));
   border: 2px solid rgba(0, 255, 255, 0.85);
   box-shadow: 0 0 24px rgba(0, 255, 255, 0.35), inset 0 0 18px rgba(0,255,255,0.2);
   border-radius: 0; /* Tron is sharp */
@@ -386,6 +476,7 @@ body.theme-tron::before {
   animation: tronScan 6s linear infinite;
   /* Left inset glow rail */
   box-shadow: inset 6px 0 18px rgba(0,255,255,0.25), 0 0 24px rgba(0,255,255,0.2);
+  backdrop-filter: blur(1px);
 }
 .theme-tron .theme-card::before { content: none; }
 .theme-tron .theme-card::after {
@@ -410,18 +501,18 @@ body.theme-tron::before {
   position: relative;
   background: linear-gradient(180deg, rgba(0, 25, 35, 0.98), rgba(0, 18, 28, 0.98));
   color: #b7ffff;
-  border: 2px solid rgba(0, 255, 255, 0.9) !important;
+  border: 1px solid rgba(0, 255, 255, 0.9) !important; /* thinner border */
   border-radius: 0 !important;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   clip-path: none;
-  box-shadow: 0 0 22px rgba(0, 255, 255, 0.45), inset 0 0 14px rgba(0, 255, 255, 0.2);
+  box-shadow: 0 0 22px rgba(0, 255, 255, 0.45), inset 0 0 14px rgba(0,255,255,0.2);
 }
 .theme-tron .theme-button::after {
   content: "";
   position: absolute;
   inset: 0;
-  border: 1.5px solid rgba(0,255,255,0.75);
+  border: 1px solid rgba(0,255,255,0.75);
   clip-path: none;
   border-radius: 0;
   pointer-events: none;
@@ -467,7 +558,7 @@ body.theme-tron [role="option"]:hover {
 
 /* Tabs (Radix) */
 .theme-tron [role="tablist"] {
-  border-bottom: 2px solid rgba(0,255,255,0.5);
+  border-bottom: 1px solid rgba(0,255,255,0.5);
   box-shadow: 0 6px 12px -6px rgba(0,255,255,0.25);
 }
 .theme-tron [role="tab"] {
@@ -530,6 +621,67 @@ body.tron-magenta table { border-color: rgba(255,0,170,0.35); box-shadow: 0 0 12
 body.tron-magenta .recharts-cartesian-grid line { stroke: rgba(255,0,170,0.25); }
 body.tron-magenta .recharts-cartesian-axis line { stroke: rgba(255,0,170,0.6); }
 
+/* Vertical animated gradient for unified player name effect */
+@property --grad-pos {
+  syntax: '<percentage>';
+  inherits: true;
+  initial-value: 0%;
+}
+@keyframes unifiedGradientY {
+  0% { --grad-pos: 0%; }
+  50% { --grad-pos: 100%; }
+  100% { --grad-pos: 0%; }
+}
+.leaderboard-gradient-scope {
+  animation: unifiedGradientY 10s ease-in-out infinite;
+}
+.animated-gradient-vertical {
+  background: linear-gradient(0deg,
+    #ff00ff,
+    #00ffff,
+    #ffff00,
+    #ff00ff,
+    #00ffff,
+    #ffff00
+  );
+  background-size: 100% 300%;
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-position: 50% var(--grad-pos);
+  will-change: background-position;
+}
+
+/* Vertical unified background gradient (no text clip) */
+.animated-bg-vertical {
+  background: linear-gradient(0deg,
+    #ff00ff,
+    #00ffff,
+    #ffff00,
+    #ff00ff,
+    #00ffff,
+    #ffff00
+  );
+  background-size: 100% 300%;
+  background-position: 50% var(--grad-pos);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  will-change: background-position;
+}
+
+/* Fallback for browsers without CSS Properties & Values API */
+@keyframes gradientShiftYFallback {
+  0% { background-position: 50% 0%; }
+  50% { background-position: 50% 100%; }
+  100% { background-position: 50% 0%; }
+}
+@supports not (property: --grad-pos) {
+  .leaderboard-gradient-scope { animation: none; }
+  .animated-gradient-vertical { animation: gradientShiftYFallback 10s ease-in-out infinite; }
+}
+
 /* Custom Styles */
 @keyframes neonGlow {
   0%, 100% {
@@ -552,4 +704,72 @@ body.tron-magenta .recharts-cartesian-axis line { stroke: rgba(255,0,170,0.6); }
                 0 0 94px #0fa,
                 0 0 140px #0fa;
   }
+}
+
+/* Global layout stability */
+html, body {
+  overflow-x: hidden; /* prevent horizontal scroll during offscreen transforms */
+  scrollbar-gutter: stable both-edges; /* reserve scrollbar space to avoid content shift */
+}
+
+/* Off-screen slide-in animation for right panels */
+@keyframes flyInRightOffscreen {
+  from { opacity: 0; transform: translateX(100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.fly-in-right-offscreen {
+  animation: flyInRightOffscreen 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  overflow-anchor: none;
+  contain: layout paint;
+  position: relative;
+  z-index: 0;
+}
+
+/* Off-screen slide-in animation for left panels */
+@keyframes flyInLeftOffscreen {
+  from { opacity: 0; transform: translateX(-100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.fly-in-left-offscreen {
+  animation: flyInLeftOffscreen 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  overflow-anchor: none;
+  contain: layout paint;
+  position: relative;
+  z-index: 0;
+}
+
+/* Fade and bounce-in animation for new brackets */
+@keyframes fadeBounceIn {
+  0% { 
+    opacity: 0; 
+    transform: scale(0.1); 
+  }
+  20% { 
+    opacity: 0.4; 
+    transform: scale(1.15); 
+  }
+  40% { 
+    opacity: 0.8; 
+    transform: scale(0.85); 
+  }
+  60% { 
+    opacity: 0.9; 
+    transform: scale(1.05); 
+  }
+  80% { 
+    opacity: 1; 
+    transform: scale(0.95); 
+  }
+  100% { 
+    opacity: 1; 
+    transform: scale(1); 
+  }
+}
+.fade-bounce-in-3d { 
+  animation: fadeBounceIn 1200ms cubic-bezier(0.175, 0.885, 0.32, 1.275) both; 
+  transform-origin: center center;
 }

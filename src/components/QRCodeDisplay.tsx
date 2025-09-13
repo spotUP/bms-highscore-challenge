@@ -13,7 +13,10 @@ const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
   
   useEffect(() => {
     if (canvasRef.current) {
-      const url = `${window.location.origin}/mobile-entry?game=${gameId}`;
+      // Prefer an explicitly configured public site URL to avoid QR codes pointing at preview domains
+      const envSiteUrl = (import.meta.env as any).VITE_PUBLIC_SITE_URL || (import.meta.env as any).VITE_SITE_URL;
+      const base = (envSiteUrl && typeof envSiteUrl === 'string' ? envSiteUrl : window.location.origin).replace(/\/$/, '');
+      const url = `${base}/mobile-entry?game=${gameId}`;
       
       QRCode.toCanvas(canvasRef.current, url, {
         width: 200,

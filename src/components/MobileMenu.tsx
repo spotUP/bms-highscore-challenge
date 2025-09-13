@@ -9,9 +9,12 @@ import PublicTournamentBrowser from "@/components/PublicTournamentBrowser";
 
 interface MobileMenuProps {
   onSpinWheel: () => void;
+  hideBracketsLink?: boolean;
+  hideSpinButton?: boolean;
+  hideStatistics?: boolean;
 }
 
-const MobileMenu = ({ onSpinWheel }: MobileMenuProps) => {
+const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = false, hideStatistics = false }: MobileMenuProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
@@ -44,20 +47,33 @@ const MobileMenu = ({ onSpinWheel }: MobileMenuProps) => {
                 <div className="text-gray-300 text-sm mb-2 border-b border-white/20 pb-2">
                   Welcome, {user.email}
                 </div>
-                <Button
-                  variant="ghost"
-                  onClick={() => handleNavigation(onSpinWheel)}
-                  className="w-full justify-start text-left"
-                >
-                  Spin the Wheel
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => handleNavigation(() => navigate('/statistics'))}
-                  className="w-full justify-start text-left"
-                >
-                  Statistics
-                </Button>
+                {!hideBracketsLink && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleNavigation(() => navigate('/admin/brackets'))}
+                    className="w-full justify-start text-left"
+                  >
+                    Brackets
+                  </Button>
+                )}
+                {!hideSpinButton && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleNavigation(onSpinWheel)}
+                    className="w-full justify-start text-left"
+                  >
+                    Spin the Wheel
+                  </Button>
+                )}
+                {!hideStatistics && (
+                  <Button
+                    variant="ghost"
+                    onClick={() => handleNavigation(() => navigate('/statistics'))}
+                    className="w-full justify-start text-left"
+                  >
+                    Statistics
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   onClick={() => handleNavigation(() => navigate('/achievements'))}

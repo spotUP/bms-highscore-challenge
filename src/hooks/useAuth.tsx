@@ -19,7 +19,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('rr_isAdmin') === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     // Set up auth state listener
@@ -66,7 +72,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
       
       if (!error) {
-        setIsAdmin(!!data);
+        const val = !!data;
+        setIsAdmin(val);
+        try { localStorage.setItem('rr_isAdmin', val ? 'true' : 'false'); } catch {}
       }
     } catch (error) {
       console.error('Error checking admin role:', error);
@@ -113,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     await supabase.auth.signOut({ scope: 'global' });
     setIsAdmin(false);
+    try { localStorage.removeItem('rr_isAdmin'); } catch {}
   };
 
   return (

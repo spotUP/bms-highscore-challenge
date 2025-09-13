@@ -67,8 +67,7 @@ const OverallLeaderboard = React.memo(() => {
                 <div className="flex-1 flex items-baseline">
                   <div className="flex-1">
                   <div 
-                      className="font-arcade font-bold text-lg animated-gradient"
-                    style={{ animationDelay: `${index * 0.15}s` }}
+                      className="font-arcade font-bold text-lg animated-gradient-vertical"
                   >
                     {player.player_name}
                   </div>
@@ -77,8 +76,7 @@ const OverallLeaderboard = React.memo(() => {
                 </div>
               </div>
               <div 
-                    className="font-bold font-arcade text-base animated-gradient"
-                style={{ animationDelay: `${index * 0.15 + 0.3}s` }}
+                    className="font-bold font-arcade text-base animated-gradient-vertical"
               >
                 {formatScore(player.total_ranking_points)}
                   </div>
@@ -102,8 +100,7 @@ const OverallLeaderboard = React.memo(() => {
                 {getAchievementRankIcon(index)}
                 <div>
                   <div 
-                    className="font-arcade font-bold text-lg animated-gradient"
-                    style={{ animationDelay: `${index * 0.15}s` }}
+                    className="font-arcade font-bold text-lg animated-gradient-vertical"
                   >
                     {hunter.player_name}
                   </div>
@@ -131,15 +128,13 @@ const OverallLeaderboard = React.memo(() => {
                   <div className="flex items-center gap-3">
                     {getDemolitionRankIcon(index)}
                     <div 
-                      className="font-arcade font-bold text-lg animated-gradient"
-                      style={{ animationDelay: `${index * 0.15}s` }}
+                      className="font-arcade font-bold text-lg animated-gradient-vertical"
                     >
                       {score.player_name}
                     </div>
                   </div>
                   <div 
-                    className="text-right font-bold font-arcade text-base animated-gradient"
-                    style={{ animationDelay: `${index * 0.15 + 0.3}s` }}
+                    className="text-right font-bold font-arcade text-base animated-gradient-vertical"
                   >
                     {formatScore(score.score)}
                   </div>

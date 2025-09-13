@@ -21,8 +21,8 @@ const HyperspaceEffect = () => {
     const DEFAULT_SPEED = isRaspberryPi ? 1 : 2; // Slower on Pi to reduce CPU load
     const BOOST_SPEED = isRaspberryPi ? 6 : 12;
 
-    let canvasWidth = window.innerWidth;
-    let canvasHeight = window.innerHeight;
+    const getViewportSize = () => ({ w: Math.max(document.documentElement.clientWidth, window.innerWidth || 0), h: Math.max(document.documentElement.clientHeight, window.innerHeight || 0) });
+    let { w: canvasWidth, h: canvasHeight } = getViewportSize();
     let centerX = canvasWidth * 0.5;
     let centerY = canvasHeight * 0.5;
     let speed = DEFAULT_SPEED;
@@ -36,10 +36,15 @@ const HyperspaceEffect = () => {
 
     // Resize handler
     const resize = () => {
-      canvasWidth = window.innerWidth;
-      canvasHeight = window.innerHeight;
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
+      const vp = getViewportSize();
+      canvasWidth = vp.w;
+      canvasHeight = vp.h;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.style.width = `${canvasWidth}px`;
+      canvas.style.height = `${canvasHeight}px`;
+      canvas.width = Math.floor(canvasWidth * dpr);
+      canvas.height = Math.floor(canvasHeight * dpr);
+      context.setTransform(dpr, 0, 0, dpr, 0, 0);
       centerX = canvasWidth * 0.5;
       centerY = canvasHeight * 0.5;
       context.fillStyle = 'rgb(255, 255, 255)';
@@ -80,7 +85,7 @@ const HyperspaceEffect = () => {
       const sin = Math.sin;
 
       // Made brighter: increased opacity from 0.3 to 0.6
-      context.fillStyle = 'rgba(255, 255, 255, 0.6)'; 
+      context.fillStyle = 'rgba(255, 255, 255, 0.22)'; 
       context.beginPath();
 
       for (let i = 0; i < PARTICLE_NUM; i++) {
@@ -131,7 +136,9 @@ const HyperspaceEffect = () => {
     resize();
     
     // Add resize listener
-    window.addEventListener('resize', resize);
+    window.addEventListener('resize', resize, { passive: true });
+    window.addEventListener('orientationchange', resize, { passive: true });
+    window.addEventListener('fullscreenchange', resize);
 
     // Start animation - Adaptive frame rate for device capability
     let animationId: number;
@@ -164,7 +171,9 @@ const HyperspaceEffect = () => {
       if (animationId) {
         cancelAnimationFrame(animationId);
       }
-      window.removeEventListener('resize', resize);
+      window.removeEventListener('resize', resize as any);
+      window.removeEventListener('orientationchange', resize as any);
+      window.removeEventListener('fullscreenchange', resize as any);
     };
   }, [enableAnimations, particleCount, isRaspberryPi, disabled]);
 
@@ -172,7 +181,7 @@ const HyperspaceEffect = () => {
     <canvas
       ref={canvasRef}
       className="fixed inset-0 pointer-events-none"
-      style={{ zIndex: -1, display: disabled ? 'none' : 'block' }}
+      style={{ zIndex: 0, display: disabled ? 'none' : 'block', opacity: 0.22 }}
     />
   );
 };

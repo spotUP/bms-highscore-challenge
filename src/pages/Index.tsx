@@ -209,6 +209,9 @@ const Index = () => {
                 <>
                   <PerformanceModeToggle displayType="switch" />
                   <TournamentDropdown />
+                  <Button variant="outline" onClick={() => navigate('/admin/brackets')}>
+                    Brackets
+                  </Button>
                   <Button variant="outline" onClick={() => setIsSpinWheelOpen(true)}>
                     Spin the Wheel
                   </Button>
@@ -307,7 +310,7 @@ const Index = () => {
                       <CardContent className="flex-1 flex flex-col pt-1">
                         {/* Scores section - scrollable if needed */}
                         <div className="flex-1 overflow-y-auto mb-4">
-                          <div className="space-y-2">
+                          <div className="space-y-2 leaderboard-gradient-scope">
                             {filtered.map((score, index) => (
                               <LeaderboardEntry
                                 key={score.id}

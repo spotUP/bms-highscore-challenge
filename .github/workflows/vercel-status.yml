@@ -77,18 +77,47 @@ jobs:
           SLEEP=10
           DEPLOYMENT_JSON=""
           for i in $(seq 1 $ATTEMPTS); do
-            # Try filtering by GitHub commit sha metadata
-            RESP=$(curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" \
+            # Primary query: filter by GitHub commit SHA metadata (fast path)
+            HTTP_CODE=0
+            RESP=$(curl -sS -w "\n%{http_code}" -H "Authorization: Bearer $VERCEL_TOKEN" \
               "https://api.vercel.com/v13/deployments?projectId=$VERCEL_PROJECT_ID&meta-githubCommitSha=$SHA&limit=1") || true
-            COUNT=$(echo "$RESP" | jq -r '.deployments | length' 2>/dev/null || echo 0)
-            if [ "$COUNT" -gt 0 ]; then
-              DEPLOYMENT_JSON=$(echo "$RESP" | jq -r '.deployments[0]')
+            HTTP_CODE=$(echo "$RESP" | tail -n1)
+            BODY=$(echo "$RESP" | sed '$d')
+            if [ "$HTTP_CODE" != "200" ]; then
+              echo "::warning::Vercel API returned $HTTP_CODE for filtered query. Body: $BODY"
+              COUNT=0
+            else
+              COUNT=$(echo "$BODY" | jq -r '.deployments | length' 2>/dev/null || echo 0)
+            fi
+            if [ "$COUNT" -gt 0 ] 2>/dev/null; then
+              DEPLOYMENT_JSON=$(echo "$BODY" | jq -r '.deployments[0]')
+            else
+              # Fallback query: fetch recent deployments for the project and find matching commit SHA
+              RESP2=$(curl -sS -w "\n%{http_code}" -H "Authorization: Bearer $VERCEL_TOKEN" \
+                "https://api.vercel.com/v13/deployments?projectId=$VERCEL_PROJECT_ID&limit=20") || true
+              HTTP2=$(echo "$RESP2" | tail -n1)
+              BODY2=$(echo "$RESP2" | sed '$d')
+              if [ "$HTTP2" != "200" ]; then
+                echo "::warning::Vercel API returned $HTTP2 for fallback query. Body: $BODY2"
+              else
+                DEPLOYMENT_JSON=$(echo "$BODY2" | jq -c --arg SHA "$SHA" '
+                  .deployments | map(select((.meta | to_entries | any(.key|test("github.*", "i"))) and ((.meta["githubCommitSha"] // .meta["githubCommitSha"] // .meta["githubCommitRef"] ) != null)))
+                  | map(select(.meta.githubCommitSha == $SHA))
+                  | (.[0] // empty)')
+              fi
+            fi
+
+            if [ -n "$DEPLOYMENT_JSON" ]; then
               STATE=$(echo "$DEPLOYMENT_JSON" | jq -r '.state')
               URL=$(echo "$DEPLOYMENT_JSON" | jq -r '.url')
               echo "Found deployment state=$STATE url=$URL"
               if [ "$STATE" = "READY" ] || [ "$STATE" = "ERROR" ] || [ "$STATE" = "CANCELED" ]; then
                 echo "state=$STATE" >> $GITHUB_OUTPUT
-                echo "url=https://$URL" >> $GITHUB_OUTPUT
+                if [ -n "$URL" ] && [ "$URL" != "null" ]; then
+                  echo "url=https://$URL" >> $GITHUB_OUTPUT
+                else
+                  echo "url=" >> $GITHUB_OUTPUT
+                fi
                 break
               fi
             fi

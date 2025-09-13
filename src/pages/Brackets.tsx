@@ -1,89 +1,148 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { useBrackets, BracketCompetition, BracketParticipant, BracketMatch } from '@/contexts/BracketContext';
-import { supabase } from '@/integrations/supabase/client';
+import React, { useEffect, useState } from 'react';
+import { useBrackets } from '@/contexts/BracketContext';
 import BracketView from '@/components/BracketView';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import AdvancedConfetti from '@/components/AdvancedConfetti';
 
 const Brackets: React.FC = () => {
-  const { competitions, loading, refresh } = useBrackets();
-  const [selected, setSelected] = useState<BracketCompetition | null>(null);
-  const [participants, setParticipants] = useState<BracketParticipant[]>([]);
-  const [matches, setMatches] = useState<BracketMatch[]>([]);
+  const { tournaments, loading, reportWinner, getTournamentData } = useBrackets();
+  const [selected, setSelected] = useState(tournaments[0] || null);
+  const [participants, setParticipants] = useState([]);
+  const [matches, setMatches] = useState([]);
   const [loadingBracket, setLoadingBracket] = useState(false);
+  const [winnerOpen, setWinnerOpen] = useState(false);
+  const [winnerName, setWinnerName] = useState('');
+  const [showConfetti, setShowConfetti] = useState(false);
 
+  // Load tournament data when selected changes
   useEffect(() => {
-    if (!selected) return;
-    const load = async () => {
-      setLoadingBracket(true);
-      try {
-        const [{ data: p, error: pErr }, { data: m, error: mErr }] = await Promise.all([
-          supabase.from('bracket_participants').select('*').eq('competition_id', selected.id),
-          supabase.from('bracket_matches').select('*').eq('competition_id', selected.id)
-        ]);
-        if (pErr) throw pErr;
-        if (mErr) throw mErr;
-        setParticipants((p || []) as any);
-        setMatches((m || []) as any);
-      } catch (e) {
-        console.error('Failed to load bracket data', e);
-      } finally {
-        setLoadingBracket(false);
-      }
-    };
-    load();
-  }, [selected?.id]);
+    if (selected) {
+      loadTournamentData(selected.id);
+    }
+  }, [selected]);
 
-  const participantsMap = useMemo(() => {
-    const map: Record<string, BracketParticipant> = {} as any;
-    participants.forEach(p => { map[p.id] = p; });
-    return map;
-  }, [participants]);
+  const loadTournamentData = async (tournamentId: string) => {
+    try {
+      setLoadingBracket(true);
+      const { players, matches: tournamentMatches } = await getTournamentData(tournamentId);
+      setParticipants(players);
+      setMatches(tournamentMatches);
+    } catch (error) {
+      console.error('Error loading tournament data:', error);
+    } finally {
+      setLoadingBracket(false);
+    }
+  };
+
+  const handleReportWinner = async (matchId: string, winnerId: string) => {
+    try {
+      const success = await reportWinner(matchId, winnerId);
+      if (success && selected) {
+        const { players, matches: updatedMatches } = await getTournamentData(selected.id);
+        setParticipants(players);
+        setMatches(updatedMatches);
+
+        // Check if this was the final match
+        const finalMatch = updatedMatches.find(m => m.round === 1);
+        if (finalMatch?.winner_participant_id) {
+          const winner = players.find(p => p.id === finalMatch.winner_participant_id);
+          if (winner) {
+            setWinnerName(winner.name);
+            setShowConfetti(true);
+            setWinnerOpen(true);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error reporting winner:', error);
+    }
+  };
+
+  // Format matches for BracketView
+  const bracketMatches = matches.map(match => ({
+    ...match,
+    position: match.match_number,
+    participant1_id: match.player1_id,
+    participant2_id: match.player2_id,
+    winner_participant_id: match.winner_id,
+    status: match.winner_id ? 'completed' : 'pending'
+  }));
+
+  // Create participant map
+  const participantMap = participants.reduce((acc, participant) => ({
+    ...acc,
+    [participant.id]: participant
+  }), {});
 
   return (
-    <div className="min-h-screen text-white p-4" style={{ background: 'var(--page-bg)' }}>
-      <div className="max-w-6xl mx-auto space-y-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold">Brackets</h1>
-          <Button variant="outline" onClick={refresh} disabled={loading}>Refresh</Button>
+    <div className="min-h-screen bg-gray-900 p-4">
+      {/* Confetti */}
+      {showConfetti && (
+        <div className="fixed inset-0 z-50 pointer-events-none">
+          <AdvancedConfetti recycle={false} onComplete={() => setShowConfetti(false)} />
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-6 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-white">Tournament Bracket</h1>
+          {tournaments.length > 1 && (
+            <select 
+              value={selected?.id || ''}
+              onChange={(e) => {
+                const tournament = tournaments.find(t => t.id === e.target.value);
+                if (tournament) setSelected(tournament);
+              }}
+              className="bg-gray-800 text-white px-4 py-2 rounded"
+            >
+              {tournaments.map(tournament => (
+                <option key={tournament.id} value={tournament.id}>
+                  {tournament.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
-        <Card className="bg-black/30 border-white/20">
-          <CardHeader>
-            <CardTitle>Competitions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loading && <div>Loading...</div>}
-            {!loading && (
-              <div className="flex flex-wrap gap-2">
-                {competitions.map(c => (
-                  <Button key={c.id} variant={selected?.id === c.id ? 'default' : 'outline'} size="sm" onClick={() => setSelected(c)}>
-                    {c.name}
-                  </Button>
-                ))}
-                {competitions.length === 0 && <div className="text-sm text-gray-400">No competitions yet.</div>}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {selected && (
-          <Card className="bg-black/30 border-white/20 h-[70vh]">
-            <CardHeader>
-              <CardTitle>{selected.name}</CardTitle>
-            </CardHeader>
-            <CardContent className="h-full">
-              {loadingBracket ? (
-                <div>Loading bracket...</div>
-              ) : (
-                <div className="h-full">
-                  <BracketView matches={matches} participants={participantsMap} />
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        {loadingBracket ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="text-white">Loading bracket...</div>
+          </div>
+        ) : (
+          <div className="bg-gray-800 p-4 rounded-lg">
+            <BracketView
+              matches={bracketMatches}
+              participants={participantMap}
+              adminMode={true}
+              onReport={handleReportWinner}
+            />
+          </div>
         )}
       </div>
+
+      {/* Winner Dialog */}
+      <Dialog open={winnerOpen} onOpenChange={setWinnerOpen}>
+        <DialogContent className="bg-gray-800 border-gray-700 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-center">
+              🏆 Tournament Complete! 🏆
+            </DialogTitle>
+          </DialogHeader>
+          <div className="text-center py-4">
+            <p className="text-xl mb-4">
+              Congratulations to <span className="font-bold text-yellow-400">{winnerName}</span> for winning the tournament!
+            </p>
+            <Button 
+              onClick={() => setWinnerOpen(false)}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
