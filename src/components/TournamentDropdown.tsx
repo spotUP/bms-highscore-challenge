@@ -19,11 +19,6 @@ const TournamentDropdown = () => {
   const [showNewBracketInput, setShowNewBracketInput] = useState(false);
 
   const handleTournamentChange = async (tournamentId: string) => {
-    if (tournamentId === 'new') {
-      setShowNewBracketInput(true);
-      return;
-    }
-    
     const selectedTournament = userTournaments.find(t => t.id === tournamentId);
     if (selectedTournament && selectedTournament.id !== currentTournament?.id) {
       try {
@@ -90,22 +85,17 @@ const TournamentDropdown = () => {
       >
         <SelectTrigger className="bg-secondary/40 border-white/20 text-white min-w-[240px]">
           <div className="flex items-center gap-2">
-            {currentTournament?.is_locked && (
-              <Lock className="w-4 h-4 text-yellow-400" />
+            <SelectValue placeholder="Select Tournament">
+              {currentTournament?.name}
+            </SelectValue>
+            {currentTournament?.scores_locked && (
+              <div title="Score submissions are locked">
+                <Lock className="w-4 h-4 text-red-400" />
+              </div>
             )}
-            <SelectValue placeholder="Select Tournament" />
           </div>
         </SelectTrigger>
         <SelectContent className="bg-gray-900 border-white/20">
-          <SelectItem 
-            value="new"
-            className="text-white focus:bg-gray-800 focus:text-white"
-          >
-            <div className="flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              <span>Create New Bracket</span>
-            </div>
-          </SelectItem>
           {userTournaments.map((tournament) => (
             <SelectItem 
               key={tournament.id} 
@@ -113,10 +103,12 @@ const TournamentDropdown = () => {
               className="text-white focus:bg-gray-800 focus:text-white"
             >
               <div className="flex items-center w-full gap-2">
-                {tournament.is_locked ? (
-                  <Lock className="w-4 h-4 text-yellow-400" />
-                ) : null}
                 <span className="flex-1">{tournament.name}</span>
+                {tournament.scores_locked && (
+                  <div title="Score submissions are locked">
+                    <Lock className="w-4 h-4 text-red-400" />
+                  </div>
+                )}
               </div>
             </SelectItem>
           ))}
@@ -165,21 +157,6 @@ const TournamentDropdown = () => {
         </div>
       )}
 
-      {hasPermission('admin') && currentTournament && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={toggleLock}
-          disabled={toggling}
-          title={currentTournament.is_locked ? 'Unlock tournament' : 'Lock tournament'}
-        >
-          {currentTournament.is_locked ? (
-            <div className="flex items-center gap-1"><Unlock className="w-4 h-4" /> Unlock</div>
-          ) : (
-            <div className="flex items-center gap-1"><Lock className="w-4 h-4" /> Lock</div>
-          )}
-        </Button>
-      )}
     </div>
   );
 };

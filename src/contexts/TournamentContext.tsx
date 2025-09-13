@@ -10,17 +10,18 @@ export interface Tournament {
   name: string;
   description: string | null;
   slug: string;
-  created_by: string; // This is what the database actually has
+  owner_id?: string;
+  created_by: string | null;
   is_public: boolean;
-  created_at: string;
-  updated_at: string;
-  // Optional properties that may not exist in database
-  owner_id?: string; // Alias for created_by for compatibility
-  is_active?: boolean;
+  is_active: boolean;
   logo_url?: string | null;
-  theme_color?: string;
-  demolition_man_active?: boolean; // Toggle for Demolition Man leaderboard
+  theme_color?: string | null;
+  max_members?: number | null;
+  created_at: string;
+  updated_at: string | null;
+  demolition_man_active?: boolean | null;
   is_locked?: boolean; // New: lock/unlock tournaments (default false)
+  scores_locked: boolean; // New: lock/unlock score submissions (default false)
 }
 
 export interface TournamentMember {

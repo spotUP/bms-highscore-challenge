@@ -55,6 +55,16 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
       return;
     }
 
+    // Check if score submissions are locked for this tournament
+    if (currentTournament.scores_locked) {
+      toast({
+        title: "Submissions Locked",
+        description: "Score submissions are currently locked for this tournament.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const trimmedName = name.trim();
     if (trimmedName.length > 50) {
       toast({

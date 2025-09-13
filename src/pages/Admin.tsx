@@ -1078,6 +1078,60 @@ const Admin = () => {
                                 title={tournament.id === currentTournament?.id ? 'Current active tournament' : 'Activate this tournament'}
                               />
                             </div>
+                            <div className="flex items-center gap-2">
+                              <Label htmlFor={`t-scores-locked-${tournament.id}`} className="text-xs text-gray-300">Lock Scores</Label>
+                              <Switch
+                                id={`t-scores-locked-${tournament.id}`}
+                                checked={tournament.scores_locked || false}
+                                onCheckedChange={async (checked) => {
+                                  try {
+                                    console.log('Attempting to update scores_locked for tournament:', tournament.id, 'to:', checked);
+                                    
+                                    // First, try to add the column if it doesn't exist
+                                    const { error: columnError } = await supabase.rpc('exec_sql', {
+                                      sql: 'ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS scores_locked BOOLEAN NOT NULL DEFAULT false;'
+                                    });
+                                    
+                                    if (columnError && !columnError.message.includes('already exists')) {
+                                      console.warn('Could not add scores_locked column:', columnError);
+                                    }
+                                    
+                                    const { data, error } = await supabase
+                                      .from('tournaments')
+                                      .update({ scores_locked: checked })
+                                      .eq('id', tournament.id)
+                                      .select();
+                                    
+                                    if (error) {
+                                      console.error('Database error:', error);
+                                      
+                                      // If column doesn't exist, show a helpful message
+                                      if (error.message?.includes('column "scores_locked" of relation "tournaments" does not exist')) {
+                                        throw new Error('Database migration required. Please run the migration to add score locking functionality.');
+                                      }
+                                      
+                                      throw error;
+                                    }
+                                    
+                                    console.log('Update successful:', data);
+                                    await refreshTournaments();
+                                    toast({ 
+                                      title: checked ? 'Scores Locked' : 'Scores Unlocked', 
+                                      description: `Score submissions are now ${checked ? 'locked' : 'unlocked'} for "${tournament.name}"` 
+                                    });
+                                  } catch (error: any) {
+                                    console.error('Error updating score lock:', error);
+                                    const errorMessage = error?.message || error?.details || 'Unknown error occurred';
+                                    toast({ 
+                                      title: 'Error', 
+                                      description: `Failed to update score lock setting: ${errorMessage}`,
+                                      variant: 'destructive'
+                                    });
+                                  }
+                                }}
+                                title={tournament.scores_locked ? 'Score submissions are locked' : 'Score submissions are unlocked'}
+                              />
+                            </div>
                             <Dialog>
                               <DialogTrigger asChild>
                                 <Button size="sm" variant="outline" title="Clone"><Copy className="w-4 h-4" /></Button>

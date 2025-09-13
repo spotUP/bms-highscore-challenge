@@ -41,9 +41,9 @@ const SpinTheWheel = ({ isOpen, onClose, leaderboardNames }: SpinTheWheelProps) 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="bg-gray-900 text-white border-white/20 max-w-2xl w-[95vw] max-h-[90vh] overflow-hidden">
+        <DialogContent className="theme-card border-white/20 max-w-2xl w-[95vw] max-h-[90vh] overflow-hidden">
           <DialogHeader>
-            <DialogTitle className="text-arcade-neonYellow text-xl text-center">
+            <DialogTitle className="animated-gradient text-xl text-center">
               Spin the Wheel
             </DialogTitle>
           </DialogHeader>
@@ -54,13 +54,13 @@ const SpinTheWheel = ({ isOpen, onClose, leaderboardNames }: SpinTheWheelProps) 
               <div className="text-center space-y-6">
                 <div className="text-6xl animate-bounce">🎉</div>
                 <div className="space-y-4">
-                  <h2 className="text-4xl font-bold text-arcade-neonYellow animate-pulse">
+                  <h2 className="text-4xl font-bold animated-gradient animate-pulse">
                     Congratulations!
                   </h2>
-                  <h3 className="text-3xl font-bold text-arcade-neonPink">
+                  <h3 className="text-3xl font-bold animated-gradient-vertical">
                     {winner}
                   </h3>
-                  <p className="text-xl text-gray-300">
+                  <p className="text-xl text-white/80">
                     You are our lucky winner! 🏆
                   </p>
                 </div>
@@ -68,14 +68,14 @@ const SpinTheWheel = ({ isOpen, onClose, leaderboardNames }: SpinTheWheelProps) 
                 <div className="flex flex-col sm:flex-row justify-center gap-4 pt-6">
                   <Button
                     onClick={resetWheel}
-                    className="bg-arcade-neonCyan hover:bg-arcade-neonCyan/80 text-black font-bold"
+                    className="bg-primary hover:bg-primary/80 text-primary-foreground font-bold"
                   >
                     Spin Again
                   </Button>
                   <Button
                     onClick={handleClose}
                     variant="outline"
-                    className="border-white text-white hover:bg-white hover:text-black"
+                    className="border-white/20 text-white hover:bg-white/10"
                   >
                     Close
                   </Button>
