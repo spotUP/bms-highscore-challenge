@@ -58,7 +58,12 @@ export const ScoreNotificationsListener: React.FC = () => {
 
   useEffect(() => {
     // Only set up the listener if we have a tournament context
-    if (!currentTournament) return;
+    if (!currentTournament) {
+      console.log('ScoreNotificationsListener: No current tournament, skipping setup');
+      return;
+    }
+
+    console.log('ScoreNotificationsListener: Setting up realtime subscriptions for tournament:', currentTournament.id);
 
     // Subscribe to score submissions
     scoreChannelRef.current = supabase
@@ -72,6 +77,7 @@ export const ScoreNotificationsListener: React.FC = () => {
           filter: `tournament_id=eq.${currentTournament.id}`,
         },
         async (payload) => {
+          console.log('ScoreNotificationsListener: Received score submission event:', payload);
           const submission = payload.new as {
             player_name: string;
             score: number;
@@ -81,13 +87,22 @@ export const ScoreNotificationsListener: React.FC = () => {
           };
 
           // Get game info
-          const { data: game } = await supabase
+          const { data: game, error: gameError } = await supabase
             .from('games')
             .select('name, logo_url')
             .eq('id', submission.game_id)
             .single();
 
-          if (!game) return;
+          if (gameError) {
+            console.error('ScoreNotificationsListener: Error fetching game:', gameError);
+            return;
+          }
+          if (!game) {
+            console.error('ScoreNotificationsListener: No game found for ID:', submission.game_id);
+            return;
+          }
+
+          console.log('ScoreNotificationsListener: Found game:', game);
 
           // Show the toast notification
           toast.success(
@@ -122,7 +137,9 @@ export const ScoreNotificationsListener: React.FC = () => {
           setShowPlayerInsult(true);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('ScoreNotificationsListener: Score subscription status:', status);
+      });
 
     // Subscribe to achievement unlocks (global)
     achievementChannelRef.current = supabase
@@ -154,9 +171,12 @@ export const ScoreNotificationsListener: React.FC = () => {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('ScoreNotificationsListener: Achievement subscription status:', status);
+      });
 
     return () => {
+      console.log('ScoreNotificationsListener: Cleaning up subscriptions');
       if (scoreChannelRef.current) supabase.removeChannel(scoreChannelRef.current);
       if (achievementChannelRef.current) supabase.removeChannel(achievementChannelRef.current);
     };
