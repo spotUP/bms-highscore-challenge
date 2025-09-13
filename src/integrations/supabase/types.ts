@@ -717,6 +717,7 @@ export type Database = {
           id: string
           is_public: boolean
           name: string
+          scores_locked: boolean
           slug: string
           updated_at: string | null
         }
@@ -728,6 +729,7 @@ export type Database = {
           id?: string
           is_public?: boolean
           name: string
+          scores_locked?: boolean
           slug: string
           updated_at?: string | null
         }
@@ -739,6 +741,7 @@ export type Database = {
           id?: string
           is_public?: boolean
           name?: string
+          scores_locked?: boolean
           slug?: string
           updated_at?: string | null
         }

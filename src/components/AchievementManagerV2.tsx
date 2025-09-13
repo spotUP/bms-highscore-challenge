@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, Plus, Shuffle, ChevronDown, ChevronUp } from "lucide-react";
 import { useTournament } from "@/contexts/TournamentContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from '@tanstack/react-query';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -103,8 +104,13 @@ const AchievementManagerV2 = () => {
   });
 
   const { toast } = useToast();
-  const { currentTournament, userTournaments, switchTournament } = useTournament();
+  const { currentTournament, userTournaments, switchTournament, hasPermission } = useTournament();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+
+  // Check if current user is the tournament creator/owner
+  const isTournamentCreator = currentTournament && user && 
+    (currentTournament.created_by === user.id || hasPermission('owner'));
 
   // Load games from the database
   const loadGames = useCallback(async () => {
@@ -429,43 +435,32 @@ const AchievementManagerV2 = () => {
     }
   };
 
-  // Clear all achievements for current tournament
+  // Clear all player achievement records for current tournament (creator only)
   const confirmClearAllAchievements = async () => {
-    if (!currentTournament) return;
+    if (!currentTournament || !user) return;
     
     try {
-      // Delete all achievements for the current tournament
+      // Clear all player achievement records for current tournament
       const { error } = await supabase
-        .from('achievements')
+        .from('player_achievements')
         .delete()
         .eq('tournament_id', currentTournament.id);
         
       if (error) throw error;
       
-      // Also clear all player achievements for this tournament
-      const { error: playerAchievementsError } = await supabase
-        .from('player_achievements')
-        .delete()
-        .eq('tournament_id', currentTournament.id);
-        
-      if (playerAchievementsError) {
-        console.warn('Error clearing player achievements:', playerAchievementsError);
-      }
-      
       toast({
         title: "Success",
-        description: `All achievements cleared for ${currentTournament.name}`,
+        description: `All player achievement progress cleared for ${currentTournament.name}`,
       });
       
       setClearAllDialog({ open: false });
-      loadAchievements();
       await invalidateQueries();
       
     } catch (error) {
-      console.error('Error clearing all achievements:', error);
+      console.error('Error clearing player achievements:', error);
       toast({
         title: "Error",
-        description: "Failed to clear achievements",
+        description: "Failed to clear player achievement progress",
         variant: "destructive",
       });
     }
@@ -609,14 +604,16 @@ const AchievementManagerV2 = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button
-              variant="destructive"
-              onClick={() => setClearAllDialog({ open: true })}
-              className="bg-red-600 hover:bg-red-700"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Clear All Achievements
-            </Button>
+            {isTournamentCreator && (
+              <Button
+                variant="destructive"
+                onClick={() => setClearAllDialog({ open: true })}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Clear All Progress
+              </Button>
+            )}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button onClick={openCreateDialog}>
@@ -666,9 +663,9 @@ const AchievementManagerV2 = () => {
       <ConfirmationDialog
         open={clearAllDialog.open}
         onOpenChange={(open) => setClearAllDialog({ open })}
-        title="Clear All Achievements"
-        description={`Are you sure you want to delete ALL achievements and player progress for "${currentTournament?.name}"? This will permanently remove all achievements and their unlock records. This action cannot be undone.`}
-        confirmText="Clear All Achievements"
+        title="Clear All Achievement Progress"
+        description={`Are you sure you want to clear ALL PLAYERS' achievement progress for "${currentTournament?.name}"? This will reset everyone's achievement unlocks but keep the achievements themselves. This action cannot be undone.`}
+        confirmText="Clear All Progress"
         cancelText="Cancel"
         variant="destructive"
         onConfirm={confirmClearAllAchievements}

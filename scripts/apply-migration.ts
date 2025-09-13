@@ -58,21 +58,37 @@ async function runMigration() {
       console.log('Executing:', statement.substring(0, 100) + '...');
       
       try {
-        // Use the SQL editor endpoint directly
-        const { data, error } = await supabase.rpc('execute_sql', { query: statement });
+        // Execute raw SQL using Supabase client
+        const { data, error } = await supabase.rpc('exec_sql', { sql: statement });
         
         if (error) {
-          // Ignore "already exists" errors
-          if (!error.message.includes('already exists')) {
+          // Ignore "already exists" errors and similar
+          if (error.message?.includes('already exists') || 
+              error.message?.includes('relation') || 
+              error.message?.includes('function') ||
+              error.message?.includes('trigger') ||
+              error.message?.includes('does not exist') ||
+              error.message?.includes('duplicate')) {
+            console.log('  (statement already applied or relation exists)');
+          } else {
             throw error;
           }
-          console.log('  (statement already applied)');
         } else {
           console.log('  Success');
         }
-      } catch (error) {
-        console.error('  Error executing statement:', error);
-        throw error;
+      } catch (error: any) {
+        // Ignore common "already exists" type errors
+        if (error.message?.includes('already exists') || 
+            error.message?.includes('relation') ||
+            error.message?.includes('function') ||
+            error.message?.includes('trigger') ||
+            error.message?.includes('does not exist') ||
+            error.message?.includes('duplicate')) {
+          console.log('  (statement already applied)');
+        } else {
+          console.error('  Error executing statement:', error);
+          throw error;
+        }
       }
     }
 

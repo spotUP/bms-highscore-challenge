@@ -133,6 +133,13 @@ const MobileEntry = () => {
       return;
     }
 
+    // Check if score submissions are locked for this tournament
+    if (currentTournament.scores_locked) {
+      toast.error("Score submissions are currently locked for this tournament.");
+      setIsSubmitting(false);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {

@@ -6,12 +6,24 @@ interface WheelOfFortuneProps {
   onWinner: (winner: string) => void;
 }
 
-// Wheel of Names style colors - clean and vibrant
-const segmentColors = [
-  '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', 
-  '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9',
-  '#FF9F43', '#10AC84', '#EE5A24', '#0984E3', '#6C5CE7'
-];
+// Theme-aware segment colors
+const getSegmentColors = () => {
+  const root = document.documentElement;
+  const computedStyle = getComputedStyle(root);
+  
+  // Try to get theme colors, fallback to defaults
+  const primary = computedStyle.getPropertyValue('--primary')?.trim() || '#0ea5e9';
+  const secondary = computedStyle.getPropertyValue('--secondary')?.trim() || '#64748b';
+  const accent = computedStyle.getPropertyValue('--accent')?.trim() || '#f59e0b';
+  
+  // Generate theme-based color palette
+  return [
+    primary, secondary, accent,
+    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', 
+    '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE', '#85C1E9',
+    '#FF9F43', '#10AC84', '#EE5A24'
+  ];
+};
 
 // Fisher-Yates shuffle algorithm
 const shuffleArray = <T,>(array: T[]): T[] => {
@@ -28,11 +40,13 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
   const [currentRotation, setCurrentRotation] = useState(0);
   const [spinVelocity, setSpinVelocity] = useState(0);
   const [shuffledNames, setShuffledNames] = useState<string[]>([]);
+  const [segmentColors, setSegmentColors] = useState<string[]>([]);
   const wheelRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number>();
 
-  // Shuffle names when they change
+  // Initialize colors and shuffle names when they change
   useEffect(() => {
+    setSegmentColors(getSegmentColors());
     setShuffledNames(shuffleArray(names));
   }, [names]);
 
@@ -130,10 +144,10 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
     <div className="flex flex-col items-center space-y-8">
       {/* Wheel Container - Wheel of Names style */}
       <div className="relative">
-        {/* Main wheel - clean and simple like Wheel of Names */}
+        {/* Main wheel - themed styling */}
         <div
           ref={wheelRef}
-          className="relative w-96 h-96 rounded-full border-4 border-gray-300 shadow-xl"
+          className="relative w-96 h-96 rounded-full border-4 border-white/20 shadow-xl theme-card"
           style={{
             transform: `rotate(${currentRotation}deg)`,
             background: `conic-gradient(${shuffledNames.map((_, index) => {
@@ -146,23 +160,23 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
             willChange: isSpinning ? 'transform' : 'auto',
           }}
         >
-          {/* Center hub - simple and clean like Wheel of Names */}
-          <div className="absolute top-1/2 left-1/2 w-16 h-16 bg-white rounded-full transform -translate-x-1/2 -translate-y-1/2 border-2 border-gray-300 z-10 shadow-lg">
-            <div className="w-full h-full rounded-full bg-gray-100 flex items-center justify-center">
-              <div className="w-4 h-4 bg-gray-400 rounded-full"></div>
+          {/* Center hub - themed styling */}
+          <div className="absolute top-1/2 left-1/2 w-16 h-16 bg-background rounded-full transform -translate-x-1/2 -translate-y-1/2 border-2 border-white/20 z-10 shadow-lg">
+            <div className="w-full h-full rounded-full bg-muted flex items-center justify-center">
+              <div className="w-4 h-4 bg-primary rounded-full"></div>
             </div>
           </div>
 
-          {/* Player names - positioned like Wheel of Names */}
+          {/* Player names - positioned at outer edges */}
           {shuffledNames.map((name, index) => {
             const segmentCenterAngle = segmentAngle * index + segmentAngle / 2;
-            // Position names in the middle of each segment
-            const radius = 120; // Middle of the segment
+            // Position names at the outer edge of each segment
+            const radius = 170; // Outer edge of the segment
             const x = Math.cos((segmentCenterAngle - 90) * Math.PI / 180) * radius;
             const y = Math.sin((segmentCenterAngle - 90) * Math.PI / 180) * radius;
             
-            // Rotate names 90 degrees from their segment angle
-            let rotationAngle = segmentCenterAngle + 90;
+            // Rotate names to follow the wheel's curve
+            let rotationAngle = segmentCenterAngle;
             // Flip text that would be upside down to keep it readable
             if (rotationAngle > 90 && rotationAngle < 270) {
               rotationAngle += 180;
@@ -177,12 +191,13 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
                   top: `calc(50% + ${y}px)`,
                   transform: `translate(-50%, -50%) rotate(${rotationAngle}deg)`,
                   transformOrigin: 'center',
-                  textShadow: '1px 1px 2px rgba(0,0,0,0.7)',
-                  maxWidth: '100px',
+                  textShadow: '2px 2px 4px rgba(0,0,0,0.8)',
+                  maxWidth: '120px',
                   textAlign: 'center',
-                  lineHeight: '1.2',
-                  fontWeight: '600',
-                  letterSpacing: '0.3px'
+                  lineHeight: '1.1',
+                  fontWeight: '700',
+                  letterSpacing: '0.5px',
+                  fontSize: '0.9rem'
                 }}
               >
                 {name}
@@ -191,21 +206,21 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
           })}
         </div>
 
-        {/* Pointer - simple triangle like Wheel of Names */}
+        {/* Pointer - themed styling */}
         <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-2 z-40">
-          <div className="w-0 h-0 border-l-4 border-r-4 border-b-8 border-l-transparent border-r-transparent border-b-gray-600 shadow-md"></div>
+          <div className="w-0 h-0 border-l-4 border-r-4 border-b-8 border-l-transparent border-r-transparent border-b-primary shadow-md"></div>
         </div>
       </div>
 
-      {/* Spin Button - clean and simple like Wheel of Names */}
+      {/* Spin Button - themed styling */}
       <Button
         onClick={handleSpin}
         disabled={isSpinning}
-        className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-lg px-8 py-4 rounded-lg shadow-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="bg-primary hover:bg-primary/80 text-primary-foreground font-semibold text-lg px-8 py-4 rounded-lg shadow-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {isSpinning ? (
           <div className="flex items-center space-x-2">
-            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
             <span>Spinning...</span>
           </div>
         ) : (
@@ -213,12 +228,12 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
         )}
       </Button>
 
-      {/* Player Info - minimal like Wheel of Names */}
+      {/* Player Info - themed styling */}
       <div className="text-center">
-        <p className="text-gray-600 text-sm">
+        <p className="text-muted-foreground text-sm">
           {shuffledNames.length} entr{shuffledNames.length !== 1 ? 'ies' : 'y'} ready to spin
         </p>
-        <p className="text-gray-500 text-xs mt-1">
+        <p className="text-muted-foreground/70 text-xs mt-1">
           Names are shuffled randomly for each spin
         </p>
       </div>
