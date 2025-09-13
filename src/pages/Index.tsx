@@ -24,6 +24,7 @@ import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
 import donkeyKongLogo from "@/assets/donkey-kong-logo.png";
+import { supabase } from "@/integrations/supabase/client";
 
 // Fallback logo mapping for backwards compatibility
 const LOGO_MAP: Record<string, string> = {
@@ -105,6 +106,32 @@ const Index = () => {
   const handleScoreSubmitted = useCallback(() => {
     refetch(); // Reload all data after submission
   }, [refetch]);
+
+  // Realtime: auto-refresh when new score submissions are recorded for current tournament
+  useEffect(() => {
+    if (!currentTournament?.id) return;
+
+    const channel = supabase
+      .channel('index-score-subscriptions')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'score_submissions',
+          filter: `tournament_id=eq.${currentTournament.id}`,
+        },
+        () => {
+          // Debounce/lightweight: refetch scores immediately on event
+          refetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentTournament?.id, refetch]);
 
   // Get player names for the wheel - each player appears once per game they have scores for
   const getLeaderboardNames = useMemo(() => {
