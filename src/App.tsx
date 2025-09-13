@@ -12,6 +12,7 @@ import HyperspaceEffect from "@/components/HyperspaceEffect";
 import VHSOverlay from "@/components/VHSOverlay";
 import PerformanceWrapper from "@/components/PerformanceWrapper";
 import TournamentAccessGuard from "@/components/TournamentAccessGuard";
+import { ScoreNotificationsListener } from "@/components/ScoreNotification";
 import Index from "./pages/Index";
 import "./styles/performance.css";
 import { BracketProvider } from "@/contexts/BracketContext";
@@ -84,6 +85,8 @@ const App = () => (
             <VHSOverlay />
             <Toaster />
             <Sonner />
+            {/* Add Score Notifications Listener */}
+            <ScoreNotificationsListener />
             <BrowserRouter
               future={{
                 v7_startTransition: true,
