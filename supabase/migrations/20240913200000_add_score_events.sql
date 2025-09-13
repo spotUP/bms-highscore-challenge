@@ -37,6 +37,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Create a trigger to notify on new score submissions
+DROP TRIGGER IF EXISTS on_score_submitted ON public.score_submissions;
 CREATE TRIGGER on_score_submitted
 AFTER INSERT ON public.score_submissions
 FOR EACH ROW EXECUTE FUNCTION public.notify_score_submission();
