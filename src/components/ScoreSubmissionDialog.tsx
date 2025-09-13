@@ -138,10 +138,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           console.error('❌ Webhook call failed:', webhookError);
         }
 
-        toast({
-          title: "Score Improved!",
-          description: `New best score for ${game.name}: ${scoreValue.toLocaleString()} (previous: ${existingScore.score.toLocaleString()})`
-        });
+        // Toast notification now handled by realtime system
 
         // Record the score submission for real-time notifications
         console.log('ScoreSubmissionDialog: Recording score submission for realtime:', {
@@ -211,10 +208,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           console.error('❌ Webhook call failed:', webhookError);
         }
         
-        toast({
-          title: "New Score Recorded!",
-          description: `First score for ${game.name}: ${scoreValue.toLocaleString()}`
-        });
+        // Toast notification now handled by realtime system
 
         // Also record submission for realtime broadcast
         console.log('ScoreSubmissionDialog: Recording score submission for realtime:', {
