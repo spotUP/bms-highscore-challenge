@@ -106,6 +106,7 @@ export const ScoreNotificationsListener: React.FC = () => {
           console.log('ScoreNotificationsListener: Found game:', game);
 
           // Show the toast notification
+          console.log('ScoreNotificationsListener: Showing toast notification');
           toast.success(
             <ScoreNotification
               playerName={submission.player_name}
@@ -134,6 +135,7 @@ export const ScoreNotificationsListener: React.FC = () => {
           );
 
           // Trigger global celebration modal + confetti
+          console.log('ScoreNotificationsListener: Triggering celebration modal for:', submission.player_name);
           setInsultPlayerName(submission.player_name);
           setShowPlayerInsult(true);
         }
