@@ -143,8 +143,17 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           description: `New best score for ${game.name}: ${scoreValue.toLocaleString()} (previous: ${existingScore.score.toLocaleString()})`
         });
 
-        // Also record submission for realtime broadcast
-        await supabase
+        // Record the score submission for real-time notifications
+        console.log('ScoreSubmissionDialog: Recording score submission for realtime:', {
+          player_name: trimmedName.toUpperCase(),
+          score: scoreValue,
+          game_id: game.id,
+          tournament_id: currentTournament?.id,
+          is_high_score: true,
+          previous_high_score: existingScore.score
+        });
+        
+        const { error: submissionError } = await supabase
           .from('score_submissions')
           .insert({
             player_name: trimmedName.toUpperCase(),
@@ -154,6 +163,12 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
             is_high_score: true,
             previous_high_score: existingScore.score
           });
+          
+        if (submissionError) {
+          console.error('ScoreSubmissionDialog: Error recording score submission:', submissionError);
+        } else {
+          console.log('ScoreSubmissionDialog: Score submission recorded successfully');
+        }
 
         // Show message for all players
         setInsultPlayerName(trimmedName);
@@ -202,7 +217,16 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         });
 
         // Also record submission for realtime broadcast
-        await supabase
+        console.log('ScoreSubmissionDialog: Recording score submission for realtime:', {
+          player_name: trimmedName.toUpperCase(),
+          score: scoreValue,
+          game_id: game.id,
+          tournament_id: currentTournament?.id,
+          is_high_score: true,
+          previous_high_score: null
+        });
+        
+        const { error: submissionError } = await supabase
           .from('score_submissions')
           .insert({
             player_name: trimmedName.toUpperCase(),
@@ -212,6 +236,12 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
             is_high_score: true,
             previous_high_score: null
           });
+          
+        if (submissionError) {
+          console.error('ScoreSubmissionDialog: Error recording score submission:', submissionError);
+        } else {
+          console.log('ScoreSubmissionDialog: Score submission recorded successfully');
+        }
 
         // Show message for all players
         setInsultPlayerName(trimmedName);
