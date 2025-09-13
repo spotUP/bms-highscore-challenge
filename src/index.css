@@ -636,22 +636,30 @@ body.tron-magenta .recharts-cartesian-axis line { stroke: rgba(255,0,170,0.6); }
   animation: unifiedGradientY 10s ease-in-out infinite;
 }
 .animated-gradient-vertical {
-  background: linear-gradient(0deg,
-    #ff00ff,
-    #00ffff,
-    #ffff00,
-    #ff00ff,
-    #00ffff,
-    #ffff00
-  );
-  background-size: 100% 300%;
-  background-attachment: fixed;
-  background-repeat: no-repeat;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-position: 50% var(--grad-pos);
-  will-change: background-position;
+  /* Mobile-first: solid white text */
+  color: white;
+}
+
+/* Desktop: gradient text animation */
+@media (min-width: 768px) {
+  .animated-gradient-vertical {
+    background: linear-gradient(0deg,
+      #ff00ff,
+      #00ffff,
+      #ffff00,
+      #ff00ff,
+      #00ffff,
+      #ffff00
+    );
+    background-size: 100% 300%;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-position: 50% var(--grad-pos);
+    will-change: background-position;
+  }
 }
 
 /* Vertical unified background gradient (no text clip) */
@@ -679,7 +687,9 @@ body.tron-magenta .recharts-cartesian-axis line { stroke: rgba(255,0,170,0.6); }
 }
 @supports not (property: --grad-pos) {
   .leaderboard-gradient-scope { animation: none; }
-  .animated-gradient-vertical { animation: gradientShiftYFallback 10s ease-in-out infinite; }
+  @media (min-width: 768px) {
+    .animated-gradient-vertical { animation: gradientShiftYFallback 10s ease-in-out infinite; }
+  }
 }
 
 /* Custom Styles */
