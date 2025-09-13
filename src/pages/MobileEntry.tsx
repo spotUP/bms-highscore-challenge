@@ -146,6 +146,9 @@ const MobileEntry = () => {
 
       if (fetchError) throw fetchError;
 
+      let isHighScore = false;
+      let previousHighScore = null;
+
       if (existingScore) {
         // Player already has a score for this game
         if (scoreValue <= existingScore.score) {
@@ -165,18 +168,12 @@ const MobileEntry = () => {
 
         if (error) throw error;
 
+        isHighScore = true;
+        previousHighScore = existingScore.score;
+
         // Post to webhook via edge function for score improvement
         try {
-          console.log('🚀 [Mobile] Calling webhook for score improvement:', {
-            player_name: name.toUpperCase(),
-            score: scoreValue,
-            game_name: game.name,
-            game_id: game.id,
-            type: 'score_improved',
-            previous_score: existingScore.score
-          });
-          
-          const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
+          await supabase.functions.invoke('send-score-webhook', {
             body: {
               player_name: name.toUpperCase(),
               score: scoreValue,
@@ -187,22 +184,11 @@ const MobileEntry = () => {
               timestamp: new Date().toISOString()
             }
           });
-          
-          if (webhookResponse.error) {
-            console.error('❌ [Mobile] Webhook error:', webhookResponse.error);
-          } else {
-            console.log('✅ [Mobile] Webhook sent successfully:', webhookResponse.data);
-            console.log('📊 [Mobile] Full webhook response:', webhookResponse);
-          }
         } catch (webhookError) {
-          console.error('❌ [Mobile] Webhook call failed:', webhookError);
+          console.error('Webhook call failed:', webhookError);
         }
 
         toast.success(`Score improved! New best: ${scoreValue.toLocaleString()} (previous: ${existingScore.score.toLocaleString()})`);
-        
-        // Show message for all players
-        setInsultPlayerName(name.trim());
-        setShowPlayerInsult(true);
       } else {
         // Insert new score for this player/game combination
         const { error } = await supabase
@@ -215,18 +201,12 @@ const MobileEntry = () => {
           });
 
         if (error) throw error;
+
+        isHighScore = true;
         
         // Post to webhook via edge function for new score
         try {
-          console.log('🚀 [Mobile] Calling webhook for new score:', {
-            player_name: name.toUpperCase(),
-            score: scoreValue,
-            game_name: game.name,
-            game_id: game.id,
-            type: 'new_score'
-          });
-          
-          const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
+          await supabase.functions.invoke('send-score-webhook', {
             body: {
               player_name: name.toUpperCase(),
               score: scoreValue,
@@ -236,24 +216,30 @@ const MobileEntry = () => {
               timestamp: new Date().toISOString()
             }
           });
-          
-          if (webhookResponse.error) {
-            console.error('❌ [Mobile] Webhook error:', webhookResponse.error);
-          } else {
-            console.log('✅ [Mobile] Webhook sent successfully:', webhookResponse.data);
-            console.log('📊 [Mobile] Full webhook response:', webhookResponse);
-          }
         } catch (webhookError) {
-          console.error('❌ [Mobile] Webhook call failed:', webhookError);
+          console.error('Webhook call failed:', webhookError);
         }
         
         toast.success(`New score recorded: ${scoreValue.toLocaleString()}`);
-        
-        // Show message for all players
-        setInsultPlayerName(name.trim());
-        setShowPlayerInsult(true);
       }
+
+      // Record the score submission for real-time notifications
+      await supabase
+        .from('score_submissions')
+        .insert({
+          player_name: name.toUpperCase(),
+          score: scoreValue,
+          game_id: game.id,
+          tournament_id: currentTournament?.id,
+          is_high_score: isHighScore,
+          previous_high_score: previousHighScore
+        });
       
+      // Show message for all players
+      setInsultPlayerName(name.trim());
+      setShowPlayerInsult(true);
+      
+      // Reset form
       setName("");
       setScore("");
       

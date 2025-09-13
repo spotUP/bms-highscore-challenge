@@ -36,13 +36,6 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    console.log('ScoreSubmissionDialog: Submitting score', {
-      name: name.trim(),
-      score,
-      game,
-      currentTournament
-    });
-
     if (!name.trim() || !score || !game) {
       toast({
         title: "Error",
@@ -114,33 +107,16 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           tournament_id: currentTournament?.id
         };
         
-        console.log('🔄 Updating existing score:', { 
-          existingScoreId: existingScore.id,
-          updateData,
-          existingScore 
-        });
-        
         const { data: updatedData, error } = await supabase
           .from('scores')
           .update(updateData)
           .eq('id', existingScore.id)
           .select();
 
-        console.log('🔄 Update result:', { updatedData, error });
-
         if (error) throw error;
 
         // Post to webhook via edge function for score improvement
         try {
-          console.log('🚀 Calling webhook for score improvement:', {
-            player_name: trimmedName.toUpperCase(),
-            score: scoreValue,
-            game_name: game.name,
-            game_id: game.id,
-            type: 'score_improved',
-            previous_score: existingScore.score
-          });
-          
           const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
             body: {
               player_name: trimmedName.toUpperCase(),
@@ -157,7 +133,6 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
             console.error('❌ Webhook error:', webhookResponse.error);
           } else {
             console.log('✅ Webhook sent successfully:', webhookResponse.data);
-            console.log('📊 Full webhook response:', webhookResponse);
           }
         } catch (webhookError) {
           console.error('❌ Webhook call failed:', webhookError);
@@ -167,6 +142,18 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           title: "Score Improved!",
           description: `New best score for ${game.name}: ${scoreValue.toLocaleString()} (previous: ${existingScore.score.toLocaleString()})`
         });
+
+        // Also record submission for realtime broadcast
+        await supabase
+          .from('score_submissions')
+          .insert({
+            player_name: trimmedName.toUpperCase(),
+            score: scoreValue,
+            game_id: game.id,
+            tournament_id: currentTournament?.id,
+            is_high_score: true,
+            previous_high_score: existingScore.score
+          });
 
         // Show message for all players
         setInsultPlayerName(trimmedName);
@@ -180,27 +167,15 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           tournament_id: currentTournament?.id
         };
         
-        console.log('💾 Inserting new score:', scoreData);
-        
         const { data: insertedData, error } = await supabase
           .from('scores')
           .insert(scoreData)
           .select();
 
-        console.log('💾 Insert result:', { insertedData, error });
-
         if (error) throw error;
         
         // Post to webhook via edge function for new score
         try {
-          console.log('🚀 Calling webhook for new score:', {
-            player_name: trimmedName.toUpperCase(),
-            score: scoreValue,
-            game_name: game.name,
-            game_id: game.id,
-            type: 'new_score'
-          });
-          
           const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
             body: {
               player_name: trimmedName.toUpperCase(),
@@ -216,7 +191,6 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
             console.error('❌ Webhook error:', webhookResponse.error);
           } else {
             console.log('✅ Webhook sent successfully:', webhookResponse.data);
-            console.log('📊 Full webhook response:', webhookResponse);
           }
         } catch (webhookError) {
           console.error('❌ Webhook call failed:', webhookError);
@@ -226,6 +200,18 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           title: "New Score Recorded!",
           description: `First score for ${game.name}: ${scoreValue.toLocaleString()}`
         });
+
+        // Also record submission for realtime broadcast
+        await supabase
+          .from('score_submissions')
+          .insert({
+            player_name: trimmedName.toUpperCase(),
+            score: scoreValue,
+            game_id: game.id,
+            tournament_id: currentTournament?.id,
+            is_high_score: true,
+            previous_high_score: null
+          });
 
         // Show message for all players
         setInsultPlayerName(trimmedName);
