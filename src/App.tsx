@@ -28,6 +28,7 @@ const Achievements = lazy(() => import("./pages/Achievements"));
 const DemolitionManSubmit = lazy(() => import("./pages/DemolitionManSubmit"));
 const Brackets = lazy(() => import("./pages/Brackets"));
 const BracketAdmin = lazy(() => import("./pages/BracketAdmin"));
+const Competition = lazy(() => import("./pages/Competition"));
 
 const queryClient = new QueryClient();
 
@@ -94,7 +95,6 @@ const App = () => (
               <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
                   <Route path="/" element={<Index />} />
-                  <Route path="/brackets" element={<Brackets />} />
                   <Route path="/admin/brackets" element={<BracketAdmin />} />
                   <Route path="/mobile-entry" element={<MobileEntry />} />
                   <Route path="/auth" element={<Auth />} />
@@ -105,7 +105,7 @@ const App = () => (
                   <Route path="/player" element={<PlayerDashboard />} />
                   <Route path="/achievements" element={<Achievements />} />
                   <Route path="/demolition-man-submit" element={<DemolitionManSubmit />} />
-                  
+                  <Route path="/competition" element={<Competition />} />
                   {/* Tournament-scoped routes with access control */}
                   <Route path="/t/:slug" element={<TournamentAccessGuard><Index /></TournamentAccessGuard>} />
                   <Route path="/t/:slug/admin" element={<TournamentAccessGuard><Admin /></TournamentAccessGuard>} />

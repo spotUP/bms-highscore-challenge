@@ -175,7 +175,7 @@ const AdvancedConfetti: React.FC<AdvancedConfettiProps> = ({ isActive, onComplet
         width: '100%',
         height: '100%',
         pointerEvents: 'none',
-        zIndex: 999999
+        zIndex: 55
       }}
     />
   );
