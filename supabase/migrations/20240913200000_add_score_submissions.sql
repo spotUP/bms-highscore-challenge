@@ -46,9 +46,11 @@ GRANT ALL ON public.score_submissions TO authenticated;
 GRANT ALL ON public.score_submissions TO service_role;
 
 -- Create policy to allow users to insert score submissions
+DROP POLICY IF EXISTS "Allow insert for authenticated users" ON public.score_submissions;
 CREATE POLICY "Allow insert for authenticated users" ON public.score_submissions
   FOR INSERT TO authenticated WITH CHECK (true);
 
 -- Create policy to allow public read access (for real-time subscriptions)
+DROP POLICY IF EXISTS "Allow public read access" ON public.score_submissions;
 CREATE POLICY "Allow public read access" ON public.score_submissions
   FOR SELECT USING (true);
