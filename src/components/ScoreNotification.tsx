@@ -65,9 +65,10 @@ export const ScoreNotificationsListener: React.FC = () => {
 
     console.log('ScoreNotificationsListener: Setting up realtime subscriptions for tournament:', currentTournament.id);
 
-    // Subscribe to score submissions
+    // Subscribe to score submissions with unique channel name
+    const channelName = `score_submissions_${currentTournament.id}_${Date.now()}`;
     scoreChannelRef.current = supabase
-      .channel('score_submissions')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -141,9 +142,10 @@ export const ScoreNotificationsListener: React.FC = () => {
         console.log('ScoreNotificationsListener: Score subscription status:', status);
       });
 
-    // Subscribe to achievement unlocks (global)
+    // Subscribe to achievement unlocks (global) with unique channel name
+    const achievementChannelName = `player_achievements_${Date.now()}`;
     achievementChannelRef.current = supabase
-      .channel('player_achievements')
+      .channel(achievementChannelName)
       .on(
         'postgres_changes',
         {
