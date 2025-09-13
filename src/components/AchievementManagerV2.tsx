@@ -398,6 +398,8 @@ const AchievementManagerV2 = () => {
 
   // Delete an achievement via confirmation dialog
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  // Clear all achievements dialog
+  const [clearAllDialog, setClearAllDialog] = useState<{ open: boolean }>({ open: false });
   const handleDeleteAchievement = (id: string) => setDeleteDialog({ open: true, id });
   const confirmDeleteAchievement = async () => {
     if (!deleteDialog.id) return;
@@ -422,6 +424,48 @@ const AchievementManagerV2 = () => {
       toast({
         title: "Error",
         description: "Failed to delete achievement",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Clear all achievements for current tournament
+  const confirmClearAllAchievements = async () => {
+    if (!currentTournament) return;
+    
+    try {
+      // Delete all achievements for the current tournament
+      const { error } = await supabase
+        .from('achievements')
+        .delete()
+        .eq('tournament_id', currentTournament.id);
+        
+      if (error) throw error;
+      
+      // Also clear all player achievements for this tournament
+      const { error: playerAchievementsError } = await supabase
+        .from('player_achievements')
+        .delete()
+        .eq('tournament_id', currentTournament.id);
+        
+      if (playerAchievementsError) {
+        console.warn('Error clearing player achievements:', playerAchievementsError);
+      }
+      
+      toast({
+        title: "Success",
+        description: `All achievements cleared for ${currentTournament.name}`,
+      });
+      
+      setClearAllDialog({ open: false });
+      loadAchievements();
+      await invalidateQueries();
+      
+    } catch (error) {
+      console.error('Error clearing all achievements:', error);
+      toast({
+        title: "Error",
+        description: "Failed to clear achievements",
         variant: "destructive",
       });
     }
@@ -565,6 +609,14 @@ const AchievementManagerV2 = () => {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <Button
+              variant="destructive"
+              onClick={() => setClearAllDialog({ open: true })}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Clear All Achievements
+            </Button>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button onClick={openCreateDialog}>
@@ -609,6 +661,17 @@ const AchievementManagerV2 = () => {
         cancelText="Cancel"
         variant="destructive"
         onConfirm={confirmDeleteAchievement}
+      />
+
+      <ConfirmationDialog
+        open={clearAllDialog.open}
+        onOpenChange={(open) => setClearAllDialog({ open })}
+        title="Clear All Achievements"
+        description={`Are you sure you want to delete ALL achievements and player progress for "${currentTournament?.name}"? This will permanently remove all achievements and their unlock records. This action cannot be undone.`}
+        confirmText="Clear All Achievements"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={confirmClearAllAchievements}
       />
 
                 <div className="space-y-2">
