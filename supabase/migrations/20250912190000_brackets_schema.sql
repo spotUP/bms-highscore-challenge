@@ -69,21 +69,27 @@ alter table public.bracket_participants enable row level security;
 alter table public.bracket_matches enable row level security;
 
 -- Owners can manage their competitions; public read if is_public
-create policy if not exists bracket_competitions_select on public.bracket_competitions
+drop policy if exists bracket_competitions_select on public.bracket_competitions;
+create policy bracket_competitions_select on public.bracket_competitions
   for select using (is_public or auth.uid() = created_by);
-create policy if not exists bracket_competitions_insert on public.bracket_competitions
+drop policy if exists bracket_competitions_insert on public.bracket_competitions;
+create policy bracket_competitions_insert on public.bracket_competitions
   for insert with check (auth.uid() = created_by);
-create policy if not exists bracket_competitions_update on public.bracket_competitions
+drop policy if exists bracket_competitions_update on public.bracket_competitions;
+create policy bracket_competitions_update on public.bracket_competitions
   for update using (auth.uid() = created_by) with check (auth.uid() = created_by);
-create policy if not exists bracket_competitions_delete on public.bracket_competitions
+drop policy if exists bracket_competitions_delete on public.bracket_competitions;
+create policy bracket_competitions_delete on public.bracket_competitions
   for delete using (auth.uid() = created_by);
 
 -- Participants follow competition visibility; only owner can mutate
-create policy if not exists bracket_participants_select on public.bracket_participants
+drop policy if exists bracket_participants_select on public.bracket_participants;
+create policy bracket_participants_select on public.bracket_participants
   for select using (
     exists(select 1 from public.bracket_competitions c where c.id = competition_id and (c.is_public or c.created_by = auth.uid()))
   );
-create policy if not exists bracket_participants_mutate on public.bracket_participants
+drop policy if exists bracket_participants_mutate on public.bracket_participants;
+create policy bracket_participants_mutate on public.bracket_participants
   for all using (
     exists(select 1 from public.bracket_competitions c where c.id = competition_id and c.created_by = auth.uid())
   ) with check (
@@ -91,11 +97,13 @@ create policy if not exists bracket_participants_mutate on public.bracket_partic
   );
 
 -- Matches visible if competition visible; owner can mutate
-create policy if not exists bracket_matches_select on public.bracket_matches
+drop policy if exists bracket_matches_select on public.bracket_matches;
+create policy bracket_matches_select on public.bracket_matches
   for select using (
     exists(select 1 from public.bracket_competitions c where c.id = competition_id and (c.is_public or c.created_by = auth.uid()))
   );
-create policy if not exists bracket_matches_mutate on public.bracket_matches
+drop policy if exists bracket_matches_mutate on public.bracket_matches;
+create policy bracket_matches_mutate on public.bracket_matches
   for all using (
     exists(select 1 from public.bracket_competitions c where c.id = competition_id and c.created_by = auth.uid())
   ) with check (
