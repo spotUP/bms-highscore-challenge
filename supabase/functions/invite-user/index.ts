@@ -93,15 +93,41 @@ const handler = async (req: Request): Promise<Response> => {
       const res = await supabase.auth.admin.inviteUserByEmail(email, {
         redirectTo: `${redirectBase.replace(/\/$/, '')}/auth`
       });
+      // Capture the raw response for diagnostics
+      if (res.error) {
+        console.warn("inviteUserByEmail returned error", {
+          message: res.error?.message,
+          name: res.error?.name,
+          status: (res as any)?.status,
+          statusText: (res as any)?.statusText,
+          error: res.error
+        });
+      }
       inviteData = res.data;
       inviteError = res.error;
     } catch (e: any) {
+      console.error("Exception thrown by inviteUserByEmail", {
+        message: e?.message,
+        name: e?.name,
+        stack: e?.stack,
+        code: e?.code
+      });
       inviteError = e;
     }
 
     let usedFallback = false;
     if (inviteError) {
       console.warn("Email invite failed, falling back to link generation:", inviteError?.message || inviteError);
+      // Extra diagnostics to help troubleshoot SMTP setup issues
+      console.warn("Invite fallback diagnostics", {
+        redirectBase,
+        siteUrlEnv: {
+          SITE_URL: Deno.env.get('SITE_URL') || null,
+          PUBLIC_SITE_URL: Deno.env.get('PUBLIC_SITE_URL') || null
+        },
+        errorType: typeof inviteError,
+        fullError: inviteError
+      });
       const alt = await (supabase as any).auth.admin.generateLink({
         type: 'invite',
         email,
