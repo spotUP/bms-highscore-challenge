@@ -76,15 +76,15 @@ const Competition: React.FC = () => {
 
         // Check if this was the final match - find the highest round number with a winner
         const sortedMatches = data.matches.sort((a, b) => b.round - a.round);
-        const finalMatch = sortedMatches.find(m => m.winner_id);
+        const finalMatch = sortedMatches.find(m => m.winner_participant_id);
 
         // Only show winner celebration if this is the actual final match
         const isActualFinal = finalMatch && sortedMatches.filter(m => m.round === finalMatch.round).length === 1;
 
-        console.log('Final match check:', { finalMatch, isActualFinal, allMatches: data.matches.map(m => ({ round: m.round, winner: m.winner_id })) });
+        console.log('Final match check:', { finalMatch, isActualFinal, allMatches: data.matches.map(m => ({ round: m.round, winner: m.winner_participant_id })) });
 
-        if (finalMatch?.winner_id && isActualFinal) {
-          const winner = data.players.find(p => p.id === finalMatch.winner_id);
+        if (finalMatch?.winner_participant_id && isActualFinal) {
+          const winner = data.players.find(p => p.id === finalMatch.winner_participant_id);
           if (winner) {
             console.log('Tournament completed! Winner:', winner.name);
             // Small delay to ensure UI updates before showing the modal
@@ -106,7 +106,7 @@ const Competition: React.FC = () => {
     const match = matches.find(m => m.id === matchId);
     console.log('Match found:', match);
 
-    if (match && match.winner_id === participantId) {
+    if (match && match.winner_participant_id === participantId) {
       // Check if this is the final match (highest round)
       const sortedMatches = matches.sort((a, b) => b.round - a.round);
       const isFinalMatch = sortedMatches[0]?.id === matchId;
@@ -169,8 +169,8 @@ const Competition: React.FC = () => {
       position: m.position,
       participant1_id: m.participant1_id,
       participant2_id: m.participant2_id,
-      winner_participant_id: m.winner_id,
-      status: m.winner_id ? 'completed' : 'pending'
+      winner_participant_id: m.winner_participant_id,
+      status: m.winner_participant_id ? 'completed' : 'pending'
     }));
   }, [matches]);
 

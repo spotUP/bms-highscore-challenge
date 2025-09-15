@@ -328,8 +328,8 @@ const BracketAdmin: React.FC = () => {
     if (!selected) return;
     
     // Optimistically update the UI
-    const optimisticMatches = matches.map(m => 
-      m.id === matchId ? { ...m, winner_id: winnerId } : m
+    const optimisticMatches = matches.map(m =>
+      m.id === matchId ? { ...m, winner_participant_id: winnerId } : m
     );
     setMatches(optimisticMatches);
     
@@ -345,8 +345,8 @@ const BracketAdmin: React.FC = () => {
       
       // Check if this was the final match (round 1000 or 1001)
       const finalMatch = data.matches.find(m => m.round === 1000 || m.round === 1001);
-      if (finalMatch?.winner_id) {
-        const winner = data.players.find(p => p.id === finalMatch.winner_id);
+      if (finalMatch?.winner_participant_id) {
+        const winner = data.players.find(p => p.id === finalMatch.winner_participant_id);
         if (winner) {
           // Small delay to ensure UI updates before showing the modal
           setTimeout(() => {
@@ -370,7 +370,7 @@ const BracketAdmin: React.FC = () => {
   const onPlayerClick = (matchId: string, participantId: string, participantName: string) => {
     // Check if this is a completed grand final match and the clicked participant is the winner
     const match = matches.find(m => m.id === matchId);
-    if (match && match.round >= 1000 && match.winner_id === participantId) {
+    if (match && match.round >= 1000 && match.winner_participant_id === participantId) {
       // This is the tournament winner being clicked
       setWinnerName(participantName);
       setWinnerOpen(true);
@@ -439,8 +439,8 @@ const BracketAdmin: React.FC = () => {
       position: m.position,
       participant1_id: m.participant1_id,
       participant2_id: m.participant2_id,
-      winner_participant_id: m.winner_id,
-      status: m.winner_id ? 'completed' : 'pending'
+      winner_participant_id: m.winner_participant_id,
+      status: m.winner_participant_id ? 'completed' : 'pending'
     }));
   }, [matches]);
 
