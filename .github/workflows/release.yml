@@ -41,7 +41,7 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Verify all required checks have passed
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const { data: checks } = await github.rest.checks.listForRef({
