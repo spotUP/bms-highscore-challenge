@@ -95,7 +95,7 @@ export const useScoreSubmissions = () => {
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'score_submissions',
+          table: 'scores',
         },
         (payload) => {
           showScoreNotification(payload.new as ScoreSubmission);

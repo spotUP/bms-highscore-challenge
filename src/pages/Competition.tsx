@@ -5,6 +5,7 @@ import BracketView from '@/components/BracketView';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { usePageTransitions } from '@/hooks/usePageTransitions';
 import ThemeSelector from '@/components/ThemeSelector';
 import TournamentDropdown from '@/components/TournamentDropdown';
 import PerformanceModeToggle from '@/components/PerformanceModeToggle';
@@ -17,6 +18,7 @@ const Competition: React.FC = () => {
   const { user, isAdmin, signOut } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { animatedNavigate } = usePageTransitions({ exitDuration: 600 });
   const [selected, setSelected] = useState<Tournament | null>(null);
   const [participants, setParticipants] = useState<TournamentPlayer[]>([]);
   const [matches, setMatches] = useState<TournamentMatch[]>([]);
@@ -175,53 +177,7 @@ const Competition: React.FC = () => {
   }, [matches]);
 
   return (
-    <div className="h-[100dvh] overflow-hidden flex flex-col text-white relative z-10" style={{ background: 'var(--page-bg)' }}>
-      {/* Top Navigation */}
-      <div className="shrink-0 bg-black/40 border-b border-white/10 p-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight">Retro Ranks</h1>
-          <div className="ml-auto flex items-center">
-            <div className="hidden md:flex gap-4 items-center">
-              {/* Digital Clock */}
-              <div className="font-arcade font-bold text-lg animated-gradient">
-                {currentTime.toLocaleTimeString('en-GB', { 
-                  hour12: false, 
-                  hour: '2-digit', 
-                  minute: '2-digit', 
-                  second: '2-digit' 
-                })}
-              </div>
-              {/* Theme Selector */}
-              <ThemeSelector />
-              
-              {user ? (
-                <>
-                  <PerformanceModeToggle displayType="switch" />
-                  <TournamentDropdown />
-                  <Button variant="outline" onClick={() => navigate('/admin/brackets')}>
-                    Brackets
-                  </Button>
-                  <Button variant="outline" onClick={() => navigate('/statistics')}>
-                    Statistics
-                  </Button>
-                  {isAdmin && (
-                    <Button variant="outline" onClick={() => navigate('/admin')}>
-                      Admin Panel
-                    </Button>
-                  )}
-                  <Button variant="outline" onClick={signOut}>
-                    Sign Out
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button onClick={() => navigate('/auth')} variant="outline">Sign In</Button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="h-[100dvh] overflow-hidden flex flex-col">
 
       {/* Main Content - Bracket View */}
       <div className="flex-1 min-h-0 overflow-hidden p-6">
@@ -235,7 +191,7 @@ const Competition: React.FC = () => {
             <p className="text-gray-400 max-w-md mb-6">
               This tournament doesn't have any players yet. Please add players in the admin panel to view the bracket.
             </p>
-            <Button onClick={() => navigate('/admin/brackets')} variant="outline">
+            <Button onClick={() => animatedNavigate('/admin/brackets')} variant="outline">
               Go to Admin Panel
             </Button>
           </div>

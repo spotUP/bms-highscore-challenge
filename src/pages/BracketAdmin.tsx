@@ -10,10 +10,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import BracketView from '@/components/BracketView';
-import ThemeSelector from '@/components/ThemeSelector';
-import PerformanceModeToggle from '@/components/PerformanceModeToggle';
-import TournamentDropdown from '@/components/TournamentDropdown';
-import MobileMenu from '@/components/MobileMenu';
 import { Switch } from '@/components/ui/switch';
 import {
   AlertDialog,
@@ -29,10 +25,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import AdvancedConfetti from '@/components/AdvancedConfetti';
 import { createPortal } from 'react-dom';
 
-const BracketAdmin: React.FC = () => {
-  const { user, signOut, isAdmin } = useAuth();
+interface BracketAdminProps {
+  isExiting?: boolean;
+}
+
+const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
+  const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+
   const { tournaments, loading, refresh, createTournament, addPlayers, generateBracket, reportWinner, getTournamentData, deleteTournament } = useBrackets();
 
   const [form, setForm] = useState({ name: '', bracketType: 'single' as 'single' | 'double' });
@@ -54,33 +56,9 @@ const BracketAdmin: React.FC = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [lastProcessedTournamentId, setLastProcessedTournamentId] = useState<string | null>(null);
-  const [currentTime, setCurrentTime] = useState(new Date());
 
   const ownedTournaments = useMemo(() => tournaments.filter(t => t.created_by === user?.id), [tournaments, user?.id]);
 
-  // Clock update effect
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      setCurrentTime(prevTime => {
-        const prevDisplay = prevTime.toLocaleTimeString('en-GB', {
-          hour12: false,
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        });
-        const newDisplay = now.toLocaleTimeString('en-GB', {
-          hour12: false,
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        });
-        return prevDisplay !== newDisplay ? now : prevTime;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
 
   useEffect(() => {
     if (!loading) {
@@ -465,77 +443,27 @@ const BracketAdmin: React.FC = () => {
   }, [selected, matches.length, bracketMatches, quickNamesList, players]);
 
   return (
-    <div className="h-[100dvh] overflow-hidden flex flex-col text-white relative z-10" style={{ background: 'var(--page-bg)' }}>
+    <div className="h-[100dvh] overflow-hidden flex flex-col">
       <div className="shrink-0 p-3 md:p-4">
-        <div className="flex items-center">
-          {/* Left aligned title */}
-          <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight animate-slide-in-left">
-            Bracket Tournaments
-          </h1>
-
-          {/* Right aligned navigation */}
-          <div className="ml-auto flex items-center">
-            {/* Desktop Menu */}
-            <div className="hidden md:flex gap-4 items-center">
-              {/* Digital Clock */}
-              <div className="font-arcade font-bold text-lg animated-gradient">
-                {currentTime.toLocaleTimeString('en-GB', {
-                  hour12: false,
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit'
-                })}
-              </div>
-              {user ? (
-                <>
-                  <PerformanceModeToggle displayType="switch" />
-                  {/* Theme Selector */}
-                  <ThemeSelector />
-                  <TournamentDropdown />
-                  <Button variant="outline" onClick={() => navigate('/')}>
-                    Back to Scores
-                  </Button>
-                  {selected && (
-                    <Button variant="outline" onClick={() => window.location.assign(`/tournaments?c=${selected.id}`)}>
-                      Competition View
-                    </Button>
-                  )}
-                  {selected && (
-                    <Button variant="destructive" onClick={() => setRestartOpen(true)}>
-                      Restart Tournament
-                    </Button>
-                  )}
-                  <Button variant="outline" onClick={() => navigate('/statistics')}>
-                    Statistics
-                  </Button>
-                  {isAdmin && (
-                    <Button variant="outline" onClick={() => navigate('/admin')}>
-                      Admin Panel
-                    </Button>
-                  )}
-                  <Button variant="outline" onClick={signOut}>
-                    Sign Out
-                  </Button>
-                </>
-              ) : (
-                <>
-                  {/* Theme Selector */}
-                  <ThemeSelector />
-                  <Button onClick={() => navigate('/auth')} variant="outline">
-                    Sign In
-                  </Button>
-                </>
-              )}
-            </div>
-
-            {/* Mobile Menu */}
-            <MobileMenu />
+        <div className="flex items-center justify-between">
+          {/* Page-specific actions for brackets */}
+          <div className="flex gap-4 items-center">
+            {selected && (
+              <>
+                <Button variant="outline" onClick={() => window.location.assign(`/tournaments?c=${selected.id}`)}>
+                  Competition View
+                </Button>
+                <Button variant="destructive" onClick={() => setRestartOpen(true)}>
+                  Restart Tournament
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </div>
       {/* Desktop two-column layout */}
       <div className="grid grid-cols-12 gap-4 flex-1 min-h-0 overflow-hidden p-4">
-      <div className="col-span-12 lg:col-span-4 xl:col-span-3 space-y-4 min-h-0 h-full pr-2"><div className="fly-in-left-offscreen anim-delay-50 h-full min-h-0">
+      <div className="col-span-12 lg:col-span-4 xl:col-span-3 space-y-4 min-h-0 h-full pr-2"><div className={`${isExiting ? 'fly-out-left-offscreen' : 'fly-in-left-offscreen anim-delay-50'} h-full min-h-0`}>
       {/* Unified Left Panel */}
       <Card className="h-full flex flex-col overflow-hidden">
         <CardContent className="flex-1 min-h-0 overflow-auto space-y-5">
@@ -668,7 +596,7 @@ Player D
         </CardContent>
       </Card>
       </div></div>
-      <div className="col-span-12 lg:col-span-8 xl:col-span-9 min-h-0 h-full flex flex-col"><div className="fly-in-right-offscreen anim-delay-100 h-full flex flex-col min-h-0">
+      <div className="col-span-12 lg:col-span-8 xl:col-span-9 min-h-0 h-full flex flex-col"><div className={`${isExiting ? 'fly-out-right-offscreen' : 'fly-in-right-offscreen anim-delay-100'} h-full flex flex-col min-h-0`}>
         <Card className="h-full flex flex-col overflow-hidden">
           <CardHeader className="pb-3 shrink-0">
             <div className="flex items-center justify-between">

@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
+import { usePageTransitions } from "@/hooks/usePageTransitions";
 import PerformanceModeToggle from "@/components/PerformanceModeToggle";
 import ThemeSelector from "@/components/ThemeSelector";
 import PublicTournamentBrowser from "@/components/PublicTournamentBrowser";
@@ -18,6 +19,7 @@ const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = fa
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const { animatedNavigate } = usePageTransitions({ exitDuration: 600 });
 
   const handleMenuToggle = () => {
     setIsOpen(!isOpen);
@@ -25,6 +27,11 @@ const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = fa
 
   const handleNavigation = (action: () => void) => {
     action();
+    setIsOpen(false);
+  };
+
+  const handleAnimatedNavigation = (path: string) => {
+    animatedNavigate(path);
     setIsOpen(false);
   };
 
@@ -50,7 +57,7 @@ const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = fa
                 {!hideBracketsLink && (
                   <Button
                     variant="ghost"
-                    onClick={() => handleNavigation(() => navigate('/admin/brackets'))}
+                    onClick={() => handleAnimatedNavigation('/admin/brackets')}
                     className="w-full justify-start text-left"
                   >
                     Brackets
@@ -68,7 +75,7 @@ const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = fa
                 {!hideStatistics && (
                   <Button
                     variant="ghost"
-                    onClick={() => handleNavigation(() => navigate('/statistics'))}
+                    onClick={() => handleAnimatedNavigation('/statistics')}
                     className="w-full justify-start text-left"
                   >
                     Statistics
@@ -76,7 +83,7 @@ const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = fa
                 )}
                 <Button
                   variant="ghost"
-                  onClick={() => handleNavigation(() => navigate('/achievements'))}
+                  onClick={() => handleAnimatedNavigation('/achievements')}
                   className="w-full justify-start text-left"
                 >
                   Achievements
@@ -94,7 +101,7 @@ const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = fa
                 {isAdmin && (
                   <Button
                     variant="ghost"
-                    onClick={() => handleNavigation(() => navigate('/admin'))}
+                    onClick={() => handleAnimatedNavigation('/admin')}
                     className="w-full justify-start text-left"
                   >
                     Admin Panel
@@ -115,7 +122,7 @@ const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = fa
                 </div>
                 <Button
                   variant="ghost"
-                  onClick={() => handleNavigation(() => navigate('/auth'))}
+                  onClick={() => handleAnimatedNavigation('/auth')}
                   className="w-full justify-start text-left"
                 >
                   Sign In

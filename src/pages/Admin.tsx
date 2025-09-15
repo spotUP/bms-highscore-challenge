@@ -28,11 +28,17 @@ import DemolitionManQRSubmit from "@/components/DemolitionManQRSubmit";
 import DemolitionManEnsure from "@/components/DemolitionManEnsure";
 import DemolitionManScoreManager from "@/components/DemolitionManScoreManager";
 import PerformanceToggle from "@/components/PerformanceToggle";
+import CompetitionManager from "@/components/CompetitionManager";
 import AchievementManagerV2 from "@/components/AchievementManagerV2";
 import BracketManagement from "@/components/BracketManagement";
-import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from "@/utils/designSystem";
+import FunctionTests from "@/components/FunctionTests";
+import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer } from "@/utils/designSystem";
 import { useUserRoles } from "@/hooks/useUserRoles";
 import { useTournament } from "@/contexts/TournamentContext";
+
+interface AdminProps {
+  isExiting?: boolean;
+}
 
 interface Game {
   id: string;
@@ -870,7 +876,7 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
   );
 };
 
-const Admin = () => {
+const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
   const { user, isAdmin, loading } = useAuth();
   const { currentTournament, userTournaments, hasPermission, updateTournament, deleteTournament, refreshTournaments, currentUserRole, cloneTournament, switchTournament, loading: tournamentsLoading } = useTournament();
   const navigate = useNavigate();
@@ -904,9 +910,13 @@ const Admin = () => {
   const [tournamentFilters, setTournamentFilters] = useState<Record<string, string>>({});
   // Persisted active tab
   const [activeTab, setActiveTab] = useState<string>('create-tournament');
+  const [tabTransitioning, setTabTransitioning] = useState(false);
+  const [previousTab, setPreviousTab] = useState<string>('create-tournament');
   // System subtab state
   const [systemSubTab, setSystemSubTab] = useState<string>('performance');
+  const [systemSubTabTransitioning, setSystemSubTabTransitioning] = useState(false);
   const [competitionSubTab, setCompetitionSubTab] = useState<string>('tournaments');
+  const [competitionSubTabTransitioning, setCompetitionSubTabTransitioning] = useState(false);
   // Bulk selection removed
   // Inline score edits: map scoreId -> { player_name, score }
   const [inlineScoreEdits, setInlineScoreEdits] = useState<Record<string, { player_name: string; score: string }>>({});
@@ -1526,15 +1536,12 @@ const Admin = () => {
     }
   };
 
-  if (!initialLoaded && (loading || tournamentsLoading || gamesLoading)) {
-    return <LoadingSpinner text="Loading admin panel..." />;
-  }
 
   if (!user || (!isAdmin && !hasPermission('admin'))) {
     return null; // Will redirect via useEffect
   }
 
-  if (!currentTournament) {
+  if (!currentTournament && !tournamentsLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center relative z-10"
            style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
@@ -1554,34 +1561,74 @@ const Admin = () => {
 
   const pageLayout = getPageLayout();
   
-  return (
-    <div {...pageLayout}>
-      <PageContainer className="max-w-6xl mx-auto">
-        <PageHeader 
-          title="Admin Panel"
-          subtitle={`Managing ${currentTournament?.name} tournament`}
-        >
-          <div className="flex items-center gap-4">
-            <Button 
-              onClick={() => navigate('/')} 
-              variant="outline"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Leaderboard
-            </Button>
-          </div>
-        </PageHeader>
+  const shouldAnimate = !loading && !tournamentsLoading && !gamesLoading;
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+  const handleTabChange = (newTab: string) => {
+    if (newTab !== activeTab) {
+      setPreviousTab(activeTab);
+      setTabTransitioning(true);
+
+      // Switch active tab immediately so tab indicator changes during exit animation
+      setActiveTab(newTab);
+
+      // Wait for animations to complete
+      setTimeout(() => {
+        setTabTransitioning(false);
+      }, 440); // Wait for full cycle: exit (200ms) + enter (200ms) + buffer (40ms)
+    }
+  };
+
+  const handleSystemSubTabChange = (newTab: string) => {
+    if (newTab !== systemSubTab) {
+      setSystemSubTabTransitioning(true);
+      setSystemSubTab(newTab);
+
+      setTimeout(() => {
+        setSystemSubTabTransitioning(false);
+      }, 440);
+    }
+  };
+
+  const handleCompetitionSubTabChange = (newTab: string) => {
+    if (newTab !== competitionSubTab) {
+      setCompetitionSubTabTransitioning(true);
+      setCompetitionSubTab(newTab);
+
+      setTimeout(() => {
+        setCompetitionSubTabTransitioning(false);
+      }, 440);
+    }
+  };
+
+  return (
+    <div {...pageLayout} className={`${pageLayout.className || ''}`}>
+      <PageContainer className="max-w-6xl mx-auto">
+        <div className={`${isExiting ? 'animate-slide-out-bottom' : shouldAnimate ? 'animate-slide-in-bottom' : 'opacity-0'}`}>
+          <PageHeader
+            title="Admin Panel"
+            subtitle={`Managing ${currentTournament?.name} tournament`}
+          >
+            <div className="flex items-center gap-4">
+              <Button
+                onClick={() => navigate('/')}
+                variant="outline"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Back to Leaderboard
+              </Button>
+            </div>
+          </PageHeader>
+
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="grid w-full grid-cols-4 bg-gray-900 border border-white/20">
-            <TabsTrigger value="create-tournament" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">Competitions</TabsTrigger>
+            <TabsTrigger value="create-tournament" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Trophy className="w-4 h-4 mr-2" />Competitions</TabsTrigger>
             <TabsTrigger value="achievements" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Trophy className="w-4 h-4 mr-2" />Achievements</TabsTrigger>
             <TabsTrigger value="users" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Users className="w-4 h-4 mr-2" />Users</TabsTrigger>
             <TabsTrigger value="system" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><TestTube className="w-4 h-4 mr-2" />System</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="create-tournament" className="mt-6">
-            <Tabs value={competitionSubTab} onValueChange={setCompetitionSubTab} className="w-full">
+          <TabsContent value="create-tournament" className={`mt-6 ${tabTransitioning ? 'animate-tab-out' : 'animate-tab-in'}`}>
+            <Tabs value={competitionSubTab} onValueChange={handleCompetitionSubTabChange} className="w-full">
               <TabsList className="grid w-full grid-cols-3 bg-gray-700 border border-white/10 rounded-md">
                 <TabsTrigger value="tournaments" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
                   <Trophy className="w-3 h-3 mr-1" />Highscore Tournaments
@@ -1594,7 +1641,10 @@ const Admin = () => {
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="tournaments" className="mt-6">
+              <TabsContent value="tournaments" className={`mt-6 ${competitionSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in'}`}>
+                <div className="space-y-6">
+                  <CompetitionManager />
+
                 <Card className={getCardStyle('primary')}>
                   <CardHeader>
                     <div className="flex items-center justify-between gap-4 w-full">
@@ -1877,9 +1927,10 @@ const Admin = () => {
                 </div>
               </CardContent>
             </Card>
+                </div>
               </TabsContent>
 
-              <TabsContent value="brackets" className="mt-6">
+              <TabsContent value="brackets" className={`mt-6 ${competitionSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in'}`}>
                 <Card className={getCardStyle('primary')}>
                   <CardHeader>
                     <CardTitle className={getTypographyStyle('h3')}>Bracket Tournaments</CardTitle>
@@ -1890,7 +1941,7 @@ const Admin = () => {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="standing" className="mt-6">
+              <TabsContent value="standing" className={`mt-6 ${competitionSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in'}`}>
                 <Card className={getCardStyle('primary')}>
                   <CardHeader>
                     <CardTitle className={getTypographyStyle('h3')}>Standing Competition</CardTitle>
@@ -1916,9 +1967,9 @@ const Admin = () => {
             />
           </TabsContent>
 
-          <TabsContent value="system" className="mt-6">
-            <Tabs value={systemSubTab} onValueChange={setSystemSubTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-4 bg-gray-700 border border-white/10 rounded-md">
+          <TabsContent value="system" className={`mt-6 ${tabTransitioning ? 'animate-tab-out' : 'animate-tab-in'}`}>
+            <Tabs value={systemSubTab} onValueChange={handleSystemSubTabChange} className="w-full">
+              <TabsList className="grid w-full grid-cols-5 bg-gray-700 border border-white/10 rounded-md">
                 <TabsTrigger value="performance" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
                   <Zap className="w-3 h-3 mr-1" />Performance
                 </TabsTrigger>
@@ -1931,30 +1982,37 @@ const Admin = () => {
                 <TabsTrigger value="webhooks" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
                   <Webhook className="w-3 h-3 mr-1" />Webhooks
                 </TabsTrigger>
+                <TabsTrigger value="tests" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+                  <TestTube className="w-3 h-3 mr-1" />Tests
+                </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="performance" className="mt-6">
+              <TabsContent value="performance" className={`mt-6 ${systemSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in'}`}>
                 <Card className={getCardStyle('primary')}>
                   <CardHeader><CardTitle className={getTypographyStyle('h3')}>Performance Settings</CardTitle></CardHeader>
                   <CardContent><PerformanceToggle /></CardContent>
                 </Card>
               </TabsContent>
 
-              <TabsContent value="demolition" className="mt-6">
+              <TabsContent value="demolition" className={`mt-6 ${systemSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in'}`}>
                 <DemolitionManEnsure />
               </TabsContent>
 
-              <TabsContent value="reset" className="mt-6">
+              <TabsContent value="reset" className={`mt-6 ${systemSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in'}`}>
                 <ResetFunctions />
               </TabsContent>
 
-              <TabsContent value="webhooks" className="mt-6">
+              <TabsContent value="webhooks" className={`mt-6 ${systemSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in'}`}>
                 <WebhookConfig />
+              </TabsContent>
+
+              <TabsContent value="tests" className={`mt-6 ${systemSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in'}`}>
+                <FunctionTests />
               </TabsContent>
             </Tabs>
           </TabsContent>
-          <TabsContent value="achievements" className="mt-6"><AchievementManagerV2 /></TabsContent>
-          <TabsContent value="users" className="mt-6"><UserManagement /></TabsContent>
+          <TabsContent value="achievements" className={`mt-6 ${tabTransitioning ? 'animate-tab-out' : 'animate-tab-in'}`}><AchievementManagerV2 /></TabsContent>
+          <TabsContent value="users" className={`mt-6 ${tabTransitioning ? 'animate-tab-out' : 'animate-tab-in'}`}><UserManagement /></TabsContent>
         </Tabs>
 
         {/* Shared Add/Edit Game Dialog */}
@@ -2056,6 +2114,7 @@ const Admin = () => {
           variant="destructive"
           onConfirm={confirmDeleteScore}
         />
+        </div>
       </PageContainer>
     </div>
   );

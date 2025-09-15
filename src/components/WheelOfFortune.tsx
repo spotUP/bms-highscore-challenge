@@ -10,8 +10,8 @@ interface WheelOfFortuneProps {
 const getSegmentColors = () => {
   // Classic game show colors: bright, contrasting, and exciting
   return [
-    '#FF6B35', // Bright Orange
-    '#F7931E', // Golden Orange
+    '#FF8C00', // Dark Orange (changed from Bright Orange)
+    '#FF8C00', // Dark Orange (changed from Golden Orange)
     '#FFD23F', // Bright Yellow
     '#06FFA5', // Neon Green
     '#4ECDC4', // Turquoise
@@ -51,7 +51,7 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
   const [isSpinning, setIsSpinning] = useState(false);
   const [currentRotation, setCurrentRotation] = useState(0);
   const [spinVelocity, setSpinVelocity] = useState(0);
-  const [shuffledNames, setShuffledNames] = useState<string[]>([]);
+  const [wheelNames, setWheelNames] = useState<string[]>([]);
   const [segmentColors, setSegmentColors] = useState<string[]>([]);
   const wheelRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number>();
@@ -59,13 +59,13 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const [tickerAnimated, setTickerAnimated] = useState(false);
 
-  // Initialize colors and shuffle names when they change
+  // Initialize colors and use names directly (allowing duplicates)
   useEffect(() => {
     setSegmentColors(getSegmentColors());
-    setShuffledNames(shuffleArray(names));
+    setWheelNames(names); // Use names directly without shuffling to allow duplicates
   }, [names]);
 
-  const segmentAngle = 360 / shuffledNames.length;
+  const segmentAngle = 360 / wheelNames.length;
 
   // Create natural click sound using Web Audio API
   const playTickSound = (velocity: number) => {
@@ -136,12 +136,12 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
 
   // Smooth physics-based spinning like Wheel of Names
   const spinWheel = () => {
-    if (isSpinning || shuffledNames.length === 0) return;
+    if (isSpinning || wheelNames.length === 0) return;
 
     setIsSpinning(true);
 
-    // Random initial velocity with some variation - increased for longer spin
-    const baseVelocity = 25 + Math.random() * 15; // 25-40 degrees per frame
+    // Random initial velocity with some variation - doubled for much longer spin
+    const baseVelocity = 50 + Math.random() * 30; // 50-80 degrees per frame (doubled)
     const velocity = baseVelocity;
     setSpinVelocity(velocity);
 
@@ -150,18 +150,18 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
 
     const animate = () => {
       setSpinVelocity(prev => {
-        const newVelocity = prev * 0.985; // Slower deceleration for longer spin
+        let newVelocity = prev * 0.992; // Even slower deceleration for much longer spin
 
         setCurrentRotation(prevRot => {
-          const newRotation = prevRot + newVelocity;
+          let actualNewRotation = prevRot + newVelocity;
 
           // Calculate tick sounds - match the visual pegs exactly
           const pegsPerSegment = 2;
-          const totalPegs = shuffledNames.length * pegsPerSegment;
+          const totalPegs = wheelNames.length * pegsPerSegment;
           const pegAngle = 360 / totalPegs;
 
           // Normalize rotations to 0-360 range for consistent comparison
-          const normalizedCurrent = ((newRotation % 360) + 360) % 360;
+          const normalizedCurrent = ((actualNewRotation % 360) + 360) % 360;
           const normalizedLast = ((lastTickAngle.current % 360) + 360) % 360;
 
           // Calculate which peg position we're at
@@ -169,39 +169,55 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
           const lastPegIndex = Math.floor(normalizedLast / pegAngle);
 
           // Play sound and animate ticker when we cross a peg boundary (accounts for wrap-around at 360°)
-          if (currentPegIndex !== lastPegIndex && newVelocity > 0.5) {
-            playTickSound(newVelocity);
+          if (currentPegIndex !== lastPegIndex) {
+            // Add friction effect - if wheel is moving very slowly, ticker might stick/catch
+            const frictionThreshold = 2.0; // Velocity below which ticker has friction
+            const shouldTick = newVelocity > frictionThreshold || Math.random() > 0.3; // 70% chance to tick even when slow
 
-            // Animate the ticker
-            setTickerAnimated(true);
-            setTimeout(() => setTickerAnimated(false), 100); // Quick flash
+            if (shouldTick) {
+              playTickSound(newVelocity);
+
+              // Animate the ticker with rubberband spring effect
+              setTickerAnimated(true);
+              // Spring back after the peg passes
+              setTimeout(() => setTickerAnimated(false), 400); // Much longer for boingier effect
+            }
+            // If we don't tick due to friction, add extra deceleration and bounce-back effect
+            else if (newVelocity <= frictionThreshold) {
+              // Add significant friction when ticker catches
+              newVelocity *= 0.7; // Dramatic slow down
+
+              // Create bounce-back effect - wheel temporarily reverses direction slightly
+              const bounceAmount = Math.random() * 0.5 + 0.2; // 0.2 to 0.7 degrees
+              actualNewRotation = prevRot - bounceAmount; // Small bounce backwards
+            }
           }
 
-          lastTickAngle.current = newRotation;
+          lastTickAngle.current = actualNewRotation;
 
           if (newVelocity > 0.1) {
             animationRef.current = requestAnimationFrame(animate);
-            return newRotation;
+            return actualNewRotation;
           } else {
             // Wheel has stopped - calculate winner
             // The pointer is at the top (0 degrees), so we need to find which segment it's pointing to
             // We need to account for the fact that segments start from the top and go clockwise
-            const normalizedRotation = ((newRotation % 360) + 360) % 360;
+            const normalizedRotation = ((actualNewRotation % 360) + 360) % 360;
             // Calculate which segment the pointer is pointing to
             // Since segments are positioned clockwise from the top, we need to reverse the calculation
             // Add 1 to account for the offset (pointer points to the correct segment)
             const segmentIndex = Math.floor(normalizedRotation / segmentAngle);
-            const winnerIndex = (shuffledNames.length - segmentIndex - 1) % shuffledNames.length;
-            const winner = shuffledNames[winnerIndex];
+            const winnerIndex = (wheelNames.length - segmentIndex - 1) % wheelNames.length;
+            const winner = wheelNames[winnerIndex];
 
             console.log('Winner calculation:', {
-              currentRotation: newRotation,
+              currentRotation: actualNewRotation,
               normalizedRotation,
               segmentAngle,
               segmentIndex,
               winnerIndex,
               winner,
-              shuffledNames
+              wheelNames
             });
 
             setTimeout(() => {
@@ -209,7 +225,7 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
               onWinner(winner);
             }, 500); // Small delay for dramatic effect
 
-            return newRotation;
+            return actualNewRotation;
           }
         });
 
@@ -232,13 +248,12 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
     };
   }, []);
 
-  // Reshuffle names when clicking spin
+  // Spin the wheel directly without reshuffling
   const handleSpin = () => {
-    setShuffledNames(shuffleArray(names));
-    setTimeout(() => spinWheel(), 50); // Small delay to ensure shuffle is complete
+    spinWheel();
   };
 
-  if (shuffledNames.length === 0) {
+  if (wheelNames.length === 0) {
     return (
       <div className="text-center text-gray-600">
         <div className="mb-6">
@@ -262,10 +277,10 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
           className="relative w-[600px] h-[600px] rounded-full shadow-2xl"
           style={{
             transform: `rotate(${currentRotation}deg)`,
-            background: `conic-gradient(${shuffledNames.map((_, index) => {
+            background: `conic-gradient(${wheelNames.map((_, index) => {
               const color = segmentColors[index % segmentColors.length];
-              const startAngle = (360 / shuffledNames.length) * index;
-              const endAngle = (360 / shuffledNames.length) * (index + 1);
+              const startAngle = (360 / wheelNames.length) * index;
+              const endAngle = (360 / wheelNames.length) * (index + 1);
               return `${color} ${startAngle}deg ${endAngle}deg`;
             }).join(', ')})`,
             transition: isSpinning ? 'none' : 'transform 0.2s ease-out',
@@ -275,8 +290,8 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
           }}
         >
           {/* Wheel pegs/tickers around the edge */}
-          {Array.from({ length: shuffledNames.length * 2 }, (_, index) => {
-            const pegAngle = (360 / (shuffledNames.length * 2)) * index;
+          {Array.from({ length: wheelNames.length * 2 }, (_, index) => {
+            const pegAngle = (360 / (wheelNames.length * 2)) * index;
             const pegRadius = 295; // Just inside the border
             const pegX = Math.cos((pegAngle - 90) * Math.PI / 180) * pegRadius;
             const pegY = Math.sin((pegAngle - 90) * Math.PI / 180) * pegRadius;
@@ -297,6 +312,84 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
             );
           })}
 
+          {/* Hypnotic spiral overlay */}
+          <div className="absolute inset-0 w-full h-full rounded-full z-5 pointer-events-none overflow-hidden">
+            <svg
+              width="100%"
+              height="100%"
+              viewBox="0 0 600 600"
+              className="absolute inset-0"
+              style={{ mixBlendMode: 'overlay' }}
+            >
+              <defs>
+                {/* Gradient for varying spiral width */}
+                <linearGradient id="spiralGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="rgba(255, 255, 255, 0.1)" stopWidth="2"/>
+                  <stop offset="50%" stopColor="rgba(255, 255, 255, 0.6)" stopWidth="20"/>
+                  <stop offset="100%" stopColor="rgba(255, 255, 255, 0.1)" stopWidth="2"/>
+                </linearGradient>
+              </defs>
+
+              {/* Create spiral arms with variable width */}
+              {Array.from({ length: 6 }, (_, armIndex) => {
+                const armOffset = (armIndex * 60); // 6 arms, 60 degrees apart
+                const segments = [];
+
+                // Break into very small segments for smooth width variation
+                for (let i = 0; i < 540; i += 3) { // Very small 3-degree segments
+                  const progress = i / 540; // 0 to 1 along the spiral
+                  const angle = (i + armOffset) * Math.PI / 180;
+                  const radius = 20 + progress * 270;
+                  const x = 300 + radius * Math.cos(angle);
+                  const y = 300 + radius * Math.sin(angle);
+
+                  // Next point
+                  const nextI = Math.min(i + 3, 540);
+                  const nextAngle = (nextI + armOffset) * Math.PI / 180;
+                  const nextRadius = 20 + (nextI / 540) * 270;
+                  const nextX = 300 + nextRadius * Math.cos(nextAngle);
+                  const nextY = 300 + nextRadius * Math.sin(nextAngle);
+
+                  // More dramatic width variation: very thin to very thick
+                  const strokeWidth = 1 + Math.sin(progress * Math.PI) * 25; // 1px to 26px
+
+                  segments.push(
+                    <path
+                      key={`spiral-${armIndex}-${i}`}
+                      d={`M ${x} ${y} L ${nextX} ${nextY}`}
+                      stroke="white"
+                      strokeWidth={strokeWidth}
+                      fill="none"
+                      strokeLinecap="round"
+                    />
+                  );
+                }
+
+                return segments;
+              })}
+            </svg>
+          </div>
+
+          {/* Rainbow overlay */}
+          <div
+            className="absolute inset-0 w-full h-full rounded-full z-8 pointer-events-none"
+            style={{
+              background: `conic-gradient(
+                from 0deg,
+                rgba(255, 0, 0, 0.6) 0deg,
+                rgba(255, 165, 0, 0.6) 51deg,
+                rgba(255, 255, 0, 0.6) 102deg,
+                rgba(0, 255, 0, 0.6) 153deg,
+                rgba(0, 255, 255, 0.6) 180deg,
+                rgba(0, 0, 255, 0.6) 204deg,
+                rgba(128, 0, 128, 0.6) 255deg,
+                rgba(255, 0, 255, 0.6) 306deg,
+                rgba(255, 0, 0, 0.6) 360deg
+              )`,
+              filter: 'saturate(130%) brightness(105%)'
+            }}
+          />
+
           {/* Center hub - classic game show styling */}
           <div className="absolute top-1/2 left-1/2 w-32 h-32 rounded-full transform -translate-x-1/2 -translate-y-1/2 z-10"
                style={{
@@ -314,7 +407,7 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
           </div>
 
           {/* Player names - positioned radially like Wheel of Fortune */}
-          {shuffledNames.map((name, index) => {
+          {wheelNames.map((name, index) => {
             const segmentCenterAngle = segmentAngle * index + segmentAngle / 2;
 
             // Calculate dynamic radius based on name length
@@ -358,6 +451,7 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   color: '#FFFFFF',
+                  textShadow: '3px 3px 0 #000000, -3px -3px 0 #000000, 3px -3px 0 #000000, -3px 3px 0 #000000, 2px 2px 0 #000000, -2px -2px 0 #000000, 2px -2px 0 #000000, -2px 2px 0 #000000, 1px 1px 0 #000000, -1px -1px 0 #000000, 1px -1px 0 #000000, -1px 1px 0 #000000',
                 }}
               >
                 {name}
@@ -383,38 +477,29 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
           </div>
         </div>
 
-        {/* Static ticker peg that creates the ticking sound */}
-        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 translate-y-1 z-50">
-          <div
-            className={`w-2 h-8 rounded-sm transition-transform duration-150 ease-out ${
-              tickerAnimated ? 'transform rotate-12 translate-x-1' : 'transform rotate-0 translate-x-0'
-            }`}
-            style={{
-              background: 'linear-gradient(135deg, #B8860B 0%, #DAA520 50%, #FFD700 100%)',
-              border: '1px solid #8B7355',
-              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.4)',
-              transformOrigin: 'top center', // Pivot from the top like a real ticker
-            }}
-          />
-        </div>
       </div>
 
-      {/* Spin Button - classic game show styling */}
+      {/* Static ticker peg that creates the ticking sound - positioned outside wheel container */}
+      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-4 z-50">
+        <div
+          className={`w-3 h-12 rounded-md ${
+            tickerAnimated ? 'animate-ticker-spring' : 'transform rotate-0 translate-x-0'
+          }`}
+          style={{
+            background: 'linear-gradient(135deg, #B8860B 0%, #DAA520 50%, #FFD700 100%)',
+            border: '1px solid #8B7355',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.4)',
+            transformOrigin: 'top center', // Pivot from the top like a real ticker
+          }}
+        />
+      </div>
+
+      {/* Spin Button */}
       <Button
+        variant="outline"
         onClick={handleSpin}
         disabled={isSpinning}
-        className="font-bold text-lg px-12 py-6 rounded-xl shadow-xl transition-all duration-300 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
-        style={{
-          background: isSpinning
-            ? 'linear-gradient(145deg, #888888, #666666)'
-            : 'linear-gradient(145deg, #FFD700, #FFA500, #FF8C00)',
-          color: '#000000',
-          border: '3px solid #B8860B',
-          boxShadow: isSpinning
-            ? '0 4px 15px rgba(0, 0, 0, 0.3), inset 0 2px 5px rgba(255, 255, 255, 0.2)'
-            : '0 8px 25px rgba(255, 215, 0, 0.4), inset 0 2px 5px rgba(255, 255, 255, 0.3)',
-          textShadow: '1px 1px 2px rgba(0, 0, 0, 0.3)'
-        }}
+        className="text-lg px-12 py-6 transition-all duration-300 hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
       >
         {isSpinning ? (
           <div className="flex items-center space-x-2">
@@ -429,10 +514,10 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
       {/* Player Info - themed styling */}
       <div className="text-center">
         <p className="text-muted-foreground text-sm">
-          {shuffledNames.length} entr{shuffledNames.length !== 1 ? 'ies' : 'y'} ready to spin
+          {wheelNames.length} entr{wheelNames.length !== 1 ? 'ies' : 'y'} ready to spin
         </p>
         <p className="text-muted-foreground/70 text-xs mt-1">
-          Names are shuffled randomly for each spin
+          Names can appear multiple times based on entries
         </p>
       </div>
     </div>

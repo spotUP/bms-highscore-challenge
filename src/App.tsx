@@ -1,9 +1,11 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { Suspense, lazy, useEffect, useRef } from "react";
+import { usePageTransitions } from "@/hooks/usePageTransitions";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AchievementProvider } from "@/contexts/AchievementContext";
 import { TournamentProvider } from "@/contexts/TournamentContext";
@@ -13,6 +15,7 @@ import VHSOverlay from "@/components/VHSOverlay";
 import PerformanceWrapper from "@/components/PerformanceWrapper";
 import TournamentAccessGuard from "@/components/TournamentAccessGuard";
 import { ScoreNotificationsListener } from "@/components/ScoreNotification";
+import Layout from "@/components/Layout";
 import Index from "./pages/Index";
 import "./styles/performance.css";
 import { BracketProvider } from "@/contexts/BracketContext";
@@ -33,11 +36,22 @@ const Competition = lazy(() => import("./pages/Competition"));
 
 const queryClient = new QueryClient();
 
+// Component for Bracket Admin specific actions
+const BracketAdminActions = () => {
+  const { animatedNavigate } = usePageTransitions({ exitDuration: 600 });
+
+  return (
+    <Button variant="outline" onClick={() => animatedNavigate('/')}>
+      Highscores
+    </Button>
+  );
+};
+
 // Loading component for lazy routes
 const LoadingSpinner = () => (
   <div className="min-h-screen flex items-center justify-center relative z-10"
        style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-    <div className="text-white text-xl animate-pulse">Loading...</div>
+    <div></div>
   </div>
 );
 
@@ -97,25 +111,25 @@ const App = () => (
               <RoutePersistence />
               <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/admin/brackets" element={<BracketAdmin />} />
-                  <Route path="/mobile-entry" element={<MobileEntry />} />
-                  <Route path="/auth" element={<Auth />} />
-                  <Route path="/auth/verify" element={<AuthVerify />} />
-                  <Route path="/auth/expired" element={<LinkExpired />} />
-                  <Route path="/admin" element={<Admin />} />
-                  <Route path="/statistics" element={<Statistics />} />
-                  <Route path="/player" element={<PlayerDashboard />} />
-                  <Route path="/achievements" element={<Achievements />} />
-                  <Route path="/demolition-man-submit" element={<DemolitionManSubmit />} />
-                  <Route path="/competition" element={<Competition />} />
+                  <Route path="/" element={<Layout><Index /></Layout>} />
+                  <Route path="/admin/brackets" element={<Layout topNavProps={{ hideBracketsLink: true, rightActions: <BracketAdminActions /> }}><BracketAdmin /></Layout>} />
+                  <Route path="/mobile-entry" element={<Layout><MobileEntry /></Layout>} />
+                  <Route path="/auth" element={<Layout hideTopNav><Auth /></Layout>} />
+                  <Route path="/auth/verify" element={<Layout hideTopNav><AuthVerify /></Layout>} />
+                  <Route path="/auth/expired" element={<Layout hideTopNav><LinkExpired /></Layout>} />
+                  <Route path="/admin" element={<Layout><Admin /></Layout>} />
+                  <Route path="/statistics" element={<Layout topNavProps={{ hideStatistics: true }}><Statistics /></Layout>} />
+                  <Route path="/player" element={<Layout><PlayerDashboard /></Layout>} />
+                  <Route path="/achievements" element={<Layout><Achievements /></Layout>} />
+                  <Route path="/demolition-man-submit" element={<Layout><DemolitionManSubmit /></Layout>} />
+                  <Route path="/competition" element={<Layout><Competition /></Layout>} />
                   {/* Tournament-scoped routes with access control */}
-                  <Route path="/t/:slug" element={<TournamentAccessGuard><Index /></TournamentAccessGuard>} />
-                  <Route path="/t/:slug/admin" element={<TournamentAccessGuard><Admin /></TournamentAccessGuard>} />
-                  <Route path="/t/:slug/statistics" element={<TournamentAccessGuard><Statistics /></TournamentAccessGuard>} />
-                  <Route path="/t/:slug/achievements" element={<TournamentAccessGuard><Achievements /></TournamentAccessGuard>} />
-                  <Route path="/t/:slug/mobile-entry" element={<TournamentAccessGuard><MobileEntry /></TournamentAccessGuard>} />
-                  <Route path="/t/:slug/demolition-man-submit" element={<TournamentAccessGuard><DemolitionManSubmit /></TournamentAccessGuard>} />
+                  <Route path="/t/:slug" element={<Layout><TournamentAccessGuard><Index /></TournamentAccessGuard></Layout>} />
+                  <Route path="/t/:slug/admin" element={<Layout><TournamentAccessGuard><Admin /></TournamentAccessGuard></Layout>} />
+                  <Route path="/t/:slug/statistics" element={<Layout topNavProps={{ hideStatistics: true }}><TournamentAccessGuard><Statistics /></TournamentAccessGuard></Layout>} />
+                  <Route path="/t/:slug/achievements" element={<Layout><TournamentAccessGuard><Achievements /></TournamentAccessGuard></Layout>} />
+                  <Route path="/t/:slug/mobile-entry" element={<Layout><TournamentAccessGuard><MobileEntry /></TournamentAccessGuard></Layout>} />
+                  <Route path="/t/:slug/demolition-man-submit" element={<Layout><TournamentAccessGuard><DemolitionManSubmit /></TournamentAccessGuard></Layout>} />
                 </Routes>
               </Suspense>
             </BrowserRouter>

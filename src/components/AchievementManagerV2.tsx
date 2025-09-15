@@ -1210,11 +1210,7 @@ const AchievementManagerV2 = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-arcade-neonCyan"></div>
-            </div>
-          ) : filteredAchievements.length === 0 ? (
+          {loading ? null : filteredAchievements.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               No achievements found. Create your first achievement!
             </div>
@@ -1250,11 +1246,7 @@ const AchievementManagerV2 = () => {
             </div>
           </CardHeader>
           <CardContent>
-            {loadingPlayerAchievements ? (
-              <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-arcade-neonCyan"></div>
-              </div>
-            ) : playerAchievements.length === 0 ? (
+            {loadingPlayerAchievements ? null : playerAchievements.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 No player achievements found.
               </div>
