@@ -274,8 +274,11 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
       setTimeout(() => {
         checkForNewAchievements(truncatedName);
       }, 1000);
-      
-      onClose();
+
+      // Only close the dialog if we're not showing the player insult modal
+      if (!showPlayerInsult) {
+        onClose();
+      }
       
     } catch (error: any) {
       console.error('Error submitting score:', error);
@@ -315,10 +318,13 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
 
   return (
     <>
-      <PlayerInsult 
-        isVisible={showPlayerInsult} 
+      <PlayerInsult
+        isVisible={showPlayerInsult}
         playerName={insultPlayerName}
-        onComplete={() => setShowPlayerInsult(false)} 
+        onComplete={() => {
+          setShowPlayerInsult(false);
+          onClose();
+        }}
       />
       <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="bg-black/30 border-white/20 max-w-md backdrop-blur-sm">

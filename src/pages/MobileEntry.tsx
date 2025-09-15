@@ -270,11 +270,6 @@ const MobileEntry = () => {
         checkForNewAchievements(name);
       }, 1000);
       
-      // Navigate back to main page after a short delay
-      setTimeout(() => {
-        navigate("/", { replace: true });
-      }, 2000);
-      
     } catch (error) {
       console.error('Error submitting score:', error);
       toast.error("Failed to submit score. Please try again.");
@@ -287,10 +282,16 @@ const MobileEntry = () => {
   
   return (
     <>
-      <PlayerInsult 
-        isVisible={showPlayerInsult} 
+      <PlayerInsult
+        isVisible={showPlayerInsult}
         playerName={insultPlayerName}
-        onComplete={() => setShowPlayerInsult(false)} 
+        onComplete={() => {
+          setShowPlayerInsult(false);
+          // Navigate back after modal completes
+          setTimeout(() => {
+            navigate("/", { replace: true });
+          }, 1000);
+        }}
       />
       <div {...pageLayout}>
         <PageContainer className="max-w-md mx-auto space-y-3 pt-8">
