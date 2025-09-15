@@ -142,8 +142,8 @@ export const PageContainer = ({ children, className = "" }: {
 export const LoadingSpinner = ({ text = "Loading..." }: { text?: string }) => (
   <div className="min-h-screen flex items-center justify-center relative z-10"
        style={{ background: DESIGN_SYSTEM.layout.background }}>
-    <div className="text-center">
-      <div className={DESIGN_SYSTEM.loading.spinner}></div>
+    <div className="text-center space-y-4">
+      <div className={`${DESIGN_SYSTEM.loading.spinner} mx-auto`}></div>
       <div className={DESIGN_SYSTEM.loading.text}>{text}</div>
     </div>
   </div>

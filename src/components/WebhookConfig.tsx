@@ -5,11 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
-import { Settings, TestTube, CheckCircle, XCircle } from 'lucide-react';
+import { Settings, TestTube, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
 
 interface WebhookConfig {
   id: string;
@@ -165,30 +164,36 @@ const WebhookConfig: React.FC = () => {
     if (!user) return;
 
     // Update local state immediately for better UX
-    setWebhooks(prev => prev.map(webhook => 
+    setWebhooks(prev => prev.map(webhook =>
       webhook.id === id ? { ...webhook, ...updates } : webhook
     ));
 
     try {
-      // Save to database
-      const { error } = await supabase.rpc('update_user_webhook_config', {
+      // Save to database - we need to call our RPC function
+      const { error } = await supabase.rpc('update_user_webhook_config_with_events', {
         p_user_id: user.id,
         p_platform: id,
         p_webhook_url: updates.url,
-        p_enabled: updates.enabled
+        p_enabled: updates.enabled,
+        p_events: updates.events ? JSON.stringify(updates.events) : null
       });
 
       if (error) {
-        console.error('Error updating webhook config:', error);
-        toast({
-          title: "Error",
-          description: "Failed to save webhook configuration",
-          variant: "destructive",
-        });
-        
-        // Reload from database to revert local changes
-        loadWebhookConfigs();
-        return;
+        // If the new function doesn't exist, fall back to the old one
+        if (error.message.includes('Could not find the function')) {
+          const { error: fallbackError } = await supabase.rpc('update_user_webhook_config', {
+            p_user_id: user.id,
+            p_platform: id,
+            p_webhook_url: updates.url,
+            p_enabled: updates.enabled
+          });
+
+          if (fallbackError) {
+            throw fallbackError;
+          }
+        } else {
+          throw error;
+        }
       }
 
       toast({
@@ -198,11 +203,11 @@ const WebhookConfig: React.FC = () => {
     } catch (error) {
       console.error('Error in updateWebhook:', error);
       toast({
-        title: "Error", 
+        title: "Error",
         description: "Failed to save webhook configuration",
         variant: "destructive",
       });
-      
+
       // Reload from database to revert local changes
       loadWebhookConfigs();
     }
@@ -326,22 +331,41 @@ const WebhookConfig: React.FC = () => {
     }
   };
 
+  const getWebhookStatus = (webhook: WebhookConfig): 'ok' | 'error' | 'disabled' | 'pending' => {
+    if (!webhook.enabled) return 'disabled';
+    if (!webhook.url) return 'error';
+    if (!webhook.lastTest) return 'pending';
+    return webhook.lastTest.success ? 'ok' : 'error';
+  };
+
+  const getStatusIcon = (status: 'ok' | 'error' | 'disabled' | 'pending') => {
+    switch (status) {
+      case 'ok': return <CheckCircle className="w-4 h-4 text-green-400" />;
+      case 'error': return <AlertCircle className="w-4 h-4 text-red-400" />;
+      case 'disabled': return <XCircle className="w-4 h-4 text-gray-400" />;
+      default: return <Clock className="w-4 h-4 text-yellow-400" />;
+    }
+  };
+
   const getStatusBadge = (webhook: WebhookConfig) => {
-    if (!webhook.enabled) {
-      return <Badge variant="secondary">Disabled</Badge>;
-    }
-    
-    if (!webhook.url) {
-      return <Badge variant="destructive">No URL</Badge>;
-    }
-    
-    if (webhook.lastTest) {
-      return webhook.lastTest.success ? 
-        <Badge variant="default" className="bg-green-600">Tested</Badge> :
-        <Badge variant="destructive">Test Failed</Badge>;
-    }
-    
-    return <Badge variant="outline">Ready</Badge>;
+    const status = getWebhookStatus(webhook);
+    const variants = {
+      ok: 'bg-green-600/20 text-green-400',
+      error: 'bg-red-600/20 text-red-400',
+      disabled: 'bg-gray-600/20 text-gray-300',
+      pending: 'bg-yellow-600/20 text-yellow-400'
+    };
+    const text = {
+      ok: 'TESTED',
+      error: webhook.url ? 'ERROR' : 'NO URL',
+      disabled: 'DISABLED',
+      pending: 'READY'
+    };
+    return (
+      <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${variants[status]}`}>
+        {text[status]}
+      </span>
+    );
   };
 
   if (!user) {
@@ -390,231 +414,166 @@ const WebhookConfig: React.FC = () => {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="achievements" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-gray-800">
-            <TabsTrigger value="achievements" className="data-[state=active]:bg-yellow-600">
-              Achievement Webhooks
-            </TabsTrigger>
-            <TabsTrigger value="scores" className="data-[state=active]:bg-yellow-600">
-              Score Webhooks
-            </TabsTrigger>
-            <TabsTrigger value="competitions" className="data-[state=active]:bg-yellow-600">
-              Competition Webhooks
-            </TabsTrigger>
-          </TabsList>
 
-          <TabsContent value="achievements" className="mt-4 space-y-4">
-            <div className="text-sm text-gray-400 mb-4">
-              Configure webhook destinations for achievement notifications. When players unlock achievements, 
-              notifications will be sent to the enabled platforms below.
-            </div>
-            
-            {webhooks.map((webhook) => (
-              <Card key={webhook.id} className="bg-gray-800 border-gray-700">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-semibold text-white">{webhook.name}</h3>
-                      {getStatusBadge(webhook)}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor={`enabled-${webhook.id}`} className="text-sm text-gray-300">
-                        Enabled
-                      </Label>
-                      <Switch
-                        id={`enabled-${webhook.id}`}
-                        checked={webhook.enabled}
-                        onCheckedChange={(enabled) => updateWebhook(webhook.id, { enabled })}
-                      />
+        {/* Simplified Webhook Configuration - One unified interface */}
+        <div className="space-y-4 mt-4">
+          <div className="text-sm text-gray-400 mb-6">
+            Configure webhook destinations for all notification types. Each webhook can be configured to receive
+            different types of events: achievements, score submissions, and competition updates.
+          </div>
+
+          {webhooks.map((webhook) => (
+            <Card key={webhook.id} className="bg-gray-800 border-gray-700">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-semibold text-white text-lg">{webhook.name}</h3>
+                    {getStatusBadge(webhook)}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor={`enabled-${webhook.id}`} className="text-sm text-gray-300">
+                      Enabled
+                    </Label>
+                    <Switch
+                      id={`enabled-${webhook.id}`}
+                      checked={webhook.enabled}
+                      onCheckedChange={(enabled) => updateWebhook(webhook.id, { enabled })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Webhook URL */}
+                  <div>
+                    <Label htmlFor={`url-${webhook.id}`} className="text-sm text-gray-300 mb-2 block">
+                      Webhook URL
+                    </Label>
+                    <Input
+                      id={`url-${webhook.id}`}
+                      value={webhook.url}
+                      onChange={(e) => updateWebhook(webhook.id, { url: e.target.value })}
+                      placeholder={`Enter ${webhook.name} webhook URL`}
+                      className="bg-gray-700 border-gray-600 text-white"
+                    />
+                  </div>
+
+                  {/* Event Types */}
+                  <div>
+                    <Label className="text-sm text-gray-300 mb-3 block">
+                      Event Types (what notifications to send)
+                    </Label>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {[
+                        { id: 'achievement_unlocked', label: 'Achievements', icon: '🏆', desc: 'Player achievement unlocks' },
+                        { id: 'score_submitted', label: 'Score Submissions', icon: '📊', desc: 'New high scores' },
+                        { id: 'competition_started', label: 'Competition Start', icon: '🚀', desc: 'Competition begins' },
+                        { id: 'competition_ended', label: 'Competition End', icon: '🏁', desc: 'Competition finishes' }
+                      ].map((eventType) => (
+                        <div
+                          key={eventType.id}
+                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                            webhook.events.includes(eventType.id)
+                              ? 'border-yellow-600 bg-yellow-600/10 text-yellow-400'
+                              : 'border-gray-600 bg-gray-800/50 text-gray-300 hover:border-gray-500'
+                          }`}
+                          onClick={() => {
+                            const newEvents = webhook.events.includes(eventType.id)
+                              ? webhook.events.filter(e => e !== eventType.id)
+                              : [...webhook.events, eventType.id];
+                            updateWebhook(webhook.id, { events: newEvents });
+                          }}
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-lg">{eventType.icon}</span>
+                            <span className="text-sm font-medium">{eventType.label}</span>
+                          </div>
+                          <div className="text-xs opacity-75">{eventType.desc}</div>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <div>
-                      <Label htmlFor={`url-${webhook.id}`} className="text-sm text-gray-300">
-                        Webhook URL
-                      </Label>
-                      <Input
-                        id={`url-${webhook.id}`}
-                        value={webhook.url}
-                        onChange={(e) => updateWebhook(webhook.id, { url: e.target.value })}
-                        placeholder={`Enter ${webhook.name} webhook URL`}
-                        className="bg-gray-700 border-gray-600 text-white"
-                      />
-                    </div>
+                  {/* Test Buttons */}
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-700">
+                    <Label className="text-sm text-gray-300 w-full mb-2">Test Webhook</Label>
 
-                    <div className="flex items-center gap-2">
+                    {webhook.events.includes('achievement_unlocked') && (
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => testWebhook(webhook)}
-                        disabled={testing === webhook.id || !webhook.url}
+                        onClick={() => testWebhook(webhook, 'achievement_unlocked')}
+                        disabled={testing === webhook.id || !webhook.url || !webhook.enabled}
+                        className="text-xs"
                       >
-                        {testing === webhook.id ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-gray-300 border-t-transparent rounded-full animate-spin mr-2"></div>
-                            Testing...
-                          </>
-                        ) : (
-                          <>
-                            <TestTube className="w-4 h-4 mr-2" />
-                            Test Webhook
-                          </>
-                        )}
+                        <TestTube className="w-3 h-3 mr-1" />
+                        Test Achievement
                       </Button>
-
-                      {webhook.lastTest && (
-                        <div className="flex items-center gap-1 text-sm">
-                          {webhook.lastTest.success ? (
-                            <CheckCircle className="w-4 h-4 text-green-400" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-red-400" />
-                          )}
-                          <span className={webhook.lastTest.success ? "text-green-400" : "text-red-400"}>
-                            Last test: {new Date(webhook.lastTest.timestamp).toLocaleString()}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {webhook.lastTest && !webhook.lastTest.success && webhook.lastTest.error && (
-                      <div className="text-sm text-red-400 bg-red-900/20 p-2 rounded">
-                        Error: {webhook.lastTest.error}
-                      </div>
                     )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </TabsContent>
 
-          <TabsContent value="scores" className="mt-4">
-            <div className="text-sm text-gray-400 mb-4">
-              Score webhooks are currently configured via environment variables. 
-              Achievement webhooks above will also include score context when available.
-            </div>
-            
-            <Card className="bg-gray-800 border-gray-700">
-              <CardContent className="p-4">
-                <h3 className="font-semibold text-white mb-2">Current Score Webhook</h3>
-                <p className="text-sm text-gray-300">
-                  Score submissions are sent to Microsoft Teams via the existing webhook system.
-                  This is configured in the Supabase edge function environment variables.
-                </p>
-                <div className="mt-3">
-                  <Badge variant="outline" className="border-green-500 text-green-400">
-                    Active
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                    {webhook.events.includes('score_submitted') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => testWebhook(webhook, 'score_submitted')}
+                        disabled={testing === webhook.id || !webhook.url || !webhook.enabled}
+                        className="text-xs"
+                      >
+                        <TestTube className="w-3 h-3 mr-1" />
+                        Test Score
+                      </Button>
+                    )}
 
-          <TabsContent value="competitions" className="mt-4 space-y-4">
-            <div className="text-sm text-gray-400 mb-4">
-              Configure webhook destinations for competition lifecycle notifications. When competitions start or end, 
-              notifications will be sent to the enabled platforms below.
-            </div>
-            
-            {webhooks.map((webhook) => (
-              <Card key={`comp-${webhook.id}`} className="bg-gray-800 border-gray-700">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-semibold text-white">{webhook.name}</h3>
-                      {getStatusBadge(webhook)}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Label htmlFor={`comp-enabled-${webhook.id}`} className="text-sm text-gray-300">
-                        Enabled
-                      </Label>
-                      <Switch
-                        id={`comp-enabled-${webhook.id}`}
-                        checked={webhook.enabled}
-                        onCheckedChange={(checked) => updateWebhook(webhook.id, { enabled: checked })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div>
-                      <Label htmlFor={`comp-url-${webhook.id}`} className="text-sm text-gray-300">
-                        Webhook URL
-                      </Label>
-                      <Input
-                        id={`comp-url-${webhook.id}`}
-                        type="url"
-                        placeholder={`Enter ${webhook.name} webhook URL`}
-                        value={webhook.url}
-                        onChange={(e) => updateWebhook(webhook.id, { url: e.target.value })}
-                        className="bg-gray-700 border-gray-600 text-white"
-                      />
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
+                    {webhook.events.includes('competition_started') && (
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => testWebhook(webhook, 'competition_started')}
-                        disabled={testing === webhook.id || !webhook.url}
+                        disabled={testing === webhook.id || !webhook.url || !webhook.enabled}
+                        className="text-xs"
                       >
-                        {testing === webhook.id ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-gray-300 border-t-transparent rounded-full animate-spin mr-2"></div>
-                            Testing...
-                          </>
-                        ) : (
-                          <>
-                            <TestTube className="w-4 h-4 mr-2" />
-                            Test Start
-                          </>
-                        )}
+                        <TestTube className="w-3 h-3 mr-1" />
+                        Test Start
                       </Button>
+                    )}
 
+                    {webhook.events.includes('competition_ended') && (
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => testWebhook(webhook, 'competition_ended')}
-                        disabled={testing === webhook.id || !webhook.url}
+                        disabled={testing === webhook.id || !webhook.url || !webhook.enabled}
+                        className="text-xs"
                       >
-                        {testing === webhook.id ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-gray-300 border-t-transparent rounded-full animate-spin mr-2"></div>
-                            Testing...
-                          </>
-                        ) : (
-                          <>
-                            <TestTube className="w-4 h-4 mr-2" />
-                            Test End
-                          </>
-                        )}
+                        <TestTube className="w-3 h-3 mr-1" />
+                        Test End
                       </Button>
-                    </div>
-
-                    {webhook.lastTest && (
-                      <div className="flex items-center gap-1 text-sm">
-                        {webhook.lastTest.success ? (
-                          <CheckCircle className="w-4 h-4 text-green-400" />
-                        ) : (
-                          <XCircle className="w-4 h-4 text-red-400" />
-                        )}
-                        <span className={webhook.lastTest.success ? "text-green-400" : "text-red-400"}>
-                          Last test: {new Date(webhook.lastTest.timestamp).toLocaleString()}
-                        </span>
-                      </div>
-                    )}
-
-                    {webhook.lastTest && !webhook.lastTest.success && webhook.lastTest.error && (
-                      <div className="text-sm text-red-400 bg-red-900/20 p-2 rounded">
-                        Error: {webhook.lastTest.error}
-                      </div>
                     )}
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </TabsContent>
-        </Tabs>
+
+                  {/* Test Results */}
+                  {webhook.lastTest && (
+                    <div className="flex items-center gap-2 text-sm pt-2">
+                      {webhook.lastTest.success ? (
+                        <CheckCircle className="w-4 h-4 text-green-400" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-red-400" />
+                      )}
+                      <span className={webhook.lastTest.success ? "text-green-400" : "text-red-400"}>
+                        Last test: {new Date(webhook.lastTest.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                  )}
+
+                  {webhook.lastTest && !webhook.lastTest.success && webhook.lastTest.error && (
+                    <div className="text-sm text-red-400 bg-red-900/20 p-3 rounded border border-red-800">
+                      <strong>Error:</strong> {webhook.lastTest.error}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </CardContent>
     </Card>
   );

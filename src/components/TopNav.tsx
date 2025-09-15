@@ -7,9 +7,11 @@ import PublicTournamentBrowser from '@/components/PublicTournamentBrowser';
 import MobileMenu from '@/components/MobileMenu';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { usePageTransitions } from '@/hooks/usePageTransitions';
 
 interface TopNavProps {
   onSpinWheel?: () => void;
+  animatedNavigate?: (to: string, options?: any) => void;
   rightActions?: React.ReactNode;
   centerNav?: boolean;
   hideBracketsLink?: boolean;
@@ -18,10 +20,14 @@ interface TopNavProps {
   hideStatistics?: boolean;
 }
 
-const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, rightActions, centerNav = false, hideBracketsLink = false, hideTournamentSelector = false, hideSpinButton = false, hideStatistics = false }) => {
+const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnimatedNavigate, rightActions, centerNav = false, hideBracketsLink = false, hideTournamentSelector = false, hideSpinButton = false, hideStatistics = false }) => {
   const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const { animatedNavigate } = usePageTransitions({ exitDuration: 600 });
   const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Use the animated navigate function passed from Layout, or fallback to our own
+  const finalAnimatedNavigate = propAnimatedNavigate || animatedNavigate;
   const [isFullscreen, setIsFullscreen] = useState<boolean>(!!document.fullscreenElement);
 
   useEffect(() => {
@@ -64,7 +70,7 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, rightActions, centerNav = 
 
   const handleSpin = () => {
     if (onSpinWheel) return onSpinWheel();
-    navigate('/');
+    finalAnimatedNavigate('/');
   };
 
   return (
@@ -103,10 +109,13 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, rightActions, centerNav = 
                   </Button>
                   {!hideTournamentSelector && <TournamentDropdown />}
                   {!hideSpinButton && <Button variant="outline" onClick={handleSpin}>Spin the Wheel</Button>}
-                  {!hideStatistics && <Button variant="outline" onClick={() => navigate('/statistics')}>Statistics</Button>}
+                  {!hideStatistics && <Button variant="outline" onClick={() => finalAnimatedNavigate('/statistics')}>Statistics</Button>}
+                  {!hideBracketsLink && (
+                    <Button variant="outline" onClick={() => finalAnimatedNavigate('/admin/brackets')}>Brackets</Button>
+                  )}
                   <Button
                     variant="outline"
-                    onClick={() => isAdmin && navigate('/admin')}
+                    onClick={() => isAdmin && finalAnimatedNavigate('/admin')}
                     style={{ visibility: isAdmin ? 'visible' : 'hidden' }}
                     tabIndex={isAdmin ? 0 : -1}
                     aria-hidden={!isAdmin}
@@ -114,16 +123,13 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, rightActions, centerNav = 
                   >
                     Admin Panel
                   </Button>
-                  {!hideBracketsLink && (
-                    <Button variant="outline" onClick={() => navigate('/admin/brackets')}>Brackets</Button>
-                  )}
                   {rightActions}
                   <Button variant="outline" onClick={signOut}>Sign Out</Button>
                 </>
               ) : (
                 <>
                   <PublicTournamentBrowser />
-                  <Button onClick={() => navigate('/auth')} variant="outline">Sign In</Button>
+                  <Button onClick={() => finalAnimatedNavigate('/auth')} variant="outline">Sign In</Button>
                 </>
               )}
             </div>
@@ -164,10 +170,13 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, rightActions, centerNav = 
                   </Button>
                   <TournamentDropdown />
                   <Button variant="outline" onClick={handleSpin}>Spin the Wheel</Button>
-                  <Button variant="outline" onClick={() => navigate('/statistics')}>Statistics</Button>
+                  <Button variant="outline" onClick={() => finalAnimatedNavigate('/statistics')}>Statistics</Button>
+                  {!hideBracketsLink && (
+                    <Button variant="outline" onClick={() => finalAnimatedNavigate('/admin/brackets')}>Brackets</Button>
+                  )}
                   <Button
                     variant="outline"
-                    onClick={() => isAdmin && navigate('/admin')}
+                    onClick={() => isAdmin && finalAnimatedNavigate('/admin')}
                     style={{ visibility: isAdmin ? 'visible' : 'hidden' }}
                     tabIndex={isAdmin ? 0 : -1}
                     aria-hidden={!isAdmin}
@@ -175,16 +184,13 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, rightActions, centerNav = 
                   >
                     Admin Panel
                   </Button>
-                  {!hideBracketsLink && (
-                    <Button variant="outline" onClick={() => navigate('/admin/brackets')}>Brackets</Button>
-                  )}
                   {rightActions}
                   <Button variant="outline" onClick={signOut}>Sign Out</Button>
                 </>
               ) : (
                 <>
                   <PublicTournamentBrowser />
-                  <Button onClick={() => navigate('/auth')} variant="outline">Sign In</Button>
+                  <Button onClick={() => finalAnimatedNavigate('/auth')} variant="outline">Sign In</Button>
                 </>
               )}
             </div>

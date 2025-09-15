@@ -1,5 +1,6 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { usePageTransitions } from '@/hooks/usePageTransitions';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -52,7 +53,11 @@ interface CompetitionScore {
   ranking_points: number;
 }
 
-const Statistics = () => {
+interface StatisticsProps {
+  isExiting?: boolean;
+}
+
+const Statistics: React.FC<StatisticsProps> = ({ isExiting = false }) => {
   const navigate = useNavigate();
   const [competitions, setCompetitions] = useState<CompetitionHistory[]>([]);
   const [selectedCompetition, setSelectedCompetition] = useState<string>('');
@@ -322,7 +327,17 @@ const Statistics = () => {
   const gameStats = getGameStats();
 
   const pageLayout = getPageLayout();
-  
+
+  // Animation state - only animate once on initial load
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const shouldAnimate = !loading && !dataLoading;
+
+  useEffect(() => {
+    if (shouldAnimate && !hasAnimated) {
+      setHasAnimated(true);
+    }
+  }, [shouldAnimate, hasAnimated]);
+
   // Deterministic Tron edge runner style per card (desync animation)
   const getRunnerStyle = (seed: string) => {
     try {
@@ -544,12 +559,13 @@ const Statistics = () => {
   
   // Guard after all hooks are declared to preserve hook order
   if (loading) {
-    return <LoadingSpinner text="Loading statistics..." />;
+    return null;
   }
   
   return (
-    <div {...pageLayout}>
-      <PageContainer>
+    <div {...pageLayout} className={`${pageLayout.className || ''}`}>
+      <PageContainer className="max-w-6xl mx-auto">
+        <div className={`${isExiting ? 'animate-slide-out-bottom' : hasAnimated ? 'animate-slide-in-bottom' : 'opacity-0'}`}>
         <PageHeader 
           title="Competition Statistics"
           subtitle="Detailed analytics and performance metrics"
@@ -1035,6 +1051,7 @@ const Statistics = () => {
             </Card>
           </div>
 
+        </div>
         </div>
       </PageContainer>
     </div>

@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getCardStyle, getTypographyStyle } from '@/utils/designSystem';
 
 interface PlayerPerformanceChartProps {
   scores: Array<{
@@ -88,9 +89,9 @@ const PlayerPerformanceChart: React.FC<PlayerPerformanceChartProps> = React.memo
 
   if (chartData.length === 0) {
     return (
-      <Card className="bg-gray-900 border-white/20">
+      <Card className={getCardStyle('primary')}>
         <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
+          <CardTitle className={`${getTypographyStyle('h3')} flex items-center gap-2`}>
             📈 Player Performance Over Time
           </CardTitle>
         </CardHeader>
@@ -104,9 +105,9 @@ const PlayerPerformanceChart: React.FC<PlayerPerformanceChartProps> = React.memo
   }
 
   return (
-    <Card className="bg-gray-900 border-white/20">
+    <Card className={getCardStyle('primary')}>
       <CardHeader>
-        <CardTitle className="text-white flex items-center gap-2">
+        <CardTitle className={`${getTypographyStyle('h3')} flex items-center gap-2`}>
           📈 Player Performance Over Time
         </CardTitle>
         <p className="text-gray-400 text-sm">

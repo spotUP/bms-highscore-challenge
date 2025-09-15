@@ -18,8 +18,8 @@ const HyperspaceEffect = () => {
     const PARTICLE_NUM = particleCount; // Dynamic based on device performance
     const PARTICLE_BASE_RADIUS = isRaspberryPi ? 0.8 : 0.6; // Larger particles on Pi for better visibility
     const FL = 50;
-    const DEFAULT_SPEED = isRaspberryPi ? 1 : 2; // Slower on Pi to reduce CPU load
-    const BOOST_SPEED = isRaspberryPi ? 6 : 12;
+    const DEFAULT_SPEED = isRaspberryPi ? 0.07 : 0.14; // Slowed down by ~93% total
+    const BOOST_SPEED = isRaspberryPi ? 0.42 : 0.84; // Slowed down by ~93% total
 
     const getViewportSize = () => ({ w: Math.max(document.documentElement.clientWidth, window.innerWidth || 0), h: Math.max(document.documentElement.clientHeight, window.innerHeight || 0) });
     let { w: canvasWidth, h: canvasHeight } = getViewportSize();

@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { getCardStyle, getTypographyStyle } from '@/utils/designSystem';
 
 interface AchievementProgressChartProps {
   achievements: Array<{
@@ -75,9 +76,9 @@ const AchievementProgressChart: React.FC<AchievementProgressChartProps> = React.
 
   if (chartData.length === 0) {
     return (
-      <Card className="bg-gray-900 border-white/20">
+      <Card className={getCardStyle('primary')}>
         <CardHeader>
-          <CardTitle className="text-white flex items-center gap-2">
+          <CardTitle className={`${getTypographyStyle('h3')} flex items-center gap-2`}>
             🏆 Achievement Progress
           </CardTitle>
         </CardHeader>
@@ -91,9 +92,9 @@ const AchievementProgressChart: React.FC<AchievementProgressChartProps> = React.
   }
 
   return (
-    <Card className="bg-gray-900 border-white/20">
+    <Card className={getCardStyle('primary')}>
       <CardHeader>
-        <CardTitle className="text-white flex items-center gap-2">
+        <CardTitle className={`${getTypographyStyle('h3')} flex items-center gap-2`}>
           🏆 Achievement Progress
         </CardTitle>
         <p className="text-gray-400 text-sm">

@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useCompetitionWebhooks } from '@/hooks/useCompetitionWebhooks';
 import misterGames from '@/data/mister-games.json';
 import gameLogoMapping from '@/data/game-logo-mapping.json';
 
@@ -15,7 +14,6 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const { sendCompetitionStartedWebhook } = useCompetitionWebhooks();
 
   const handleRandomizeGames = async () => {
     setIsLoading(true);
@@ -192,22 +190,10 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
       
       toast({
         title: "Games Randomized!",
-        description: `New games with ${localLogosCount}/5 local logos: ${newGameNames.join(', ')}`,
+        description: `New games selected: ${newGameNames.join(', ')}. Use Competition Manager to start the competition.`,
       });
 
-      // Send competition started webhook
-      const gamesForWebhook = selectedGames.map(game => {
-        const logoData = gameLogoMapping[game.name];
-        return {
-          id: game.name.toLowerCase().replace(/\s+/g, '-'),
-          name: game.name,
-          logo_url: logoData ? `/game-logos/${logoData.logoFile}` : undefined
-        };
-      });
-
-      setTimeout(() => {
-        sendCompetitionStartedWebhook(gamesForWebhook, `Competition ${new Date().toLocaleDateString()}`);
-      }, 1000);
+      // Games are now ready for competition - use Competition Manager to start
       
       // Close dialog and notify parent component
       setIsOpen(false);

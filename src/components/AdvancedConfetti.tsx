@@ -32,7 +32,7 @@ const AdvancedConfetti: React.FC<AdvancedConfettiProps> = ({ isActive, onComplet
   const createParticle = (canvas: HTMLCanvasElement): ConfettiParticle => {
     return {
       x: Math.random() * canvas.width,
-      y: -10,
+      y: -50,
       vx: (Math.random() - 0.5) * 4,
       vy: Math.random() * 3 + 2,
       gravity: 0.1 + Math.random() * 0.1,

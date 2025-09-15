@@ -1,25 +1,19 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTournamentGameData } from "@/hooks/useTournamentGameData";
 import { getGameLogoUrl } from "@/lib/utils";
 import StorageImage from "@/components/StorageImage";
 import { parseStorageObjectUrl } from "@/lib/storage";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LeaderboardEntry from "@/components/LeaderboardEntry";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import OverallLeaderboard from "@/components/OverallLeaderboard";
 import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
-import SpinTheWheel from "@/components/SpinTheWheel";
-import MobileMenu from "@/components/MobileMenu";
-import ThemeSelector from "@/components/ThemeSelector";
-import PerformanceModeToggle from "@/components/PerformanceModeToggle";
 import TournamentDropdown from "@/components/TournamentDropdown";
-import PublicTournamentBrowser from "@/components/PublicTournamentBrowser";
 import { useTournament } from "@/contexts/TournamentContext";
 import { dlog } from "@/lib/debug";
+import CompetitionStatus from "@/components/CompetitionStatus";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -53,50 +47,19 @@ interface Score {
   isNew?: boolean;
 }
 
-const shuffleArray = (array: string[]) => {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  };
+interface IndexProps {
+  isExiting?: boolean;
+}
 
-const Index = () => {
-  const { user, loading, signOut, isAdmin } = useAuth();
+const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
+  // Clean index page with single navigation via Layout component
   const { currentTournament, loading: tournamentLoading } = useTournament();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { activeGames: games, gameScores, loading: gamesLoading, refetch } = useTournamentGameData();
+
   const [selectedGameForSubmission, setSelectedGameForSubmission] = useState<any>(null);
   const [isSubmissionDialogOpen, setIsSubmissionDialogOpen] = useState(false);
-  const [isSpinWheelOpen, setIsSpinWheelOpen] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
-
-  // Clock update effect - Optimized to reduce re-renders
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      setCurrentTime(prevTime => {
-        // Only update if the time display actually changed (seconds)
-        const prevDisplay = prevTime.toLocaleTimeString('en-GB', { 
-          hour12: false, 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          second: '2-digit' 
-        });
-        const newDisplay = now.toLocaleTimeString('en-GB', { 
-          hour12: false, 
-          hour: '2-digit', 
-          minute: '2-digit', 
-          second: '2-digit' 
-        });
-        return prevDisplay !== newDisplay ? now : prevTime;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, []);
 
   const handleGameLogoClick = useCallback((game: Game) => {
     setSelectedGameForSubmission(game);
@@ -133,38 +96,6 @@ const Index = () => {
     };
   }, [currentTournament?.id, refetch]);
 
-  // Get player names for the wheel - each player appears once per game they have scores for
-  const getLeaderboardNames = useMemo(() => {
-    const playerGameCounts = new Map<string, number>();
-    
-    // Count how many different games each player has scores for
-    Object.values(gameScores).forEach(gameScoreList => {
-      const playersInGame = new Set();
-      gameScoreList.forEach(score => {
-        playersInGame.add(score.player_name);
-      });
-      
-      playersInGame.forEach(playerName => {
-        const currentCount = playerGameCounts.get(playerName as string) || 0;
-        playerGameCounts.set(playerName as string, currentCount + 1);
-      });
-    });
-    
-    // Create array where each player appears once per game they have scores for
-    const wheelNames: string[] = [];
-    playerGameCounts.forEach((gameCount, playerName) => {
-      for (let i = 0; i < gameCount; i++) {
-        wheelNames.push(playerName);
-      }
-    });
-    
-    return wheelNames;
-  }, [gameScores]);
-
-  const getRandomizedLeaderboardNames = useMemo(() => {
-    return shuffleArray(getLeaderboardNames);
-  }, [getLeaderboardNames]);
-
   // Deterministic style for Tron edge runner per card
   const getRunnerStyle = (seed: string) => {
     let h = 0;
@@ -179,18 +110,8 @@ const Index = () => {
     } as React.CSSProperties;
   };
 
-  // Remove annoying loading screen - show content immediately
-  // if (loading || tournamentLoading || gamesLoading) {
-  //   return (
-  //     <div className="min-h-screen flex items-center justify-center relative z-10"
-  //          style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
-  //       <div className="text-white text-xl">Loading...</div>
-  //     </div>
-  //   );
-  // }
-
-  // Show tournament selection if user has no current tournament (but only after loading is complete)
-  if (user && !tournamentLoading && !currentTournament) {
+  // Show tournament selection if no current tournament (but only after loading is complete)
+  if (!tournamentLoading && !currentTournament) {
     return (
       <div className="min-h-screen flex items-center justify-center relative z-10"
            style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
@@ -207,86 +128,30 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen text-white p-3 md:p-4 relative z-10"
-         style={{ background: 'var(--page-bg)' }}>
+    <div className="p-3 md:p-4">
       <div className="w-full space-y-4">
-        <div className="flex items-center">
-          {/* Left aligned title */}
-          <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight animate-slide-in-left">
-            Retro Ranks
-          </h1>
-          
-          {/* Right aligned navigation */}
-          <div className="ml-auto flex items-center">
-            {/* Desktop Menu */}
-            <div className="hidden md:flex gap-4 items-center">
-              {/* Digital Clock */}
-              <div className="font-arcade font-bold text-lg animated-gradient">
-                {currentTime.toLocaleTimeString('en-GB', { 
-                  hour12: false, 
-                  hour: '2-digit', 
-                  minute: '2-digit', 
-                  second: '2-digit' 
-                })}
-              </div>
-              {user ? (
-                <>
-                  <PerformanceModeToggle displayType="switch" />
-                  {/* Theme Selector */}
-                  <ThemeSelector />
-                  <TournamentDropdown />
-                  <Button variant="outline" onClick={() => navigate('/admin/brackets')}>
-                    Brackets
-                  </Button>
-                  <Button variant="outline" onClick={() => setIsSpinWheelOpen(true)}>
-                    Spin the Wheel
-                  </Button>
-                  <Button variant="outline" onClick={() => navigate('/statistics')}>
-                    Statistics
-                  </Button>
-                  {isAdmin && (
-                    <Button variant="outline" onClick={() => navigate('/admin')}>
-                      Admin Panel
-                    </Button>
-                  )}
-                  <Button variant="outline" onClick={signOut}>
-                    Sign Out
-                  </Button>
-                </>
-              ) : (
-                <>
-                  {/* Theme Selector */}
-                  <ThemeSelector />
-                  <PublicTournamentBrowser />
-                  <Button onClick={() => navigate('/auth')} variant="outline">
-                    Sign In
-                  </Button>
-                </>
-              )}
-            </div>
-            
-            {/* Mobile Menu */}
-            <MobileMenu onSpinWheel={() => setIsSpinWheelOpen(true)} />
-          </div>
-        </div>
-        
-        <div className={`grid gap-4 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-8rem)] grid-cols-1 lg:grid-cols-5'}`}>
+        <div className={`grid gap-4 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-12rem)] grid-cols-1 lg:grid-cols-5'}`}>
           {/* Left column - Overall Leaderboard (smaller) */}
-          <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-1'} animate-slide-in-left animation-delay-200`}>
+          <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-1'} ${isExiting ? 'animate-slide-out-left' : 'animate-slide-in-left animation-delay-200'}`}>
             <OverallLeaderboard />
           </div>
-          
+
           {/* Right column - Game content (4 games instead of 5) */}
           <div className={`${isMobile ? 'order-1' : 'h-full lg:col-span-4'}`}>
+            {/* Competition Status Subheader */}
+            <div className={`mb-4 ${isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right animation-delay-100'}`}>
+              <CompetitionStatus />
+            </div>
+
             <div className={`${isMobile ? 'flex flex-col space-y-6' : 'flex gap-3 h-full'}`}>
               {games.slice(0, 4).map((game) => {
                 // Get logo URL - convert local paths to Supabase Storage URLs
                 const logoUrl = getGameLogoUrl(game.logo_url) || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
                 const storageRef = logoUrl && logoUrl.includes('supabase.co/storage/') ? parseStorageObjectUrl(logoUrl) : null;
                 const isPublicObject = !!(logoUrl && logoUrl.includes('/storage/v1/object/public/'));
-                
+
                 const filtered = gameScores[game.id] || [];
-                
+
                 // Debug logging for joust specifically
                 if (game.name.toLowerCase().includes('joust')) {
                   dlog('🎮 Joust Debug Info:', {
@@ -297,11 +162,11 @@ const Index = () => {
                     totalGames: games.length
                   });
                 }
-                
+
                 return (
-                <section key={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full flex-1 min-w-0'} animate-slide-in-right`} style={{animationDelay: `${(games.findIndex(g => g.id === game.id) + 1) * 200 + 800}ms`}}>
+                <section key={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full flex-1 min-w-0'} ${isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right'}`} style={{animationDelay: isExiting ? '0ms' : `${(games.findIndex(g => g.id === game.id) + 1) * 200 + 800}ms`}}>
                   {/* Card containing logo, scores and QR code */}
-                  <Card 
+                  <Card
                     className="bg-black/30 border-white/20 theme-card flex-1 flex flex-col cursor-pointer hover:scale-[1.02] transition-transform duration-200"
                     style={getRunnerStyle(game.id)}
                     onClick={() => handleGameLogoClick(game)}
@@ -321,9 +186,9 @@ const Index = () => {
                                   expiresIn={300}
                                 />
                               ) : (
-                                <img 
-                                  src={logoUrl} 
-                                  alt={game.name} 
+                                <img
+                                  src={logoUrl}
+                                  alt={game.name}
                                   className="h-32 md:h-40 w-auto object-contain max-w-full"
                                 />
                               )
@@ -355,7 +220,7 @@ const Index = () => {
                             )}
                           </div>
                         </div>
-                        
+
                         {/* QR Code - inside card at bottom - hidden on mobile */}
                         <div className="mt-auto hidden md:block">
                           <QRCodeDisplay gameId={game.id} gameName={game.name} />
@@ -366,25 +231,19 @@ const Index = () => {
                 );
               })}
               {!gamesLoading && games.length === 0 && (
-                <div className="col-span-full text-center py-8 text-gray-400 animate-slide-in-right animation-delay-1000">
+                <div className={`col-span-full text-center py-8 text-gray-400 ${isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right animation-delay-1000'}`}>
                   No active games found. Please contact an administrator.
                 </div>
               )}
             </div>
           </div>
         </div>
-        
+
         <ScoreSubmissionDialog
           game={selectedGameForSubmission}
           isOpen={isSubmissionDialogOpen}
           onClose={() => setIsSubmissionDialogOpen(false)}
           onScoreSubmitted={handleScoreSubmitted}
-        />
-
-        <SpinTheWheel
-          isOpen={isSpinWheelOpen}
-          onClose={() => setIsSpinWheelOpen(false)}
-          leaderboardNames={getRandomizedLeaderboardNames}
         />
       </div>
     </div>
