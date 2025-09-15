@@ -59,14 +59,19 @@ export const ScoreNotificationsListener: React.FC = () => {
   useEffect(() => {
     // Only set up the listener if we have a tournament context
     if (!currentTournament) {
-      console.log('ScoreNotificationsListener: No current tournament, skipping setup');
+      console.log('🔍 ScoreNotificationsListener: No current tournament, skipping setup');
       return;
     }
 
-    console.log('ScoreNotificationsListener: Setting up realtime subscriptions for tournament:', currentTournament.id);
+    console.log('🔍 ScoreNotificationsListener: Setting up realtime subscriptions for tournament:', currentTournament.id);
+    console.log('🔍 ScoreNotificationsListener: Current timestamp:', Date.now());
 
     // Subscribe to score submissions with unique channel name
     const channelName = `score_submissions_${currentTournament.id}_${Date.now()}`;
+    console.log('🔍 ScoreNotificationsListener: Channel name:', channelName);
+
+    console.log('🔍 ScoreNotificationsListener: Creating subscription with filter:', `tournament_id=eq.${currentTournament.id}`);
+
     scoreChannelRef.current = supabase
       .channel(channelName)
       .on(
@@ -78,7 +83,12 @@ export const ScoreNotificationsListener: React.FC = () => {
           filter: `tournament_id=eq.${currentTournament.id}`,
         },
         async (payload) => {
-          console.log('ScoreNotificationsListener: Received score submission event:', payload);
+          console.log('🎉 ScoreNotificationsListener: *** REAL-TIME EVENT RECEIVED! ***');
+          console.log('🎉 ScoreNotificationsListener: Full payload:', JSON.stringify(payload, null, 2));
+          console.log('🎉 ScoreNotificationsListener: Player name:', payload.new?.player_name);
+          console.log('🎉 ScoreNotificationsListener: Score:', payload.new?.score);
+          console.log('🎉 ScoreNotificationsListener: Tournament ID:', payload.new?.tournament_id);
+
           const submission = payload.new as {
             player_name: string;
             score: number;
@@ -88,6 +98,7 @@ export const ScoreNotificationsListener: React.FC = () => {
           };
 
           // Get game info
+          console.log('🎮 ScoreNotificationsListener: Looking up game for ID:', submission.game_id);
           const { data: game, error: gameError } = await supabase
             .from('games')
             .select('name, logo_url')
@@ -95,41 +106,50 @@ export const ScoreNotificationsListener: React.FC = () => {
             .single();
 
           if (gameError) {
-            console.error('ScoreNotificationsListener: Error fetching game:', gameError);
+            console.error('❌ ScoreNotificationsListener: Error fetching game:', gameError);
             return;
           }
           if (!game) {
-            console.error('ScoreNotificationsListener: No game found for ID:', submission.game_id);
+            console.error('❌ ScoreNotificationsListener: No game found for ID:', submission.game_id);
             return;
           }
 
-          console.log('ScoreNotificationsListener: Found game:', game);
+          console.log('✅ ScoreNotificationsListener: Found game:', game);
 
           // Show the toast notification
-          console.log('ScoreNotificationsListener: Showing toast notification');
+          console.log('🍞 ScoreNotificationsListener: Showing toast notification');
           try {
             toast.success(`${submission.player_name} scored ${submission.score.toLocaleString()} in ${game.name}!`, {
               duration: 5000,
               position: 'top-center',
             });
-            console.log('ScoreNotificationsListener: Toast called successfully');
+            console.log('✅ ScoreNotificationsListener: Toast called successfully');
           } catch (toastError) {
-            console.error('ScoreNotificationsListener: Toast error:', toastError);
+            console.error('❌ ScoreNotificationsListener: Toast error:', toastError);
           }
 
           // Trigger global celebration modal + confetti
-          console.log('ScoreNotificationsListener: Triggering celebration modal for:', submission.player_name);
+          console.log('🎊 ScoreNotificationsListener: Triggering celebration modal for:', submission.player_name);
           try {
             setInsultPlayerName(submission.player_name);
             setShowPlayerInsult(true);
-            console.log('ScoreNotificationsListener: Modal state updated successfully');
+            console.log('✅ ScoreNotificationsListener: Modal state updated successfully');
           } catch (modalError) {
-            console.error('ScoreNotificationsListener: Modal error:', modalError);
+            console.error('❌ ScoreNotificationsListener: Modal error:', modalError);
           }
         }
       )
       .subscribe((status) => {
-        console.log('ScoreNotificationsListener: Score subscription status:', status);
+        console.log('📡 ScoreNotificationsListener: Score subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ ScoreNotificationsListener: Successfully subscribed to real-time events!');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('❌ ScoreNotificationsListener: Channel error!');
+        } else if (status === 'TIMED_OUT') {
+          console.error('⏰ ScoreNotificationsListener: Subscription timed out!');
+        } else if (status === 'CLOSED') {
+          console.log('🔒 ScoreNotificationsListener: Channel closed');
+        }
       });
 
     // Subscribe to achievement unlocks (global) with unique channel name
@@ -168,9 +188,17 @@ export const ScoreNotificationsListener: React.FC = () => {
       });
 
     return () => {
-      console.log('ScoreNotificationsListener: Cleaning up subscriptions');
-      if (scoreChannelRef.current) supabase.removeChannel(scoreChannelRef.current);
-      if (achievementChannelRef.current) supabase.removeChannel(achievementChannelRef.current);
+      console.log('🧹 ScoreNotificationsListener: Cleaning up subscriptions');
+      console.log('🧹 ScoreNotificationsListener: Score channel exists:', !!scoreChannelRef.current);
+      console.log('🧹 ScoreNotificationsListener: Achievement channel exists:', !!achievementChannelRef.current);
+      if (scoreChannelRef.current) {
+        console.log('🧹 ScoreNotificationsListener: Removing score channel');
+        supabase.removeChannel(scoreChannelRef.current);
+      }
+      if (achievementChannelRef.current) {
+        console.log('🧹 ScoreNotificationsListener: Removing achievement channel');
+        supabase.removeChannel(achievementChannelRef.current);
+      }
     };
   }, [currentTournament?.id, showAchievementNotification]); // Depend on tournament ID and showAchievementNotification
 
