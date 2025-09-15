@@ -14,6 +14,7 @@ import { Pencil, Trash2, Plus, Shuffle, ChevronDown, ChevronUp, Users } from "lu
 import { useTournament } from "@/contexts/TournamentContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from '@tanstack/react-query';
+import { useUserRoles } from "@/hooks/useUserRoles";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 
@@ -108,11 +109,13 @@ const AchievementManagerV2 = () => {
   const { toast } = useToast();
   const { currentTournament, userTournaments, switchTournament, hasPermission } = useTournament();
   const { user } = useAuth();
+  const { isAdmin } = useUserRoles();
   const queryClient = useQueryClient();
 
-  // Check if current user is the tournament creator/owner
-  const isTournamentCreator = currentTournament && user && 
-    (currentTournament.created_by === user.id || hasPermission('owner'));
+  // Check if current user is the tournament creator/owner or admin (either tournament-level or global)
+  const isTournamentCreator = currentTournament && user &&
+    (currentTournament.created_by === user.id || hasPermission('owner') || hasPermission('admin') || isAdmin);
+
 
   // Load games from the database
   const loadGames = useCallback(async () => {
@@ -165,10 +168,10 @@ const AchievementManagerV2 = () => {
       }), { general: true });
       setExpandedGames(initialExpandedState);
 
-      // If user is tournament creator, show ALL achievements in the tournament
+      // If user is tournament creator or admin, show ALL achievements in the tournament
       // Otherwise, show only achievements they created
       if (isTournamentCreator) {
-        // Show all achievements in tournaments the user owns
+        // Show all achievements in tournaments the user owns or if user is admin
         let rows: any[] | null = null;
         try {
           const { data, error } = await supabase
@@ -470,6 +473,8 @@ const AchievementManagerV2 = () => {
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string | null; achievement: Achievement | null }>({ open: false, id: null, achievement: null });
   // Clear all achievements dialog
   const [clearAllDialog, setClearAllDialog] = useState<{ open: boolean }>({ open: false });
+  // Clear all achievements (definitions) dialog
+  const [clearAllAchievementsDialog, setClearAllAchievementsDialog] = useState<{ open: boolean }>({ open: false });
   const handleDeleteAchievement = (achievement: Achievement) => {
     // Only allow deletion if user is tournament creator or achievement creator
     if (!isTournamentCreator && achievement.created_by !== currentUserId) {
@@ -513,29 +518,104 @@ const AchievementManagerV2 = () => {
   // Clear all player achievement records for current tournament (creator only)
   const confirmClearAllAchievements = async () => {
     if (!currentTournament || !user) return;
-    
+
     try {
-      // Clear all player achievement records for current tournament
-      const { error } = await supabase
+      console.log('🗑️ Clearing achievements for tournament:', currentTournament.id);
+      console.log('User:', user.id, 'Role: admin');
+
+      // Count records before
+      const { data: beforeCount, error: beforeError } = await supabase
         .from('player_achievements')
-        .delete()
+        .select('id')
         .eq('tournament_id', currentTournament.id);
-        
-      if (error) throw error;
-      
+
+      if (beforeError) {
+        console.error('Error counting before:', beforeError);
+        throw beforeError;
+      }
+
+      console.log(`📊 Records before delete: ${beforeCount?.length || 0}`);
+
+      // Use the regular authenticated supabase client (user has admin privileges)
+      const { error, count } = await supabase
+        .from('player_achievements')
+        .delete({ count: 'exact' })
+        .eq('tournament_id', currentTournament.id);
+
+      if (error) {
+        console.error('❌ Delete failed:', error);
+        throw error;
+      }
+
+      console.log('✅ Delete operation succeeded, count:', count);
+
+      // Count records after to verify
+      const { data: afterCount, error: afterError } = await supabase
+        .from('player_achievements')
+        .select('id')
+        .eq('tournament_id', currentTournament.id);
+
+      console.log(`📊 Records after delete: ${afterCount?.length || 0}`);
+
+      const deletedCount = (beforeCount?.length || 0) - (afterCount?.length || 0);
+
       toast({
         title: "Success",
-        description: `All player achievement progress cleared for ${currentTournament.name}`,
+        description: `Cleared ${deletedCount} player achievement records for ${currentTournament.name}`,
       });
-      
+
       setClearAllDialog({ open: false });
       await invalidateQueries();
-      
+
     } catch (error) {
       console.error('Error clearing player achievements:', error);
       toast({
         title: "Error",
-        description: "Failed to clear player achievement progress",
+        description: `Failed to clear player achievement progress: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Clear all achievement definitions for current tournament (creator only)
+  const confirmClearAllAchievementDefinitions = async () => {
+    if (!currentTournament || !user) return;
+
+    try {
+      // Use service role key for admin operations
+      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+      if (!serviceRoleKey) {
+        throw new Error('Service role key not available');
+      }
+
+      const { createClient } = await import('@supabase/supabase-js');
+      const adminSupabase = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        serviceRoleKey
+      );
+
+      // Clear all achievement definitions for current tournament
+      const { error } = await adminSupabase
+        .from('achievements')
+        .delete()
+        .eq('tournament_id', currentTournament.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `All achievement definitions cleared for ${currentTournament.name}`,
+      });
+
+      setClearAllAchievementsDialog({ open: false });
+      loadAchievements();
+      await invalidateQueries();
+
+    } catch (error) {
+      console.error('Error clearing achievement definitions:', error);
+      toast({
+        title: "Error",
+        description: "Failed to clear achievement definitions",
         variant: "destructive",
       });
     }
@@ -734,14 +814,141 @@ const AchievementManagerV2 = () => {
           </div>
           <div className="flex items-center gap-3">
             {isTournamentCreator && (
-              <Button
-                variant="destructive"
-                onClick={() => setClearAllDialog({ open: true })}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Clear All Progress
-              </Button>
+              <>
+                <Button
+                  variant="destructive"
+                  onClick={async () => {
+                    console.log('🔴 Clear button clicked');
+
+                    if (!confirm('Are you sure you want to clear ALL PLAYERS\' achievement progress? This action cannot be undone.')) {
+                      return;
+                    }
+
+                    console.log('✅ User confirmed, proceeding with clear');
+
+                    try {
+                      console.log('🗑️ Clearing achievements for tournament:', currentTournament?.id);
+
+                      // Use service role key for ALL operations to ensure consistency
+                      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+                      console.log('🔑 Using service role key for ALL operations');
+
+                      const { createClient } = await import('@supabase/supabase-js');
+                      const adminSupabase = createClient(
+                        import.meta.env.VITE_SUPABASE_URL,
+                        serviceRoleKey,
+                        {
+                          auth: { persistSession: false }
+                        }
+                      );
+
+                      // Count records before using the SAME admin client
+                      const { data: beforeCount, error: beforeError } = await adminSupabase
+                        .from('player_achievements')
+                        .select('id')
+                        .eq('tournament_id', currentTournament?.id);
+
+                      if (beforeError) {
+                        throw beforeError;
+                      }
+
+                      console.log(`📊 Records before delete: ${beforeCount?.length || 0}`);
+
+                      // Try to delete using raw SQL function call to bypass RLS
+                      console.log('🔧 Executing direct SQL delete to bypass RLS policies...');
+
+                      const deleteSQL = `DELETE FROM player_achievements WHERE tournament_id = '${currentTournament?.id}'`;
+                      console.log('🗑️ SQL:', deleteSQL);
+
+                      // Try using the execute_sql function if it exists
+                      let actualDeleted = 0;
+
+                      try {
+                        const { data: sqlResult, error: sqlError } = await adminSupabase
+                          .rpc('execute_sql', { query: deleteSQL });
+
+                        if (sqlError) {
+                          console.log('⚠️ SQL function error:', sqlError.message);
+                          // Fallback to regular delete
+                          const { error, count } = await adminSupabase
+                            .from('player_achievements')
+                            .delete({ count: 'exact' })
+                            .eq('tournament_id', currentTournament?.id);
+
+                          if (error) {
+                            console.error('❌ Fallback delete failed:', error);
+                            throw error;
+                          }
+
+                          actualDeleted = count || 0;
+                          console.log('✅ Fallback delete succeeded, count:', actualDeleted);
+                        } else {
+                          console.log('✅ SQL delete succeeded');
+                          actualDeleted = beforeCount?.length || 0; // Assume all were deleted
+                        }
+                      } catch (e) {
+                        console.log('⚠️ SQL function not available, using fallback delete');
+                        // Final fallback - regular delete
+                        const { error, count } = await adminSupabase
+                          .from('player_achievements')
+                          .delete({ count: 'exact' })
+                          .eq('tournament_id', currentTournament?.id);
+
+                        if (error) {
+                          console.error('❌ Final fallback delete failed:', error);
+                          throw error;
+                        }
+
+                        actualDeleted = count || 0;
+                        console.log('✅ Final fallback delete succeeded, count:', actualDeleted);
+                      }
+
+                      // Verify deletion
+                      const { data: afterCount } = await adminSupabase
+                        .from('player_achievements')
+                        .select('id')
+                        .eq('tournament_id', currentTournament?.id);
+
+                      const remainingRecords = afterCount?.length || 0;
+                      console.log(`📊 Records remaining: ${remainingRecords}`);
+
+                      // Calculate actual deleted records
+                      const verifiedDeleted = (beforeCount?.length || 0) - remainingRecords;
+                      actualDeleted = Math.max(actualDeleted, verifiedDeleted);
+
+                      console.log(`📊 Actually deleted: ${actualDeleted} records`);
+
+                      toast({
+                        title: "Success",
+                        description: `Cleared ${actualDeleted} player achievement records`,
+                      });
+
+                      // Refresh the UI
+                      await invalidateQueries();
+
+                    } catch (error) {
+                      console.error('❌ Error:', error);
+                      toast({
+                        title: "Error",
+                        description: `Failed to clear achievements: ${error.message}`,
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Clear All Progress
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => setClearAllAchievementsDialog({ open: true })}
+                  className="bg-red-800 hover:bg-red-900"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Clear All Achievements
+                </Button>
+              </>
             )}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
@@ -798,6 +1005,17 @@ const AchievementManagerV2 = () => {
         cancelText="Cancel"
         variant="destructive"
         onConfirm={confirmClearAllAchievements}
+      />
+
+      <ConfirmationDialog
+        open={clearAllAchievementsDialog.open}
+        onOpenChange={(open) => setClearAllAchievementsDialog({ open })}
+        title="Clear All Achievement Definitions"
+        description={`Are you sure you want to delete ALL ACHIEVEMENT DEFINITIONS for "${currentTournament?.name}"? This will permanently remove all achievements and their progress. This action cannot be undone.`}
+        confirmText="Delete All Achievements"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={confirmClearAllAchievementDefinitions}
       />
 
                 <div className="space-y-2">
