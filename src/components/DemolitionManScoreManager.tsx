@@ -33,12 +33,12 @@ const DemolitionManScoreManager = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Load Demolition Man game ID and scores
+  // Load Standing Competition game ID and scores
   const loadData = async () => {
     try {
       setLoading(true);
       
-      // First ensure Demolition Man game exists and get its ID
+      // First ensure Standing Competition game exists and get its ID
       let gameId = demolitionManGameId;
       
       if (!gameId) {
@@ -46,19 +46,19 @@ const DemolitionManScoreManager = () => {
         const { data: games, error: gameError } = await supabase
           .from('games')
           .select('id')
-          .eq('name', 'Demolition Man')
+          .eq('name', 'Standing Competition')
           .single();
 
         if (games && !gameError) {
           gameId = games.id;
           setDemolitionManGameId(gameId);
         } else {
-          console.error('Demolition Man game not found in database');
+          console.error('Standing Competition game not found in database');
           return;
         }
       }
 
-      // Load Demolition Man scores
+      // Load Standing Competition scores
       const { data: scoresData, error: scoresError } = await supabase
         .from('scores')
         .select('id, player_name, score, created_at, updated_at')
@@ -69,10 +69,10 @@ const DemolitionManScoreManager = () => {
       setScores(scoresData || []);
 
     } catch (error: any) {
-      console.error('Error loading Demolition Man data:', error);
+      console.error('Error loading Standing Competition data:', error);
       toast({
         title: "Error",
-        description: "Failed to load Demolition Man scores",
+        description: "Failed to load Standing Competition scores",
         variant: "destructive",
       });
     } finally {
@@ -125,7 +125,7 @@ const DemolitionManScoreManager = () => {
     if (!demolitionManGameId) {
       toast({
         title: "Error",
-        description: "Demolition Man game not available",
+        description: "Standing Competition game not available",
         variant: "destructive",
       });
       return;
@@ -150,7 +150,7 @@ const DemolitionManScoreManager = () => {
         
         toast({
           title: "Score Updated",
-          description: `Updated ${playerName}'s Demolition Man score`
+          description: `Updated ${playerName}'s Standing Competition score`
         });
       } else {
         // Check for existing score from same player
@@ -170,7 +170,7 @@ const DemolitionManScoreManager = () => {
           
           toast({
             title: "Score Updated",
-            description: `Updated ${playerName}'s Demolition Man score (was: ${existingScore.score.toLocaleString()}, now: ${scoreValue.toLocaleString()})`
+            description: `Updated ${playerName}'s Standing Competition score (was: ${existingScore.score.toLocaleString()}, now: ${scoreValue.toLocaleString()})`
           });
         } else {
           // Create new score
@@ -187,7 +187,7 @@ const DemolitionManScoreManager = () => {
           
           toast({
             title: "Score Added",
-            description: `Added ${playerName}'s Demolition Man score: ${scoreValue.toLocaleString()}`
+            description: `Added ${playerName}'s Standing Competition score: ${scoreValue.toLocaleString()}`
           });
         }
       }
@@ -201,7 +201,7 @@ const DemolitionManScoreManager = () => {
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['tournaments'] });
     } catch (error: any) {
-      console.error('Error saving Demolition Man score:', error);
+      console.error('Error saving Standing Competition score:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to save score",
@@ -228,7 +228,7 @@ const DemolitionManScoreManager = () => {
 
       toast({
         title: "Score Deleted",
-        description: "Demolition Man score deleted successfully"
+        description: "Standing Competition score deleted successfully"
       });
 
       loadData();
@@ -238,7 +238,7 @@ const DemolitionManScoreManager = () => {
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['tournaments'] });
     } catch (error: any) {
-      console.error('Error deleting Demolition Man score:', error);
+      console.error('Error deleting Standing Competition score:', error);
       toast({
         title: "Error",
         description: "Failed to delete score",
@@ -253,12 +253,12 @@ const DemolitionManScoreManager = () => {
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
             <Zap className="w-5 h-5 text-red-400" />
-            Demolition Man Eternal Leaderboard
+            Standing Competition Eternal Leaderboard
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="text-center text-gray-400 py-8">
-            Loading Demolition Man scores...
+            Loading Standing Competition scores...
           </div>
         </CardContent>
       </Card>
@@ -273,7 +273,7 @@ const DemolitionManScoreManager = () => {
           <div>
             <CardTitle className="text-white flex items-center gap-2">
               <Zap className="w-5 h-5 text-red-400" />
-              Demolition Man Eternal Leaderboard
+              Standing Competition Eternal Leaderboard
             </CardTitle>
             <span className="text-sm text-red-300">Scores never reset - eternal competition</span>
           </div>
@@ -288,7 +288,7 @@ const DemolitionManScoreManager = () => {
             <DialogContent className="bg-black/90 border-red-700/50">
               <DialogHeader>
                 <DialogTitle className="text-white">
-                  {editingScore ? 'Edit' : 'Add'} Demolition Man Score
+                  {editingScore ? 'Edit' : 'Add'} Standing Competition Score
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
@@ -389,7 +389,7 @@ const DemolitionManScoreManager = () => {
             {scores.length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-red-400 py-8">
-                  No Demolition Man scores yet. Add the first eternal score!
+                  No Standing Competition scores yet. Add the first eternal score!
                 </TableCell>
               </TableRow>
             )}
@@ -401,7 +401,7 @@ const DemolitionManScoreManager = () => {
       open={deleteDialog.open}
       onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
       title="Delete Score"
-      description="Are you sure you want to delete this Demolition Man score? This action cannot be undone."
+      description="Are you sure you want to delete this Standing Competition score? This action cannot be undone."
       confirmText="Delete Score"
       cancelText="Cancel"
       variant="destructive"

@@ -35,7 +35,8 @@ const BracketAdmin: React.FC = () => {
   const navigate = useNavigate();
   const { tournaments, loading, refresh, createTournament, addPlayers, generateBracket, reportWinner, getTournamentData, deleteTournament } = useBrackets();
 
-  const [form, setForm] = useState({ name: '' });
+  const [form, setForm] = useState({ name: '', bracketType: 'single' as 'single' | 'double' });
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [selected, setSelected] = useState<Tournament | null>(null);
   const [playerBlock, setPlayerBlock] = useState('');
   const [quickBlock, setQuickBlock] = useState('');
@@ -43,7 +44,6 @@ const BracketAdmin: React.FC = () => {
   const [players, setPlayers] = useState<TournamentPlayer[]>([]);
   const [matches, setMatches] = useState<TournamentMatch[]>([]);
   const [loadingBracket, setLoadingBracket] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [restartOpen, setRestartOpen] = useState(false);
   const [restartLoading, setRestartLoading] = useState(false);
   const [winnerOpen, setWinnerOpen] = useState(false);
@@ -172,14 +172,14 @@ const BracketAdmin: React.FC = () => {
   const handleCreate = async () => {
     if (!form.name.trim()) {
       toast({ title: 'Name required', description: 'Enter a tournament name', variant: 'destructive' });
-      return;
+      return null;
     }
-    const tournament = await createTournament(form.name.trim());
+    const tournament = await createTournament(form.name.trim(), form.bracketType);
     if (tournament) {
       toast({ title: 'Created', description: 'Tournament created' });
-      setForm({ name: '' });
-      setSelected(tournament);
+      setForm({ name: '', bracketType: 'single' });
     }
+    return tournament;
   };
 
   const handleAddPlayers = async () => {
@@ -220,7 +220,7 @@ const BracketAdmin: React.FC = () => {
       setPlayers(data.players);
       setMatches(data.matches);
       setQuickBlock('');
-      toast({ title: 'Bracket ready', description: 'Players added and bracket generated' });
+      toast({ title: 'Bracket Tournament ready', description: 'Players added and bracket generated' });
       setNavigationModalOpen(true);
     } catch (e: any) {
       toast({ title: 'Quick start failed', description: e?.message || 'Please try again', variant: 'destructive' });
@@ -229,80 +229,7 @@ const BracketAdmin: React.FC = () => {
     }
   };
 
-  const handleGenerate = async () => {
-    if (!selected) return;
-    setGenerating(true);
-    const ok = await generateBracket(selected.id);
-    setGenerating(false);
-    if (ok) {
-      toast({ title: 'Bracket generated', description: 'Single-elimination matches created' });
-      const data = await getTournamentData(selected.id);
-      setMatches(data.matches);
-      setNavigationModalOpen(true);
-    }
-  };
 
-  const handleSavePlayerChanges = async () => {
-    if (!selected) return;
-    
-    const names = quickBlock
-      .split(/[\n,;]+/)
-      .map(name => name.trim())
-      .filter(Boolean);
-    
-    if (names.length < 2) {
-      toast({ 
-        title: 'Not enough players', 
-        description: 'You need at least 2 players to create a bracket',
-        variant: 'destructive' 
-      });
-      return;
-    }
-    
-    try {
-      // First remove all existing players
-      await Promise.all(
-        players.map(player => 
-          supabase.from('bracket_players')
-            .delete()
-            .eq('id', player.id)
-        )
-      );
-      
-      // Add the new players
-      const { error } = await supabase
-        .from('bracket_players')
-        .insert(
-          names.map(name => ({
-            tournament_id: selected.id,
-            name,
-            created_at: new Date().toISOString()
-          }))
-        );
-      
-      if (error) throw error;
-      
-      // Refresh the data
-      const updatedData = await getTournamentData(selected.id);
-      setPlayers(updatedData.players);
-      
-      toast({
-        title: 'Players updated',
-        description: 'The player list has been successfully updated.'
-      });
-      
-      // Reset the last processed ID to ensure UI updates
-      setLastProcessedTournamentId(null);
-      
-    } catch (error) {
-      console.error('Error updating players:', error);
-      toast({
-        title: 'Failed to update players',
-        description: 'An error occurred while updating the player list.',
-        variant: 'destructive'
-      });
-    }
-  };
 
   const handleRandomizeNames = () => {
     if (!quickBlock.trim()) return;
@@ -389,7 +316,7 @@ const BracketAdmin: React.FC = () => {
       setMatches(data.matches);
       await refresh();
       
-      toast({ title: 'Tournament restarted', description: 'All matches cleared. Generate a new bracket when ready.' });
+      toast({ title: 'Bracket Tournament restarted', description: 'All matches cleared. Generate a new bracket when ready.' });
     } catch (e) {
       toast({ title: 'Failed to restart', description: 'Please try again', variant: 'destructive' });
     } finally {
@@ -543,7 +470,7 @@ const BracketAdmin: React.FC = () => {
         <div className="flex items-center">
           {/* Left aligned title */}
           <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight animate-slide-in-left">
-            Tournament Brackets
+            Bracket Tournaments
           </h1>
 
           {/* Right aligned navigation */}
@@ -612,96 +539,124 @@ const BracketAdmin: React.FC = () => {
       {/* Unified Left Panel */}
       <Card className="h-full flex flex-col overflow-hidden">
         <CardContent className="flex-1 min-h-0 overflow-auto space-y-5">
-          {/* Select Tournament */}
+          {/* Select/Create Tournament */}
           <section className="mt-4 space-y-1.5">
-            <h3 className="text-sm font-semibold text-gray-200">Select Tournament</h3>
-            {ownedTournaments.length > 0 ? (
-              <select
-                className="w-full bg-black/50 border border-white/20 rounded px-2 py-2 text-sm"
-                value={selected?.id || ''}
-                onChange={(e) => {
-                  const tour = ownedTournaments.find(t => t.id === e.target.value);
-                  if (tour) setSelected(tour);
-                }}
-              >
-                <option value="" disabled>Choose…</option>
-                {ownedTournaments.map(t => (<option key={t.id} value={t.id}>{t.name}</option>))}
-              </select>
-            ) : (
-              <div className="text-sm text-gray-400">No tournaments yet — create one below.</div>
-            )}
-          </section>
-
-          {/* Unified Create/Edit Tournament */}
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-gray-200">{selected ? 'Edit Tournament' : 'Create Tournament'}</h3>
-            <div className="space-y-1">
-              <Label htmlFor="tour-name" className="text-sm text-gray-300">Name</Label>
-              <Input id="tour-name" value={form.name} onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))} placeholder="Tournament name" />
-            </div>
-            <Button
-              className="w-full"
-              disabled={selected ? !(user && selected.created_by === user.id) : !form.name.trim()}
-              onClick={async () => {
-                if (selected && user && selected.created_by === user.id) {
-                  const ok = await Promise.all([
-                    supabase.from('tournaments').update({ name: form.name }).eq('id', selected.id),
-                    getTournamentData(selected.id)
-                  ]);
-                  if (ok.every(Boolean)) {
-                    await refresh();
-                    const updated = tournaments.find(t => t.id === selected.id);
-                    if (updated) setSelected(updated);
-                  }
+            <h3 className="text-sm font-semibold text-gray-200">Tournament</h3>
+            <select
+              className="w-full bg-black/50 border border-white/20 rounded px-2 py-2 text-sm"
+              value={showCreateForm ? 'CREATE_NEW' : (selected?.id || '')}
+              onChange={(e) => {
+                if (e.target.value === 'CREATE_NEW') {
+                  setShowCreateForm(true);
+                  setSelected(null);
+                  setForm({ name: '', bracketType: 'single' });
                 } else {
-                  await handleCreate();
+                  setShowCreateForm(false);
+                  const tour = ownedTournaments.find(t => t.id === e.target.value);
+                  if (tour) {
+                    setSelected(tour);
+                    setForm({ name: tour.name, bracketType: tour.bracket_type });
+                  }
                 }
               }}
             >
-              {selected ? 'Save Changes' : 'Create Tournament'}
-            </Button>
+              <option value="" disabled>Choose tournament…</option>
+              {ownedTournaments.map(t => (<option key={t.id} value={t.id}>{t.name}</option>))}
+              <option value="CREATE_NEW">+ Create new tournament</option>
+            </select>
           </section>
 
+          {/* Create Tournament Form (only shown when creating) */}
+          {showCreateForm && (
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-gray-200">Create Tournament</h3>
+              <div className="space-y-1">
+                <Label htmlFor="tour-name" className="text-sm text-gray-300">Name</Label>
+                <Input
+                  id="tour-name"
+                  value={form.name}
+                  onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Tournament name"
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="bracket-type" className="text-sm text-gray-300">Tournament Type</Label>
+                <select
+                  id="bracket-type"
+                  value={form.bracketType}
+                  onChange={(e) => setForm(prev => ({ ...prev, bracketType: e.target.value as 'single' | 'double' }))}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="single">Single Elimination</option>
+                  <option value="double">Double Elimination</option>
+                </select>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowCreateForm(false);
+                    setForm({ name: '', bracketType: 'single' });
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  disabled={!form.name.trim()}
+                  onClick={async () => {
+                    const tournament = await handleCreate();
+                    if (tournament) {
+                      setShowCreateForm(false);
+                      setSelected(tournament);
+                    }
+                  }}
+                >
+                  Create
+                </Button>
+              </div>
+            </section>
+          )}
+
           {/* Add Players & Generate */}
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold text-gray-200">Add Players & Generate</h3>
-            <Label htmlFor="quick-block" className="text-sm text-gray-300">Paste names (one per line; ; or , also supported)</Label>
-            <Textarea
-              id="quick-block"
-              value={quickBlock}
-              onChange={(e) => setQuickBlock(e.target.value)}
-              rows={4}
-              placeholder={selected ? 'Player A\nPlayer B\nPlayer C' : 'Select a tournament first'}
-              disabled={!selected}
-              className="bg-black/50 border-gray-700 text-white"
-            />
-            <Button
-              onClick={handleRandomizeNames}
-              disabled={!selected || !quickBlock.trim()}
-              variant="outline"
-              className="w-full"
-            >
-              Randomize Order
-            </Button>
-            <Button onClick={handleQuickStart} disabled={!selected || !quickBlock.trim() || quickRunning} className="w-full">
-              {quickRunning ? 'Creating…' : 'Create Bracket'}
-            </Button>
-          </section>
+          {selected && !showCreateForm && (
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold text-gray-200">Add Players & Generate</h3>
+              <Label htmlFor="quick-block" className="text-sm text-gray-300">Add any number of players (minimum 2)</Label>
+              <div className="text-xs text-gray-400 mb-2">Paste names one per line, or separate with ; or ,</div>
+              <Textarea
+                id="quick-block"
+                value={quickBlock}
+                onChange={(e) => setQuickBlock(e.target.value)}
+                rows={4}
+                placeholder={`Player A
+Player B
+Player C
+Player D
+...`}
+                className="bg-black/50 border-gray-700 text-white"
+              />
+              <Button
+                onClick={handleRandomizeNames}
+                disabled={!quickBlock.trim()}
+                variant="outline"
+                className="w-full"
+              >
+                Randomize Order
+              </Button>
+              <Button onClick={handleQuickStart} disabled={!quickBlock.trim() || quickRunning} className="w-full">
+                {quickRunning ? 'Creating…' : 'Start'}
+              </Button>
+            </section>
+          )}
 
           {/* Action Buttons */}
           {selected && players.length > 0 && (
             <div className="space-y-3">
-              {matches.length === 0 && players.length >= 2 && (
-                <Button 
-                  onClick={handleGenerate} 
-                  className="w-full"
-                  disabled={generating}
-                >
-                  {generating ? 'Generating...' : 'Create Bracket'}
-                </Button>
-              )}
-              <Button 
-                variant="destructive" 
+              <Button
+                variant="destructive"
                 className="w-full"
                 onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleting}
@@ -719,9 +674,6 @@ const BracketAdmin: React.FC = () => {
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Tournament Admin</CardTitle>
                <div className="flex items-center gap-2">
-                 {matches.length === 0 && players.length >= 2 && (
-                   <Button size="sm" variant="default" onClick={handleGenerate}>Generate</Button>
-                 )}
                  {selected && (
                    <Button variant="destructive" size="sm" onClick={() => setRestartOpen(true)}>Restart</Button>
                  )}
@@ -758,11 +710,10 @@ const BracketAdmin: React.FC = () => {
                 {!selected ? (
                   <p className="text-gray-500 text-center">Select a tournament to get started</p>
                 ) : quickNamesList.length < 2 && players.length < 2 ? (
-                  <p className="text-gray-500 text-center">Add at least two players to see bracket preview</p>
+                  <p className="text-gray-500 text-center">Add at least two players to see Bracket Tournament preview</p>
                 ) : (
                   <div className="flex flex-col items-center gap-2">
-                    <p className="text-gray-500 text-center">Generate a bracket to get started</p>
-                    <Button onClick={handleGenerate}>Generate</Button>
+                    <p className="text-gray-500 text-center">Use Quick Start to add players and generate Bracket Tournament</p>
                   </div>
                 )}
               </div>
@@ -798,9 +749,9 @@ const BracketAdmin: React.FC = () => {
       <Dialog open={navigationModalOpen} onOpenChange={setNavigationModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Bracket Generated Successfully!</DialogTitle>
+            <DialogTitle>Bracket Tournament Generated Successfully!</DialogTitle>
             <DialogDescription>
-              Your bracket has been created and is ready for competition. Would you like to navigate to the competition view to start reporting match results?
+              Your Bracket Tournament has been created and is ready for competition. Would you like to navigate to the competition view to start reporting match results?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

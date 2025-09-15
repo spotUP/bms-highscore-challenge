@@ -15,7 +15,7 @@ const DemolitionManEnsure: React.FC = () => {
       const { data, error } = await supabase
         .from('games')
         .select('id, name')
-        .eq('name', 'Demolition Man')
+        .eq('name', 'Standing Competition')
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
@@ -37,11 +37,11 @@ const DemolitionManEnsure: React.FC = () => {
     setIsEnsuring(true);
     
     try {
-      // Create Demolition Man game manually since the function doesn't exist in types
+      // Create Standing Competition game manually since the function doesn't exist in types
       const { data: existingGame, error: findError } = await supabase
         .from('games')
         .select('id')
-        .eq('name', 'Demolition Man')
+        .eq('name', 'Standing Competition')
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
@@ -52,7 +52,7 @@ const DemolitionManEnsure: React.FC = () => {
         gameId = existingGame.id;
       } else {
         // Game doesn't exist, we'll just mark it as unavailable
-        const error = new Error('Demolition Man game not found');
+        const error = new Error('Standing Competition game not found');
         throw error;
       }
 
@@ -60,14 +60,14 @@ const DemolitionManEnsure: React.FC = () => {
       setGameExists(true);
       toast({
         title: "Success!",
-        description: `Demolition Man eternal leaderboard is now available (ID: ${gameId})`,
+        description: `Standing Competition eternal leaderboard is now available (ID: ${gameId})`,
       });
 
     } catch (error: any) {
-      console.error('Error ensuring Demolition Man game:', error);
+      console.error('Error ensuring Standing Competition game:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to ensure Demolition Man game exists",
+        description: error.message || "Failed to ensure Standing Competition game exists",
         variant: "destructive",
       });
     } finally {
@@ -85,13 +85,13 @@ const DemolitionManEnsure: React.FC = () => {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-white">
           <Zap className="w-5 h-5 text-red-400" />
-          Demolition Man Eternal Leaderboard
+          Standing Competition Eternal Leaderboard
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="text-sm text-gray-300">
-            Ensure the Demolition Man game exists in the database for the eternal leaderboard
+            Ensure the Standing Competition game exists in the database for the eternal leaderboard
           </div>
           <div className="flex items-center gap-2">
             {gameExists === true && (
@@ -133,7 +133,7 @@ const DemolitionManEnsure: React.FC = () => {
         </div>
 
         <div className="text-xs text-gray-500">
-          The Demolition Man game will be automatically created when needed, but you can manually ensure it exists here.
+          The Standing Competition game will be automatically created when needed, but you can manually ensure it exists here.
         </div>
       </CardContent>
     </Card>

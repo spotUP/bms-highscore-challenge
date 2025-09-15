@@ -30,6 +30,15 @@ export interface TournamentMatch {
   updated_at: string;
 }
 
+// Type alias for BracketView compatibility
+export type BracketMatch = TournamentMatch;
+
+export interface BracketParticipant {
+  id: string;
+  name: string;
+  display_name: string;
+}
+
 interface BracketContextType {
   tournaments: Tournament[];
   loading: boolean;
@@ -283,17 +292,33 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
 
     const matches: Partial<TournamentMatch>[] = [];
 
-    // 1. WINNERS BRACKET (1-99): Standard single elimination
+    console.log(`Creating double elimination bracket for ${playerCount} players (bracket size: ${bracketSize})`);
+    console.log('Seeded players:', seededPlayers.map(p => p?.name || 'BYE'));
+
+    // Clear any existing matches for this tournament to prevent conflicts
+    console.log('Clearing existing matches...');
+    await supabase
+      .from('bracket_matches')
+      .delete()
+      .eq('tournament_id', tournamentId);
+
+    // 1. WINNERS BRACKET (1-99): Standard single elimination with GUARANTEED player assignments
     let position = 1;
     for (let i = 0; i < seededPlayers.length; i += 2) {
-      matches.push({
+      const p1 = seededPlayers[i];
+      const p2 = seededPlayers[i + 1];
+
+      const match = {
         tournament_id: tournamentId,
         round: 1,
         position: position++,
-        participant1_id: seededPlayers[i]?.id || null,
-        participant2_id: seededPlayers[i + 1]?.id || null,
+        participant1_id: p1?.id || null,
+        participant2_id: p2?.id || null,
         winner_participant_id: null
-      });
+      };
+
+      console.log(`R1P${match.position}: ${p1?.name || 'BYE'} vs ${p2?.name || 'BYE'}`);
+      matches.push(match);
     }
 
     // Create subsequent winners bracket rounds
@@ -311,41 +336,298 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // 2. LOSERS BRACKET (100-199): Complex interleaved structure
-    // Losers bracket has (2 * totalWinnersRounds - 1) rounds
-    const totalLosersRounds = (2 * totalWinnersRounds) - 1;
+    // 2. LOSERS BRACKET (100-199): Proper double elimination structure
+    // The formula for losers bracket rounds is 2*(totalWinnersRounds-1)
+    const totalLosersRounds = 2 * (totalWinnersRounds - 1);
 
-    for (let losersRound = 1; losersRound <= totalLosersRounds; losersRound++) {
-      const round = 100 + losersRound - 1; // 100, 101, 102, ...
+    // Create losers bracket matches with proper structure based on tournament size
+    let losersRoundNum = 100;
 
-      let matchesInRound: number;
-      if (losersRound === 1) {
-        // First losers round: half the first winners round losers
-        matchesInRound = Math.pow(2, totalWinnersRounds - 2);
-      } else if (losersRound % 2 === 0) {
-        // Even rounds: matches decrease by half
-        matchesInRound = Math.pow(2, totalWinnersRounds - Math.ceil(losersRound / 2) - 1);
-      } else {
-        // Odd rounds: same as previous round
-        matchesInRound = Math.pow(2, totalWinnersRounds - Math.ceil(losersRound / 2));
-      }
+    // Optimized implementations for common tournament sizes
+    if (totalWinnersRounds === 2) {
+      // 4-PLAYER TOURNAMENT (2 winners rounds, 2 losers rounds)
+      // L1: 1 match (2 losers from W1)
+      matches.push({
+        tournament_id: tournamentId,
+        round: losersRoundNum,
+        position: 1,
+        participant1_id: null,
+        participant2_id: null,
+        winner_participant_id: null
+      });
+      losersRoundNum++;
 
-      // Ensure we don't go below 1 match
-      matchesInRound = Math.max(1, matchesInRound);
+      // L2: 1 match (L1 winner vs W2 loser - losers bracket final)
+      matches.push({
+        tournament_id: tournamentId,
+        round: losersRoundNum,
+        position: 1,
+        participant1_id: null,
+        participant2_id: null,
+        winner_participant_id: null
+      });
 
-      for (let pos = 1; pos <= matchesInRound; pos++) {
+    } else if (totalWinnersRounds === 3) {
+      // 8-PLAYER TOURNAMENT (3 winners rounds, 4 losers rounds)
+      // L1: 2 matches (4 losers from W1)
+      for (let pos = 1; pos <= 2; pos++) {
         matches.push({
           tournament_id: tournamentId,
-          round: round,
+          round: losersRoundNum,
           position: pos,
           participant1_id: null,
           participant2_id: null,
           winner_participant_id: null
         });
       }
+      losersRoundNum++;
+
+      // L2: 2 matches (L1 winners vs W2 losers)
+      for (let pos = 1; pos <= 2; pos++) {
+        matches.push({
+          tournament_id: tournamentId,
+          round: losersRoundNum,
+          position: pos,
+          participant1_id: null,
+          participant2_id: null,
+          winner_participant_id: null
+        });
+      }
+      losersRoundNum++;
+
+      // L3: 1 match (L2 winners)
+      matches.push({
+        tournament_id: tournamentId,
+        round: losersRoundNum,
+        position: 1,
+        participant1_id: null,
+        participant2_id: null,
+        winner_participant_id: null
+      });
+      losersRoundNum++;
+
+      // L4: 1 match (L3 winner vs W3 loser - losers bracket final)
+      matches.push({
+        tournament_id: tournamentId,
+        round: losersRoundNum,
+        position: 1,
+        participant1_id: null,
+        participant2_id: null,
+        winner_participant_id: null
+      });
+
+    } else if (totalWinnersRounds === 4) {
+      // 16-PLAYER TOURNAMENT (4 winners rounds, 6 losers rounds)
+      // L1: 4 matches (8 losers from W1)
+      for (let pos = 1; pos <= 4; pos++) {
+        matches.push({
+          tournament_id: tournamentId,
+          round: losersRoundNum,
+          position: pos,
+          participant1_id: null,
+          participant2_id: null,
+          winner_participant_id: null
+        });
+      }
+      losersRoundNum++;
+
+      // L2: 4 matches (L1 winners vs W2 losers)
+      for (let pos = 1; pos <= 4; pos++) {
+        matches.push({
+          tournament_id: tournamentId,
+          round: losersRoundNum,
+          position: pos,
+          participant1_id: null,
+          participant2_id: null,
+          winner_participant_id: null
+        });
+      }
+      losersRoundNum++;
+
+      // L3: 2 matches (L2 winners)
+      for (let pos = 1; pos <= 2; pos++) {
+        matches.push({
+          tournament_id: tournamentId,
+          round: losersRoundNum,
+          position: pos,
+          participant1_id: null,
+          participant2_id: null,
+          winner_participant_id: null
+        });
+      }
+      losersRoundNum++;
+
+      // L4: 2 matches (L3 winners vs W3 losers)
+      for (let pos = 1; pos <= 2; pos++) {
+        matches.push({
+          tournament_id: tournamentId,
+          round: losersRoundNum,
+          position: pos,
+          participant1_id: null,
+          participant2_id: null,
+          winner_participant_id: null
+        });
+      }
+      losersRoundNum++;
+
+      // L5: 1 match (L4 winners)
+      matches.push({
+        tournament_id: tournamentId,
+        round: losersRoundNum,
+        position: 1,
+        participant1_id: null,
+        participant2_id: null,
+        winner_participant_id: null
+      });
+      losersRoundNum++;
+
+      // L6: 1 match (L5 winner vs W4 loser - losers bracket final)
+      matches.push({
+        tournament_id: tournamentId,
+        round: losersRoundNum,
+        position: 1,
+        participant1_id: null,
+        participant2_id: null,
+        winner_participant_id: null
+      });
+
+    } else if (totalWinnersRounds === 5) {
+      // 32-PLAYER TOURNAMENT (5 winners rounds, 8 losers rounds)
+      // L1: 8 matches (16 losers from W1)
+      for (let pos = 1; pos <= 8; pos++) {
+        matches.push({
+          tournament_id: tournamentId,
+          round: losersRoundNum,
+          position: pos,
+          participant1_id: null,
+          participant2_id: null,
+          winner_participant_id: null
+        });
+      }
+      losersRoundNum++;
+
+      // L2: 8 matches (L1 winners vs W2 losers)
+      for (let pos = 1; pos <= 8; pos++) {
+        matches.push({
+          tournament_id: tournamentId,
+          round: losersRoundNum,
+          position: pos,
+          participant1_id: null,
+          participant2_id: null,
+          winner_participant_id: null
+        });
+      }
+      losersRoundNum++;
+
+      // L3: 4 matches (L2 winners)
+      for (let pos = 1; pos <= 4; pos++) {
+        matches.push({
+          tournament_id: tournamentId,
+          round: losersRoundNum,
+          position: pos,
+          participant1_id: null,
+          participant2_id: null,
+          winner_participant_id: null
+        });
+      }
+      losersRoundNum++;
+
+      // L4: 4 matches (L3 winners vs W3 losers)
+      for (let pos = 1; pos <= 4; pos++) {
+        matches.push({
+          tournament_id: tournamentId,
+          round: losersRoundNum,
+          position: pos,
+          participant1_id: null,
+          participant2_id: null,
+          winner_participant_id: null
+        });
+      }
+      losersRoundNum++;
+
+      // L5: 2 matches (L4 winners)
+      for (let pos = 1; pos <= 2; pos++) {
+        matches.push({
+          tournament_id: tournamentId,
+          round: losersRoundNum,
+          position: pos,
+          participant1_id: null,
+          participant2_id: null,
+          winner_participant_id: null
+        });
+      }
+      losersRoundNum++;
+
+      // L6: 2 matches (L5 winners vs W4 losers)
+      for (let pos = 1; pos <= 2; pos++) {
+        matches.push({
+          tournament_id: tournamentId,
+          round: losersRoundNum,
+          position: pos,
+          participant1_id: null,
+          participant2_id: null,
+          winner_participant_id: null
+        });
+      }
+      losersRoundNum++;
+
+      // L7: 1 match (L6 winners)
+      matches.push({
+        tournament_id: tournamentId,
+        round: losersRoundNum,
+        position: 1,
+        participant1_id: null,
+        participant2_id: null,
+        winner_participant_id: null
+      });
+      losersRoundNum++;
+
+      // L8: 1 match (L7 winner vs W5 loser - losers bracket final)
+      matches.push({
+        tournament_id: tournamentId,
+        round: losersRoundNum,
+        position: 1,
+        participant1_id: null,
+        participant2_id: null,
+        winner_participant_id: null
+      });
+
+    } else {
+      // Generic fallback for other tournament sizes
+      for (let losersRound = 1; losersRound <= totalLosersRounds; losersRound++) {
+        const round = 100 + losersRound - 1;
+
+        let matchesInRound: number;
+        if (losersRound === 1) {
+          // First losers round: half the R1 losers
+          matchesInRound = Math.pow(2, totalWinnersRounds - 2);
+        } else if (losersRound % 2 === 0) {
+          // Even rounds: new losers from winners bracket enter
+          const winnersRoundLosing = Math.ceil(losersRound / 2) + 1;
+          matchesInRound = Math.pow(2, totalWinnersRounds - winnersRoundLosing);
+        } else {
+          // Odd rounds: only losers bracket players
+          const roundSet = Math.floor(losersRound / 2) + 1;
+          matchesInRound = Math.pow(2, totalWinnersRounds - roundSet);
+        }
+
+        matchesInRound = Math.max(1, matchesInRound);
+
+        for (let pos = 1; pos <= matchesInRound; pos++) {
+          matches.push({
+            tournament_id: tournamentId,
+            round: round,
+            position: pos,
+            participant1_id: null,
+            participant2_id: null,
+            winner_participant_id: null
+          });
+        }
+      }
     }
 
-    // 3. GRAND FINALS (1000, 1001): Winners champion vs Losers champion
+    // 3. GRAND FINALS (1000): Winners champion vs Losers champion
+    // Single match - winner takes all, no bracket reset
     matches.push({
       tournament_id: tournamentId,
       round: 1000,
@@ -355,21 +637,22 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       winner_participant_id: null
     });
 
-    // Bracket reset match (only played if losers champion wins grand finals)
-    matches.push({
-      tournament_id: tournamentId,
-      round: 1001,
-      position: 1,
-      participant1_id: null,
-      participant2_id: null,
-      winner_participant_id: null
+    console.log(`About to insert ${matches.length} matches`);
+    console.log('First round participant assignments:');
+    matches.filter(m => m.round === 1).forEach(m => {
+      console.log(`  R${m.round}P${m.position}: p1=${m.participant1_id}, p2=${m.participant2_id}`);
     });
 
     const { error: insertErr } = await supabase
       .from('bracket_matches')
       .insert(matches);
 
-    if (insertErr) throw insertErr;
+    if (insertErr) {
+      console.error('Failed to insert double elimination matches:', insertErr);
+      throw insertErr;
+    }
+
+    console.log('✅ Double elimination bracket created successfully');
 
     // Update tournament status to active
     await supabase
@@ -491,49 +774,10 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       const { round, position, participant1_id, participant2_id } = match;
       const loserId = winnerId === participant1_id ? participant2_id : participant1_id;
 
-      // GRAND FINALS LOGIC (1000-1001)
+      // GRAND FINALS LOGIC (1000) - Single winner, no bracket reset
       if (round === 1000) {
-        // First grand final match
-        // Check if winner came from winners bracket (has never lost)
-        const { data: winnerMatches, error: winnerMatchesErr } = await supabase
-          .from('bracket_matches')
-          .select('*')
-          .eq('tournament_id', match.tournament_id)
-          .or(`participant1_id.eq.${winnerId},participant2_id.eq.${winnerId}`)
-          .gte('round', 100) // Check if winner played in losers bracket
-          .not('winner_participant_id', 'is', null);
-
-        if (winnerMatchesErr) throw winnerMatchesErr;
-
-        const winnerHasLostBefore = winnerMatches && winnerMatches.length > 0;
-
-        if (!winnerHasLostBefore) {
-          // Winner from winners bracket wins - tournament over
-          await supabase
-            .from('bracket_tournaments')
-            .update({
-              status: 'completed',
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', match.tournament_id);
-        } else {
-          // Winner from losers bracket wins - bracket reset, play round 1001
-          await supabase
-            .from('bracket_matches')
-            .update({
-              participant1_id: loserId, // Original winners bracket champion
-              participant2_id: winnerId, // Losers bracket champion who just won
-              winner_participant_id: null
-            })
-            .eq('tournament_id', match.tournament_id)
-            .eq('round', 1001)
-            .eq('position', 1);
-        }
-        return true;
-      }
-
-      if (round === 1001) {
-        // Bracket reset final - tournament complete regardless of winner
+        // Grand final match - whoever wins is the tournament champion
+        // Complete the tournament regardless of who wins
         await supabase
           .from('bracket_tournaments')
           .update({
@@ -641,20 +885,126 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
     loserId: string
   ): Promise<void> => {
     try {
-      // Calculate target losers bracket position based on winners bracket elimination
+      // Get tournament info to determine total winners rounds
+      const { data: matches } = await supabase
+        .from('bracket_matches')
+        .select('round')
+        .eq('tournament_id', tournamentId)
+        .lt('round', 100) // Only winners bracket
+        .order('round', { ascending: false })
+        .limit(1);
+
+      const totalWinnersRounds = matches?.[0]?.round || 3; // Default to 8-player if not found
+
+      // Calculate target losers bracket position based on tournament size and winners round
       let targetLosersRound: number;
       let targetPosition: number;
+      let targetSlot: 'participant1_id' | 'participant2_id';
 
-      if (winnersRound === 1) {
-        // First round losers go directly to losers bracket round 1
-        targetLosersRound = 100; // Round 100 = losers round 1
-        targetPosition = Math.ceil(winnersPosition / 2);
+      if (totalWinnersRounds === 2) {
+        // 4-PLAYER TOURNAMENT
+        if (winnersRound === 1) {
+          // W1 losers -> L1 (round 100)
+          targetLosersRound = 100;
+          targetPosition = 1;
+          targetSlot = winnersPosition === 1 ? 'participant1_id' : 'participant2_id';
+        } else {
+          // W2 loser -> L2 (round 101)
+          targetLosersRound = 101;
+          targetPosition = 1;
+          targetSlot = 'participant2_id';
+        }
+
+      } else if (totalWinnersRounds === 3) {
+        // 8-PLAYER TOURNAMENT
+        if (winnersRound === 1) {
+          // W1 losers -> L1 (round 100)
+          targetLosersRound = 100;
+          targetPosition = Math.ceil(winnersPosition / 2);
+          targetSlot = (winnersPosition % 2 === 1) ? 'participant1_id' : 'participant2_id';
+        } else if (winnersRound === 2) {
+          // W2 losers -> L2 (round 101)
+          targetLosersRound = 101;
+          targetPosition = winnersPosition;
+          targetSlot = 'participant2_id';
+        } else {
+          // W3 loser -> L4 (round 103)
+          targetLosersRound = 103;
+          targetPosition = 1;
+          targetSlot = 'participant2_id';
+        }
+
+      } else if (totalWinnersRounds === 4) {
+        // 16-PLAYER TOURNAMENT
+        if (winnersRound === 1) {
+          // W1 losers -> L1 (round 100)
+          targetLosersRound = 100;
+          targetPosition = Math.ceil(winnersPosition / 2);
+          targetSlot = (winnersPosition % 2 === 1) ? 'participant1_id' : 'participant2_id';
+        } else if (winnersRound === 2) {
+          // W2 losers -> L2 (round 101)
+          targetLosersRound = 101;
+          targetPosition = winnersPosition;
+          targetSlot = 'participant2_id';
+        } else if (winnersRound === 3) {
+          // W3 losers -> L4 (round 103)
+          targetLosersRound = 103;
+          targetPosition = winnersPosition;
+          targetSlot = 'participant2_id';
+        } else {
+          // W4 loser -> L6 (round 105)
+          targetLosersRound = 105;
+          targetPosition = 1;
+          targetSlot = 'participant2_id';
+        }
+
+      } else if (totalWinnersRounds === 5) {
+        // 32-PLAYER TOURNAMENT
+        if (winnersRound === 1) {
+          // W1 losers -> L1 (round 100)
+          targetLosersRound = 100;
+          targetPosition = Math.ceil(winnersPosition / 2);
+          targetSlot = (winnersPosition % 2 === 1) ? 'participant1_id' : 'participant2_id';
+        } else if (winnersRound === 2) {
+          // W2 losers -> L2 (round 101)
+          targetLosersRound = 101;
+          targetPosition = winnersPosition;
+          targetSlot = 'participant2_id';
+        } else if (winnersRound === 3) {
+          // W3 losers -> L4 (round 103)
+          targetLosersRound = 103;
+          targetPosition = winnersPosition;
+          targetSlot = 'participant2_id';
+        } else if (winnersRound === 4) {
+          // W4 losers -> L6 (round 105)
+          targetLosersRound = 105;
+          targetPosition = winnersPosition;
+          targetSlot = 'participant2_id';
+        } else {
+          // W5 loser -> L8 (round 107)
+          targetLosersRound = 107;
+          targetPosition = 1;
+          targetSlot = 'participant2_id';
+        }
+
       } else {
-        // Later round losers enter at specific positions
-        // This is complex - losers from different winners rounds enter at different points
-        const losersRoundNumber = (winnersRound - 1) * 2; // Approximate mapping
-        targetLosersRound = 100 + losersRoundNumber - 1;
-        targetPosition = Math.ceil(winnersPosition / 2);
+        // Generic fallback for other tournament sizes
+        if (winnersRound === 1) {
+          targetLosersRound = 100;
+          targetPosition = Math.ceil(winnersPosition / 2);
+          targetSlot = (winnersPosition % 2 === 1) ? 'participant1_id' : 'participant2_id';
+        } else if (winnersRound === totalWinnersRounds) {
+          // Finals loser goes to last losers round
+          targetLosersRound = 100 + (2 * (totalWinnersRounds - 1)) - 1;
+          targetPosition = 1;
+          targetSlot = 'participant2_id';
+        } else {
+          // Middle rounds
+          const losersRoundNumber = (winnersRound - 1) * 2;
+          targetLosersRound = 100 + losersRoundNumber - 1;
+          targetPosition = winnersPosition;
+          targetSlot = 'participant2_id';
+        }
       }
 
       // Find the target losers bracket match
@@ -669,22 +1019,13 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       if (losersMatchErr) throw losersMatchErr;
 
       if (losersMatch) {
-        // Determine which slot to fill (participant1 or participant2)
-        let updateField: string;
-        if (!losersMatch.participant1_id) {
-          updateField = 'participant1_id';
-        } else if (!losersMatch.participant2_id) {
-          updateField = 'participant2_id';
-        } else {
-          // Both slots filled - this shouldn't happen in a properly structured bracket
-          console.warn('Both participants already set in losers bracket match');
-          return;
-        }
-
+        // Use the calculated target slot
         await supabase
           .from('bracket_matches')
-          .update({ [updateField]: loserId })
+          .update({ [targetSlot]: loserId })
           .eq('id', losersMatch.id);
+      } else {
+        console.warn(`Could not find losers bracket match at round ${targetLosersRound}, position ${targetPosition}`);
       }
     } catch (e) {
       console.error('Error advancing loser to losers bracket:', e);
