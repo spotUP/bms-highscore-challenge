@@ -124,6 +124,51 @@ const BracketAdmin: React.FC = () => {
     load();
   }, [selected, getTournamentData, lastProcessedTournamentId]);
 
+  // Auto-save player changes when quickBlock is edited
+  useEffect(() => {
+    if (!selected || !quickBlock.trim()) return;
+
+    // Debounce the save operation - wait 1 second after user stops typing
+    const timeoutId = setTimeout(async () => {
+      const names = quickBlock
+        .split(/[\n,;]+/)
+        .map(name => name.trim())
+        .filter(Boolean);
+
+      if (names.length < 2) return;
+
+      try {
+        // First remove all existing players
+        await Promise.all(
+          players.map(player =>
+            supabase.from('bracket_players').delete().eq('id', player.id)
+          )
+        );
+
+        // Then add the new players
+        const playerRows = names.map(name => ({
+          tournament_id: selected.id,
+          name
+        }));
+
+        const { error } = await supabase
+          .from('bracket_players')
+          .insert(playerRows);
+
+        if (error) throw error;
+
+        // Refresh the tournament data
+        const data = await getTournamentData(selected.id);
+        setPlayers(data.players);
+        setMatches(data.matches);
+      } catch (e) {
+        console.error('Auto-save failed:', e);
+      }
+    }, 1000); // 1 second debounce
+
+    return () => clearTimeout(timeoutId);
+  }, [quickBlock, selected, players, getTournamentData]);
+
   const handleCreate = async () => {
     if (!form.name.trim()) {
       toast({ title: 'Name required', description: 'Enter a tournament name', variant: 'destructive' });
@@ -257,6 +302,26 @@ const BracketAdmin: React.FC = () => {
         variant: 'destructive'
       });
     }
+  };
+
+  const handleRandomizeNames = () => {
+    if (!quickBlock.trim()) return;
+
+    const names = quickBlock
+      .split(/[\n,;]+/)
+      .map(name => name.trim())
+      .filter(Boolean);
+
+    if (names.length < 2) return;
+
+    // Fisher-Yates shuffle algorithm
+    const shuffled = [...names];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    setQuickBlock(shuffled.join('\n'));
   };
 
   const onReportClick = async (matchId: string, winnerId: string) => {
@@ -405,6 +470,73 @@ const BracketAdmin: React.FC = () => {
     return map;
   }, [participantMap, players, quickNamesList]);
 
+  // Generate preview bracket matches for live preview when editing player names
+  const generatePreviewMatches = (playerList: { id: string; name: string }[]) => {
+    if (playerList.length < 2) return [];
+
+    const matches = [];
+    const numPlayers = playerList.length;
+    const numRounds = Math.ceil(Math.log2(numPlayers));
+
+    // Create first round matches
+    let currentRound = 1;
+    let position = 1;
+
+    for (let i = 0; i < numPlayers; i += 2) {
+      const participant1 = playerList[i];
+      const participant2 = playerList[i + 1] || null; // Handle odd number of players
+
+      matches.push({
+        id: `preview-${currentRound}-${position}`,
+        tournament_id: selected?.id || 'preview',
+        round: currentRound,
+        position: position,
+        participant1_id: participant1.id,
+        participant2_id: participant2?.id || null,
+        winner_participant_id: null,
+        status: 'pending' as const
+      });
+
+      position++;
+    }
+
+    // Generate subsequent rounds (empty for preview)
+    for (let round = 2; round <= numRounds; round++) {
+      const matchesInRound = Math.pow(2, numRounds - round);
+      for (let pos = 1; pos <= matchesInRound; pos++) {
+        matches.push({
+          id: `preview-${round}-${pos}`,
+          tournament_id: selected?.id || 'preview',
+          round: round,
+          position: pos,
+          participant1_id: null,
+          participant2_id: null,
+          winner_participant_id: null,
+          status: 'pending' as const
+        });
+      }
+    }
+
+    return matches;
+  };
+
+  // Generate preview matches when editing names
+  const previewMatches = useMemo(() => {
+    if (!selected) return [];
+
+    // If we have actual matches, use those
+    if (matches.length > 0) return bracketMatches;
+
+    // Otherwise generate preview matches from quickNamesList or players
+    const sourceList = quickNamesList.length >= 2
+      ? quickNamesList.map((name) => ({ id: makeTempId(name), name }))
+      : players.length >= 2
+        ? players.map(p => ({ id: p.id, name: p.name }))
+        : [];
+
+    return generatePreviewMatches(sourceList);
+  }, [selected, matches.length, bracketMatches, quickNamesList, players]);
+
   return (
     <div className="h-[100dvh] overflow-hidden flex flex-col text-white relative z-10" style={{ background: 'var(--page-bg)' }}>
       <div className="shrink-0 p-3 md:p-4">
@@ -543,31 +675,19 @@ const BracketAdmin: React.FC = () => {
               disabled={!selected}
               className="bg-black/50 border-gray-700 text-white"
             />
+            <Button
+              onClick={handleRandomizeNames}
+              disabled={!selected || !quickBlock.trim()}
+              variant="outline"
+              className="w-full"
+            >
+              Randomize Order
+            </Button>
             <Button onClick={handleQuickStart} disabled={!selected || !quickBlock.trim() || quickRunning} className="w-full">
               {quickRunning ? 'Creating…' : 'Create Bracket'}
             </Button>
-            <Button onClick={handleSavePlayerChanges} disabled={!selected || !quickBlock.trim()} className="w-full">
-              Save Player Changes
-            </Button>
           </section>
 
-          {/* Seeding */}
-          {selected && (
-            <section className="space-y-3">
-              <h3 className="text-sm font-semibold text-gray-200">Seeding</h3>
-              {players.length === 0 ? (
-                <div className="text-sm text-gray-400">No players yet. Add players above.</div>
-              ) : (
-                <div className="space-y-2 max-h-56 overflow-auto pr-2">
-                  {players.map(p => (
-                    <div key={p.id} className="flex items-center gap-2">
-                      <div className="text-sm text-gray-300 truncate">{p.name}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-          )}
           {/* Action Buttons */}
           {selected && players.length > 0 && (
             <div className="space-y-3">
@@ -609,21 +729,36 @@ const BracketAdmin: React.FC = () => {
              </div>
            </CardHeader>
            <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
-            {selected && matches.length > 0 ? (
-              <BracketView
-                matches={bracketMatches}
-                participants={participantMap}
-                adminMode
-                onReport={onReportClick}
-                onPlayerClick={onPlayerClick}
-                highlightTarget={highlightTarget}
-              />
+            {selected && (previewMatches.length > 0 || matches.length > 0) ? (
+              <div className="h-full flex flex-col">
+                {/* Preview indicator when showing preview matches */}
+                {matches.length === 0 && previewMatches.length > 0 && (
+                  <div className="shrink-0 px-4 py-2 bg-amber-500/20 border-b border-amber-500/30">
+                    <p className="text-sm text-amber-200 flex items-center gap-2">
+                      <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span>
+                      Live Preview - Edit player names to see changes
+                    </p>
+                  </div>
+                )}
+                <div className="flex-1 overflow-hidden">
+                  <BracketView
+                    matches={previewMatches}
+                    participants={previewParticipants}
+                    adminMode={matches.length > 0} // Only enable admin mode for actual matches
+                    onReport={matches.length > 0 ? onReportClick : undefined}
+                    onPlayerClick={matches.length > 0 ? onPlayerClick : undefined}
+                    highlightTarget={highlightTarget}
+                    disableKeyboardNavigation={true}
+                    forceAutoFit={true}
+                  />
+                </div>
+              </div>
             ) : (
               <div className="p-6 h-full flex flex-col items-center justify-center">
                 {!selected ? (
                   <p className="text-gray-500 text-center">Select a tournament to get started</p>
-                ) : players.length < 2 ? (
-                  <p className="text-gray-500 text-center">Add at least two players to generate a bracket</p>
+                ) : quickNamesList.length < 2 && players.length < 2 ? (
+                  <p className="text-gray-500 text-center">Add at least two players to see bracket preview</p>
                 ) : (
                   <div className="flex flex-col items-center gap-2">
                     <p className="text-gray-500 text-center">Generate a bracket to get started</p>

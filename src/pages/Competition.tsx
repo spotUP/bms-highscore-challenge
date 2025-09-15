@@ -8,6 +8,9 @@ import { useNavigate } from 'react-router-dom';
 import ThemeSelector from '@/components/ThemeSelector';
 import TournamentDropdown from '@/components/TournamentDropdown';
 import PerformanceModeToggle from '@/components/PerformanceModeToggle';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import AdvancedConfetti from '@/components/AdvancedConfetti';
+import { createPortal } from 'react-dom';
 
 const Competition: React.FC = () => {
   const { tournaments, getTournamentData, reportWinner } = useBrackets();
@@ -19,6 +22,9 @@ const Competition: React.FC = () => {
   const [matches, setMatches] = useState<TournamentMatch[]>([]);
   const [loadingBracket, setLoadingBracket] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [winnerOpen, setWinnerOpen] = useState(false);
+  const [winnerName, setWinnerName] = useState<string | null>(null);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Update clock every second
   useEffect(() => {
@@ -67,11 +73,58 @@ const Competition: React.FC = () => {
       if (data) {
         setParticipants(data.players);
         setMatches(data.matches);
+
+        // Check if this was the final match - find the highest round number with a winner
+        const sortedMatches = data.matches.sort((a, b) => b.round - a.round);
+        const finalMatch = sortedMatches.find(m => m.winner_id);
+
+        // Only show winner celebration if this is the actual final match
+        const isActualFinal = finalMatch && sortedMatches.filter(m => m.round === finalMatch.round).length === 1;
+
+        console.log('Final match check:', { finalMatch, isActualFinal, allMatches: data.matches.map(m => ({ round: m.round, winner: m.winner_id })) });
+
+        if (finalMatch?.winner_id && isActualFinal) {
+          const winner = data.players.find(p => p.id === finalMatch.winner_id);
+          if (winner) {
+            console.log('Tournament completed! Winner:', winner.name);
+            // Small delay to ensure UI updates before showing the modal
+            setTimeout(() => {
+              setWinnerName(winner.name);
+              setWinnerOpen(true);
+              setShowConfetti(true);
+            }, 500);
+          }
+        }
       }
     }
   };
 
   const handlePlayerClick = async (matchId: string, participantId: string, participantName: string) => {
+    console.log('Player clicked:', { matchId, participantId, participantName });
+
+    // Check if this is a completed final match and the clicked participant is the winner
+    const match = matches.find(m => m.id === matchId);
+    console.log('Match found:', match);
+
+    if (match && match.winner_id === participantId) {
+      // Check if this is the final match (highest round)
+      const sortedMatches = matches.sort((a, b) => b.round - a.round);
+      const isFinalMatch = sortedMatches[0]?.id === matchId;
+
+      console.log('Is final match?', { isFinalMatch, highestRound: sortedMatches[0]?.round });
+
+      if (isFinalMatch) {
+        console.log('Showing winner dialog for completed final match');
+        // This is the tournament winner being clicked
+        setWinnerName(participantName);
+        setWinnerOpen(true);
+        setShowConfetti(true);
+        return;
+      }
+    }
+
+    // Normal winner reporting
+    console.log('Reporting winner normally');
     await handleReportWinner(matchId, participantId);
   };
 
@@ -201,9 +254,52 @@ const Competition: React.FC = () => {
             isPublic={selected?.is_public}
             isCompleted={selected?.status === 'completed'}
             matchCount={matches.length}
+            tournamentTitle={selected?.name}
           />
         )}
       </div>
+
+      {/* Winner Dialog */}
+      <Dialog open={winnerOpen} onOpenChange={(o) => { setWinnerOpen(o); if (!o) setShowConfetti(false); }}>
+        <DialogContent className="bg-gray-900 text-white border-white/20 max-w-xl w-[95vw]">
+          <DialogHeader>
+            <DialogTitle className="text-arcade-neonYellow text-2xl text-center">Champion Crowned!</DialogTitle>
+          </DialogHeader>
+          <div className="text-center space-y-4 py-4">
+            <div className="text-6xl">🏆</div>
+            <div className="text-xl text-gray-300">{selected?.name}</div>
+            <div className="text-3xl font-bold text-arcade-neonPink">Champion: {winnerName}</div>
+            <div className="pt-2 flex items-center justify-center gap-2">
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  const url = `${window.location.origin}/competition?tournament=${selected?.id}`;
+                  try {
+                    await navigator.clipboard.writeText(url);
+                  } catch {}
+                }}
+              >
+                Copy Share Link
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setWinnerOpen(false);
+                  setShowConfetti(false);
+                }}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confetti */}
+      {showConfetti && createPortal(
+        <AdvancedConfetti isActive={showConfetti} onComplete={() => setShowConfetti(false)} />,
+        document.body
+      )}
     </div>
   );
 };

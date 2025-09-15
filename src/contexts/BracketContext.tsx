@@ -39,6 +39,7 @@ interface BracketContextType {
   reportWinner: (matchId: string, winnerId: string) => Promise<boolean>;
   getTournamentData: (tournamentId: string) => Promise<{ players: TournamentPlayer[]; matches: TournamentMatch[] }>;
   deleteTournament: (tournamentId: string) => Promise<boolean>;
+  renameTournament: (tournamentId: string, newName: string) => Promise<boolean>;
 }
 
 const BracketContext = createContext<BracketContextType | undefined>(undefined);
@@ -345,20 +346,41 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const renameTournament = async (tournamentId: string, newName: string): Promise<boolean> => {
+    try {
+      const { error } = await supabase
+        .from('bracket_tournaments')
+        .update({
+          name: newName.trim(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', tournamentId);
+
+      if (error) throw error;
+
+      // Refresh the tournaments list
+      await refresh();
+      return true;
+    } catch (e) {
+      console.error('Failed to rename tournament', e);
+      return false;
+    }
+  };
+
   const deleteTournament = async (tournamentId: string): Promise<boolean> => {
     try {
       // First delete all related records
       await supabase.from('bracket_matches').delete().eq('tournament_id', tournamentId);
       await supabase.from('bracket_players').delete().eq('tournament_id', tournamentId);
-      
+
       // Then delete the tournament itself
       const { error } = await supabase
         .from('bracket_tournaments')
         .delete()
         .eq('id', tournamentId);
-      
+
       if (error) throw error;
-      
+
       // Refresh the tournaments list
       await refresh();
       return true;
@@ -377,7 +399,8 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
     generateBracket,
     reportWinner,
     getTournamentData,
-    deleteTournament
+    deleteTournament,
+    renameTournament
   };
 
   return (

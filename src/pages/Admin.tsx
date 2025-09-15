@@ -29,6 +29,7 @@ import DemolitionManEnsure from "@/components/DemolitionManEnsure";
 import DemolitionManScoreManager from "@/components/DemolitionManScoreManager";
 import PerformanceToggle from "@/components/PerformanceToggle";
 import AchievementManagerV2 from "@/components/AchievementManagerV2";
+import BracketManagement from "@/components/BracketManagement";
 import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from "@/utils/designSystem";
 import { useUserRoles } from "@/hooks/useUserRoles";
 import { useTournament } from "@/contexts/TournamentContext";
@@ -1571,11 +1572,12 @@ const Admin = () => {
         </PageHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 bg-gray-900 border border-white/20">
+          <TabsList className="grid w-full grid-cols-6 bg-gray-900 border border-white/20">
             <TabsTrigger value="create-tournament" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">Tournaments</TabsTrigger>
             <TabsTrigger value="system" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><TestTube className="w-4 h-4 mr-2" />System</TabsTrigger>
             <TabsTrigger value="achievements" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Trophy className="w-4 h-4 mr-2" />Achievements</TabsTrigger>
             <TabsTrigger value="users" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Users className="w-4 h-4 mr-2" />Users</TabsTrigger>
+            <TabsTrigger value="brackets" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Zap className="w-4 h-4 mr-2" />Brackets</TabsTrigger>
             <TabsTrigger value="demolition" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><BarChart3 className="w-4 h-4 mr-2" />Demolition Man</TabsTrigger>
           </TabsList>
 
@@ -1915,6 +1917,16 @@ const Admin = () => {
           </TabsContent>
           <TabsContent value="achievements" className="mt-6"><AchievementManagerV2 /></TabsContent>
           <TabsContent value="users" className="mt-6"><UserManagement /></TabsContent>
+          <TabsContent value="brackets" className="mt-6">
+            <Card className={getCardStyle('primary')}>
+              <CardHeader>
+                <CardTitle className={getTypographyStyle('h3')}>Bracket Tournaments</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <BracketManagement />
+              </CardContent>
+            </Card>
+          </TabsContent>
           <TabsContent value="demolition" className="mt-6"><div className="space-y-6"><DemolitionManScoreManager /><DemolitionManQRSubmit /></div></TabsContent>
         </Tabs>
 
