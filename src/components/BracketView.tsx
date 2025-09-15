@@ -281,15 +281,37 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
     const h = svg.clientHeight || 600;
     const marginX = 90;
     const marginY = 90;
-    const sx = (w - marginX) / Math.max(1, contentWidth);
-    const sy = (h - marginY) / Math.max(1, contentHeight);
+
+    // Calculate actual content bounds from match positions
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    if (matchPositions.size > 0) {
+      matchPositions.forEach((pos) => {
+        const actualY = pos.y + 40; // Account for the 40px offset where matches are rendered
+        minY = Math.min(minY, actualY);
+        maxY = Math.max(maxY, actualY + matchHeight);
+      });
+    } else {
+      minY = 40;
+      maxY = 40 + matchHeight;
+    }
+
+    const actualContentHeight = maxY - minY + 40; // Add some padding
+    const actualContentWidth = contentWidth;
+
+    const sx = (w - marginX) / Math.max(1, actualContentWidth);
+    const sy = (h - marginY) / Math.max(1, actualContentHeight);
     const newScale = Math.max(0.3, Math.min(3, Math.min(sx, sy) * 0.85));
     setScale(newScale);
-    const contentWScaled = contentWidth * newScale;
-    const contentHScaled = contentHeight * newScale;
+
+    const contentWScaled = actualContentWidth * newScale;
+    const contentHScaled = actualContentHeight * newScale;
+    const minYScaled = minY * newScale;
+
     setOffset({
       x: Math.round((w - contentWScaled) / 2),
-      y: Math.round((h - contentHScaled) / 2)
+      y: Math.round((h - contentHScaled) / 2) - minYScaled
     });
   };
 
@@ -402,7 +424,6 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
           {/* Winners Section */}
           {winnersRounds.map(([round, list], colIdx) => (
             <g key={`w-${round}`}>
-              <text x={colIdx * colWidth} y={20} fill="#7CFFB2" fontSize={14} fontWeight={700}>{`Winners R${round}`}</text>
               {list
                 .slice()
                 .sort((a, b) => a.position - b.position)
@@ -414,9 +435,12 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                   const p2 = m.participant2_id ? participants[m.participant2_id] : undefined;
                   const winner = m.winner_participant_id ? participants[m.winner_participant_id] : undefined;
                   const loserColor = "#ff4d4d";
+                  const winnerColor = "#00e0a4";
                   let p1Color = "#fff";
                   let p2Color = "#fff";
                   if (winner) {
+                    if (p1 && winner.id === p1?.id) p1Color = winnerColor; // p1 won
+                    if (p2 && winner.id === p2?.id) p2Color = winnerColor; // p2 won
                     if (p1 && winner.id === p2?.id) p1Color = loserColor; // p1 lost
                     if (p2 && winner.id === p1?.id) p2Color = loserColor; // p2 lost
                   }
@@ -446,13 +470,14 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                         {winner && (
                           <g>
                             <title>Winner</title>
-                            <rect x={146} y={padY + nameFontSize - 22} width={44} height={16} rx={4} ry={4} fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.35)" />
+                            <rect x={146} y={padY + nameFontSize - 22} width={44} height={16} rx={4} ry={4} fill="#00e0a4" stroke="#00ff99" />
+                            <text x={168} y={padY + nameFontSize - 11} fill="white" fontSize={9} textAnchor="middle" style={{ pointerEvents: 'none' }}>Winner</text>
                           </g>
                         )}
                         {isWalkover && (
                           <g>
                             <title>Walkover</title>
-                            <rect x={160} y={padY + nameFontSize + 6} width={28} height={16} rx={4} ry={4} fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.35)" />
+                            <rect x={160} y={padY + nameFontSize + 6} width={28} height={16} rx={4} ry={4} fill="#00e0a4" stroke="#00ff99" />
                             <text x={174} y={padY + nameFontSize + 18} fill="#cccccc" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>WO</text>
                           </g>
                         )}
@@ -481,7 +506,6 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
           {/* Losers Section */}
           {losersRounds.map(([round, list], colIdx) => (
             <g key={`l-${round}`}>
-              <text x={(winnersRounds.length * colWidth) + 200 + colIdx * colWidth} y={20} fill="#FFB27C" fontSize={14} fontWeight={700}>{`Losers R${round - 99}`}</text>
               {list
                 .slice()
                 .sort((a, b) => a.position - b.position)
@@ -493,11 +517,14 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                   const p2 = m.participant2_id ? participants[m.participant2_id] : undefined;
                   const winner = m.winner_participant_id ? participants[m.winner_participant_id] : undefined;
                   const loserColor = "#ff4d4d";
+                  const winnerColor = "#00e0a4";
                   let p1Color = "#fff";
                   let p2Color = "#fff";
                   if (winner) {
-                    if (p1 && winner.id === p2?.id) p1Color = loserColor;
-                    if (p2 && winner.id === p1?.id) p2Color = loserColor;
+                    if (p1 && winner.id === p1?.id) p1Color = winnerColor; // p1 won
+                    if (p2 && winner.id === p2?.id) p2Color = winnerColor; // p2 won
+                    if (p1 && winner.id === p2?.id) p1Color = loserColor; // p1 lost
+                    if (p2 && winner.id === p1?.id) p2Color = loserColor; // p2 lost
                   }
                   const padX = 24;
                   const padY = 12;
@@ -521,13 +548,14 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                         {winner && (
                           <g>
                             <title>Winner</title>
-                            <rect x={146} y={padY + nameFontSize - 22} width={44} height={16} rx={4} ry={4} fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.35)" />
+                            <rect x={146} y={padY + nameFontSize - 22} width={44} height={16} rx={4} ry={4} fill="#00e0a4" stroke="#00ff99" />
+                            <text x={168} y={padY + nameFontSize - 11} fill="white" fontSize={9} textAnchor="middle" style={{ pointerEvents: 'none' }}>Winner</text>
                           </g>
                         )}
                         {isWalkover && (
                           <g>
                             <title>Walkover</title>
-                            <rect x={160} y={padY + nameFontSize + 6} width={28} height={16} rx={4} ry={4} fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.35)" />
+                            <rect x={160} y={padY + nameFontSize + 6} width={28} height={16} rx={4} ry={4} fill="#00e0a4" stroke="#00ff99" />
                             <text x={174} y={padY + nameFontSize + 18} fill="#cccccc" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>WO</text>
                           </g>
                         )}
@@ -547,7 +575,6 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
           {/* Grand Final Section */}
           {grandRounds.map(([round, list]) => (
             <g key={`g-${round}`}>
-              <text x={(winnersRounds.length * colWidth) + 200 + (losersRounds.length * colWidth) + 400} y={20} fill="#FFD700" fontSize={16} fontWeight={800}>Grand Final</text>
               {list.map((m) => {
                 const pos = matchPositions.get(m.id);
                 if (!pos) return null;
@@ -555,9 +582,12 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                 const p2 = m.participant2_id ? participants[m.participant2_id] : undefined;
                 const winner = m.winner_participant_id ? participants[m.winner_participant_id] : undefined;
                 const loserColor = "#ff4d4d";
+                const winnerColor = "#00e0a4";
                 let p1Color = "#fff";
                 let p2Color = "#fff";
                 if (winner) {
+                  if (p1 && winner.id === p1?.id) p1Color = winnerColor; // p1 won
+                  if (p2 && winner.id === p2?.id) p2Color = winnerColor; // p2 won
                   if (p1 && winner.id === p2?.id) p1Color = loserColor; // p1 lost
                   if (p2 && winner.id === p1?.id) p2Color = loserColor; // p2 lost
                 }
@@ -579,13 +609,14 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                       {winner && (
                         <g>
                           <title>Winner</title>
-                          <rect x={166} y={padY + nameFontSize - 22} width={44} height={16} rx={4} ry={4} fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.35)" />
+                          <rect x={166} y={padY + nameFontSize - 22} width={44} height={16} rx={4} ry={4} fill="#00e0a4" stroke="#00ff99" />
+                          <text x={188} y={padY + nameFontSize - 11} fill="white" fontSize={9} textAnchor="middle" style={{ pointerEvents: 'none' }}>Winner</text>
                         </g>
                       )}
                       {isWalkover && (
                         <g>
                           <title>Walkover</title>
-                          <rect x={180} y={padY + nameFontSize + 6} width={28} height={16} rx={4} ry={4} fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.35)" />
+                          <rect x={180} y={padY + nameFontSize + 6} width={28} height={16} rx={4} ry={4} fill="#00e0a4" stroke="#00ff99" />
                           <text x={194} y={padY + nameFontSize + 18} fill="#cccccc" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>WO</text>
                         </g>
                       )}
