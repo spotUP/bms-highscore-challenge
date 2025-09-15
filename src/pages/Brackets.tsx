@@ -65,8 +65,8 @@ const Brackets: React.FC = () => {
     position: match.position,
     participant1_id: match.participant1_id,
     participant2_id: match.participant2_id,
-    winner_participant_id: match.winner_id,
-    status: match.winner_id ? 'completed' : 'pending'
+    winner_participant_id: match.winner_participant_id,
+    status: match.winner_participant_id ? 'completed' : 'pending'
   }));
 
   // Create participant map
