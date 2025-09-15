@@ -16,7 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Plus, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy } from "lucide-react";
+import { Pencil, Trash2, Plus, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy, Zap, RotateCcw } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { isPlaceholderLogo, formatScore } from "@/lib/utils";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
@@ -903,6 +903,8 @@ const Admin = () => {
   const [tournamentFilters, setTournamentFilters] = useState<Record<string, string>>({});
   // Persisted active tab
   const [activeTab, setActiveTab] = useState<string>('create-tournament');
+  // System subtab state
+  const [systemSubTab, setSystemSubTab] = useState<string>('performance');
   // Bulk selection removed
   // Inline score edits: map scoreId -> { player_name, score }
   const [inlineScoreEdits, setInlineScoreEdits] = useState<Record<string, { player_name: string; score: string }>>({});
@@ -1569,9 +1571,8 @@ const Admin = () => {
         </PageHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6 bg-gray-900 border border-white/20">
+          <TabsList className="grid w-full grid-cols-5 bg-gray-900 border border-white/20">
             <TabsTrigger value="create-tournament" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">Tournaments</TabsTrigger>
-            <TabsTrigger value="webhooks" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Webhook className="w-4 h-4 mr-2" />Webhooks</TabsTrigger>
             <TabsTrigger value="system" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><TestTube className="w-4 h-4 mr-2" />System</TabsTrigger>
             <TabsTrigger value="achievements" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Trophy className="w-4 h-4 mr-2" />Achievements</TabsTrigger>
             <TabsTrigger value="users" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Users className="w-4 h-4 mr-2" />Users</TabsTrigger>
@@ -1875,16 +1876,42 @@ const Admin = () => {
             />
           </TabsContent>
 
-          <TabsContent value="webhooks" className="mt-6"><WebhookConfig /></TabsContent>
           <TabsContent value="system" className="mt-6">
-            <div className="space-y-6">
-              <Card className={getCardStyle('primary')}>
-                <CardHeader><CardTitle className={getTypographyStyle('h3')}>Performance Settings</CardTitle></CardHeader>
-                <CardContent><PerformanceToggle /></CardContent>
-              </Card>
-              <DemolitionManEnsure />
-              <ResetFunctions />
-            </div>
+            <Tabs value={systemSubTab} onValueChange={setSystemSubTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-4 bg-gray-800 border border-white/20">
+                <TabsTrigger value="performance" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
+                  <Zap className="w-4 h-4 mr-2" />Performance
+                </TabsTrigger>
+                <TabsTrigger value="demolition" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
+                  <BarChart3 className="w-4 h-4 mr-2" />Demolition Man
+                </TabsTrigger>
+                <TabsTrigger value="reset" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
+                  <RotateCcw className="w-4 h-4 mr-2" />Reset Functions
+                </TabsTrigger>
+                <TabsTrigger value="webhooks" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
+                  <Webhook className="w-4 h-4 mr-2" />Webhooks
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="performance" className="mt-6">
+                <Card className={getCardStyle('primary')}>
+                  <CardHeader><CardTitle className={getTypographyStyle('h3')}>Performance Settings</CardTitle></CardHeader>
+                  <CardContent><PerformanceToggle /></CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="demolition" className="mt-6">
+                <DemolitionManEnsure />
+              </TabsContent>
+
+              <TabsContent value="reset" className="mt-6">
+                <ResetFunctions />
+              </TabsContent>
+
+              <TabsContent value="webhooks" className="mt-6">
+                <WebhookConfig />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
           <TabsContent value="achievements" className="mt-6"><AchievementManagerV2 /></TabsContent>
           <TabsContent value="users" className="mt-6"><UserManagement /></TabsContent>
