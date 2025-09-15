@@ -34,7 +34,7 @@ const TournamentDropdown = () => {
     if (!newBracketName.trim()) return;
     
     try {
-      const slug = newBracketName.toLowerCase().replace(/\s+/g, '-').replace(/[^\w\-]+/g, '');
+      const slug = newBracketName.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
       const newTournament = await createTournament({
         name: newBracketName,
         slug: slug,

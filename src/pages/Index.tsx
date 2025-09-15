@@ -189,8 +189,8 @@ const Index = () => {
   //   );
   // }
 
-  // Show tournament selection if user has no current tournament
-  if (user && !currentTournament) {
+  // Show tournament selection if user has no current tournament (but only after loading is complete)
+  if (user && !tournamentLoading && !currentTournament) {
     return (
       <div className="min-h-screen flex items-center justify-center relative z-10"
            style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
@@ -212,7 +212,7 @@ const Index = () => {
       <div className="w-full space-y-4">
         <div className="flex items-center">
           {/* Left aligned title */}
-          <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight">
+          <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight animate-slide-in-left">
             Retro Ranks
           </h1>
           
@@ -229,12 +229,11 @@ const Index = () => {
                   second: '2-digit' 
                 })}
               </div>
-              {/* Theme Selector */}
-              <ThemeSelector />
-              
               {user ? (
                 <>
                   <PerformanceModeToggle displayType="switch" />
+                  {/* Theme Selector */}
+                  <ThemeSelector />
                   <TournamentDropdown />
                   <Button variant="outline" onClick={() => navigate('/admin/brackets')}>
                     Brackets
@@ -256,6 +255,8 @@ const Index = () => {
                 </>
               ) : (
                 <>
+                  {/* Theme Selector */}
+                  <ThemeSelector />
                   <PublicTournamentBrowser />
                   <Button onClick={() => navigate('/auth')} variant="outline">
                     Sign In
@@ -271,7 +272,7 @@ const Index = () => {
         
         <div className={`grid gap-4 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-8rem)] grid-cols-1 lg:grid-cols-5'}`}>
           {/* Left column - Overall Leaderboard (smaller) */}
-          <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-1'}`}>
+          <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-1'} animate-slide-in-left animation-delay-200`}>
             <OverallLeaderboard />
           </div>
           
@@ -298,7 +299,7 @@ const Index = () => {
                 }
                 
                 return (
-                <section key={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full flex-1 min-w-0'}`}>
+                <section key={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full flex-1 min-w-0'} animate-slide-in-right`} style={{animationDelay: `${(games.findIndex(g => g.id === game.id) + 1) * 200 + 800}ms`}}>
                   {/* Card containing logo, scores and QR code */}
                   <Card 
                     className="bg-black/30 border-white/20 theme-card flex-1 flex flex-col cursor-pointer hover:scale-[1.02] transition-transform duration-200"
@@ -364,8 +365,8 @@ const Index = () => {
                 </section>
                 );
               })}
-              {games.length === 0 && (
-                <div className="col-span-full text-center py-8 text-gray-400">
+              {!gamesLoading && games.length === 0 && (
+                <div className="col-span-full text-center py-8 text-gray-400 animate-slide-in-right animation-delay-1000">
                   No active games found. Please contact an administrator.
                 </div>
               )}

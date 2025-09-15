@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/components/ui/use-toast";
@@ -16,17 +16,14 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Plus, Wrench, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy } from "lucide-react";
+import { Pencil, Trash2, Plus, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { isPlaceholderLogo, formatScore } from "@/lib/utils";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import GameLogoSuggestions, { GameLogoSuggestionsRef } from "@/components/GameLogoSuggestions";
-import RandomizeGames from "@/components/RandomizeGames";
-import StopCompetition from "@/components/StopCompetition";
 import WebhookConfig from "@/components/WebhookConfig";
 import UserManagement from "@/components/UserManagement";
 import ResetFunctions from "@/components/ResetFunctions";
-import StorageTester from "@/components/StorageTester";
 import DemolitionManQRSubmit from "@/components/DemolitionManQRSubmit";
 import DemolitionManEnsure from "@/components/DemolitionManEnsure";
 import DemolitionManScoreManager from "@/components/DemolitionManScoreManager";
@@ -48,7 +45,7 @@ interface Game {
   updated_at: string;
 }
 
-const CreateTournamentForm = () => {
+const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
   const { createTournament } = useTournament();
   const { toast } = useToast();
   const [isCreating, setIsCreating] = useState(false);
@@ -124,20 +121,23 @@ const CreateTournamentForm = () => {
         is_public: false,
         demolition_man_active: false,
       });
+      setSlugAvailable(null);
       toast({
         title: "Success",
         description: "Tournament created successfully!",
       });
+      onClose(); // Close the modal
     }
     setIsCreating(false);
   };
 
   return (
-    <Card className={getCardStyle('primary')}>
-      <CardHeader>
-        <CardTitle className={getTypographyStyle('h3')}>Create New Tournament</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Create New Tournament</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
         <div>
           <Label htmlFor="name" className="text-white">Tournament Name</Label>
           <Input
@@ -248,15 +248,16 @@ const CreateTournamentForm = () => {
           </Label>
         </div>
 
-        <Button 
-          onClick={handleCreateTournament} 
+        <Button
+          onClick={handleCreateTournament}
           disabled={!createForm.name.trim() || !createForm.slug.trim() || isCreating || slugAvailable === false}
           className="w-full"
         >
           {isCreating ? 'Creating...' : 'Create Tournament'}
         </Button>
-      </CardContent>
-    </Card>
+      </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 
@@ -267,6 +268,605 @@ const generateRandomString = (length: number) => {
     result += characters.charAt(Math.floor(Math.random() * characters.length));
   }
   return result;
+};
+
+const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose: () => void; loadGames: () => Promise<void> }) => {
+  const { currentTournament } = useTournament();
+  const [loading, setLoading] = useState(false);
+  const [games, setGames] = useState<any[]>([]);
+  const [selectedLogos, setSelectedLogos] = useState<Record<number, string>>({});
+  const [addingGames, setAddingGames] = useState(false);
+  const [filters, setFilters] = useState({
+    region: 'any',
+    platform: 'any',
+    series: 'any',
+    homebrew: 'any',
+    year: 'any',
+    manufacturer: 'any',
+    category: 'any',
+    rotation: 'any',
+    move_inputs: 'any',
+    num_buttons: 'any'
+  });
+  const [misterCompatibleOnly, setMisterCompatibleOnly] = useState(true);
+  const { toast } = useToast();
+
+  const addGamesToTournament = async () => {
+    if (!currentTournament) {
+      toast({
+        title: "Error",
+        description: "No active tournament selected",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setAddingGames(true);
+    try {
+      const gamesToAdd = games.map((game, index) => ({
+        name: game.name,
+        logo_url: selectedLogos[index] || '',
+        tournament_id: currentTournament.id,
+        include_in_challenge: true
+      }));
+
+      const { data, error } = await supabase
+        .from('games')
+        .insert(gamesToAdd)
+        .select();
+
+      if (error) throw error;
+
+      toast({
+        title: "Success!",
+        description: `Added ${gamesToAdd.length} games to "${currentTournament.name}"`,
+      });
+
+      // Refresh the games list
+      await loadGames();
+
+      // Close the modal
+      onClose();
+
+    } catch (error) {
+      console.error('Error adding games:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add games",
+        variant: "destructive"
+      });
+    } finally {
+      setAddingGames(false);
+    }
+  };
+
+  // Store all available games
+  const [allAvailableGames, setAllAvailableGames] = useState<any[]>([]);
+  const [gamesLoaded, setGamesLoaded] = useState(false);
+
+  // Fallback data if CSV fails
+  const misterFallbackGames = [
+    { name: "Street Fighter II", year: "1991", manufacturer: "Capcom", category: "Fighter", region: "World", series: "Street Fighter", rotation: "0", num_buttons: "6" },
+    { name: "Metal Slug", year: "1996", manufacturer: "SNK", category: "Shooter", region: "World", series: "Metal Slug", rotation: "0", num_buttons: "2" },
+    { name: "The King of Fighters '98", year: "1998", manufacturer: "SNK", category: "Fighter", region: "World", series: "King of Fighters", rotation: "0", num_buttons: "4" },
+    { name: "Pac-Man", year: "1980", manufacturer: "Namco", category: "Maze", region: "World", series: "", rotation: "90", num_buttons: "0" },
+    { name: "Donkey Kong", year: "1981", manufacturer: "Nintendo", category: "Platform", region: "World", series: "Donkey Kong", rotation: "90", num_buttons: "2" },
+    { name: "Galaga", year: "1981", manufacturer: "Namco", category: "Shooter", region: "World", series: "", rotation: "90", num_buttons: "1" },
+    { name: "Mortal Kombat", year: "1992", manufacturer: "Midway", category: "Fighter", region: "USA", series: "Mortal Kombat", rotation: "0", num_buttons: "5" },
+    { name: "Final Fight", year: "1989", manufacturer: "Capcom", category: "Beat 'em up", region: "World", series: "", rotation: "0", num_buttons: "2" }
+  ];
+
+  const mameFallbackGames = [
+    { name: "Street Fighter II", year: "1991", manufacturer: "Capcom", category: "Fighter", region: "World", series: "Street Fighter", rotation: "0", num_buttons: "6" },
+    { name: "Metal Slug", year: "1996", manufacturer: "SNK", category: "Shooter", region: "World", series: "Metal Slug", rotation: "0", num_buttons: "2" },
+    { name: "Pac-Man", year: "1980", manufacturer: "Namco", category: "Maze", region: "World", series: "", rotation: "90", num_buttons: "0" },
+    { name: "Asteroids", year: "1979", manufacturer: "Atari", category: "Shooter", region: "USA", series: "", rotation: "0", num_buttons: "5" },
+    { name: "Centipede", year: "1980", manufacturer: "Atari", category: "Shooter", region: "USA", series: "", rotation: "90", num_buttons: "1" },
+    { name: "Defender", year: "1980", manufacturer: "Williams", category: "Shooter", region: "USA", series: "", rotation: "0", num_buttons: "5" },
+    { name: "Frogger", year: "1981", manufacturer: "Konami", category: "Action", region: "World", series: "", rotation: "90", num_buttons: "1" },
+    { name: "Ms. Pac-Man", year: "1981", manufacturer: "Midway", category: "Maze", region: "USA", series: "Pac-Man", rotation: "90", num_buttons: "0" },
+    { name: "Q*bert", year: "1982", manufacturer: "Gottlieb", category: "Action", region: "USA", series: "", rotation: "0", num_buttons: "1" },
+    { name: "Robotron: 2084", year: "1982", manufacturer: "Williams", category: "Shooter", region: "USA", series: "", rotation: "0", num_buttons: "0" },
+    { name: "Tempest", year: "1981", manufacturer: "Atari", category: "Shooter", region: "USA", series: "", rotation: "0", num_buttons: "2" },
+    { name: "Joust", year: "1982", manufacturer: "Williams", category: "Action", region: "USA", series: "", rotation: "0", num_buttons: "1" },
+    { name: "Missile Command", year: "1980", manufacturer: "Atari", category: "Shooter", region: "USA", series: "", rotation: "0", num_buttons: "1" },
+    { name: "Phoenix", year: "1980", manufacturer: "Amstar", category: "Shooter", region: "USA", series: "", rotation: "90", num_buttons: "2" },
+    { name: "BurgerTime", year: "1982", manufacturer: "Data East", category: "Platform", region: "World", series: "", rotation: "90", num_buttons: "1" }
+  ];
+
+  const loadAllGames = async () => {
+    setLoading(true);
+
+    try {
+      console.log(`🎮 Starting game suggestion fetch (${misterCompatibleOnly ? 'MiSTer FPGA' : 'Full MAME'})...`);
+
+      // Try to fetch the CSV data with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+      // Choose data source based on MiSTer compatibility toggle
+      const csvUrl = misterCompatibleOnly
+        ? 'https://raw.githubusercontent.com/MiSTer-devel/ArcadeDatabase_MiSTer/refs/heads/main/ArcadeDatabase_CSV/ArcadeDatabase.csv'
+        : 'https://raw.githubusercontent.com/libretro/mame2003-plus-libretro/master/metadata/mame2003-plus_gamelist.csv'; // Full MAME library alternative
+
+      const response = await fetch(csvUrl, {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Network error: ${response.status}`);
+      }
+
+      const csvText = await response.text();
+      console.log(`✅ Fetched CSV successfully (${Math.round(csvText.length / 1024)}KB)`);
+
+      if (!csvText || csvText.length < 100) {
+        throw new Error('CSV appears to be empty or corrupted');
+      }
+
+      // Parse with ultra-safe approach
+      const lines = csvText.split(/\r?\n/).filter(line => line && line.trim().length > 0);
+
+      if (lines.length < 2) {
+        throw new Error('CSV has insufficient data');
+      }
+
+      console.log(`📊 Processing ${lines.length} lines...`);
+
+      // Get headers more safely
+      const headerLine = lines[0];
+      const headers = headerLine.split(',').map(h => h.replace(/^["']|["']$/g, '').trim());
+
+      if (headers.length < 3) {
+        throw new Error('CSV headers appear malformed');
+      }
+
+      console.log(`🏷️ Found headers: ${headers.slice(0, 5).join(', ')}...`);
+
+      // Process games with maximum safety
+      const allGames = [];
+      let processed = 0;
+      let skipped = 0;
+
+      for (let i = 1; i < lines.length && i < 5000; i++) { // Limit to first 5000 rows
+        processed++;
+
+        try {
+          const line = lines[i];
+          if (!line || line.length < 10) continue;
+
+          // Very simple parsing - just split and clean
+          const rawValues = line.split(',');
+          if (rawValues.length < headers.length / 2) continue; // Skip clearly malformed rows
+
+          const values = rawValues.map(v => {
+            if (!v) return '';
+            return v.replace(/^["']|["']$/g, '').trim();
+          });
+
+          // Build game object safely
+          const game: any = {};
+          for (let j = 0; j < Math.min(headers.length, values.length); j++) {
+            const header = headers[j];
+            if (header && header.length > 0) {
+              game[header] = values[j] || '';
+            }
+          }
+
+          // Must have a name to be valid
+          if (game.name && typeof game.name === 'string' && game.name.trim().length > 0) {
+            allGames.push(game);
+          } else {
+            skipped++;
+          }
+
+        } catch (rowError) {
+          skipped++;
+          // Silently skip bad rows
+        }
+
+        // Progress indicator for large files
+        if (processed % 1000 === 0) {
+          console.log(`⏳ Processed ${processed} rows, found ${allGames.length} games...`);
+        }
+      }
+
+      console.log(`🎯 Parsing complete: ${allGames.length} games found, ${skipped} rows skipped`);
+
+      if (allGames.length === 0) {
+        throw new Error('No valid games found in CSV data');
+      }
+
+      // Apply filters safely
+      let filteredGames = allGames;
+
+      for (const [key, value] of Object.entries(filters)) {
+        if (!value || !value.trim() || value === 'any') continue;
+
+        const beforeCount = filteredGames.length;
+        filteredGames = filteredGames.filter(game => {
+          try {
+            const gameValue = game[key];
+            if (!gameValue) return false;
+            return String(gameValue).toLowerCase().includes(value.toLowerCase());
+          } catch {
+            return false;
+          }
+        });
+
+        console.log(`🔍 Filter ${key}="${value}": ${beforeCount} → ${filteredGames.length} games`);
+      }
+
+      if (filteredGames.length === 0) {
+        console.log('⚠️ No games match filters, using fallback data');
+        filteredGames = misterCompatibleOnly ? misterFallbackGames : mameFallbackGames;
+      }
+
+      // Select random games
+      const selectedGames = [];
+      const gamesToSelect = Math.min(5, filteredGames.length);
+      const availableGames = [...filteredGames];
+
+      for (let i = 0; i < gamesToSelect; i++) {
+        const randomIndex = Math.floor(Math.random() * availableGames.length);
+        selectedGames.push(availableGames.splice(randomIndex, 1)[0]);
+      }
+
+      console.log(`🎲 Selected ${selectedGames.length} random games:`, selectedGames.map(g => g.name));
+
+      console.log(`🎯 Parsing complete: ${allGames.length} games found, ${skipped} rows skipped`);
+
+      if (allGames.length === 0) {
+        throw new Error('No valid games found in CSV data');
+      }
+
+      setAllAvailableGames(allGames);
+      setGamesLoaded(true);
+
+    } catch (error) {
+      console.warn('⚠️ CSV fetch failed, using fallback games:', error);
+      setAllAvailableGames(misterCompatibleOnly ? misterFallbackGames : mameFallbackGames);
+      setGamesLoaded(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Filter and select 5 random games based on current filters
+  const updateRandomGames = () => {
+    if (!gamesLoaded || allAvailableGames.length === 0) return;
+
+    // Apply filters
+    let filteredGames = allAvailableGames;
+
+    for (const [key, value] of Object.entries(filters)) {
+      if (!value || !value.trim() || value === 'any') continue;
+
+      filteredGames = filteredGames.filter(game => {
+        try {
+          const gameValue = game[key];
+          if (!gameValue) return false;
+          return String(gameValue).toLowerCase().includes(value.toLowerCase());
+        } catch {
+          return false;
+        }
+      });
+    }
+
+    if (filteredGames.length === 0) {
+      filteredGames = allAvailableGames; // Reset if no matches
+    }
+
+    // Select 5 random games
+    const selectedGames = [];
+    const gamesToSelect = Math.min(5, filteredGames.length);
+    const availableGames = [...filteredGames];
+
+    for (let i = 0; i < gamesToSelect; i++) {
+      const randomIndex = Math.floor(Math.random() * availableGames.length);
+      selectedGames.push(availableGames.splice(randomIndex, 1)[0]);
+    }
+
+    console.log(`🎲 Filtered from ${allAvailableGames.length} to ${filteredGames.length}, selected:`, selectedGames.map(g => g.name));
+
+    setGames(selectedGames);
+    setSelectedLogos({}); // Clear selected logos when games change
+  };
+
+  // Load games when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setGamesLoaded(false);
+      loadAllGames();
+    }
+  }, [isOpen, misterCompatibleOnly]);
+
+  // Update games when filters change
+  useEffect(() => {
+    if (gamesLoaded) {
+      updateRandomGames();
+    }
+  }, [filters, gamesLoaded]);
+
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Suggest Games from Arcade Database</DialogTitle>
+          <DialogDescription>
+            Filter and discover random arcade games from the MiSTer FPGA database or the full MAME library, then add them to your tournament.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          {/* MiSTer Compatibility Toggle */}
+          <div className="flex items-center space-x-2 p-3 bg-black/30 border border-white/20 rounded-lg">
+            <Switch
+              id="mister-compatible"
+              checked={misterCompatibleOnly}
+              onCheckedChange={setMisterCompatibleOnly}
+            />
+            <Label htmlFor="mister-compatible" className="text-white">
+              Limit to MiSTer FPGA compatible games only
+            </Label>
+            <div className="text-xs text-gray-400 ml-2">
+              {misterCompatibleOnly ? '(~900 games)' : '(~10,000+ games)'}
+            </div>
+          </div>
+
+          {/* Filters */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div>
+              <Label>Region</Label>
+              <Select value={filters.region} onValueChange={(value) => setFilters(prev => ({ ...prev, region: value }))}>
+                <SelectTrigger className="bg-black/50 border-gray-700 text-white">
+                  <SelectValue placeholder="Any Region" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any Region</SelectItem>
+                  <SelectItem value="World">World</SelectItem>
+                  <SelectItem value="Japan">Japan</SelectItem>
+                  <SelectItem value="USA">USA</SelectItem>
+                  <SelectItem value="Europe">Europe</SelectItem>
+                  <SelectItem value="Asia">Asia</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Platform</Label>
+              <Select value={filters.platform} onValueChange={(value) => setFilters(prev => ({ ...prev, platform: value }))}>
+                <SelectTrigger className="bg-black/50 border-gray-700 text-white">
+                  <SelectValue placeholder="Any Platform" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any Platform</SelectItem>
+                  <SelectItem value="Arcade">Arcade</SelectItem>
+                  <SelectItem value="Neo Geo">Neo Geo</SelectItem>
+                  <SelectItem value="CPS">CPS</SelectItem>
+                  <SelectItem value="CPS2">CPS2</SelectItem>
+                  <SelectItem value="CPS3">CPS3</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Series</Label>
+              <Select value={filters.series} onValueChange={(value) => setFilters(prev => ({ ...prev, series: value }))}>
+                <SelectTrigger className="bg-black/50 border-gray-700 text-white">
+                  <SelectValue placeholder="Any Series" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any Series</SelectItem>
+                  <SelectItem value="Street Fighter">Street Fighter</SelectItem>
+                  <SelectItem value="King of Fighters">King of Fighters</SelectItem>
+                  <SelectItem value="Metal Slug">Metal Slug</SelectItem>
+                  <SelectItem value="Fatal Fury">Fatal Fury</SelectItem>
+                  <SelectItem value="Samurai Shodown">Samurai Shodown</SelectItem>
+                  <SelectItem value="Tekken">Tekken</SelectItem>
+                  <SelectItem value="Mortal Kombat">Mortal Kombat</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Homebrew</Label>
+              <Select value={filters.homebrew} onValueChange={(value) => setFilters(prev => ({ ...prev, homebrew: value }))}>
+                <SelectTrigger className="bg-black/50 border-gray-700 text-white">
+                  <SelectValue placeholder="Any" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any</SelectItem>
+                  <SelectItem value="No">Official Games</SelectItem>
+                  <SelectItem value="Yes">Homebrew Only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Year</Label>
+              <Select value={filters.year} onValueChange={(value) => setFilters(prev => ({ ...prev, year: value }))}>
+                <SelectTrigger className="bg-black/50 border-gray-700 text-white">
+                  <SelectValue placeholder="Any Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any Year</SelectItem>
+                  <SelectItem value="1980">1980s</SelectItem>
+                  <SelectItem value="1990">1990s</SelectItem>
+                  <SelectItem value="2000">2000s</SelectItem>
+                  <SelectItem value="2010">2010s</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Manufacturer</Label>
+              <Select value={filters.manufacturer} onValueChange={(value) => setFilters(prev => ({ ...prev, manufacturer: value }))}>
+                <SelectTrigger className="bg-black/50 border-gray-700 text-white">
+                  <SelectValue placeholder="Any Manufacturer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any Manufacturer</SelectItem>
+                  <SelectItem value="Capcom">Capcom</SelectItem>
+                  <SelectItem value="SNK">SNK</SelectItem>
+                  <SelectItem value="Konami">Konami</SelectItem>
+                  <SelectItem value="Namco">Namco</SelectItem>
+                  <SelectItem value="Sega">Sega</SelectItem>
+                  <SelectItem value="Taito">Taito</SelectItem>
+                  <SelectItem value="Midway">Midway</SelectItem>
+                  <SelectItem value="Data East">Data East</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Category</Label>
+              <Select value={filters.category} onValueChange={(value) => setFilters(prev => ({ ...prev, category: value }))}>
+                <SelectTrigger className="bg-black/50 border-gray-700 text-white">
+                  <SelectValue placeholder="Any Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any Category</SelectItem>
+                  <SelectItem value="Fighter">Fighter</SelectItem>
+                  <SelectItem value="Shooter">Shooter</SelectItem>
+                  <SelectItem value="Platform">Platform</SelectItem>
+                  <SelectItem value="Beat 'em up">Beat 'em up</SelectItem>
+                  <SelectItem value="Puzzle">Puzzle</SelectItem>
+                  <SelectItem value="Racing">Racing</SelectItem>
+                  <SelectItem value="Sports">Sports</SelectItem>
+                  <SelectItem value="Action">Action</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Rotation</Label>
+              <Select value={filters.rotation} onValueChange={(value) => setFilters(prev => ({ ...prev, rotation: value }))}>
+                <SelectTrigger className="bg-black/50 border-gray-700 text-white">
+                  <SelectValue placeholder="Any Rotation" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any Rotation</SelectItem>
+                  <SelectItem value="0">Horizontal (0°)</SelectItem>
+                  <SelectItem value="90">Vertical CW (90°)</SelectItem>
+                  <SelectItem value="180">Upside Down (180°)</SelectItem>
+                  <SelectItem value="270">Vertical CCW (270°)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Move Inputs</Label>
+              <Select value={filters.move_inputs} onValueChange={(value) => setFilters(prev => ({ ...prev, move_inputs: value }))}>
+                <SelectTrigger className="bg-black/50 border-gray-700 text-white">
+                  <SelectValue placeholder="Any Input" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any Input</SelectItem>
+                  <SelectItem value="8-way">8-way Joystick</SelectItem>
+                  <SelectItem value="4-way">4-way Joystick</SelectItem>
+                  <SelectItem value="2-way">2-way Joystick</SelectItem>
+                  <SelectItem value="Analog">Analog Stick</SelectItem>
+                  <SelectItem value="Trackball">Trackball</SelectItem>
+                  <SelectItem value="Paddle">Paddle</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Num Buttons</Label>
+              <Select value={filters.num_buttons} onValueChange={(value) => setFilters(prev => ({ ...prev, num_buttons: value }))}>
+                <SelectTrigger className="bg-black/50 border-gray-700 text-white">
+                  <SelectValue placeholder="Any Buttons" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="any">Any Buttons</SelectItem>
+                  <SelectItem value="1">1 Button</SelectItem>
+                  <SelectItem value="2">2 Buttons</SelectItem>
+                  <SelectItem value="3">3 Buttons</SelectItem>
+                  <SelectItem value="4">4 Buttons</SelectItem>
+                  <SelectItem value="5">5 Buttons</SelectItem>
+                  <SelectItem value="6">6 Buttons</SelectItem>
+                  <SelectItem value="7">7+ Buttons</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setFilters({
+              region: 'any', platform: 'any', series: 'any', homebrew: 'any', year: 'any',
+              manufacturer: 'any', category: 'any', rotation: 'any', move_inputs: 'any', num_buttons: 'any'
+            })}>
+              Clear Filters
+            </Button>
+            <Button onClick={updateRandomGames} variant="outline">
+              Shuffle Games
+            </Button>
+            {games.length > 0 && currentTournament && (
+              <Button
+                onClick={addGamesToTournament}
+                disabled={addingGames}
+                className="bg-arcade-neonCyan text-black hover:bg-arcade-neonCyan/80"
+              >
+                {addingGames ? 'Adding...' : `Add to ${currentTournament.name}`}
+              </Button>
+            )}
+          </div>
+
+          {/* Results */}
+          {games.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Suggested Games:</h3>
+              <div className="space-y-6">
+                {games.map((game, index) => (
+                  <Card key={index} className="bg-black/30 border-white/20 mb-4">
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        {/* Game Name Header */}
+                        <div className="border-b border-white/20 pb-2 mb-3">
+                          <h3 className="text-lg font-bold text-arcade-neonCyan">{game.name}</h3>
+                          <div className="text-xs text-gray-400">
+                            {game.year} • {game.manufacturer} • {game.category}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                          <div><strong>Year:</strong> {game.year}</div>
+                          <div><strong>Manufacturer:</strong> {game.manufacturer}</div>
+                          <div><strong>Category:</strong> {game.category}</div>
+                          <div><strong>Region:</strong> {game.region}</div>
+                          <div><strong>Series:</strong> {game.series}</div>
+                          <div><strong>Rotation:</strong> {game.rotation}°</div>
+                          <div><strong>Buttons:</strong> {game.num_buttons}</div>
+                          <div><strong>Platform:</strong> {game.platform || 'Arcade'}</div>
+                        </div>
+
+                        {/* Logo suggestions for this game */}
+                        <div className="border-t border-white/10 pt-3">
+                          <div className="text-sm font-medium text-white mb-2">
+                            Available Logos:
+                            {selectedLogos[index] && (
+                              <span className="ml-2 text-xs text-arcade-neonCyan">✓ Selected</span>
+                            )}
+                          </div>
+                          <GameLogoSuggestions
+                            gameName={game.name}
+                            selectedImageUrl={selectedLogos[index]}
+                            onSelectImage={(imageUrl) => {
+                              // Set the selected logo for this game
+                              setSelectedLogos(prev => ({ ...prev, [index]: imageUrl }));
+                              toast({
+                                title: "Logo Selected",
+                                description: `Logo selected for "${game.name}"`,
+                              });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 };
 
 const Admin = () => {
@@ -282,12 +882,13 @@ const Admin = () => {
   const [editingScore, setEditingScore] = useState<any | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isScoreDialogOpen, setIsScoreDialogOpen] = useState(false);
+  const [isCreateTournamentOpen, setIsCreateTournamentOpen] = useState(false);
+  const [isSuggestGamesOpen, setIsSuggestGamesOpen] = useState(false);
   const [scoreFormData, setScoreFormData] = useState({
     player_name: "",
     score: ""
   });
   const [newScoreGameId, setNewScoreGameId] = useState<string | null>(null);
-  const [gamesUpdateTrigger, setGamesUpdateTrigger] = useState(0);
   const [formData, setFormData] = useState({
     name: "",
     logo_url: "",
@@ -432,8 +1033,6 @@ const Admin = () => {
         scoresByGame[score.game_id].push(score);
       });
       setGameScores(scoresByGame);
-
-      setGamesUpdateTrigger(prev => prev + 1); // Trigger refresh for StopCompetition
     } catch (error: any) {
       console.error('Error loading games and scores:', error);
       toast({
@@ -873,58 +1472,6 @@ const Admin = () => {
     }
   };
 
-  // Clean up placeholder logos
-  const cleanupPlaceholderLogos = async () => {
-    try {
-      const { data: gamesWithPlaceholders, error: fetchError } = await supabase
-        .from('games')
-        .select('id, name, logo_url')
-        .not('logo_url', 'is', null);
-
-      if (fetchError) throw fetchError;
-
-      const gamesToUpdate = gamesWithPlaceholders?.filter(game =>
-        isPlaceholderLogo(game.logo_url)
-      ) || [];
-
-      if (gamesToUpdate.length === 0) {
-        toast({
-          title: "No Action Needed",
-          description: "No placeholder logos found to clean up"
-        });
-        return;
-      }
-
-      const updatePromises = gamesToUpdate.map(game =>
-        supabase
-          .from('games')
-          .update({ logo_url: null })
-          .eq('id', game.id)
-      );
-
-      const results = await Promise.all(updatePromises);
-      const hasErrors = results.some(result => result.error);
-
-      if (hasErrors) {
-        throw new Error('Some updates failed');
-      }
-
-      toast({
-        title: "Success",
-        description: `Cleaned up ${gamesToUpdate.length} placeholder logos`
-      });
-
-      loadGames();
-    } catch (error) {
-      console.error('Error cleaning up placeholder logos:', error);
-      toast({
-        title: "Error",
-        description: "Failed to clean up placeholder logos",
-        variant: "destructive"
-      });
-    }
-  };
-
   // Update tournament
   const handleUpdateTournament = async () => {
     if (!currentTournament) return;
@@ -1037,10 +1584,19 @@ const Admin = () => {
                 <div className="flex items-center justify-between gap-4 w-full">
                   <CardTitle className={getTypographyStyle('h3')}>Manage Tournaments</CardTitle>
                   <div className="flex flex-wrap items-center gap-2">
-                    <RandomizeGames onGamesUpdated={loadGames} />
-                    <StopCompetition onCompetitionStopped={loadGames} refreshTrigger={gamesUpdateTrigger} />
-                    <Button onClick={cleanupPlaceholderLogos} variant="outline" className="h-8" title="Remove broken placeholder logos and use fallback UI instead">
-                      <Wrench className="w-4 h-4 mr-2" /> Fix Logos
+                    <Button
+                      onClick={() => setIsCreateTournamentOpen(true)}
+                      variant="outline"
+                      className="h-8"
+                    >
+                      <Plus className="w-4 h-4 mr-2" /> Create Tournament
+                    </Button>
+                    <Button
+                      onClick={() => setIsSuggestGamesOpen(true)}
+                      variant="outline"
+                      className="h-8"
+                    >
+                      <Gamepad2 className="w-4 h-4 mr-2" /> Suggest Games
                     </Button>
                   </div>
                 </div>
@@ -1307,7 +1863,16 @@ const Admin = () => {
             </Card>
 
             {/* Create New Tournament Section */}
-            <CreateTournamentForm />
+            <CreateTournamentForm
+              isOpen={isCreateTournamentOpen}
+              onClose={() => setIsCreateTournamentOpen(false)}
+            />
+
+            <SuggestGames
+              isOpen={isSuggestGamesOpen}
+              onClose={() => setIsSuggestGamesOpen(false)}
+              loadGames={loadGames}
+            />
           </TabsContent>
 
           <TabsContent value="webhooks" className="mt-6"><WebhookConfig /></TabsContent>
@@ -1319,7 +1884,6 @@ const Admin = () => {
               </Card>
               <DemolitionManEnsure />
               <ResetFunctions />
-              <StorageTester />
             </div>
           </TabsContent>
           <TabsContent value="achievements" className="mt-6"><AchievementManagerV2 /></TabsContent>
@@ -1342,13 +1906,7 @@ const Admin = () => {
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      gameLogoSuggestionsRef.current?.searchForLogos();
-                    }
-                  }}
-                  placeholder="Enter game name (press Enter to search local logos)"
+                  placeholder="Enter game name (logos search automatically as you type)"
                   className="bg-black/50 border-white/20 text-white w-full"
                 />
               </div>

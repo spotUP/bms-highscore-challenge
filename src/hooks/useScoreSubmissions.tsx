@@ -83,7 +83,7 @@ export const useScoreSubmissions = () => {
         },
       }
     );
-  }, [currentTournament, getGameLogo, supabase]);
+  }, [currentTournament, getGameLogo, supabase, showAchievementNotification]);
 
   // Set up real-time subscriptions
   useEffect(() => {

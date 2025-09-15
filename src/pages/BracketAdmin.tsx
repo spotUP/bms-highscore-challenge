@@ -10,7 +10,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import BracketView from '@/components/BracketView';
-import TopNav from '@/components/TopNav';
+import ThemeSelector from '@/components/ThemeSelector';
+import PerformanceModeToggle from '@/components/PerformanceModeToggle';
+import TournamentDropdown from '@/components/TournamentDropdown';
+import MobileMenu from '@/components/MobileMenu';
 import { Switch } from '@/components/ui/switch';
 import {
   AlertDialog,
@@ -27,7 +30,7 @@ import AdvancedConfetti from '@/components/AdvancedConfetti';
 import { createPortal } from 'react-dom';
 
 const BracketAdmin: React.FC = () => {
-  const { user } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const { tournaments, loading, refresh, createTournament, addPlayers, generateBracket, reportWinner, getTournamentData, deleteTournament } = useBrackets();
@@ -51,13 +54,38 @@ const BracketAdmin: React.FC = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [lastProcessedTournamentId, setLastProcessedTournamentId] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   const ownedTournaments = useMemo(() => tournaments.filter(t => t.created_by === user?.id), [tournaments, user?.id]);
 
-  useEffect(() => { 
-    if (!loading) { 
-      setSelected(s => s && ownedTournaments.find(t => t.id === s.id) || null); 
-    } 
+  // Clock update effect
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date();
+      setCurrentTime(prevTime => {
+        const prevDisplay = prevTime.toLocaleTimeString('en-GB', {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+        const newDisplay = now.toLocaleTimeString('en-GB', {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+        return prevDisplay !== newDisplay ? now : prevTime;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      setSelected(s => s && ownedTournaments.find(t => t.id === s.id) || null);
+    }
   }, [loading, ownedTournaments]);
 
   useEffect(() => {
@@ -274,6 +302,17 @@ const BracketAdmin: React.FC = () => {
     }
   };
 
+  const onPlayerClick = (matchId: string, participantId: string, participantName: string) => {
+    // Check if this is a completed grand final match and the clicked participant is the winner
+    const match = matches.find(m => m.id === matchId);
+    if (match && match.round >= 1000 && match.winner_id === participantId) {
+      // This is the tournament winner being clicked
+      setWinnerName(participantName);
+      setWinnerOpen(true);
+      setShowConfetti(true);
+    }
+  };
+
   const handleRestart = async () => {
     if (!selected) return;
     setRestartLoading(true);
@@ -332,9 +371,9 @@ const BracketAdmin: React.FC = () => {
       id: m.id,
       tournament_id: m.tournament_id,
       round: m.round,
-      position: m.match_number,
-      participant1_id: m.player1_id,
-      participant2_id: m.player2_id,
+      position: m.position,
+      participant1_id: m.participant1_id,
+      participant2_id: m.participant2_id,
       winner_participant_id: m.winner_id,
       status: m.winner_id ? 'completed' : 'pending'
     }));
@@ -368,19 +407,72 @@ const BracketAdmin: React.FC = () => {
 
   return (
     <div className="h-[100dvh] overflow-hidden flex flex-col text-white relative z-10" style={{ background: 'var(--page-bg)' }}>
-      <div className="shrink-0">
-        <TopNav
-          rightActions={
-            <div className="flex items-center gap-2">
-              {selected && (
-                <Button variant="outline" size="sm" onClick={() => window.location.assign(`/tournaments?c=${selected.id}`)}>Back to Tournaments</Button>
-              )}
-              {selected && (
-                <Button variant="destructive" size="sm" onClick={() => setRestartOpen(true)}>Restart</Button>
+      <div className="shrink-0 p-3 md:p-4">
+        <div className="flex items-center">
+          {/* Left aligned title */}
+          <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight animate-slide-in-left">
+            Tournament Brackets
+          </h1>
+
+          {/* Right aligned navigation */}
+          <div className="ml-auto flex items-center">
+            {/* Desktop Menu */}
+            <div className="hidden md:flex gap-4 items-center">
+              {/* Digital Clock */}
+              <div className="font-arcade font-bold text-lg animated-gradient">
+                {currentTime.toLocaleTimeString('en-GB', {
+                  hour12: false,
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit'
+                })}
+              </div>
+              {user ? (
+                <>
+                  <PerformanceModeToggle displayType="switch" />
+                  {/* Theme Selector */}
+                  <ThemeSelector />
+                  <TournamentDropdown />
+                  <Button variant="outline" onClick={() => navigate('/')}>
+                    Back to Scores
+                  </Button>
+                  {selected && (
+                    <Button variant="outline" onClick={() => window.location.assign(`/tournaments?c=${selected.id}`)}>
+                      Competition View
+                    </Button>
+                  )}
+                  {selected && (
+                    <Button variant="destructive" onClick={() => setRestartOpen(true)}>
+                      Restart Tournament
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={() => navigate('/statistics')}>
+                    Statistics
+                  </Button>
+                  {isAdmin && (
+                    <Button variant="outline" onClick={() => navigate('/admin')}>
+                      Admin Panel
+                    </Button>
+                  )}
+                  <Button variant="outline" onClick={signOut}>
+                    Sign Out
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {/* Theme Selector */}
+                  <ThemeSelector />
+                  <Button onClick={() => navigate('/auth')} variant="outline">
+                    Sign In
+                  </Button>
+                </>
               )}
             </div>
-          }
-        />
+
+            {/* Mobile Menu */}
+            <MobileMenu />
+          </div>
+        </div>
       </div>
       {/* Desktop two-column layout */}
       <div className="grid grid-cols-12 gap-4 flex-1 min-h-0 overflow-hidden p-4">
@@ -523,6 +615,7 @@ const BracketAdmin: React.FC = () => {
                 participants={participantMap}
                 adminMode
                 onReport={onReportClick}
+                onPlayerClick={onPlayerClick}
                 highlightTarget={highlightTarget}
               />
             ) : (

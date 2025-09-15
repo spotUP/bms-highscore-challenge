@@ -172,7 +172,7 @@ export const ScoreNotificationsListener: React.FC = () => {
       if (scoreChannelRef.current) supabase.removeChannel(scoreChannelRef.current);
       if (achievementChannelRef.current) supabase.removeChannel(achievementChannelRef.current);
     };
-  }, [currentTournament?.id]); // Only depend on tournament ID, not the function
+  }, [currentTournament?.id, showAchievementNotification]); // Depend on tournament ID and showAchievementNotification
 
   return (
     <>

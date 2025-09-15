@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
-import { dlog } from '@/lib/debug';
+import { dlog } from '../utils/logger';
+import { ErrorLogger } from '../utils/errorLogging';
+import { ErrorMessage } from '../components/ErrorMessage';
 
 export interface Tournament {
   id: string;
@@ -39,6 +41,7 @@ interface TournamentContextType {
   userTournaments: Tournament[];
   currentUserRole: string | null;
   loading: boolean;
+  error: any;
   switchTournament: (tournament: Tournament) => void;
   createTournament: (data: CreateTournamentData) => Promise<Tournament | null>;
   cloneTournament: (sourceTournamentId: string, data: CreateTournamentData) => Promise<Tournament | null>;
@@ -73,8 +76,11 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
 
   // Load user's tournaments (or default tournament for anonymous users)
-  const loadUserTournaments = async () => {
+  const [error, setError] = useState<any>(null);
+
+  const loadUserTournaments = useCallback(async () => {
     dlog('Loading tournaments for user:', user?.id || 'anonymous');
+    setError(null);
 
     // For anonymous users, load the default tournament
     if (!user) {
@@ -266,29 +272,31 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
     } catch (error: any) {
       console.error('Error loading tournaments:', error);
+      const errorDetails = ErrorLogger.logError(error, JSON.stringify({
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint
+      }, null, 2));
+      
+      setError(errorDetails);
       
       let errorMessage = "Failed to load tournaments";
-      let errorDetails = "";
-      
       if (error.code === '42P01') {
         errorMessage = "Tournament tables not found";
-        errorDetails = "The multiuser migration may not have been applied correctly.";
       } else if (error.code === '42501') {
         errorMessage = "Permission denied";
-        errorDetails = "You may not have access to tournament data. Check your user permissions.";
-      } else if (error.message) {
-        errorDetails = error.message;
       }
       
       toast({
         title: errorMessage,
-        description: errorDetails || "Please check the console for more details.",
+        description: error.message || "Please check the console for more details.",
         variant: "destructive",
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, toast, setCurrentTournament, setCurrentUserRole, setUserTournaments, setLoading, setError]);
 
   // Switch to a different tournament
   const switchTournament = async (tournament: Tournament) => {
@@ -374,6 +382,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       queryClient.invalidateQueries({ queryKey: ['achievements'] });
     } catch (error: any) {
       console.error('Error switching tournament:', error);
+      const errorDetails = ErrorLogger.logError(error, JSON.stringify({
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        tournamentId: tournament.id,
+        tournamentSlug: tournament.slug
+      }, null, 2));
+      
+      setError(errorDetails);
+      
       toast({
         title: "Error",
         description: "Failed to switch tournament",
@@ -444,13 +463,21 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       console.error('Error creating tournament:', error);
       
+      const errorDetails = ErrorLogger.logError(error, JSON.stringify({
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        data: data
+      }, null, 2));
+      
+      setError(errorDetails);
+      
       let errorMessage = "Failed to create tournament";
       if (error.code === '23505' && (error.message || '').includes('tournaments_slug_key')) {
         errorMessage = "A tournament with this slug already exists. Please choose a different slug.";
       } else if (error.code === '42501') {
         errorMessage = "Permission denied when creating tournament. Your account may lack insert rights or RLS blocked the action.";
-      } else if (error.message) {
-        errorMessage = error.message;
       }
       
       toast({
@@ -487,6 +514,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (error: any) {
       console.error('Error updating tournament:', error);
+      const errorDetails = ErrorLogger.logError(error, JSON.stringify({
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        tournamentId: id,
+        updateData: data
+      }, null, 2));
+      
+      setError(errorDetails);
+      
       toast({
         title: "Error",
         description: error.message || "Failed to update tournament",
@@ -577,6 +615,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (error: any) {
       console.error('Error deleting tournament:', error);
+      const errorDetails = ErrorLogger.logError(error, JSON.stringify({
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        tournamentId: id
+      }, null, 2));
+      
+      setError(errorDetails);
+      
       toast({
         title: "Error",
         description: error.message || "Failed to delete tournament",
@@ -640,6 +688,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (error: any) {
       console.error('Error joining tournament:', error);
+      const errorDetails = ErrorLogger.logError(error, JSON.stringify({
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        slug: slug
+      }, null, 2));
+      
+      setError(errorDetails);
+      
       toast({
         title: "Error",
         description: error.message || "Failed to join tournament",
@@ -672,6 +730,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (error: any) {
       console.error('Error leaving tournament:', error);
+      const errorDetails = ErrorLogger.logError(error, JSON.stringify({
+        code: error?.code,
+        message: error?.message,
+        details: error?.details,
+        hint: error?.hint,
+        tournamentId: tournamentId
+      }, null, 2));
+      
+      setError(errorDetails);
+      
       toast({
         title: "Error",
         description: error.message || "Failed to leave tournament",
@@ -801,13 +869,18 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     loadUserTournaments();
-  }, [user]);
+  }, [loadUserTournaments]);
+
+  if (error) {
+    return <ErrorMessage message={error.message} consoleOutput={error.consoleOutput} />;
+  }
 
   const value: TournamentContextType = {
     currentTournament,
     userTournaments,
     currentUserRole,
     loading,
+    error,
     switchTournament,
     createTournament,
     cloneTournament,

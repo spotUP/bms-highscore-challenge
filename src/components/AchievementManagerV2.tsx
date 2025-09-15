@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil, Trash2, Plus, Shuffle, ChevronDown, ChevronUp } from "lucide-react";
+import { Pencil, Trash2, Plus, Shuffle, ChevronDown, ChevronUp, Users } from "lucide-react";
 import { useTournament } from "@/contexts/TournamentContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryClient } from '@tanstack/react-query';
@@ -83,6 +83,8 @@ const AchievementManagerV2 = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [playerAchievements, setPlayerAchievements] = useState<any[]>([]);
+  const [loadingPlayerAchievements, setLoadingPlayerAchievements] = useState(false);
   const [formData, setFormData] = useState<{
     name: string;
     description: string;
@@ -149,22 +151,50 @@ const AchievementManagerV2 = () => {
   // Load achievements for current tournament
   const loadAchievements = useCallback(async () => {
     if (!currentTournament) return;
-    
+
     try {
       setLoading(true);
-      
+
       // Load games first
       await loadGames();
-      
+
       // Initialize expanded state for games
       const initialExpandedState = games.reduce((acc, game) => ({
         ...acc,
         [game.id]: false
       }), { general: true });
       setExpandedGames(initialExpandedState);
-      
-      // Prefer direct query filtered by author if we know the current user id
-      if (currentUserId) {
+
+      // If user is tournament creator, show ALL achievements in the tournament
+      // Otherwise, show only achievements they created
+      if (isTournamentCreator) {
+        // Show all achievements in tournaments the user owns
+        let rows: any[] | null = null;
+        try {
+          const { data, error } = await supabase
+            .from('achievements')
+            .select(
+              'id,name,description,type,badge_icon,badge_color,criteria,points,is_active,created_at,updated_at,tournament_id,created_by'
+            )
+            .eq('tournament_id', currentTournament.id)
+            .order('created_at', { ascending: false });
+          if (error) throw error;
+          rows = (data as unknown as any[]) || [];
+        } catch (e: any) {
+          // Column may not exist in older schemas
+          const { data, error } = await supabase
+            .from('achievements')
+            .select(
+              'id,name,description,type,badge_icon,badge_color,criteria,points,is_active,created_at,updated_at,tournament_id'
+            )
+            .eq('tournament_id', currentTournament.id)
+            .order('created_at', { ascending: false });
+          if (error) throw error;
+          rows = (data as unknown as any[]) || [];
+        }
+        setAchievements((rows as unknown as Achievement[]) || []);
+      } else if (currentUserId) {
+        // Non-owners only see achievements they created
         let rows: any[] | null = null;
         try {
           const { data, error } = await supabase
@@ -213,9 +243,43 @@ const AchievementManagerV2 = () => {
     }
   }, [currentTournament, loadGames, toast, currentUserId]);
 
+  // Load player achievements for current tournament (only for tournament creators)
+  const loadPlayerAchievements = useCallback(async () => {
+    if (!currentTournament || !isTournamentCreator) return;
+
+    try {
+      setLoadingPlayerAchievements(true);
+      const { data, error } = await supabase
+        .from('player_achievements')
+        .select(`
+          id,
+          player_name,
+          earned_at,
+          achievements!inner(name, badge_icon, badge_color)
+        `)
+        .eq('tournament_id', currentTournament.id)
+        .order('earned_at', { ascending: false });
+
+      if (error) throw error;
+      setPlayerAchievements(data || []);
+    } catch (error) {
+      console.error('Error loading player achievements:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load player achievements",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingPlayerAchievements(false);
+    }
+  }, [currentTournament, isTournamentCreator, toast]);
+
   useEffect(() => {
     loadAchievements();
-  }, [loadAchievements]);
+    if (isTournamentCreator) {
+      loadPlayerAchievements();
+    }
+  }, [loadAchievements, loadPlayerAchievements, isTournamentCreator]);
 
   // Group achievements by game ID (or 'general' if no game_id)
   const groupedAchievements = achievements.reduce((acc, achievement) => {
@@ -403,10 +467,21 @@ const AchievementManagerV2 = () => {
   };
 
   // Delete an achievement via confirmation dialog
-  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string | null; achievement: Achievement | null }>({ open: false, id: null, achievement: null });
   // Clear all achievements dialog
   const [clearAllDialog, setClearAllDialog] = useState<{ open: boolean }>({ open: false });
-  const handleDeleteAchievement = (id: string) => setDeleteDialog({ open: true, id });
+  const handleDeleteAchievement = (achievement: Achievement) => {
+    // Only allow deletion if user is tournament creator or achievement creator
+    if (!isTournamentCreator && achievement.created_by !== currentUserId) {
+      toast({
+        title: "Access Denied",
+        description: "You can only delete achievements in tournaments you created, or achievements you created yourself.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setDeleteDialog({ open: true, id: achievement.id, achievement });
+  };
   const confirmDeleteAchievement = async () => {
     if (!deleteDialog.id) return;
     try {
@@ -414,17 +489,17 @@ const AchievementManagerV2 = () => {
         .from('achievements')
         .delete()
         .eq('id', deleteDialog.id);
-        
+
       if (error) throw error;
-      
+
       toast({
         title: "Success",
         description: "Achievement deleted successfully",
       });
-      
+
       loadAchievements();
       await invalidateQueries();
-      
+
     } catch (error) {
       console.error('Error deleting achievement:', error);
       toast({
@@ -468,22 +543,67 @@ const AchievementManagerV2 = () => {
 
   // Toggle achievement status
   const toggleAchievementStatus = async (achievement: Achievement) => {
+    // Only allow status changes if user is tournament creator or achievement creator
+    if (!isTournamentCreator && achievement.created_by !== currentUserId) {
+      toast({
+        title: "Access Denied",
+        description: "You can only modify achievements in tournaments you created, or achievements you created yourself.",
+        variant: "destructive",
+      });
+      return;
+    }
     try {
       const { error } = await supabase
         .from('achievements')
         .update({ is_active: !achievement.is_active })
         .eq('id', achievement.id);
-        
+
       if (error) throw error;
-      
+
       loadAchievements();
       await invalidateQueries();
-      
+
     } catch (error) {
       console.error('Error toggling achievement status:', error);
       toast({
         title: "Error",
         description: "Failed to update achievement status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Delete individual player achievement
+  const deletePlayerAchievement = async (playerAchievementId: string) => {
+    if (!isTournamentCreator) {
+      toast({
+        title: "Access Denied",
+        description: "Only tournament creators can manage player achievements.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('player_achievements')
+        .delete()
+        .eq('id', playerAchievementId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Player achievement removed successfully",
+      });
+
+      loadPlayerAchievements();
+      await invalidateQueries();
+    } catch (error) {
+      console.error('Error deleting player achievement:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove player achievement",
         variant: "destructive",
       });
     }
@@ -506,6 +626,15 @@ const AchievementManagerV2 = () => {
 
   // Open edit dialog with achievement data
   const handleEditAchievement = (achievement: Achievement) => {
+    // Only allow editing if user is tournament creator or achievement creator
+    if (!isTournamentCreator && achievement.created_by !== currentUserId) {
+      toast({
+        title: "Access Denied",
+        description: "You can only edit achievements in tournaments you created, or achievements you created yourself.",
+        variant: "destructive",
+      });
+      return;
+    }
     setEditingAchievement(achievement);
     setFormData({
       name: achievement.name,
@@ -852,9 +981,12 @@ const AchievementManagerV2 = () => {
         <CardHeader>
           <div className="flex justify-between items-center">
             <div>
-              <CardTitle>All Achievements</CardTitle>
+              <CardTitle>
+                {isTournamentCreator ? 'All Tournament Achievements' : 'My Achievements'}
+              </CardTitle>
               <CardDescription>
                 {filteredAchievements.length} achievement{filteredAchievements.length !== 1 ? 's' : ''} found
+                {isTournamentCreator && ' (you can edit all achievements in tournaments you created)'}
               </CardDescription>
             </div>
           </div>
@@ -869,17 +1001,54 @@ const AchievementManagerV2 = () => {
               No achievements found. Create your first achievement!
             </div>
           ) : (
-            <AchievementsTable 
-              achievements={filteredAchievements} 
+            <AchievementsTable
+              achievements={filteredAchievements}
               onEdit={handleEditAchievement}
               onDelete={handleDeleteAchievement}
               onToggleStatus={toggleAchievementStatus}
               getTypeIcon={getTypeIcon}
               getCriteriaDisplay={getCriteriaDisplay}
+              isTournamentCreator={isTournamentCreator}
+              currentUserId={currentUserId}
             />
           )}
         </CardContent>
       </Card>
+
+      {/* Player Achievement Management - Only for tournament creators */}
+      {isTournamentCreator && (
+        <Card>
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Player Achievement Management
+                </CardTitle>
+                <CardDescription>
+                  Manage individual player achievement unlocks in your tournament
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingPlayerAchievements ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-arcade-neonCyan"></div>
+              </div>
+            ) : playerAchievements.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                No player achievements found.
+              </div>
+            ) : (
+              <PlayerAchievementsTable
+                playerAchievements={playerAchievements}
+                onDelete={deletePlayerAchievement}
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };
@@ -894,14 +1063,18 @@ const AchievementsTable = ({
   onDelete,
   onToggleStatus,
   getTypeIcon,
-  getCriteriaDisplay
-}: { 
+  getCriteriaDisplay,
+  isTournamentCreator,
+  currentUserId
+}: {
   achievements: any[];
   onEdit: (achievement: any) => void;
-  onDelete: (id: string) => void;
+  onDelete: (achievement: any) => void;
   onToggleStatus: (achievement: any) => void;
   getTypeIcon: (type: string) => string;
   getCriteriaDisplay: (criteria: any, type: string) => string;
+  isTournamentCreator: boolean;
+  currentUserId: string | null;
 }) => (
   <Table>
     <TableHeader>
@@ -914,6 +1087,7 @@ const AchievementsTable = ({
         <TableHead>Points</TableHead>
         <TableHead>Status</TableHead>
         <TableHead>Unlocks</TableHead>
+        {isTournamentCreator && <TableHead>Created By</TableHead>}
         <TableHead>Actions</TableHead>
       </TableRow>
     </TableHeader>
@@ -944,36 +1118,113 @@ const AchievementsTable = ({
           <TableCell>{achievement.points}</TableCell>
           <TableCell>
             <div className="flex items-center space-x-2">
-              <Switch 
-                checked={achievement.is_active} 
-                onCheckedChange={() => onToggleStatus(achievement)}
-                className="data-[state=checked]:bg-arcade-neonCyan"
-              />
-              <span className={achievement.is_active ? 'text-green-500' : 'text-gray-500'}>
-                {achievement.is_active ? 'Active' : 'Inactive'}
-              </span>
+              {(() => {
+                const canEdit = isTournamentCreator || achievement.created_by === currentUserId;
+                return (
+                  <>
+                    <Switch
+                      checked={achievement.is_active}
+                      onCheckedChange={() => onToggleStatus(achievement)}
+                      disabled={!canEdit}
+                      className="data-[state=checked]:bg-arcade-neonCyan"
+                      title={canEdit ? "Toggle achievement status" : "You can only modify achievements you created or achievements in tournaments you own"}
+                    />
+                    <span className={achievement.is_active ? 'text-green-500' : 'text-gray-500'}>
+                      {achievement.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </>
+                );
+              })()}
             </div>
           </TableCell>
           <TableCell>{achievement.unlock_count || 0}</TableCell>
+          {isTournamentCreator && (
+            <TableCell className="text-xs text-gray-500">
+              {achievement.created_by === currentUserId ? 'You' : 'User'}
+            </TableCell>
+          )}
           <TableCell>
             <div className="flex space-x-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onEdit(achievement)}
-                className="text-blue-500 hover:text-blue-600"
-              >
-                <Pencil className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onDelete(achievement.id)}
-                className="text-red-500 hover:text-red-600"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
+              {(() => {
+                const canEdit = isTournamentCreator || achievement.created_by === currentUserId;
+                return (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEdit(achievement)}
+                      disabled={!canEdit}
+                      className={canEdit ? "text-blue-500 hover:text-blue-600" : "text-gray-400 cursor-not-allowed"}
+                      title={canEdit ? "Edit achievement" : "You can only edit achievements you created or achievements in tournaments you own"}
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onDelete(achievement)}
+                      disabled={!canEdit}
+                      className={canEdit ? "text-red-500 hover:text-red-600" : "text-gray-400 cursor-not-allowed"}
+                      title={canEdit ? "Delete achievement" : "You can only delete achievements you created or achievements in tournaments you own"}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </>
+                );
+              })()}
             </div>
+          </TableCell>
+        </TableRow>
+      ))}
+    </TableBody>
+  </Table>
+);
+
+// Player Achievements Table Component
+const PlayerAchievementsTable = ({
+  playerAchievements,
+  onDelete
+}: {
+  playerAchievements: any[];
+  onDelete: (id: string) => void;
+}) => (
+  <Table>
+    <TableHeader>
+      <TableRow>
+        <TableHead>Achievement</TableHead>
+        <TableHead>Player</TableHead>
+        <TableHead>Earned Date</TableHead>
+        <TableHead>Actions</TableHead>
+      </TableRow>
+    </TableHeader>
+    <TableBody>
+      {playerAchievements.map((playerAchievement) => (
+        <TableRow key={playerAchievement.id}>
+          <TableCell>
+            <div className="flex items-center gap-3">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
+                style={{ backgroundColor: playerAchievement.achievements.badge_color }}
+              >
+                {playerAchievement.achievements.badge_icon}
+              </div>
+              <span className="font-medium">{playerAchievement.achievements.name}</span>
+            </div>
+          </TableCell>
+          <TableCell className="font-medium">{playerAchievement.player_name}</TableCell>
+          <TableCell className="text-sm text-gray-500">
+            {new Date(playerAchievement.earned_at).toLocaleDateString()}
+          </TableCell>
+          <TableCell>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(playerAchievement.id)}
+              className="text-red-500 hover:text-red-600"
+              title="Remove this achievement from player"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
           </TableCell>
         </TableRow>
       ))}

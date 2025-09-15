@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState, useEffect } from 'react';
 import { Trophy, Medal, Award, Star } from "lucide-react";
 import { formatScore } from '@/lib/utils';
 import { useTournamentGameData } from '@/hooks/useTournamentGameData';
@@ -8,14 +8,50 @@ const OverallLeaderboard = React.memo(() => {
   const { leaders, achievementHunters, demolitionManScores, loading } = useTournamentGameData();
   const { currentTournament } = useTournament();
 
+  // Local state to prevent flickering during updates
+  const [displayLeaders, setDisplayLeaders] = useState(leaders);
+  const [displayAchievementHunters, setDisplayAchievementHunters] = useState(achievementHunters);
+  const [displayDemolitionManScores, setDisplayDemolitionManScores] = useState(demolitionManScores);
+  const [hasInitialLoad, setHasInitialLoad] = useState(false);
+
+  // Update display data only when new data is significantly different or on initial load
+  useEffect(() => {
+    if (!loading && (leaders.length > 0 || !hasInitialLoad)) {
+      // Deep comparison to avoid unnecessary updates
+      const leadersChanged = JSON.stringify(leaders) !== JSON.stringify(displayLeaders);
+      if (leadersChanged || !hasInitialLoad) {
+        setDisplayLeaders(leaders);
+      }
+      setHasInitialLoad(true);
+    }
+  }, [leaders, loading, hasInitialLoad, displayLeaders]);
+
+  useEffect(() => {
+    if (!loading && (achievementHunters.length > 0 || !hasInitialLoad)) {
+      const huntersChanged = JSON.stringify(achievementHunters) !== JSON.stringify(displayAchievementHunters);
+      if (huntersChanged || !hasInitialLoad) {
+        setDisplayAchievementHunters(achievementHunters);
+      }
+    }
+  }, [achievementHunters, loading, hasInitialLoad, displayAchievementHunters]);
+
+  useEffect(() => {
+    if (!loading && (demolitionManScores.length > 0 || !hasInitialLoad)) {
+      const scoresChanged = JSON.stringify(demolitionManScores) !== JSON.stringify(displayDemolitionManScores);
+      if (scoresChanged || !hasInitialLoad) {
+        setDisplayDemolitionManScores(demolitionManScores);
+      }
+    }
+  }, [demolitionManScores, loading, hasInitialLoad, displayDemolitionManScores]);
+
   const getRankIcon = useCallback((index: number) => {
     switch (index) {
       case 0:
-        return <Trophy className="w-12 h-12 text-yellow-400 animate-gold-shine" />;
+        return <span className="w-12 h-12 flex items-center justify-center text-4xl animate-gold-shine">🏆</span>;
       case 1:
-        return <Medal className="w-12 h-12 text-gray-300 animate-silver-shine" />;
+        return <span className="w-12 h-12 flex items-center justify-center text-4xl animate-silver-shine">🥈</span>;
       case 2:
-        return <Award className="w-12 h-12 text-orange-600 animate-bronze-shine" />;
+        return <span className="w-12 h-12 flex items-center justify-center text-4xl animate-bronze-shine">🥉</span>;
       default:
         return <span className="w-12 h-12 flex items-center justify-center text-3xl font-bold text-white">#{index + 1}</span>;
     }
@@ -24,11 +60,11 @@ const OverallLeaderboard = React.memo(() => {
   const getAchievementRankIcon = useCallback((index: number) => {
     switch (index) {
       case 0:
-        return <Star className="w-12 h-12 text-pink-400" />;
+        return <span className="w-12 h-12 flex items-center justify-center text-4xl">🌟</span>;
       case 1:
-        return <Star className="w-12 h-12 text-purple-300" />;
+        return <span className="w-12 h-12 flex items-center justify-center text-4xl">⭐</span>;
       case 2:
-        return <Star className="w-12 h-12 text-indigo-600" />;
+        return <span className="w-12 h-12 flex items-center justify-center text-4xl">✨</span>;
       default:
         return <span className="w-12 h-12 flex items-center justify-center text-3xl font-bold text-white">#{index + 1}</span>;
     }
@@ -37,17 +73,18 @@ const OverallLeaderboard = React.memo(() => {
   const getDemolitionRankIcon = useCallback((index: number) => {
     switch (index) {
       case 0:
-        return <Trophy className="w-12 h-12 text-red-400" />;
+        return <span className="w-12 h-12 flex items-center justify-center text-4xl text-red-400">🏆</span>;
       case 1:
-        return <Medal className="w-12 h-12 text-orange-300" />;
+        return <span className="w-12 h-12 flex items-center justify-center text-4xl text-orange-300">🥈</span>;
       case 2:
-        return <Award className="w-12 h-12 text-yellow-600" />;
+        return <span className="w-12 h-12 flex items-center justify-center text-4xl text-yellow-600">🥉</span>;
       default:
         return <span className="w-12 h-12 flex items-center justify-center text-3xl font-bold text-white">#{index + 1}</span>;
     }
   }, []);
 
-  if (loading) {
+  // Only show loading on initial load, not on subsequent updates
+  if (loading && !hasInitialLoad) {
     return (
       <div className="p-6">
           <div className="text-center text-white">Loading leaders...</div>
@@ -58,10 +95,10 @@ const OverallLeaderboard = React.memo(() => {
   return (
     <div className="flex flex-col h-full space-y-4 overflow-hidden">
       {/* Overall Leaders */}
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 animate-slide-in-left animation-delay-400">
         <span className="text-xl font-bold text-white mb-3 block">Overall Leaders</span>
         <div className="space-y-1 max-h-80 overflow-y-auto">
-          {leaders.map((player, index) => (
+          {displayLeaders.map((player, index) => (
               <div key={player.player_name} className="flex items-center gap-3 py-1">
                 {getRankIcon(index)}
                 <div className="flex-1 flex items-baseline">
@@ -83,7 +120,7 @@ const OverallLeaderboard = React.memo(() => {
               </div>
             </div>
           ))}
-          {leaders.length === 0 && (
+          {displayLeaders.length === 0 && hasInitialLoad && (
               <div className="text-center text-gray-400 py-4">
               No scores found yet.
             </div>
@@ -92,10 +129,10 @@ const OverallLeaderboard = React.memo(() => {
       </div>
 
       {/* Achievement Hunters */}
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 animate-slide-in-left animation-delay-600">
         <span className="text-xl font-bold text-white mb-3 block">Achievement Hunters</span>
         <div className="space-y-1 max-h-80 overflow-y-auto">
-            {achievementHunters.map((hunter, index) => (
+            {displayAchievementHunters.map((hunter, index) => (
               <div key={hunter.player_name} className="flex items-center gap-3 py-1">
                 {getAchievementRankIcon(index)}
                 <div>
@@ -110,7 +147,7 @@ const OverallLeaderboard = React.memo(() => {
                 </div>
               </div>
             ))}
-            {achievementHunters.length === 0 && (
+            {displayAchievementHunters.length === 0 && hasInitialLoad && (
               <div className="text-center text-gray-400 py-4">
                 No achievements yet.
               </div>
@@ -120,10 +157,10 @@ const OverallLeaderboard = React.memo(() => {
 
       {/* Demolition Man Eternal Leaderboard - Only show if enabled */}
       {currentTournament?.demolition_man_active && (
-        <div className="flex-shrink-0">
+        <div className="flex-shrink-0 animate-slide-in-left animation-delay-800">
           <span className="text-xl font-bold text-white mb-3 block">Demolition Man</span>
           <div className="space-y-1 max-h-80 overflow-y-auto">
-              {demolitionManScores.map((score, index) => (
+              {displayDemolitionManScores.map((score, index) => (
                 <div key={`${score.player_name}-${score.created_at}`} className="flex items-center justify-between py-1">
                   <div className="flex items-center gap-3">
                     {getDemolitionRankIcon(index)}
@@ -140,7 +177,7 @@ const OverallLeaderboard = React.memo(() => {
                   </div>
                 </div>
               ))}
-              {demolitionManScores.length === 0 && (
+              {displayDemolitionManScores.length === 0 && hasInitialLoad && (
                 <div className="text-center text-gray-400 py-4">
                   No Demolition Man scores yet.
                 </div>

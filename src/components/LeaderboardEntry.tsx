@@ -14,28 +14,32 @@ const LeaderboardEntry = React.memo(({ rank, name, score, isNewScore }: Leaderbo
   const getRankIcon = (rank: number) => {
     switch (rank) {
       case 1:
-        return <Trophy className="w-12 h-12 text-yellow-400 animate-gold-shine" />;
+        return <span className="w-12 h-12 flex items-center justify-center text-4xl animate-gold-shine">🏆</span>;
       case 2:
-        return <Medal className="w-12 h-12 text-gray-300 animate-silver-shine" />;
+        return <span className="w-12 h-12 flex items-center justify-center text-4xl animate-silver-shine">🥈</span>;
       case 3:
-        return <Award className="w-12 h-12 text-orange-600 animate-bronze-shine" />;
+        return <span className="w-12 h-12 flex items-center justify-center text-4xl animate-bronze-shine">🥉</span>;
       default:
         return <span className="w-12 h-12 flex items-center justify-center text-3xl font-bold text-white">#{rank}</span>;
     }
   };
+
+  const waveDelay = (rank - 1) * 0.3; // 300ms delay per rank for more visible wave effect
 
   return (
     <div className="flex items-center justify-between py-1">
       <div className="flex items-center gap-3">
         {getRankIcon(rank)}
         <div className="flex-1">
-          <div 
+          <div
             className="font-arcade font-bold text-2xl animated-gradient-vertical"
+            style={{ '--wave-delay': `${waveDelay}s` } as React.CSSProperties}
           >
             {name}
           </div>
-          <div 
+          <div
             className="text-lg font-arcade animated-gradient-vertical mt-1"
+            style={{ '--wave-delay': `${waveDelay}s` } as React.CSSProperties}
           >
             {formatScore(score)}
           </div>

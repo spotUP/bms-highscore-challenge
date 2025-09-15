@@ -62,9 +62,9 @@ const Brackets: React.FC = () => {
   // Format matches for BracketView
   const bracketMatches = matches.map(match => ({
     ...match,
-    position: match.match_number,
-    participant1_id: match.player1_id,
-    participant2_id: match.player2_id,
+    position: match.position,
+    participant1_id: match.participant1_id,
+    participant2_id: match.participant2_id,
     winner_participant_id: match.winner_id,
     status: match.winner_id ? 'completed' : 'pending'
   }));

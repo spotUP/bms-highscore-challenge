@@ -61,9 +61,9 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     id: ThemeId;
     label: string;
   }[]>(() => ([
-    { id: 'current', label: 'Arcade (Current)' },
-    { id: 'modern-dark', label: 'Modern Dark' },
-    { id: 'tron', label: 'Tron (Futuristic)' },
+    { id: 'current', label: 'Arcade Theme (Current)' },
+    { id: 'modern-dark', label: 'Modern Dark Theme' },
+    { id: 'tron', label: 'Tron Theme (Futuristic)' },
   ]), []);
 
   const value = useMemo(() => ({ theme, setTheme, themes, accent, setAccent }), [theme, themes, accent]);
