@@ -21,14 +21,19 @@ interface BracketViewPropsExtra extends BracketViewProps {
   isPublic?: boolean;
   isCompleted?: boolean;
   matchCount?: number;
+  tournamentTitle?: string;
+  // Admin view props
+  disableKeyboardNavigation?: boolean;
+  forceAutoFit?: boolean;
 }
 
-const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, adminMode = false, onReport, onPlayerClick, highlightTarget, tournaments, selectedTournament, onTournamentChange, bracketType, isPublic, isCompleted, matchCount }) => {
+const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, adminMode = false, onReport, onPlayerClick, highlightTarget, tournaments, selectedTournament, onTournamentChange, bracketType, isPublic, isCompleted, matchCount, tournamentTitle, disableKeyboardNavigation = false, forceAutoFit = false }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [showLegend, setShowLegend] = useState(true);
   const restoredRef = useRef(false);
+  const initialFitDoneRef = useRef(false);
   const dragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
 
@@ -138,6 +143,8 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
 
   // Keyboard shortcuts: arrows to pan, +/- to zoom, 0 to fit, L to toggle legend
   useEffect(() => {
+    if (disableKeyboardNavigation) return;
+
     const handler = (e: KeyboardEvent) => {
       const step = e.shiftKey ? 60 : 30;
       if (e.key === 'ArrowLeft') { setOffset(o => ({ ...o, x: o.x + step })); }
@@ -151,23 +158,27 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [disableKeyboardNavigation]);
 
   // Persist/restore view state per competition
   const compId = useMemo(() => (matches && matches[0] ? (matches[0] as any).competition_id : null), [matches]);
   useEffect(() => {
-    if (!compId) return;
+    if (!compId || forceAutoFit) return;
     try {
       const raw = localStorage.getItem(`bracketView:${compId}`);
       if (raw) {
         const v = JSON.parse(raw);
-        if (typeof v.scale === 'number') setScale(v.scale);
-        if (v.offset && typeof v.offset.x === 'number' && typeof v.offset.y === 'number') setOffset(v.offset);
+        const haveMatches = Array.isArray(matches) && matches.length > 0;
+        // Only restore scale/offset if we don't have matches (to allow auto-fit) or if initial fit is already done
+        if (!haveMatches || initialFitDoneRef.current) {
+          if (typeof v.scale === 'number') setScale(v.scale);
+          if (v.offset && typeof v.offset.x === 'number' && typeof v.offset.y === 'number') setOffset(v.offset);
+        }
         if (typeof v.showLegend === 'boolean') setShowLegend(v.showLegend);
         restoredRef.current = true;
       }
     } catch {}
-  }, [compId]);
+  }, [compId, matches, forceAutoFit]);
   useEffect(() => {
     if (!compId) return;
     try {
@@ -179,17 +190,40 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
   useEffect(() => {
     const haveMatches = Array.isArray(matches) && matches.length > 0;
     if (!haveMatches) return;
-    // Allow layout to settle over two frames before fitting
+    // Always center and fit to view when entering competition page or when forceAutoFit is enabled
+    // Allow layout to settle over three frames before fitting
     const id1 = requestAnimationFrame(() => {
-      const id2 = requestAnimationFrame(() => zoomToFit());
-      // store inner id on window to cancel if needed (not critical)
-      (window as any).__bfid = id2;
+      const id2 = requestAnimationFrame(() => {
+        const id3 = requestAnimationFrame(() => {
+          zoomToFit();
+          initialFitDoneRef.current = true;
+        });
+        (window as any).__bfid = id3;
+      });
     });
     return () => {
       cancelAnimationFrame(id1);
       if ((window as any).__bfid) cancelAnimationFrame((window as any).__bfid);
     };
   }, [matches]);
+
+  // Separate auto-fit for admin mode with forceAutoFit
+  useEffect(() => {
+    if (!forceAutoFit) return;
+    const haveMatches = Array.isArray(matches) && matches.length > 0;
+    if (!haveMatches) return;
+
+    // Run auto-fit when matches or participants change in admin mode
+    const timeoutId = setTimeout(() => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          zoomToFit();
+        });
+      });
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [forceAutoFit, matches, participants]); // Include both matches and participants for admin mode
 
   const onWheel: React.WheelEventHandler<SVGSVGElement> = (e) => {
     const delta = -e.deltaY;
@@ -383,10 +417,8 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                   let p1Color = "#fff";
                   let p2Color = "#fff";
                   if (winner) {
-                    if (p1 && winner.id === p1.id) p1Color = "#00e0a4"; // winner green
-                    else if (p1 && winner.id === p2?.id) p1Color = loserColor; // p1 lost
-                    if (p2 && winner.id === p2.id) p2Color = "#00e0a4"; // winner green
-                    else if (p2 && winner.id === p1?.id) p2Color = loserColor; // p2 lost
+                    if (p1 && winner.id === p2?.id) p1Color = loserColor; // p1 lost
+                    if (p2 && winner.id === p1?.id) p2Color = loserColor; // p2 lost
                   }
                   
                   // Inner padding for content inside the match box
@@ -415,7 +447,6 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                           <g>
                             <title>Winner</title>
                             <rect x={146} y={padY + nameFontSize - 22} width={44} height={16} rx={4} ry={4} fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.35)" />
-                            <text x={168} y={padY + nameFontSize - 10} fill="#00e0a4" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>Winner</text>
                           </g>
                         )}
                         {isWalkover && (
@@ -465,8 +496,8 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                   let p1Color = "#fff";
                   let p2Color = "#fff";
                   if (winner) {
-                    if (p1 && winner.id === p1.id) p1Color = "#00e0a4"; else if (p1 && winner.id === p2?.id) p1Color = loserColor;
-                    if (p2 && winner.id === p2.id) p2Color = "#00e0a4"; else if (p2 && winner.id === p1?.id) p2Color = loserColor;
+                    if (p1 && winner.id === p2?.id) p1Color = loserColor;
+                    if (p2 && winner.id === p1?.id) p2Color = loserColor;
                   }
                   const padX = 24;
                   const padY = 12;
@@ -491,7 +522,6 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                           <g>
                             <title>Winner</title>
                             <rect x={146} y={padY + nameFontSize - 22} width={44} height={16} rx={4} ry={4} fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.35)" />
-                            <text x={168} y={padY + nameFontSize - 10} fill="#00e0a4" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>Winner</text>
                           </g>
                         )}
                         {isWalkover && (
@@ -528,10 +558,8 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                 let p1Color = "#fff";
                 let p2Color = "#fff";
                 if (winner) {
-                  if (p1 && winner.id === p1.id) p1Color = "#00e0a4"; // winner green
-                  else if (p1 && winner.id === p2?.id) p1Color = loserColor; // p1 lost
-                  if (p2 && winner.id === p2.id) p2Color = "#00e0a4"; // winner green
-                  else if (p2 && winner.id === p1?.id) p2Color = loserColor; // p2 lost
+                  if (p1 && winner.id === p2?.id) p1Color = loserColor; // p1 lost
+                  if (p2 && winner.id === p1?.id) p2Color = loserColor; // p2 lost
                 }
                 const padX = 24; const padY = 12; const nameFontSize = 20; const lineHeight = 30;
                 const isWalkover = false; // Grand Final should never be a walkover - it's populated with both champions
@@ -552,7 +580,6 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                         <g>
                           <title>Winner</title>
                           <rect x={166} y={padY + nameFontSize - 22} width={44} height={16} rx={4} ry={4} fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.35)" />
-                          <text x={188} y={padY + nameFontSize - 10} fill="#00e0a4" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>Winner</text>
                         </g>
                       )}
                       {isWalkover && (
@@ -721,10 +748,32 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
         </g>
 
         {/* In-canvas Title/Status HUD (not scaled or panned) */}
-        {(bracketType || typeof isPublic === 'boolean' || typeof isCompleted === 'boolean' || typeof matchCount === 'number') && (
+        {(tournamentTitle || bracketType || typeof isPublic === 'boolean' || typeof isCompleted === 'boolean' || typeof matchCount === 'number') && (
           <g style={{ pointerEvents: 'none' } as any}>
+            {/* Tournament Title */}
+            {tournamentTitle && (
+              <g transform={`translate(16, 45)`}>
+                <text x={0} y={0} fill="url(#tournamentGradient)" fontSize={40} fontWeight="bold">{tournamentTitle}</text>
+                <defs>
+                  <linearGradient id="tournamentGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#ff00ff">
+                      <animate attributeName="stop-color" values="#ff00ff;#00ffff;#ffff00;#ff00ff" dur="4s" repeatCount="indefinite"/>
+                    </stop>
+                    <stop offset="33%" stopColor="#00ffff">
+                      <animate attributeName="stop-color" values="#00ffff;#ffff00;#ff00ff;#00ffff" dur="4s" repeatCount="indefinite"/>
+                    </stop>
+                    <stop offset="66%" stopColor="#ffff00">
+                      <animate attributeName="stop-color" values="#ffff00;#ff00ff;#00ffff;#ffff00" dur="4s" repeatCount="indefinite"/>
+                    </stop>
+                    <stop offset="100%" stopColor="#ff00ff">
+                      <animate attributeName="stop-color" values="#ff00ff;#00ffff;#ffff00;#ff00ff" dur="4s" repeatCount="indefinite"/>
+                    </stop>
+                  </linearGradient>
+                </defs>
+              </g>
+            )}
             {/* Badges row */}
-            <g transform={`translate(16, 80)`}>
+            <g transform={`translate(16, ${tournamentTitle ? 75 : 60})`}>
               {bracketType && (
                 <>
                   <rect x={0} y={-12} rx={6} ry={6} width={150} height={20} fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.2)" />
