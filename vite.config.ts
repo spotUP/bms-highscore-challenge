@@ -24,6 +24,7 @@ export default defineConfig(({ mode }) => ({
   },
   // Disable linting during build
   build: {
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       onwarn: (warning, warn) => {
         // Suppress ESLint warnings during build
@@ -31,6 +32,15 @@ export default defineConfig(({ mode }) => ({
           return;
         }
         warn(warning);
+      },
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select'],
+          charts: ['recharts'],
+          supabase: ['@supabase/supabase-js'],
+          reactQuery: ['@tanstack/react-query'],
+        },
       },
     },
   },

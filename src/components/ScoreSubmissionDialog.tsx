@@ -66,10 +66,24 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
     }
 
     const trimmedName = name.trim();
-    if (trimmedName.length > 50) {
+
+    // Limit player names to 16 characters (database constraint)
+    const truncatedName = trimmedName.length > 16 ? trimmedName.substring(0, 16) : trimmedName;
+
+    if (trimmedName.length > 16) {
+      toast({
+        title: "Name Shortened",
+        description: `Name truncated to "${truncatedName}" (max 16 characters)`,
+        variant: "default"
+      });
+    }
+
+    // Note: Frontend now limits input to 16 characters, so this check is redundant
+    // but kept as a safety measure
+    if (trimmedName.length > 16) {
       toast({
         title: "Error",
-        description: "Player name must be 50 characters or less",
+        description: "Player name must be 16 characters or less",
         variant: "destructive"
       });
       return;
@@ -92,7 +106,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
       const { data: existingScore, error: fetchError } = await supabase
         .from('scores')
         .select('*')
-        .eq('player_name', trimmedName.toUpperCase())
+        .eq('player_name', truncatedName.toUpperCase())
         .eq('game_id', game.id)
         .maybeSingle();
 
@@ -129,7 +143,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         try {
           const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
             body: {
-              player_name: trimmedName.toUpperCase(),
+              player_name: truncatedName.toUpperCase(),
               score: scoreValue,
               game_name: game.name,
               game_id: game.id,
@@ -152,7 +166,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
 
         // Record the score submission for real-time notifications
         console.log('ScoreSubmissionDialog: Recording score submission for realtime:', {
-          player_name: trimmedName.toUpperCase(),
+          player_name: truncatedName.toUpperCase(),
           score: scoreValue,
           game_id: game.id,
           tournament_id: currentTournament?.id,
@@ -163,7 +177,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         const { error: submissionError } = await supabase
           .from('score_submissions')
           .insert({
-            player_name: trimmedName.toUpperCase(),
+            player_name: truncatedName.toUpperCase(),
             score: scoreValue,
             game_id: game.id,
             tournament_id: currentTournament?.id,
@@ -178,12 +192,12 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         }
 
         // Show message for all players
-        setInsultPlayerName(trimmedName);
+        setInsultPlayerName(truncatedName);
         setShowPlayerInsult(true);
       } else {
         // Insert new score for this player/game combination
         const scoreData = {
-          player_name: trimmedName.toUpperCase(),
+          player_name: truncatedName.toUpperCase(),
           score: scoreValue,
           game_id: game.id,
           tournament_id: currentTournament?.id
@@ -200,7 +214,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         try {
           const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
             body: {
-              player_name: trimmedName.toUpperCase(),
+              player_name: truncatedName.toUpperCase(),
               score: scoreValue,
               game_name: game.name,
               game_id: game.id,
@@ -222,7 +236,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
 
         // Also record submission for realtime broadcast
         console.log('ScoreSubmissionDialog: Recording score submission for realtime:', {
-          player_name: trimmedName.toUpperCase(),
+          player_name: truncatedName.toUpperCase(),
           score: scoreValue,
           game_id: game.id,
           tournament_id: currentTournament?.id,
@@ -233,7 +247,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         const { error: submissionError } = await supabase
           .from('score_submissions')
           .insert({
-            player_name: trimmedName.toUpperCase(),
+            player_name: truncatedName.toUpperCase(),
             score: scoreValue,
             game_id: game.id,
             tournament_id: currentTournament?.id,
@@ -248,7 +262,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         }
 
         // Show message for all players
-        setInsultPlayerName(trimmedName);
+        setInsultPlayerName(truncatedName);
         setShowPlayerInsult(true);
       }
       
@@ -258,7 +272,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
       
       // Check for new achievements after a short delay to allow database triggers to complete
       setTimeout(() => {
-        checkForNewAchievements(trimmedName);
+        checkForNewAchievements(truncatedName);
       }, 1000);
       
       onClose();
@@ -340,15 +354,15 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           <div className="space-y-4">
             <Input
               type="text"
-              placeholder="Player Name (max 50 characters)"
+              placeholder="Player Name (max 16 characters)"
               value={name}
               onChange={(e) => {
                 const value = e.target.value;
-                if (value.length <= 50) {
+                if (value.length <= 16) {
                   setName(value);
                 }
               }}
-              maxLength={50}
+              maxLength={16}
               className="bg-black/50 border-arcade-neonCyan text-white text-center"
               autoFocus
             />

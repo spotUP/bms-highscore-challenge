@@ -113,9 +113,9 @@ const Competition: React.FC = () => {
       id: m.id,
       tournament_id: m.tournament_id,
       round: m.round,
-      position: m.match_number,
-      participant1_id: m.player1_id,
-      participant2_id: m.player2_id,
+      position: m.position,
+      participant1_id: m.participant1_id,
+      participant2_id: m.participant2_id,
       winner_participant_id: m.winner_id,
       status: m.winner_id ? 'completed' : 'pending'
     }));

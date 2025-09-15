@@ -21,9 +21,9 @@ export interface TournamentMatch {
   id: string;
   tournament_id: string;
   round: number;
-  match_number: number;
-  player1_id: string | null;
-  player2_id: string | null;
+  position: number;
+  participant1_id: string | null;
+  participant2_id: string | null;
   winner_id: string | null;
   created_at: string;
   updated_at: string;
@@ -194,14 +194,14 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       const totalRounds = Math.log2(bracketSize);
       
       // Round 1: Initial pairings
-      let matchNumber = 1;
+      let position = 1;
       for (let i = 0; i < seededPlayers.length; i += 2) {
         matches.push({
           tournament_id: tournamentId,
           round: 1,
-          match_number: matchNumber++,
-          player1_id: seededPlayers[i]?.id || null,
-          player2_id: seededPlayers[i + 1]?.id || null,
+          position: position++,
+          participant1_id: seededPlayers[i]?.id || null,
+          participant2_id: seededPlayers[i + 1]?.id || null,
           winner_id: null
         });
       }
@@ -213,9 +213,9 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
           matches.push({
             tournament_id: tournamentId,
             round: round,
-            match_number: pos,
-            player1_id: null,
-            player2_id: null,
+            position: pos,
+            participant1_id: null,
+            participant2_id: null,
             winner_id: null
           });
         }
@@ -273,29 +273,29 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       
       // Find next round match to advance winner
       const nextRound = match.round + 1;
-      const nextMatchNumber = Math.ceil(match.match_number / 2);
-      const isLeftSide = (match.match_number % 2) === 1;
-      
+      const nextPosition = Math.ceil(match.position / 2);
+      const isLeftSide = (match.position % 2) === 1;
+
       // Check if there's a next round match
       const { data: nextMatch, error: nextErr } = await supabase
         .from('bracket_matches')
         .select('*')
         .eq('tournament_id', match.tournament_id)
         .eq('round', nextRound)
-        .eq('match_number', nextMatchNumber)
+        .eq('position', nextPosition)
         .maybeSingle();
       
       if (nextErr) throw nextErr;
       
       if (nextMatch) {
         // Advance winner to next match
-        const updateField = isLeftSide ? 'player1_id' : 'player2_id';
-        
+        const updateField = isLeftSide ? 'participant1_id' : 'participant2_id';
+
         const { error: advanceErr } = await supabase
           .from('bracket_matches')
           .update({ [updateField]: winnerId })
           .eq('id', nextMatch.id);
-        
+
         if (advanceErr) throw advanceErr;
       }
       
@@ -324,7 +324,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
         .select('*')
         .eq('tournament_id', tournamentId)
         .order('round', { ascending: true })
-        .order('match_number', { ascending: true });
+        .order('position', { ascending: true });
       
       if (matchesError) throw matchesError;
       

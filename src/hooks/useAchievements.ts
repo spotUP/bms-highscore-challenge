@@ -110,7 +110,7 @@ export const useAchievements = () => {
       console.error('Error in checkForDuplicateAchievements:', e);
       return { hasDuplicates: false, error: e };
     }
-  }, []);
+  }, [supabase]);
 
   const cleanupDuplicateAchievements = useCallback(async (playerName: string, tournamentId: string) => {
     try {
@@ -416,7 +416,7 @@ export const useAchievements = () => {
     } catch (error) {
       console.error('Error in checkForNewAchievements:', error);
     }
-  }, [showAchievementNotification, currentTournament]);
+  }, [showAchievementNotification, currentTournament, checkForDuplicateAchievements, cleanupDuplicateAchievements, ensureRealtimeSubscription]);
 
   const sendMultipleAchievementsWebhook = useCallback(async (
     playerName: string, 
@@ -463,7 +463,7 @@ export const useAchievements = () => {
     } catch (error) {
       console.error('❌ Achievement webhook call failed:', error);
     }
-  }, []);
+  }, [supabase, currentTournament]);
 
   const sendAchievementWebhook = useCallback(async (
     playerName: string, 
@@ -512,7 +512,7 @@ export const useAchievements = () => {
     } catch (error) {
       console.error('❌ Achievement webhook call failed:', error);
     }
-  }, []);
+  }, [supabase, currentTournament]);
 
 
   // Clean up realtime subscription when component unmounts
