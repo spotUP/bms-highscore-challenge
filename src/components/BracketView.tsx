@@ -56,17 +56,20 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
 
     const positions = new Map<string, { x: number; y: number; centerY: number }>();
 
-    const layoutSection = (roundsArr: [number, BracketMatch[]][], sectionOffsetX: number) => {
+    const layoutSection = (roundsArr: [number, BracketMatch[]][], sectionOffsetX: number, isReversed: boolean = false) => {
       roundsArr.forEach(([round, matchList], colIdx) => {
         const sortedMatches = matchList.slice().sort((a, b) => a.position - b.position);
         const baseSpacing = Math.max(120, matchHeight + 40);
-        
+
+        // For mirrored losers bracket, reverse column index
+        const actualColIdx = isReversed ? (roundsArr.length - 1 - colIdx) : colIdx;
+
         if (colIdx === 0) {
           // First round: use regular spacing
           const roundSpacing = baseSpacing;
           sortedMatches.forEach((match, index) => {
-            const x = sectionOffsetX + colIdx * colWidth;
-            const y = index * roundSpacing;
+            const x = sectionOffsetX + actualColIdx * colWidth;
+            const y = index * roundSpacing + 200; // Add vertical offset
             const centerY = y + (matchHeight / 2);
             positions.set(match.id, { x, y, centerY });
           });
@@ -76,15 +79,15 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
           if (prevRound) {
             const [, prevMatches] = prevRound;
             sortedMatches.forEach((match, index) => {
-              const x = sectionOffsetX + colIdx * colWidth;
-              
+              const x = sectionOffsetX + actualColIdx * colWidth;
+
               // Find the two parent matches that feed into this match
               const parentMatch1Position = (match.position - 1) * 2 + 1;
               const parentMatch2Position = (match.position - 1) * 2 + 2;
-              
+
               const parent1 = prevMatches.find(m => m.position === parentMatch1Position);
               const parent2 = prevMatches.find(m => m.position === parentMatch2Position);
-              
+
               let y: number;
               if (parent1 && parent2) {
                 // Center between the two parent matches
@@ -95,7 +98,7 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                 } else {
                   // Fallback to exponential spacing
                   const roundSpacing = baseSpacing * Math.pow(2, Math.max(0, (round % 100) - 1));
-                  y = index * roundSpacing;
+                  y = index * roundSpacing + 200;
                 }
               } else if (parent1) {
                 // Only one parent (odd number of matches in previous round)
@@ -104,14 +107,14 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                   y = parent1Pos.centerY - (matchHeight / 2);
                 } else {
                   const roundSpacing = baseSpacing * Math.pow(2, Math.max(0, (round % 100) - 1));
-                  y = index * roundSpacing;
+                  y = index * roundSpacing + 200;
                 }
               } else {
                 // No parents found, use exponential spacing as fallback
                 const roundSpacing = baseSpacing * Math.pow(2, Math.max(0, (round % 100) - 1));
-                y = index * roundSpacing;
+                y = index * roundSpacing + 200;
               }
-              
+
               const centerY = y + (matchHeight / 2);
               positions.set(match.id, { x, y, centerY });
             });
@@ -119,8 +122,8 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
             // Fallback to exponential spacing
             const roundSpacing = baseSpacing * Math.pow(2, Math.max(0, (round % 100) - 1));
             sortedMatches.forEach((match, index) => {
-              const x = sectionOffsetX + colIdx * colWidth;
-              const y = index * roundSpacing;
+              const x = sectionOffsetX + actualColIdx * colWidth;
+              const y = index * roundSpacing + 200;
               const centerY = y + (matchHeight / 2);
               positions.set(match.id, { x, y, centerY });
             });
@@ -129,10 +132,126 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
       });
     };
 
+    // Traditional layout: Winners on top, losers on bottom, finals on right
     const winnersCols = winners.length;
-    layoutSection(winners, 0);
-    layoutSection(losers, winnersCols * colWidth + 200); // gap between sections
-    layoutSection(grand, (winnersCols + losers.length) * colWidth + 400);
+    const losersCols = losers.length;
+    const maxCols = Math.max(winnersCols, losersCols);
+
+    // Define baseSpacing for use throughout the layout
+    const baseSpacing = Math.max(120, matchHeight + 40);
+
+    // Winners bracket on the top
+    const winnersOffsetX = 40;
+    const winnersOffsetY = 40;
+
+    // Layout winners section with custom positioning for traditional layout
+    winners.forEach(([round, list], colIdx) => {
+      const sortedMatches = list.slice().sort((a, b) => a.position - b.position);
+
+      if (colIdx === 0) {
+        // First round: evenly spaced
+        const roundSpacing = baseSpacing;
+        sortedMatches.forEach((match, index) => {
+          const x = winnersOffsetX + colIdx * colWidth;
+          const y = winnersOffsetY + index * roundSpacing;
+          const centerY = y + (matchHeight / 2);
+          positions.set(match.id, { x, y, centerY });
+        });
+      } else {
+        // Subsequent rounds: center between parent matches
+        const prevRound = winners[colIdx - 1];
+        if (prevRound) {
+          const [, prevMatches] = prevRound;
+          sortedMatches.forEach((match, index) => {
+            const x = winnersOffsetX + colIdx * colWidth;
+
+            // Find parent matches
+            const parentMatch1Position = (match.position - 1) * 2 + 1;
+            const parentMatch2Position = (match.position - 1) * 2 + 2;
+
+            const parent1 = prevMatches.find(m => m.position === parentMatch1Position);
+            const parent2 = prevMatches.find(m => m.position === parentMatch2Position);
+
+            let y: number;
+            if (parent1 && parent2) {
+              const parent1Pos = positions.get(parent1.id);
+              const parent2Pos = positions.get(parent2.id);
+              if (parent1Pos && parent2Pos) {
+                y = (parent1Pos.centerY + parent2Pos.centerY) / 2 - (matchHeight / 2);
+              } else {
+                y = winnersOffsetY + index * baseSpacing * Math.pow(2, colIdx);
+              }
+            } else if (parent1) {
+              const parent1Pos = positions.get(parent1.id);
+              y = parent1Pos ? parent1Pos.centerY - (matchHeight / 2) : winnersOffsetY + index * baseSpacing * Math.pow(2, colIdx);
+            } else {
+              y = winnersOffsetY + index * baseSpacing * Math.pow(2, colIdx);
+            }
+
+            const centerY = y + (matchHeight / 2);
+            positions.set(match.id, { x, y, centerY });
+          });
+        }
+      }
+    });
+
+    // Losers bracket on the bottom
+    const losersOffsetX = 40;
+    const losersOffsetY = winnersOffsetY + 600; // Below winners bracket
+
+    // Layout losers section
+    losers.forEach(([round, list], colIdx) => {
+      const sortedMatches = list.slice().sort((a, b) => a.position - b.position);
+
+      // Losers bracket has more complex positioning
+      const x = losersOffsetX + colIdx * colWidth;
+
+      if (colIdx === 0) {
+        // First losers round: evenly spaced
+        const roundSpacing = baseSpacing;
+        sortedMatches.forEach((match, index) => {
+          const y = losersOffsetY + index * roundSpacing;
+          const centerY = y + (matchHeight / 2);
+          positions.set(match.id, { x, y, centerY });
+        });
+      } else {
+        // Subsequent losers rounds: center between previous matches
+        const prevRound = losers[colIdx - 1];
+        if (prevRound) {
+          const [, prevMatches] = prevRound;
+          sortedMatches.forEach((match, index) => {
+            // For losers bracket, positioning can be more complex
+            let y: number;
+            if (prevMatches.length >= 2) {
+              // Try to center between previous round matches
+              const spacing = baseSpacing * Math.pow(2, colIdx);
+              y = losersOffsetY + index * spacing;
+            } else {
+              // Single match case
+              const prevMatch = prevMatches[0];
+              const prevPos = positions.get(prevMatch?.id);
+              y = prevPos ? prevPos.centerY - (matchHeight / 2) : losersOffsetY + index * baseSpacing;
+            }
+
+            const centerY = y + (matchHeight / 2);
+            positions.set(match.id, { x, y, centerY });
+          });
+        }
+      }
+    });
+
+    // Grand finals on the right side
+    if (grand.length > 0) {
+      const finalX = winnersOffsetX + maxCols * colWidth + 100;
+      grand.forEach(([round, matchList]) => {
+        matchList.forEach((match, index) => {
+          // Position finals roughly in the middle vertically
+          const finalY = winnersOffsetY + 300;
+          const centerY = finalY + (matchHeight / 2);
+          positions.set(match.id, { x: finalX, y: finalY, centerY });
+        });
+      });
+    }
 
     return { winnersRounds: winners, losersRounds: losers, grandRounds: grand, matchPositions: positions };
   }, [matches, matchHeight]);
@@ -186,11 +305,13 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
     } catch {}
   }, [compId, scale, offset, showLegend]);
 
-  // Auto-fit on load and whenever matches change
+  // Auto-fit only on initial load, not when matches update
   useEffect(() => {
     const haveMatches = Array.isArray(matches) && matches.length > 0;
     if (!haveMatches) return;
-    // Always center and fit to view when entering competition page or when forceAutoFit is enabled
+    // Only auto-fit on initial load, not on updates
+    if (initialFitDoneRef.current) return;
+
     // Allow layout to settle over three frames before fitting
     const id1 = requestAnimationFrame(() => {
       const id2 = requestAnimationFrame(() => {
@@ -248,10 +369,13 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
   const onMouseUp = () => { dragging.current = false; };
   const onMouseLeave = () => { dragging.current = false; };
 
-  // Precompute section offsets for connectors and quick-jump
-  const winnersOffsetX = 0;
-  const losersOffsetX = winnersRounds.length * colWidth + 200;
-  const grandOffsetX = losersOffsetX + losersRounds.length * colWidth + 400;
+  // Layout constants for traditional bracket (winners top, losers bottom)
+  const winnersOffsetX = 40;
+  const winnersOffsetY = 40;
+  const losersOffsetX = 40;
+  const losersOffsetY = winnersOffsetY + 600;
+  const maxCols = Math.max(winnersRounds.length, losersRounds.length);
+  const finalX = winnersOffsetX + maxCols * colWidth + 100;
 
   // Compute section heights and total width for zoom-to-fit and backgrounds
   const baseSpacing = Math.max(120, matchHeight + 40);
@@ -268,11 +392,10 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
   const winnersHeight = computeSectionHeight(winnersRounds);
   const losersHeight = computeSectionHeight(losersRounds);
   const grandHeight = computeSectionHeight(grandRounds);
-  const contentHeight = Math.max(winnersHeight, losersHeight, grandHeight);
-  const winnersWidth = Math.max(1, winnersRounds.length) * colWidth;
-  const losersWidth = losersRounds.length > 0 ? (200 + losersRounds.length * colWidth) : 0;
-  const grandWidth = grandRounds.length > 0 ? (400 + colWidth) : 0;
-  const contentWidth = winnersWidth + losersWidth + grandWidth;
+
+  // Traditional layout: total height is winners + losers vertically, width includes final column
+  const contentHeight = winnersHeight + losersHeight + 200; // Space between winners and losers
+  const contentWidth = finalX + colWidth + 100; // Includes final column width
 
   const zoomToFit = () => {
     const svg = svgRef.current;
@@ -335,14 +458,14 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
     });
   };
 
-  const zoomToWinners = () => zoomToRect(winnersOffsetX - 20, winnersWidth + 40, winnersHeight);
+  const zoomToWinners = () => zoomToRect(winnersOffsetX - 20, maxCols * colWidth + 40, winnersHeight);
   const zoomToLosers = () => {
     if (losersRounds.length === 0) return;
-    zoomToRect(losersOffsetX - 20, losersRounds.length * colWidth + 40, losersHeight);
+    zoomToRect(losersOffsetX - 20, maxCols * colWidth + 40, losersHeight);
   };
   const zoomToGrand = () => {
     if (grandRounds.length === 0) return;
-    zoomToRect(grandOffsetX - 20, colWidth + 40, grandHeight);
+    zoomToRect(finalX - 20, colWidth + 40, grandHeight);
   };
   const resetView = () => { setScale(1); setOffset({ x: 0, y: 0 }); };
 
@@ -414,12 +537,12 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
       >
         <g transform={`translate(${offset.x},${offset.y}) scale(${scale})`}>
           {/* Section backgrounds */}
-          <rect x={winnersOffsetX - 20} y={20} width={winnersWidth + 40} height={winnersHeight} fill="none" stroke="none" />
+          <rect x={winnersOffsetX - 20} y={winnersOffsetY - 20} width={maxCols * colWidth + 40} height={winnersHeight + 40} fill="none" stroke="none" />
           {losersRounds.length > 0 && (
-            <rect x={losersOffsetX - 20} y={20} width={losersRounds.length * colWidth + 40} height={losersHeight} fill="none" stroke="none" />
+            <rect x={losersOffsetX - 20} y={losersOffsetY - 20} width={maxCols * colWidth + 40} height={losersHeight + 40} fill="none" stroke="none" />
           )}
           {grandRounds.length > 0 && (
-            <rect x={grandOffsetX - 20} y={20} width={colWidth + 40} height={grandHeight} fill="none" stroke="none" />
+            <rect x={finalX - 20} y={winnersOffsetY + 280} width={colWidth + 40} height={grandHeight + 40} fill="none" stroke="none" />
           )}
           {/* Winners Section */}
           {winnersRounds.map(([round, list], colIdx) => (
@@ -645,31 +768,31 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
           {winnersRounds.map(([round, list], colIdx) => {
             const nextRound = winnersRounds[colIdx + 1];
             if (!nextRound) return null;
-            
+
             return (
               <g key={`connectors-${round}`}>
                 {list.map((match) => {
                   const currentPos = matchPositions.get(match.id);
                   if (!currentPos) return null;
-                  
+
                   // Find the target match in next round
                   const targetPosition = Math.ceil(match.position / 2);
                   const targetMatch = nextRound[1].find(m => m.position === targetPosition);
-                  
+
                   if (!targetMatch) return null;
                   const targetPos = matchPositions.get(targetMatch.id);
                   if (!targetPos) return null;
-                  
+
                   // Draw connector from current match center to target match center
                   const x1 = winnersOffsetX + colIdx * colWidth + 200; // Right edge of current match
                   const y1 = currentPos.centerY + 40; // Current match center (accounting for round offset)
                   const x2 = winnersOffsetX + (colIdx + 1) * colWidth; // Left edge of next match
                   const y2 = targetPos.centerY + 40; // Target match center (accounting for round offset)
-                  
+
                   // Create L-shaped connector
                   const midX = x1 + 40; // Horizontal segment length
                   const path = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
-                  
+
                   return (
                     <path
                       key={`${match.id}-connector`}
@@ -689,7 +812,7 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
             );
           })}
 
-          {/* Losers connectors */}
+          {/* Losers connectors - traditional layout (left to right) */}
           {losersRounds.map(([round, list], colIdx) => {
             const nextRound = losersRounds[colIdx + 1];
             if (!nextRound) return null;
@@ -706,11 +829,12 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                   const targetPos = matchPositions.get(targetMatch.id);
                   if (!targetPos) return null;
 
-                  const x1 = losersOffsetX + colIdx * colWidth + 200;
-                  const y1 = currentPos.centerY + 40;
-                  const x2 = losersOffsetX + (colIdx + 1) * colWidth;
-                  const y2 = targetPos.centerY + 40;
-                  const midX = x1 + 40;
+                  // Traditional losers bracket: connectors go right (left to right)
+                  const x1 = losersOffsetX + colIdx * colWidth + 200; // Right edge of current match
+                  const y1 = currentPos.centerY + 40; // Add round offset for proper centering
+                  const x2 = losersOffsetX + (colIdx + 1) * colWidth; // Left edge of next match
+                  const y2 = targetPos.centerY + 40; // Add round offset for proper centering
+                  const midX = x1 + 40; // Horizontal segment length
                   const path = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
 
                   return (
@@ -732,6 +856,50 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
             );
           })}
 
+          {/* Winners to Grand Final connector (from last winners round) */}
+          {winnersRounds.length > 0 && grandRounds.length > 0 && (
+            (() => {
+              const lastWinners = winnersRounds[winnersRounds.length - 1][1];
+              if (!lastWinners || lastWinners.length === 0) return null;
+              const wm = lastWinners[0];
+              const wPos = matchPositions.get(wm.id);
+              const gfList = grandRounds[0][1];
+              const gf = gfList && gfList[0];
+              if (!wPos || !gf) return null;
+              const gfPos = matchPositions.get(gf.id);
+              if (!gfPos) return null;
+
+              const winnersChampExists = wm.status === 'completed' && wm.winner_participant_id;
+              const grandFinalHasParticipant = gf.participant1_id || gf.participant2_id;
+              if (!winnersChampExists && !grandFinalHasParticipant) return null;
+
+              // From winners bracket to grand final on the right
+              const x1 = winnersOffsetX + (winnersRounds.length - 1) * colWidth + 200; // Right edge of last winners match
+              const y1 = wPos.centerY;
+              const x2 = finalX; // Left edge of GF
+              const y2 = gfPos.centerY;
+
+              // Create path going right then down/up to final
+              const midX = x1 + 50;
+              const path = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
+
+              return (
+                <path
+                  key={`winners-to-gf`}
+                  d={path}
+                  stroke="#60a5fa"
+                  strokeWidth="2"
+                  fill="none"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeDasharray="100" strokeDashoffset="100" pathLength={100}
+                >
+                  <animate attributeName="stroke-dashoffset" from="100" to="0" dur="1.4s" begin={`0.8s`} fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1" keyTimes="0;1" />
+                </path>
+              );
+            })()
+          )}
+
           {/* Losers champion to Grand Final connector (from last losers round) */}
           {losersRounds.length > 0 && grandRounds.length > 0 && (
             (() => {
@@ -746,20 +914,24 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
               if (!lPos || !gf) return null;
               const gfPos = matchPositions.get(gf.id);
               if (!gfPos) return null;
-              
+
               // Only show connector if losers champion exists (last losers match is completed)
               // and Grand Final has at least one participant
               const losersChampExists = lm.status === 'completed' && lm.winner_participant_id;
               const grandFinalHasParticipant = gf.participant1_id || gf.participant2_id;
-              
+
               if (!losersChampExists && !grandFinalHasParticipant) return null;
-              
-              const x1 = losersOffsetX + (losersRounds.length - 1) * colWidth + 200;
-              const y1 = lPos.centerY + 40;
-              const x2 = grandOffsetX; // left edge of GF
-              const y2 = gfPos.centerY + 40;
-              const midX = x1 + 60;
+
+              // From losers bracket to grand final on the right
+              const x1 = losersOffsetX + (losersRounds.length - 1) * colWidth + 200; // Right edge of last losers match
+              const y1 = lPos.centerY;
+              const x2 = finalX; // Left edge of GF
+              const y2 = gfPos.centerY;
+
+              // Create path going right then up to final
+              const midX = x1 + 50;
               const path = `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`;
+
               return (
                 <path
                   key={`losers-to-gf`}

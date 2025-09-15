@@ -99,7 +99,7 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
     if (!createForm.name.trim() || !createForm.slug.trim()) {
       toast({
         title: "Error",
-        description: "Tournament name and slug are required",
+        description: "Highscore tournament name and slug are required",
         variant: "destructive",
       });
       return;
@@ -125,7 +125,7 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
       setSlugAvailable(null);
       toast({
         title: "Success",
-        description: "Tournament created successfully!",
+        description: "Highscore tournament created successfully!",
       });
       onClose(); // Close the modal
     }
@@ -136,11 +136,11 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Tournament</DialogTitle>
+          <DialogTitle>Create New Highscore Tournament</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
         <div>
-          <Label htmlFor="name" className="text-white">Tournament Name</Label>
+          <Label htmlFor="name" className="text-white">Highscore Tournament Name</Label>
           <Input
             id="name"
             value={createForm.name}
@@ -152,7 +152,7 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
                 slug: generateSlug(name)
               }));
             }}
-            placeholder="My Awesome Tournament"
+            placeholder="My Awesome Highscore Tournament"
             className="bg-black/50 border-gray-700 text-white"
           />
         </div>
@@ -163,13 +163,13 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
             id="description"
             value={createForm.description}
             onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
-            placeholder="A brief description of your tournament"
+            placeholder="A brief description of your highscore tournament"
             className="bg-black/50 border-gray-700 text-white"
           />
         </div>
 
         <div>
-          <Label htmlFor="slug" className="text-white">Tournament Slug</Label>
+          <Label htmlFor="slug" className="text-white">Highscore Tournament Slug</Label>
           <div className="relative">
             <Input
               id="slug"
@@ -245,7 +245,7 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
             onCheckedChange={(checked) => setCreateForm(prev => ({ ...prev, demolition_man_active: checked }))}
           />
           <Label htmlFor="create-demolition-man" className="text-white">
-            Enable Demolition Man Leaderboard
+            Enable Standing Competition Leaderboard
           </Label>
         </div>
 
@@ -296,7 +296,7 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
     if (!currentTournament) {
       toast({
         title: "Error",
-        description: "No active tournament selected",
+        description: "No active highscore tournament selected",
         variant: "destructive"
       });
       return;
@@ -906,6 +906,7 @@ const Admin = () => {
   const [activeTab, setActiveTab] = useState<string>('create-tournament');
   // System subtab state
   const [systemSubTab, setSystemSubTab] = useState<string>('performance');
+  const [competitionSubTab, setCompetitionSubTab] = useState<string>('tournaments');
   // Bulk selection removed
   // Inline score edits: map scoreId -> { player_name, score }
   const [inlineScoreEdits, setInlineScoreEdits] = useState<Record<string, { player_name: string; score: string }>>({});
@@ -1572,41 +1573,53 @@ const Admin = () => {
         </PageHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6 bg-gray-900 border border-white/20">
-            <TabsTrigger value="create-tournament" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">Tournaments</TabsTrigger>
-            <TabsTrigger value="system" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><TestTube className="w-4 h-4 mr-2" />System</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 bg-gray-900 border border-white/20">
+            <TabsTrigger value="create-tournament" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">Competitions</TabsTrigger>
             <TabsTrigger value="achievements" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Trophy className="w-4 h-4 mr-2" />Achievements</TabsTrigger>
             <TabsTrigger value="users" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Users className="w-4 h-4 mr-2" />Users</TabsTrigger>
-            <TabsTrigger value="brackets" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Zap className="w-4 h-4 mr-2" />Brackets</TabsTrigger>
-            <TabsTrigger value="demolition" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><BarChart3 className="w-4 h-4 mr-2" />Demolition Man</TabsTrigger>
+            <TabsTrigger value="system" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><TestTube className="w-4 h-4 mr-2" />System</TabsTrigger>
           </TabsList>
 
           <TabsContent value="create-tournament" className="mt-6">
-            <Card className={getCardStyle('primary')}>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-4 w-full">
-                  <CardTitle className={getTypographyStyle('h3')}>Manage Tournaments</CardTitle>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      onClick={() => setIsCreateTournamentOpen(true)}
-                      variant="outline"
-                      className="h-8"
-                    >
-                      <Plus className="w-4 h-4 mr-2" /> Create Tournament
-                    </Button>
-                    <Button
-                      onClick={() => setIsSuggestGamesOpen(true)}
-                      variant="outline"
-                      className="h-8"
-                    >
-                      <Gamepad2 className="w-4 h-4 mr-2" /> Suggest Games
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
+            <Tabs value={competitionSubTab} onValueChange={setCompetitionSubTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-3 bg-gray-700 border border-white/10 rounded-md">
+                <TabsTrigger value="tournaments" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+                  <Trophy className="w-3 h-3 mr-1" />Highscore Tournaments
+                </TabsTrigger>
+                <TabsTrigger value="brackets" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+                  <Zap className="w-3 h-3 mr-1" />Bracket Tournaments
+                </TabsTrigger>
+                <TabsTrigger value="standing" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+                  <BarChart3 className="w-3 h-3 mr-1" />Standing Competition
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="tournaments" className="mt-6">
+                <Card className={getCardStyle('primary')}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-4 w-full">
+                      <CardTitle className={getTypographyStyle('h3')}>Manage Highscore Tournaments</CardTitle>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          onClick={() => setIsCreateTournamentOpen(true)}
+                          variant="outline"
+                          className="h-8"
+                        >
+                          <Plus className="w-4 h-4 mr-2" /> Create Highscore Tournament
+                        </Button>
+                        <Button
+                          onClick={() => setIsSuggestGamesOpen(true)}
+                          variant="outline"
+                          className="h-8"
+                        >
+                          <Gamepad2 className="w-4 h-4 mr-2" /> Suggest Games
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="text-sm text-gray-300 mb-4">You have access to {userTournaments.length} tournament{userTournaments.length !== 1 ? 's' : ''}.</div>
+                  <div className="text-sm text-gray-300 mb-4">You have access to {userTournaments.length} highscore tournament{userTournaments.length !== 1 ? 's' : ''}.</div>
                   <div className="grid gap-4">
                     {userTournaments.map((tournament) => (
                       <div key={tournament.id} className="p-4 bg-black/30 rounded-lg border border-white/10">
@@ -1615,7 +1628,7 @@ const Admin = () => {
                             <div className="flex items-center gap-2 mb-1 flex-wrap">
                               <h4 className="font-semibold text-white">{tournament.name}</h4>
                               {tournament.id === currentTournament?.id && (<span className="px-2 py-1 text-xs bg-arcade-neonCyan text-black rounded">Current</span>)}
-                              {tournament.is_public ? (<div title="Public Tournament"><Globe className="w-4 h-4 text-green-400" /></div>) : (<div title="Private Tournament"><Lock className="w-4 h-4 text-yellow-400" /></div>)}
+                              {tournament.is_public ? (<div title="Public Highscore Tournament"><Globe className="w-4 h-4 text-green-400" /></div>) : (<div title="Private Highscore Tournament"><Lock className="w-4 h-4 text-yellow-400" /></div>)}
                             </div>
                             <p className="text-sm text-gray-400 mb-1 truncate">Slug: /t/{tournament.slug}</p>
                             {tournament.description && (<p className="text-sm text-gray-300 break-words">{tournament.description}</p>)}
@@ -1632,9 +1645,9 @@ const Admin = () => {
                                 onCheckedChange={async (checked) => {
                                   if (!checked) return;
                                   await switchTournament(tournament);
-                                  toast({ title: 'Tournament Switched', description: `Now managing "${tournament.name}"` });
+                                  toast({ title: 'Highscore Tournament Switched', description: `Now managing "${tournament.name}"` });
                                 }}
-                                title={tournament.id === currentTournament?.id ? 'Current active tournament' : 'Activate this tournament'}
+                                title={tournament.id === currentTournament?.id ? 'Current active highscore tournament' : 'Activate this highscore tournament'}
                               />
                             </div>
                             <div className="flex items-center gap-2">
@@ -1696,7 +1709,7 @@ const Admin = () => {
                                 <Button size="sm" variant="outline" title="Clone"><Copy className="w-4 h-4" /></Button>
                               </DialogTrigger>
                               <DialogContent className="bg-gray-900 text-white border-white/20">
-                                <DialogHeader><DialogTitle>Clone Tournament</DialogTitle></DialogHeader>
+                                <DialogHeader><DialogTitle>Clone Highscore Tournament</DialogTitle></DialogHeader>
                                 <div className="space-y-4">
                                   <div><Label className="text-white">Source Tournament</Label><Input value={tournament.name} disabled className="bg-black/50 border-white/20 text-white" /></div>
                                   <div><Label className="text-white">New Name</Label><Input id={`clone-name-${tournament.id}`} placeholder={`${tournament.name} (Copy)`} className="bg-black/50 border-white/20 text-white" /></div>
@@ -1704,18 +1717,18 @@ const Admin = () => {
                                   <div className="flex items-center space-x-2"><Switch id={`clone-public-${tournament.id}`} defaultChecked={tournament.is_public} /><Label htmlFor={`clone-public-${tournament.id}`}>Make Public</Label></div>
                                   <div className="flex justify-end space-x-2 pt-4">
                                     <Button variant="outline" onClick={() => {}}>Cancel</Button>
-                                    <Button onClick={async () => { const nameEl = document.getElementById(`clone-name-${tournament.id}`) as HTMLInputElement; const slugEl = document.getElementById(`clone-slug-${tournament.id}`) as HTMLInputElement; const pubEl = document.getElementById(`clone-public-${tournament.id}`) as HTMLInputElement; const name = nameEl?.value?.trim() || `${tournament.name} (Copy)`; const slug = slugEl?.value?.trim() || `${tournament.slug}-${generateRandomString(4)}`; const isPublic = !!pubEl?.checked; const created = await cloneTournament(tournament.id, { name, slug, is_public: isPublic }); if (created) { await refreshTournaments(); toast({ title: 'Success', description: `Cloned "${tournament.name}" as "${name}"` }); } }}>Clone Tournament</Button>
+                                    <Button onClick={async () => { const nameEl = document.getElementById(`clone-name-${tournament.id}`) as HTMLInputElement; const slugEl = document.getElementById(`clone-slug-${tournament.id}`) as HTMLInputElement; const pubEl = document.getElementById(`clone-public-${tournament.id}`) as HTMLInputElement; const name = nameEl?.value?.trim() || `${tournament.name} (Copy)`; const slug = slugEl?.value?.trim() || `${tournament.slug}-${generateRandomString(4)}`; const isPublic = !!pubEl?.checked; const created = await cloneTournament(tournament.id, { name, slug, is_public: isPublic }); if (created) { await refreshTournaments(); toast({ title: 'Success', description: `Cloned "${tournament.name}" as "${name}"` }); } }}>Clone Highscore Tournament</Button>
                                   </div>
                                 </div>
                               </DialogContent>
                             </Dialog>
-                            <Button size="sm" variant="outline" onClick={() => { toast({ title: 'Edit Tournament', description: `Edit functionality for "${tournament.name}" would go here` }); }}><Pencil className="w-4 h-4" /></Button>
+                            <Button size="sm" variant="outline" onClick={() => { toast({ title: 'Edit Highscore Tournament', description: `Edit functionality for "${tournament.name}" would go here` }); }}><Pencil className="w-4 h-4" /></Button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button size="sm" variant="destructive" disabled={tournament.id === currentTournament?.id}><Trash2 className="w-4 h-4" /></Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent className="bg-gray-900 text-white border-white/20">
-                                <AlertDialogHeader><AlertDialogTitle>Delete Tournament</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete "{tournament.name}"? This action cannot be undone and will remove all games, scores, and members.</AlertDialogDescription></AlertDialogHeader>
+                                <AlertDialogHeader><AlertDialogTitle>Delete Highscore Tournament</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete "{tournament.name}"? This action cannot be undone and will remove all games, scores, and members.</AlertDialogDescription></AlertDialogHeader>
                                 <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteTournament(tournament.id)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction></AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
@@ -1864,8 +1877,33 @@ const Admin = () => {
                 </div>
               </CardContent>
             </Card>
+              </TabsContent>
 
-            {/* Create New Tournament Section */}
+              <TabsContent value="brackets" className="mt-6">
+                <Card className={getCardStyle('primary')}>
+                  <CardHeader>
+                    <CardTitle className={getTypographyStyle('h3')}>Bracket Tournaments</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <BracketManagement />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="standing" className="mt-6">
+                <Card className={getCardStyle('primary')}>
+                  <CardHeader>
+                    <CardTitle className={getTypographyStyle('h3')}>Standing Competition</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <DemolitionManScoreManager />
+                    <DemolitionManQRSubmit />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
+
+            {/* Shared Dialogs */}
             <CreateTournamentForm
               isOpen={isCreateTournamentOpen}
               onClose={() => setIsCreateTournamentOpen(false)}
@@ -1880,18 +1918,18 @@ const Admin = () => {
 
           <TabsContent value="system" className="mt-6">
             <Tabs value={systemSubTab} onValueChange={setSystemSubTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-4 bg-gray-800 border border-white/20">
-                <TabsTrigger value="performance" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
-                  <Zap className="w-4 h-4 mr-2" />Performance
+              <TabsList className="grid w-full grid-cols-4 bg-gray-700 border border-white/10 rounded-md">
+                <TabsTrigger value="performance" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+                  <Zap className="w-3 h-3 mr-1" />Performance
                 </TabsTrigger>
-                <TabsTrigger value="demolition" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
-                  <BarChart3 className="w-4 h-4 mr-2" />Demolition Man
+                <TabsTrigger value="demolition" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+                  <BarChart3 className="w-3 h-3 mr-1" />Standing Competition
                 </TabsTrigger>
-                <TabsTrigger value="reset" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
-                  <RotateCcw className="w-4 h-4 mr-2" />Reset Functions
+                <TabsTrigger value="reset" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+                  <RotateCcw className="w-3 h-3 mr-1" />Reset Functions
                 </TabsTrigger>
-                <TabsTrigger value="webhooks" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black">
-                  <Webhook className="w-4 h-4 mr-2" />Webhooks
+                <TabsTrigger value="webhooks" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+                  <Webhook className="w-3 h-3 mr-1" />Webhooks
                 </TabsTrigger>
               </TabsList>
 
@@ -1917,17 +1955,6 @@ const Admin = () => {
           </TabsContent>
           <TabsContent value="achievements" className="mt-6"><AchievementManagerV2 /></TabsContent>
           <TabsContent value="users" className="mt-6"><UserManagement /></TabsContent>
-          <TabsContent value="brackets" className="mt-6">
-            <Card className={getCardStyle('primary')}>
-              <CardHeader>
-                <CardTitle className={getTypographyStyle('h3')}>Bracket Tournaments</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <BracketManagement />
-              </CardContent>
-            </Card>
-          </TabsContent>
-          <TabsContent value="demolition" className="mt-6"><div className="space-y-6"><DemolitionManScoreManager /><DemolitionManQRSubmit /></div></TabsContent>
         </Tabs>
 
         {/* Shared Add/Edit Game Dialog */}

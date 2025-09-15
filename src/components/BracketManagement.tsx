@@ -61,12 +61,12 @@ const BracketManagement: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="text-gray-300">
-        Manage bracket tournaments: rename or delete existing tournaments.
+        Manage Bracket Tournaments: rename or delete existing tournaments.
       </div>
 
       {tournaments.length === 0 ? (
         <div className="text-center py-8 text-gray-400">
-          No bracket tournaments found.
+          No Bracket Tournaments found.
         </div>
       ) : (
         <Table>

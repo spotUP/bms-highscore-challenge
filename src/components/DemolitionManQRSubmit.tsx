@@ -24,7 +24,7 @@ const DemolitionManQRSubmit = () => {
     setQrUrl(qrSubmitUrl);
   }, []);
 
-  // Find Demolition Man game ID
+  // Find Standing Competition game ID
   useEffect(() => {
     const findOrCreateDemolitionManGame = async () => {
       try {
@@ -32,7 +32,7 @@ const DemolitionManQRSubmit = () => {
         const { data: games, error } = await supabase
           .from('games')
           .select('id, name')
-          .eq('name', 'Demolition Man')
+          .eq('name', 'Standing Competition')
           .single();
 
         if (games && !error) {
@@ -41,12 +41,12 @@ const DemolitionManQRSubmit = () => {
         }
 
         // If not found, we can't create it without the function
-        console.log('Demolition Man game not found in database');
+        console.log('Standing Competition game not found in database');
         setDemolitionManGameId(null);
         return;
 
       } catch (error) {
-        console.error('Error with Demolition Man game setup:', error);
+        console.error('Error with Standing Competition game setup:', error);
       }
     };
 
@@ -75,7 +75,7 @@ const DemolitionManQRSubmit = () => {
     if (!demolitionManGameId) {
       toast({
         title: "⚠️ Setup Required",
-        description: "Demolition Man game needs to be added to the database first. Please contact an admin.",
+        description: "Standing Competition game needs to be added to the database first. Please contact an admin.",
         variant: "destructive",
       });
       return;
@@ -97,7 +97,7 @@ const DemolitionManQRSubmit = () => {
 
       toast({
         title: "Score Submitted!",
-        description: `${playerName}'s score of ${Number(score).toLocaleString()} has been submitted to the Demolition Man eternal leaderboard!`,
+        description: `${playerName}'s score of ${Number(score).toLocaleString()} has been submitted to the Standing Competition eternal leaderboard!`,
       });
 
       // Clear form
@@ -128,7 +128,7 @@ const DemolitionManQRSubmit = () => {
       <CardHeader>
         <CardTitle className={getTypographyStyle('h3') + " flex items-center gap-2"}>
           <Zap className="w-5 h-5 text-red-500" />
-          Demolition Man QR Submit
+          Standing Competition QR Submit
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -146,7 +146,7 @@ const DemolitionManQRSubmit = () => {
           </div>
           <div className="space-y-2">
             <p className="text-sm text-gray-400">
-              Scan this QR code to quickly submit Demolition Man scores
+              Scan this QR code to quickly submit Standing Competition scores
             </p>
             <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
               <ExternalLink className="w-3 h-3" />
@@ -204,17 +204,17 @@ const DemolitionManQRSubmit = () => {
 
             {!demolitionManGameId && (
               <p className="text-xs text-amber-400 text-center">
-                ⚠️ Demolition Man game needs to be added to the database first
+                ⚠️ Standing Competition game needs to be added to the database first
               </p>
             )}
           </div>
         </div>
 
-        {/* Demolition Man Header */}
+        {/* Standing Competition Header */}
         <div className="text-center">
           <img 
             src="https://images.launchbox-app.com/c84bf29b-1b54-4310-9290-9b52f587f442.png"
-            alt="Demolition Man"
+            alt="Standing Competition"
             className="w-full max-w-sm h-auto mx-auto rounded-lg"
           />
         </div>
