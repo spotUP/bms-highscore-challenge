@@ -13,6 +13,102 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import AdvancedConfetti from '@/components/AdvancedConfetti';
 import { createPortal } from 'react-dom';
 
+// Helper function to check if tournament is complete - SAME LOGIC AS BracketAdmin
+const checkTournamentComplete = (matches: TournamentMatch[], bracketType: 'single' | 'double'): boolean => {
+  console.log('🏆 COMPETITION - CHECKING TOURNAMENT COMPLETION:', {
+    bracketType,
+    totalMatches: matches.length,
+    matchesByRound: matches.reduce((acc, m) => {
+      acc[m.round] = (acc[m.round] || 0) + 1;
+      return acc;
+    }, {} as Record<number, number>)
+  });
+
+  if (bracketType === 'single') {
+    // Single elimination: tournament is complete when round 1000 (grand final) has a winner
+    const grandFinal = matches.find(m => m.round === 1000);
+    console.log('🏆 COMPETITION - Single elimination - Grand Final:', grandFinal);
+
+    if (!grandFinal) {
+      console.log('🏆 COMPETITION - Single elimination - No Grand Final exists yet');
+      return false;
+    }
+
+    if (!grandFinal.winner_participant_id) {
+      console.log('🏆 COMPETITION - Single elimination - Grand Final not completed yet');
+      return false;
+    }
+
+    // CRITICAL FIX: Ensure Grand Final has both participants before considering it complete
+    if (!grandFinal.participant1_id || !grandFinal.participant2_id) {
+      console.log('🏆 COMPETITION - Single elimination - Grand Final missing participants:', {
+        participant1_id: grandFinal.participant1_id,
+        participant2_id: grandFinal.participant2_id
+      });
+      return false;
+    }
+
+    console.log('🏆 COMPETITION - Single elimination - Tournament is COMPLETE!');
+    return true;
+  } else {
+    // Double elimination: more complex logic
+    const grandFinal = matches.find(m => m.round === 1000);
+    const bracketReset = matches.find(m => m.round === 1001);
+
+    console.log('🏆 COMPETITION - Double elimination - Grand Final:', grandFinal);
+    console.log('🏆 COMPETITION - Double elimination - Bracket Reset:', bracketReset);
+
+    if (!grandFinal) {
+      console.log('🏆 COMPETITION - Double elimination - No Grand Final exists yet');
+      return false;
+    }
+
+    if (!grandFinal.winner_participant_id) {
+      console.log('🏆 COMPETITION - Double elimination - Grand Final not completed yet');
+      return false;
+    }
+
+    // CRITICAL FIX: Ensure Grand Final has both participants before considering it complete
+    if (!grandFinal.participant1_id || !grandFinal.participant2_id) {
+      console.log('🏆 COMPETITION - Double elimination - Grand Final missing participants:', {
+        participant1_id: grandFinal.participant1_id,
+        participant2_id: grandFinal.participant2_id
+      });
+      return false;
+    }
+
+    if (!bracketReset) {
+      console.log('🏆 COMPETITION - Double elimination - No bracket reset, Grand Final winner is champion!');
+      return true;
+    }
+
+    if (bracketReset.winner_participant_id) {
+      console.log('🏆 COMPETITION - Double elimination - Bracket reset completed, tournament is COMPLETE!');
+      return true;
+    }
+
+    console.log('🏆 COMPETITION - Double elimination - Bracket reset exists but not completed yet');
+    return false;
+  }
+};
+
+// Helper function to get the tournament winner - SAME LOGIC AS BracketAdmin
+const getTournamentWinner = (matches: TournamentMatch[], players: TournamentPlayer[]): TournamentPlayer | null => {
+  // Check if bracket reset (round 1001) exists and is completed
+  const bracketReset = matches.find(m => m.round === 1001);
+  if (bracketReset?.winner_participant_id) {
+    return players.find(p => p.id === bracketReset.winner_participant_id) || null;
+  }
+
+  // Otherwise, check grand final (round 1000)
+  const grandFinal = matches.find(m => m.round === 1000);
+  if (grandFinal?.winner_participant_id) {
+    return players.find(p => p.id === grandFinal.winner_participant_id) || null;
+  }
+
+  return null;
+};
+
 const Competition: React.FC = () => {
   const { tournaments, getTournamentData, reportWinner } = useBrackets();
   const { user, isAdmin, signOut } = useAuth();
@@ -27,6 +123,7 @@ const Competition: React.FC = () => {
   const [winnerOpen, setWinnerOpen] = useState(false);
   const [winnerName, setWinnerName] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [bracketZoomAnimation, setBracketZoomAnimation] = useState(false);
 
   // Update clock every second
   useEffect(() => {
@@ -76,25 +173,21 @@ const Competition: React.FC = () => {
         setParticipants(data.players);
         setMatches(data.matches);
 
-        // Check if this was the final match - find the highest round number with a winner
-        const sortedMatches = data.matches.sort((a, b) => b.round - a.round);
-        const finalMatch = sortedMatches.find(m => m.winner_participant_id);
+        // Check if tournament is actually complete using proper logic
+        const isTournamentComplete = checkTournamentComplete(data.matches, selected?.bracket_type || 'single');
 
-        // Only show winner celebration if this is the actual final match
-        const isActualFinal = finalMatch && sortedMatches.filter(m => m.round === finalMatch.round).length === 1;
-
-        console.log('Final match check:', { finalMatch, isActualFinal, allMatches: data.matches.map(m => ({ round: m.round, winner: m.winner_participant_id })) });
-
-        if (finalMatch?.winner_participant_id && isActualFinal) {
-          const winner = data.players.find(p => p.id === finalMatch.winner_participant_id);
+        if (isTournamentComplete) {
+          const winner = getTournamentWinner(data.matches, data.players);
           if (winner) {
             console.log('Tournament completed! Winner:', winner.name);
-            // Small delay to ensure UI updates before showing the modal
+            // Start bracket zoom animation before showing the modal
+            setBracketZoomAnimation(true);
             setTimeout(() => {
+              setBracketZoomAnimation(false);
               setWinnerName(winner.name);
               setWinnerOpen(true);
               setShowConfetti(true);
-            }, 500);
+            }, 2000); // 2 seconds for the zoom animation
           }
         }
       }
@@ -104,28 +197,8 @@ const Competition: React.FC = () => {
   const handlePlayerClick = async (matchId: string, participantId: string, participantName: string) => {
     console.log('Player clicked:', { matchId, participantId, participantName });
 
-    // Check if this is a completed final match and the clicked participant is the winner
-    const match = matches.find(m => m.id === matchId);
-    console.log('Match found:', match);
-
-    if (match && match.winner_participant_id === participantId) {
-      // Check if this is the final match (highest round)
-      const sortedMatches = matches.sort((a, b) => b.round - a.round);
-      const isFinalMatch = sortedMatches[0]?.id === matchId;
-
-      console.log('Is final match?', { isFinalMatch, highestRound: sortedMatches[0]?.round });
-
-      if (isFinalMatch) {
-        console.log('Showing winner dialog for completed final match');
-        // This is the tournament winner being clicked
-        setWinnerName(participantName);
-        setWinnerOpen(true);
-        setShowConfetti(true);
-        return;
-      }
-    }
-
-    // Normal winner reporting
+    // Always proceed with normal winner reporting
+    // Winner announcements are handled properly in handleReportWinner with fresh data
     console.log('Reporting winner normally');
     await handleReportWinner(matchId, participantId);
   };
@@ -211,6 +284,7 @@ const Competition: React.FC = () => {
             isCompleted={selected?.status === 'completed'}
             matchCount={matches.length}
             tournamentTitle={selected?.name}
+            showWinnerZoom={bracketZoomAnimation}
           />
         )}
       </div>

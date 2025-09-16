@@ -29,6 +29,102 @@ interface BracketAdminProps {
   isExiting?: boolean;
 }
 
+// Helper function to check if tournament is complete
+const checkTournamentComplete = (matches: TournamentMatch[], bracketType: 'single' | 'double'): boolean => {
+  console.log('🏆 CHECKING TOURNAMENT COMPLETION:', {
+    bracketType,
+    totalMatches: matches.length,
+    matchesByRound: matches.reduce((acc, m) => {
+      acc[m.round] = (acc[m.round] || 0) + 1;
+      return acc;
+    }, {} as Record<number, number>)
+  });
+
+  if (bracketType === 'single') {
+    // Single elimination: tournament is complete when round 1000 (grand final) has a winner
+    const grandFinal = matches.find(m => m.round === 1000);
+    console.log('🏆 Single elimination - Grand Final:', grandFinal);
+
+    if (!grandFinal) {
+      console.log('🏆 Single elimination - No Grand Final exists yet');
+      return false;
+    }
+
+    if (!grandFinal.winner_participant_id) {
+      console.log('🏆 Single elimination - Grand Final not completed yet');
+      return false;
+    }
+
+    // CRITICAL FIX: Ensure Grand Final has both participants before considering it complete
+    if (!grandFinal.participant1_id || !grandFinal.participant2_id) {
+      console.log('🏆 Single elimination - Grand Final missing participants:', {
+        participant1_id: grandFinal.participant1_id,
+        participant2_id: grandFinal.participant2_id
+      });
+      return false;
+    }
+
+    console.log('🏆 Single elimination - Tournament is COMPLETE!');
+    return true;
+  } else {
+    // Double elimination: more complex logic
+    const grandFinal = matches.find(m => m.round === 1000);
+    const bracketReset = matches.find(m => m.round === 1001);
+
+    console.log('🏆 Double elimination - Grand Final:', grandFinal);
+    console.log('🏆 Double elimination - Bracket Reset:', bracketReset);
+
+    if (!grandFinal) {
+      console.log('🏆 Double elimination - No Grand Final exists yet');
+      return false;
+    }
+
+    if (!grandFinal.winner_participant_id) {
+      console.log('🏆 Double elimination - Grand Final not completed yet');
+      return false;
+    }
+
+    // CRITICAL FIX: Ensure Grand Final has both participants before considering it complete
+    if (!grandFinal.participant1_id || !grandFinal.participant2_id) {
+      console.log('🏆 Double elimination - Grand Final missing participants:', {
+        participant1_id: grandFinal.participant1_id,
+        participant2_id: grandFinal.participant2_id
+      });
+      return false;
+    }
+
+    if (!bracketReset) {
+      console.log('🏆 Double elimination - No bracket reset, Grand Final winner is champion!');
+      return true;
+    }
+
+    if (bracketReset.winner_participant_id) {
+      console.log('🏆 Double elimination - Bracket reset completed, tournament is COMPLETE!');
+      return true;
+    }
+
+    console.log('🏆 Double elimination - Bracket reset exists but not completed yet');
+    return false;
+  }
+};
+
+// Helper function to get the tournament winner
+const getTournamentWinner = (matches: TournamentMatch[], players: TournamentPlayer[]): TournamentPlayer | null => {
+  // Check if bracket reset (round 1001) exists and is completed
+  const bracketReset = matches.find(m => m.round === 1001);
+  if (bracketReset?.winner_participant_id) {
+    return players.find(p => p.id === bracketReset.winner_participant_id) || null;
+  }
+
+  // Otherwise, check grand final (round 1000)
+  const grandFinal = matches.find(m => m.round === 1000);
+  if (grandFinal?.winner_participant_id) {
+    return players.find(p => p.id === grandFinal.winner_participant_id) || null;
+  }
+
+  return null;
+};
+
 const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -51,11 +147,13 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
   const [winnerOpen, setWinnerOpen] = useState(false);
   const [winnerName, setWinnerName] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [bracketZoomAnimation, setBracketZoomAnimation] = useState(false);
   const [highlightTarget, setHighlightTarget] = useState<{ round: number; position: number } | null>(null);
   const [navigationModalOpen, setNavigationModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [lastProcessedTournamentId, setLastProcessedTournamentId] = useState<string | null>(null);
+  const [processingMatchId, setProcessingMatchId] = useState<string | null>(null);
 
   const ownedTournaments = useMemo(() => tournaments.filter(t => t.created_by === user?.id), [tournaments, user?.id]);
 
@@ -197,9 +295,15 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
       const data = await getTournamentData(selected.id);
       setPlayers(data.players);
       setMatches(data.matches);
+
+      // Verify bracket was actually generated
+      if (!data.matches || data.matches.length === 0) {
+        throw new Error('Bracket generation failed - no matches created');
+      }
+
       setQuickBlock('');
-      toast({ title: 'Bracket Tournament ready', description: 'Players added and bracket generated' });
-      setNavigationModalOpen(true);
+      toast({ title: 'Bracket Tournament ready', description: `Players added and bracket generated (${data.matches.length} matches)` });
+      navigate(`/competition?tournament=${selected.id}`);
     } catch (e: any) {
       toast({ title: 'Quick start failed', description: e?.message || 'Please try again', variant: 'destructive' });
     } finally {
@@ -231,66 +335,84 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
 
   const onReportClick = async (matchId: string, winnerId: string) => {
     if (!selected) return;
-    
+
+    // Set processing state immediately for visual feedback
+    setProcessingMatchId(matchId);
+
+    // Immediate UI feedback before any async operations
+    toast({ title: 'Reporting result...', description: 'Processing match completion' });
+
     // Optimistically update the UI
     const optimisticMatches = matches.map(m =>
       m.id === matchId ? { ...m, winner_participant_id: winnerId } : m
     );
     setMatches(optimisticMatches);
-    
-    const ok = await reportWinner(matchId, winnerId);
-    if (ok) {
-      toast({ title: 'Result reported', description: 'Match completed' });
-      if (!selected) return;
-      
-      // Get updated data
-      const data = await getTournamentData(selected.id);
-      setPlayers(data.players);
-      setMatches(data.matches);
-      
-      // Check if this was the final match (round 1000 or 1001)
-      const finalMatch = data.matches.find(m => m.round === 1000 || m.round === 1001);
-      if (finalMatch?.winner_participant_id) {
-        const winner = data.players.find(p => p.id === finalMatch.winner_participant_id);
-        if (winner) {
-          // Small delay to ensure UI updates before showing the modal
-          setTimeout(() => {
-            setWinnerName(winner.name);
-            setWinnerOpen(true);
-            setShowConfetti(true);
-          }, 500);
+
+    try {
+      const ok = await reportWinner(matchId, winnerId);
+      if (ok) {
+        toast({ title: 'Result reported', description: 'Match completed' });
+        if (!selected) return;
+
+        // Get updated data
+        const data = await getTournamentData(selected.id);
+        setPlayers(data.players);
+        setMatches(data.matches);
+
+        // Check if this was the final match that determines the tournament winner
+        const isTournamentComplete = checkTournamentComplete(data.matches, selected?.bracket_type || 'single');
+        if (isTournamentComplete) {
+          const tournamentWinner = getTournamentWinner(data.matches, data.players);
+          if (tournamentWinner) {
+            // Start bracket zoom animation before showing the modal
+            setBracketZoomAnimation(true);
+            setTimeout(() => {
+              setBracketZoomAnimation(false);
+              setWinnerName(tournamentWinner.name);
+              setWinnerOpen(true);
+              setShowConfetti(true);
+            }, 2000); // 2 seconds for the zoom animation
+          }
         }
+      } else {
+        toast({
+          title: 'Failed to report result',
+          description: 'Please try again',
+          variant: 'destructive'
+        });
+        // Revert optimistic update on failure
+        await refresh();
       }
-    } else {
-      toast({ 
-        title: 'Failed to report result', 
+    } catch (error) {
+      console.error('Error reporting winner:', error);
+      toast({
+        title: 'Failed to report result',
         description: 'Please try again',
-        variant: 'destructive' 
+        variant: 'destructive'
       });
-      // Revert optimistic update on failure
+      // Revert optimistic update on error
       await refresh();
+    } finally {
+      // Clear processing state
+      setProcessingMatchId(null);
     }
   };
 
   const onPlayerClick = (matchId: string, participantId: string, participantName: string) => {
-    // Check if this is a completed grand final match and the clicked participant is the winner
-    const match = matches.find(m => m.id === matchId);
-    if (match && match.round >= 1000 && match.winner_participant_id === participantId) {
-      // This is the tournament winner being clicked
-      setWinnerName(participantName);
-      setWinnerOpen(true);
-      setShowConfetti(true);
-    }
+    // Player clicks should only be used for winner reporting, not for showing winner announcements
+    // Winner announcements are handled properly in onReportClick with fresh data
+    console.log('Player clicked - winner announcements handled in onReportClick');
   };
 
   const handleRestart = async () => {
     if (!selected) return;
     setRestartLoading(true);
     try {
-      await supabase.from('tournament_matches').delete().eq('tournament_id', selected.id);
-      await supabase.from('tournaments').update({ status: 'draft' }).eq('id', selected.id);
+      await supabase.from('bracket_matches').delete().eq('tournament_id', selected.id);
+      await supabase.from('bracket_tournaments').update({ status: 'draft' }).eq('id', selected.id);
       
       const data = await getTournamentData(selected.id);
+      setPlayers(data.players);
       setMatches(data.matches);
       await refresh();
       
@@ -465,7 +587,7 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
       <div className="grid grid-cols-12 gap-4 flex-1 min-h-0 overflow-hidden p-4">
       <div className="col-span-12 lg:col-span-4 xl:col-span-3 space-y-4 min-h-0 h-full pr-2"><div className={`${isExiting ? 'fly-out-left-offscreen' : 'fly-in-left-offscreen anim-delay-50'} h-full min-h-0`}>
       {/* Unified Left Panel */}
-      <Card className="h-full flex flex-col overflow-hidden">
+      <Card className="h-full flex flex-col overflow-hidden bg-black/20 backdrop-blur-sm border-white/10">
         <CardContent className="flex-1 min-h-0 overflow-auto space-y-5">
           {/* Select/Create Tournament */}
           <section className="mt-4 space-y-1.5">
@@ -534,6 +656,7 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
                 <Button
                   className="flex-1"
                   disabled={!form.name.trim()}
+                  variant="outline"
                   onClick={async () => {
                     const tournament = await handleCreate();
                     if (tournament) {
@@ -548,10 +671,10 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
             </section>
           )}
 
-          {/* Add Players & Generate */}
+          {/* Add Player Names */}
           {selected && !showCreateForm && (
             <section className="space-y-3">
-              <h3 className="text-sm font-semibold text-gray-200">Add Players & Generate</h3>
+              <h3 className="text-sm font-semibold text-gray-200">Add Player Names</h3>
               <Label htmlFor="quick-block" className="text-sm text-gray-300">Add any number of players (minimum 2)</Label>
               <div className="text-xs text-gray-400 mb-2">Paste names one per line, or separate with ; or ,</div>
               <Textarea
@@ -574,7 +697,7 @@ Player D
               >
                 Randomize Order
               </Button>
-              <Button onClick={handleQuickStart} disabled={!quickBlock.trim() || quickRunning} className="w-full">
+              <Button onClick={handleQuickStart} disabled={!quickBlock.trim() || quickRunning} className="w-full" variant="outline">
                 {quickRunning ? 'Creating…' : 'Start'}
               </Button>
             </section>
@@ -597,7 +720,7 @@ Player D
       </Card>
       </div></div>
       <div className="col-span-12 lg:col-span-8 xl:col-span-9 min-h-0 h-full flex flex-col"><div className={`${isExiting ? 'fly-out-right-offscreen' : 'fly-in-right-offscreen anim-delay-100'} h-full flex flex-col min-h-0`}>
-        <Card className="h-full flex flex-col overflow-hidden">
+        <Card className="h-full flex flex-col overflow-hidden bg-black/20 backdrop-blur-sm border-white/10">
           <CardHeader className="pb-3 shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg">Tournament Admin</CardTitle>
@@ -630,6 +753,8 @@ Player D
                     highlightTarget={highlightTarget}
                     disableKeyboardNavigation={true}
                     forceAutoFit={true}
+                    showWinnerZoom={bracketZoomAnimation}
+                    processingMatchId={processingMatchId}
                   />
                 </div>
               </div>
@@ -689,7 +814,7 @@ Player D
             <Button onClick={() => {
               setNavigationModalOpen(false);
               navigate(`/competition?tournament=${selected?.id}`);
-            }}>
+            }} variant="outline">
               Go to Competition
             </Button>
           </DialogFooter>
