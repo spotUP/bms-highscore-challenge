@@ -1,22 +1,61 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useCompetitionStatus } from '@/hooks/useCompetitionStatus';
-import { Clock, Lock, Unlock, Calendar, Trophy } from 'lucide-react';
+import { useSystemHealth } from '@/hooks/useSystemHealth';
+import { Clock, Lock, Unlock, Calendar, Trophy, Shield, AlertTriangle, CheckCircle } from 'lucide-react';
+import SystemProblemsModal from '@/components/SystemProblemsModal';
 
 const CompetitionStatus: React.FC = () => {
   const { competition, isLocked, loading, error } = useCompetitionStatus();
+  const { healthStatus } = useSystemHealth();
+  const [isSystemModalOpen, setIsSystemModalOpen] = useState(false);
 
+  // Always render the full container to prevent layout shifts
   if (loading) {
     return (
-      <div className="text-sm text-gray-400 animate-pulse">
-        Loading competition status...
+      <div className="bg-black/20 border border-white/20 rounded-lg p-4 backdrop-blur-sm status-bar-stable">
+        <div className="flex flex-wrap items-center gap-6 text-sm">
+          <div className="flex items-center gap-2 text-gray-400">
+            <div className="w-4 h-4 bg-gray-400/30 rounded animate-pulse"></div>
+            <span className="animate-pulse">Loading competition status...</span>
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-gray-400 bg-gray-500/20 border border-gray-500/30">
+              <div className="w-3 h-3 bg-gray-400/30 rounded animate-pulse"></div>
+              <span className="animate-pulse">System...</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-gray-400 bg-gray-500/20 border border-gray-500/30">
+              <div className="w-3 h-3 bg-gray-400/30 rounded animate-pulse"></div>
+              <span className="animate-pulse">Loading...</span>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="text-sm text-red-400">
-        {error}
+      <div className="bg-black/20 border border-white/20 rounded-lg p-4 backdrop-blur-sm status-bar-stable">
+        <div className="flex flex-wrap items-center gap-6 text-sm">
+          <div className="text-red-400 flex items-center gap-2">
+            <Trophy className="w-4 h-4" />
+            <span>{error}</span>
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            <button
+              className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${getHealthColor(healthStatus.overall)} cursor-pointer hover:scale-105 transition-transform duration-200`}
+              title={`System Health: ${healthStatus.message}\nLast checked: ${new Date(healthStatus.lastChecked).toLocaleTimeString()}\n\nClick for detailed overview`}
+              onClick={() => setIsSystemModalOpen(true)}
+            >
+              {getHealthIcon(healthStatus.overall)}
+              <span>System {healthStatus.overall === 'healthy' ? 'OK' : healthStatus.overall}</span>
+            </button>
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-red-300 bg-red-500/20 border border-red-500/30">
+              <Lock className="w-3 h-3" />
+              <span>Error</span>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -52,8 +91,26 @@ const CompetitionStatus: React.FC = () => {
     });
   };
 
+  const getHealthIcon = (status: 'healthy' | 'warning' | 'error') => {
+    switch (status) {
+      case 'healthy': return <CheckCircle className="w-3 h-3" />;
+      case 'warning': return <AlertTriangle className="w-3 h-3" />;
+      case 'error': return <Shield className="w-3 h-3" />;
+      default: return <Shield className="w-3 h-3" />;
+    }
+  };
+
+  const getHealthColor = (status: 'healthy' | 'warning' | 'error') => {
+    switch (status) {
+      case 'healthy': return 'text-green-300 bg-green-500/20 border-green-500/30';
+      case 'warning': return 'text-yellow-300 bg-yellow-500/20 border-yellow-500/30';
+      case 'error': return 'text-red-300 bg-red-500/20 border-red-500/30';
+      default: return 'text-gray-300 bg-gray-500/20 border-gray-500/30';
+    }
+  };
+
   return (
-    <div className="bg-black/20 border border-white/20 rounded-lg p-4 backdrop-blur-sm">
+    <div className="bg-black/20 border border-white/20 rounded-lg p-4 backdrop-blur-sm status-bar-stable">
       <div className="flex flex-wrap items-center gap-6 text-sm">
         {competition ? (
           <>
@@ -84,8 +141,19 @@ const CompetitionStatus: React.FC = () => {
           </div>
         )}
 
-        {/* Score Lock Status */}
-        <div className="ml-auto">
+        {/* System Health and Score Lock Status */}
+        <div className="ml-auto flex items-center gap-3">
+          {/* System Health Indicator */}
+          <button
+            className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${getHealthColor(healthStatus.overall)} cursor-pointer hover:scale-105 transition-transform duration-200`}
+            title={`System Health: ${healthStatus.message}\nLast checked: ${new Date(healthStatus.lastChecked).toLocaleTimeString()}\n\nClick for detailed overview`}
+            onClick={() => setIsSystemModalOpen(true)}
+          >
+            {getHealthIcon(healthStatus.overall)}
+            <span>System {healthStatus.overall === 'healthy' ? 'OK' : healthStatus.overall}</span>
+          </button>
+
+          {/* Score Lock Status */}
           <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${
             isLocked
               ? 'text-red-300 bg-red-500/20 border border-red-500/30'
@@ -96,6 +164,13 @@ const CompetitionStatus: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* System Problems Modal */}
+      <SystemProblemsModal
+        isOpen={isSystemModalOpen}
+        onClose={() => setIsSystemModalOpen(false)}
+        healthStatus={healthStatus}
+      />
     </div>
   );
 };

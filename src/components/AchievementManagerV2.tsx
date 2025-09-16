@@ -665,25 +665,97 @@ const AchievementManagerV2 = () => {
     }
 
     try {
-      const { error } = await supabase
+      console.log('🗑️ Starting player achievement deletion:', playerAchievementId);
+
+      // Use admin client with service role key for deletion
+      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+      if (!serviceRoleKey) {
+        throw new Error('Service role key not configured');
+      }
+
+      console.log('🔑 Creating admin client for deletion...');
+      const { createClient } = await import('@supabase/supabase-js');
+      const adminSupabase = createClient(
+        import.meta.env.VITE_SUPABASE_URL,
+        serviceRoleKey,
+        {
+          auth: {
+            persistSession: false,
+            storage: {
+              getItem: () => null,
+              setItem: () => {},
+              removeItem: () => {}
+            }
+          }
+        }
+      );
+
+      // Verify the record exists before deletion
+      console.log('🔍 Verifying record exists...');
+      const { data: existingRecord, error: checkError } = await adminSupabase
         .from('player_achievements')
-        .delete()
+        .select('id, player_name, achievements(name)')
+        .eq('id', playerAchievementId)
+        .single();
+
+      if (checkError) {
+        console.error('❌ Error checking record:', checkError);
+        throw new Error(`Failed to verify record: ${checkError.message}`);
+      }
+
+      if (!existingRecord) {
+        throw new Error('Player achievement not found');
+      }
+
+      console.log('✅ Found record to delete:', existingRecord);
+
+      // Perform the deletion
+      console.log('🗑️ Executing deletion...');
+      const { error, count } = await adminSupabase
+        .from('player_achievements')
+        .delete({ count: 'exact' })
         .eq('id', playerAchievementId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Deletion error:', error);
+        throw error;
+      }
+
+      console.log('📊 Deletion count:', count);
+
+      if (count === 0) {
+        throw new Error('No records were deleted - this may indicate a permission issue');
+      }
+
+      // Verify deletion was successful
+      console.log('🔍 Verifying deletion...');
+      const { data: verifyRecord, error: verifyError } = await adminSupabase
+        .from('player_achievements')
+        .select('id')
+        .eq('id', playerAchievementId)
+        .single();
+
+      if (!verifyError || verifyError.code === 'PGRST116') {
+        // PGRST116 means no record found, which is what we want
+        console.log('✅ Deletion verified - record no longer exists');
+      } else {
+        console.error('⚠️ Verification error:', verifyError);
+      }
 
       toast({
         title: "Success",
-        description: "Player achievement removed successfully",
+        description: `Player achievement for "${existingRecord.player_name}" removed successfully`,
       });
 
+      console.log('🔄 Refreshing data...');
       loadPlayerAchievements();
       await invalidateQueries();
-    } catch (error) {
-      console.error('Error deleting player achievement:', error);
+
+    } catch (error: any) {
+      console.error('❌ Error deleting player achievement:', error);
       toast({
         title: "Error",
-        description: "Failed to remove player achievement",
+        description: `Failed to remove player achievement: ${error.message}`,
         variant: "destructive",
       });
     }
@@ -816,7 +888,7 @@ const AchievementManagerV2 = () => {
             {isTournamentCreator && (
               <>
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   onClick={async () => {
                     console.log('🔴 Clear button clicked');
 
@@ -941,7 +1013,7 @@ const AchievementManagerV2 = () => {
                   Clear All Progress
                 </Button>
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   onClick={() => setClearAllAchievementsDialog({ open: true })}
                   className="bg-red-800 hover:bg-red-900"
                 >
@@ -952,7 +1024,7 @@ const AchievementManagerV2 = () => {
             )}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={openCreateDialog}>
+                <Button onClick={openCreateDialog} variant="outline">
                   <Plus className="w-4 h-4 mr-2" />
                   Add Achievement
                 </Button>
@@ -992,7 +1064,7 @@ const AchievementManagerV2 = () => {
         description="Are you sure you want to delete this achievement? This action cannot be undone."
         confirmText="Delete Achievement"
         cancelText="Cancel"
-        variant="destructive"
+        variant="outline"
         onConfirm={confirmDeleteAchievement}
       />
 
@@ -1003,7 +1075,7 @@ const AchievementManagerV2 = () => {
         description={`Are you sure you want to clear ALL PLAYERS' achievement progress for "${currentTournament?.name}"? This will reset everyone's achievement unlocks but keep the achievements themselves. This action cannot be undone.`}
         confirmText="Clear All Progress"
         cancelText="Cancel"
-        variant="destructive"
+        variant="outline"
         onConfirm={confirmClearAllAchievements}
       />
 
@@ -1014,7 +1086,7 @@ const AchievementManagerV2 = () => {
         description={`Are you sure you want to delete ALL ACHIEVEMENT DEFINITIONS for "${currentTournament?.name}"? This will permanently remove all achievements and their progress. This action cannot be undone.`}
         confirmText="Delete All Achievements"
         cancelText="Cancel"
-        variant="destructive"
+        variant="outline"
         onConfirm={confirmClearAllAchievementDefinitions}
       />
 
@@ -1183,7 +1255,7 @@ const AchievementManagerV2 = () => {
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>
                   Cancel
                 </Button>
-                <Button onClick={saveAchievement} disabled={isSaveDisabled}>
+                <Button onClick={saveAchievement} disabled={isSaveDisabled} variant="outline">
                   {isSaving ? 'Saving...' : (editingAchievement ? 'Update Achievement' : 'Create Achievement')}
                 </Button>
               </div>

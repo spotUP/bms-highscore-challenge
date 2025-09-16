@@ -287,7 +287,7 @@ const CompetitionManager: React.FC = () => {
                   <Button
                     onClick={endCompetition}
                     disabled={isLoading}
-                    variant="destructive"
+                    variant="outline"
                     size="sm"
                   >
                     <Square className="w-4 h-4 mr-2" />
@@ -330,6 +330,7 @@ const CompetitionManager: React.FC = () => {
             <Button
               onClick={() => startCompetition()}
               disabled={isLoading}
+              variant="outline"
               className="bg-green-600 hover:bg-green-700"
             >
               <Play className="w-4 h-4 mr-2" />
@@ -404,7 +405,7 @@ const CompetitionManager: React.FC = () => {
                 <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={createScheduledCompetition}>
+                <Button onClick={createScheduledCompetition} variant="outline">
                   Schedule Competition
                 </Button>
               </div>

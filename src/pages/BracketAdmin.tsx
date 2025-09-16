@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -8,8 +8,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { useBrackets, Tournament, TournamentPlayer, TournamentMatch } from '@/contexts/BracketContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import { supabase } from '@/integrations/supabase/client';
-import BracketView from '@/components/BracketView';
+import BracketView, { BracketViewRef } from '@/components/BracketView';
 import { Switch } from '@/components/ui/switch';
 import {
   AlertDialog,
@@ -24,6 +25,10 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import AdvancedConfetti from '@/components/AdvancedConfetti';
 import { createPortal } from 'react-dom';
+import { Check, Plus, BarChart3 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import BracketAnalytics from '@/components/BracketAnalytics';
+import BracketDebugger from '@/components/BracketDebugger';
 
 interface BracketAdminProps {
   isExiting?: boolean;
@@ -31,79 +36,50 @@ interface BracketAdminProps {
 
 // Helper function to check if tournament is complete
 const checkTournamentComplete = (matches: TournamentMatch[], bracketType: 'single' | 'double'): boolean => {
-  console.log('🏆 CHECKING TOURNAMENT COMPLETION:', {
-    bracketType,
-    totalMatches: matches.length,
-    matchesByRound: matches.reduce((acc, m) => {
-      acc[m.round] = (acc[m.round] || 0) + 1;
-      return acc;
-    }, {} as Record<number, number>)
-  });
-
   if (bracketType === 'single') {
     // Single elimination: tournament is complete when round 1000 (grand final) has a winner
     const grandFinal = matches.find(m => m.round === 1000);
-    console.log('🏆 Single elimination - Grand Final:', grandFinal);
 
     if (!grandFinal) {
-      console.log('🏆 Single elimination - No Grand Final exists yet');
       return false;
     }
 
     if (!grandFinal.winner_participant_id) {
-      console.log('🏆 Single elimination - Grand Final not completed yet');
       return false;
     }
 
     // CRITICAL FIX: Ensure Grand Final has both participants before considering it complete
     if (!grandFinal.participant1_id || !grandFinal.participant2_id) {
-      console.log('🏆 Single elimination - Grand Final missing participants:', {
-        participant1_id: grandFinal.participant1_id,
-        participant2_id: grandFinal.participant2_id
-      });
       return false;
     }
 
-    console.log('🏆 Single elimination - Tournament is COMPLETE!');
     return true;
   } else {
     // Double elimination: more complex logic
     const grandFinal = matches.find(m => m.round === 1000);
     const bracketReset = matches.find(m => m.round === 1001);
 
-    console.log('🏆 Double elimination - Grand Final:', grandFinal);
-    console.log('🏆 Double elimination - Bracket Reset:', bracketReset);
-
     if (!grandFinal) {
-      console.log('🏆 Double elimination - No Grand Final exists yet');
       return false;
     }
 
     if (!grandFinal.winner_participant_id) {
-      console.log('🏆 Double elimination - Grand Final not completed yet');
       return false;
     }
 
     // CRITICAL FIX: Ensure Grand Final has both participants before considering it complete
     if (!grandFinal.participant1_id || !grandFinal.participant2_id) {
-      console.log('🏆 Double elimination - Grand Final missing participants:', {
-        participant1_id: grandFinal.participant1_id,
-        participant2_id: grandFinal.participant2_id
-      });
       return false;
     }
 
     if (!bracketReset) {
-      console.log('🏆 Double elimination - No bracket reset, Grand Final winner is champion!');
       return true;
     }
 
     if (bracketReset.winner_participant_id) {
-      console.log('🏆 Double elimination - Bracket reset completed, tournament is COMPLETE!');
       return true;
     }
 
-    console.log('🏆 Double elimination - Bracket reset exists but not completed yet');
     return false;
   }
 };
@@ -154,13 +130,42 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
   const [deleting, setDeleting] = useState(false);
   const [lastProcessedTournamentId, setLastProcessedTournamentId] = useState<string | null>(null);
   const [processingMatchId, setProcessingMatchId] = useState<string | null>(null);
+  const [currentView, setCurrentView] = useState<'bracket' | 'analytics' | 'debug'>('bracket');
+  const bracketViewRef = useRef<BracketViewRef>(null);
+  const hasAutoSelectedRef = useRef(false);
+  const tournamentNameInputRef = useRef<HTMLInputElement>(null);
+  const [showShareLinkDialog, setShowShareLinkDialog] = useState(false);
+  const [shareUrl, setShareUrl] = useState('');
 
   const ownedTournaments = useMemo(() => tournaments.filter(t => t.created_by === user?.id), [tournaments, user?.id]);
+
+  // Check if current tournament is complete
+  const isTournamentComplete = useMemo(() => {
+    if (!selected || matches.length === 0) return false;
+    return checkTournamentComplete(matches, selected.bracket_type || 'single');
+  }, [selected, matches]);
 
 
   useEffect(() => {
     if (!loading) {
-      setSelected(s => s && ownedTournaments.find(t => t.id === s.id) || null);
+      const currentSelected = selected && ownedTournaments.find(t => t.id === selected.id);
+
+      if (currentSelected) {
+        // Keep current selection if it's still valid
+        setSelected(currentSelected);
+      } else if (!hasAutoSelectedRef.current && !selected) {
+        // Auto-select the most recent finished tournament if no tournament is selected
+        // (only do this once when first loading the page)
+        const finishedTournaments = ownedTournaments.filter(t => t.status === 'completed');
+        if (finishedTournaments.length > 0) {
+          // Sort by updated_at (most recent first) and select the first one
+          const mostRecentFinished = finishedTournaments.sort((a, b) =>
+            new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
+          )[0];
+          setSelected(mostRecentFinished);
+          hasAutoSelectedRef.current = true;
+        }
+      }
     }
   }, [loading, ownedTournaments]);
 
@@ -170,19 +175,19 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
       setLastProcessedTournamentId(null);
       return;
     }
-    
+
     // Only update if we haven't processed this tournament ID yet
     if (selected.id === lastProcessedTournamentId) return;
-    
-    setForm({ name: selected.name || '' });
-    
+
+    setForm({ name: selected.name || '', bracketType: selected.bracket_type || 'single' });
+
     const load = async () => {
       setLoadingBracket(true);
       try {
         const data = await getTournamentData(selected.id);
         setPlayers(data.players);
         setMatches(data.matches);
-        
+
         // Update quickBlock with player names, one per line
         if (data.players.length > 0) {
           const playerNames = data.players.map(p => p.name).join('\n');
@@ -190,7 +195,7 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
         } else {
           setQuickBlock('');
         }
-        
+
         // Mark this tournament as processed
         setLastProcessedTournamentId(selected.id);
       } finally {
@@ -200,9 +205,57 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
     load();
   }, [selected, getTournamentData, lastProcessedTournamentId]);
 
+  // Real-time subscription for match updates
+  useEffect(() => {
+    if (!selected) return;
+
+    console.log('🔄 BracketAdmin: Setting up real-time subscription for tournament:', selected.id);
+
+    const channel = supabase
+      .channel(`bracket_matches_admin_${selected.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'bracket_matches',
+        filter: `tournament_id=eq.${selected.id}`
+      }, async (payload) => {
+        console.log('🔄 BracketAdmin: Match updated via real-time:', payload);
+
+        // Optimistic update for faster response
+        if (payload.eventType === 'UPDATE' && payload.new) {
+          const updatedMatch = payload.new as TournamentMatch;
+          setMatches(prevMatches =>
+            prevMatches.map(match =>
+              match.id === updatedMatch.id ? updatedMatch : match
+            )
+          );
+        }
+
+        // Also do a full refresh to ensure consistency
+        try {
+          const data = await getTournamentData(selected.id);
+          setPlayers(data.players);
+          setMatches(data.matches);
+        } catch (error) {
+          console.error('🔄 BracketAdmin: Error refreshing data:', error);
+        }
+      })
+      .subscribe((status) => {
+        console.log('🔄 BracketAdmin: Subscription status:', status);
+      });
+
+    return () => {
+      console.log('🔄 BracketAdmin: Cleaning up real-time subscription');
+      supabase.removeChannel(channel);
+    };
+  }, [selected, getTournamentData]);
+
   // Auto-save player changes when quickBlock is edited
   useEffect(() => {
     if (!selected || !quickBlock.trim()) return;
+
+    // DON'T auto-save if tournament already has matches (started/completed tournaments)
+    if (matches.length > 0) return;
 
     // Debounce the save operation - wait 1 second after user stops typing
     const timeoutId = setTimeout(async () => {
@@ -243,9 +296,23 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
     }, 1000); // 1 second debounce
 
     return () => clearTimeout(timeoutId);
-  }, [quickBlock, selected, players, getTournamentData]);
+  }, [quickBlock, selected, players, matches.length, getTournamentData]);
+
+  // Auto-focus tournament name input when create form is shown
+  useEffect(() => {
+    if (showCreateForm && tournamentNameInputRef.current) {
+      // Use setTimeout to ensure the input is rendered before focusing
+      setTimeout(() => {
+        tournamentNameInputRef.current?.focus();
+      }, 100);
+    }
+  }, [showCreateForm]);
 
   const handleCreate = async () => {
+    if (!user) {
+      toast({ title: 'Authentication required', description: 'Please log in to create tournaments', variant: 'destructive' });
+      return null;
+    }
     if (!form.name.trim()) {
       toast({ title: 'Name required', description: 'Enter a tournament name', variant: 'destructive' });
       return null;
@@ -259,6 +326,10 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
   };
 
   const handleAddPlayers = async () => {
+    if (!user) {
+      toast({ title: 'Authentication required', description: 'Please log in to add players', variant: 'destructive' });
+      return;
+    }
     if (!selected) return;
     const names = playerBlock.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
     if (names.length === 0) {
@@ -275,6 +346,10 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
   };
 
   const handleQuickStart = async () => {
+    if (!user) {
+      toast({ title: 'Authentication required', description: 'Please log in to use quick start', variant: 'destructive' });
+      return;
+    }
     if (!selected) {
       toast({ title: 'Select a tournament', description: 'Choose a tournament first', variant: 'destructive' });
       return;
@@ -302,8 +377,17 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
       }
 
       setQuickBlock('');
-      toast({ title: 'Bracket Tournament ready', description: `Players added and bracket generated (${data.matches.length} matches)` });
-      navigate(`/competition?tournament=${selected.id}`);
+      const shareUrl = `${window.location.origin}/competition?tournament=${selected.id}`;
+
+      // Show share link dialog instead of toast
+      setShareUrl(shareUrl);
+      setShowShareLinkDialog(true);
+
+      // Show initial success toast
+      toast({
+        title: 'Bracket Tournament ready',
+        description: `Players added and bracket generated (${data.matches.length} matches)`,
+      });
     } catch (e: any) {
       toast({ title: 'Quick start failed', description: e?.message || 'Please try again', variant: 'destructive' });
     } finally {
@@ -336,6 +420,9 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
   const onReportClick = async (matchId: string, winnerId: string) => {
     if (!selected) return;
 
+    // Store original matches for potential rollback
+    const originalMatches = [...matches];
+
     // Set processing state immediately for visual feedback
     setProcessingMatchId(matchId);
 
@@ -344,7 +431,7 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
 
     // Optimistically update the UI
     const optimisticMatches = matches.map(m =>
-      m.id === matchId ? { ...m, winner_participant_id: winnerId } : m
+      m.id === matchId ? { ...m, winner_participant_id: winnerId, status: 'completed' as const } : m
     );
     setMatches(optimisticMatches);
 
@@ -364,14 +451,21 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
         if (isTournamentComplete) {
           const tournamentWinner = getTournamentWinner(data.matches, data.players);
           if (tournamentWinner) {
-            // Start bracket zoom animation before showing the modal
-            setBracketZoomAnimation(true);
+            // Center on final match first, then start zoom animation
+            bracketViewRef.current?.centerOnFinal();
+
+            // Small delay to let centering finish, then start zoom animation
             setTimeout(() => {
-              setBracketZoomAnimation(false);
-              setWinnerName(tournamentWinner.name);
-              setWinnerOpen(true);
-              setShowConfetti(true);
-            }, 2000); // 2 seconds for the zoom animation
+              setBracketZoomAnimation(true);
+              setTimeout(() => {
+                setBracketZoomAnimation(false);
+                setWinnerName(tournamentWinner.name);
+                setWinnerOpen(true);
+                setShowConfetti(true);
+                // Reset processed tournament ID so tournament can reload properly if user switches away and back
+                setLastProcessedTournamentId(null);
+              }, 2000); // 2 seconds for the zoom animation
+            }, 200); // 200ms delay for centering
           }
         }
       } else {
@@ -381,7 +475,7 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
           variant: 'destructive'
         });
         // Revert optimistic update on failure
-        await refresh();
+        setMatches(originalMatches);
       }
     } catch (error) {
       console.error('Error reporting winner:', error);
@@ -391,7 +485,7 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
         variant: 'destructive'
       });
       // Revert optimistic update on error
-      await refresh();
+      setMatches(originalMatches);
     } finally {
       // Clear processing state
       setProcessingMatchId(null);
@@ -426,6 +520,10 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
   };
 
   const handleDeleteTournament = async () => {
+    if (!user) {
+      toast({ title: 'Authentication required', description: 'Please log in to delete tournaments', variant: 'destructive' });
+      return;
+    }
     if (!selected) return;
     setDeleting(true);
     try {
@@ -473,10 +571,11 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
 
   // Parse quickBlock names for preview when players haven't been saved yet
   const quickNamesList = useMemo(() => {
-    return quickBlock
+    const names = quickBlock
       .split(/[\r\n;,]+/)
       .map(s => s.trim())
       .filter(Boolean);
+    return names;
   }, [quickBlock]);
 
   // Stable temp ID for preview participants derived from their name
@@ -561,30 +660,14 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
         ? players.map(p => ({ id: p.id, name: p.name }))
         : [];
 
-    return generatePreviewMatches(sourceList);
+    const generatedMatches = generatePreviewMatches(sourceList);
+    return generatedMatches;
   }, [selected, matches.length, bracketMatches, quickNamesList, players]);
 
   return (
     <div className="h-[100dvh] overflow-hidden flex flex-col">
-      <div className="shrink-0 p-3 md:p-4">
-        <div className="flex items-center justify-between">
-          {/* Page-specific actions for brackets */}
-          <div className="flex gap-4 items-center">
-            {selected && (
-              <>
-                <Button variant="outline" onClick={() => window.location.assign(`/tournaments?c=${selected.id}`)}>
-                  Competition View
-                </Button>
-                <Button variant="destructive" onClick={() => setRestartOpen(true)}>
-                  Restart Tournament
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
       {/* Desktop two-column layout */}
-      <div className="grid grid-cols-12 gap-4 flex-1 min-h-0 overflow-hidden p-4">
+      <div className="grid grid-cols-12 gap-3 flex-1 min-h-0 overflow-hidden p-2">
       <div className="col-span-12 lg:col-span-4 xl:col-span-3 space-y-4 min-h-0 h-full pr-2"><div className={`${isExiting ? 'fly-out-left-offscreen' : 'fly-in-left-offscreen anim-delay-50'} h-full min-h-0`}>
       {/* Unified Left Panel */}
       <Card className="h-full flex flex-col overflow-hidden bg-black/20 backdrop-blur-sm border-white/10">
@@ -592,17 +675,16 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
           {/* Select/Create Tournament */}
           <section className="mt-4 space-y-1.5">
             <h3 className="text-sm font-semibold text-gray-200">Tournament</h3>
-            <select
-              className="w-full bg-black/50 border border-white/20 rounded px-2 py-2 text-sm"
+            <Select
               value={showCreateForm ? 'CREATE_NEW' : (selected?.id || '')}
-              onChange={(e) => {
-                if (e.target.value === 'CREATE_NEW') {
+              onValueChange={(value) => {
+                if (value === 'CREATE_NEW') {
                   setShowCreateForm(true);
                   setSelected(null);
                   setForm({ name: '', bracketType: 'single' });
                 } else {
                   setShowCreateForm(false);
-                  const tour = ownedTournaments.find(t => t.id === e.target.value);
+                  const tour = ownedTournaments.find(t => t.id === value);
                   if (tour) {
                     setSelected(tour);
                     setForm({ name: tour.name, bracketType: tour.bracket_type });
@@ -610,10 +692,35 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
                 }
               }}
             >
-              <option value="" disabled>Choose tournament…</option>
-              {ownedTournaments.map(t => (<option key={t.id} value={t.id}>{t.name}</option>))}
-              <option value="CREATE_NEW">+ Create new tournament</option>
-            </select>
+              <SelectTrigger className="w-full bg-black/50 border-white/20 text-white">
+                <SelectValue placeholder="Choose tournament…" />
+              </SelectTrigger>
+              <SelectContent className="bg-gray-900 border-white/20">
+                {ownedTournaments.map(t => (
+                  <SelectItem
+                    key={t.id}
+                    value={t.id}
+                    className="text-white focus:bg-gray-800 focus:text-white"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>{t.name}</span>
+                      {t.status === 'completed' && (
+                        <Check className="w-4 h-4 text-green-400" />
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+                <SelectItem
+                  value="CREATE_NEW"
+                  className="text-white focus:bg-gray-800 focus:text-white"
+                >
+                  <div className="flex items-center gap-2">
+                    <Plus className="w-4 h-4" />
+                    <span>Create new tournament</span>
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </section>
 
           {/* Create Tournament Form (only shown when creating) */}
@@ -624,6 +731,7 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
                 <Label htmlFor="tour-name" className="text-sm text-gray-300">Name</Label>
                 <Input
                   id="tour-name"
+                  ref={tournamentNameInputRef}
                   value={form.name}
                   onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="Tournament name"
@@ -674,32 +782,45 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
           {/* Add Player Names */}
           {selected && !showCreateForm && (
             <section className="space-y-3">
-              <h3 className="text-sm font-semibold text-gray-200">Add Player Names</h3>
-              <Label htmlFor="quick-block" className="text-sm text-gray-300">Add any number of players (minimum 2)</Label>
-              <div className="text-xs text-gray-400 mb-2">Paste names one per line, or separate with ; or ,</div>
-              <Textarea
-                id="quick-block"
-                value={quickBlock}
-                onChange={(e) => setQuickBlock(e.target.value)}
-                rows={4}
-                placeholder={`Player A
+              <h3 className="text-sm font-semibold text-gray-200">
+                {isTournamentComplete ? 'Tournament Complete' : 'Add Player Names'}
+              </h3>
+              {isTournamentComplete ? (
+                <div className="p-4 bg-green-500/20 border border-green-500/30 rounded-md">
+                  <p className="text-sm text-green-200 flex items-center gap-2">
+                    <span className="text-lg">🏆</span>
+                    This tournament has finished. Use "Restart Tournament" to reset and create a new bracket.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <Label htmlFor="quick-block" className="text-sm text-gray-300">Add any number of players (minimum 2)</Label>
+                  <div className="text-xs text-gray-400 mb-2">Paste names one per line, or separate with ; or ,</div>
+                  <Textarea
+                    id="quick-block"
+                    value={quickBlock}
+                    onChange={(e) => setQuickBlock(e.target.value)}
+                    rows={4}
+                    placeholder={`Player A
 Player B
 Player C
 Player D
 ...`}
-                className="bg-black/50 border-gray-700 text-white"
-              />
-              <Button
-                onClick={handleRandomizeNames}
-                disabled={!quickBlock.trim()}
-                variant="outline"
-                className="w-full"
-              >
-                Randomize Order
-              </Button>
-              <Button onClick={handleQuickStart} disabled={!quickBlock.trim() || quickRunning} className="w-full" variant="outline">
-                {quickRunning ? 'Creating…' : 'Start'}
-              </Button>
+                    className="bg-black/50 border-gray-700 text-white"
+                  />
+                  <Button
+                    onClick={handleRandomizeNames}
+                    disabled={!quickBlock.trim()}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    Randomize Order
+                  </Button>
+                  <Button onClick={handleQuickStart} disabled={!quickBlock.trim() || quickRunning} className="w-full" variant="outline">
+                    {quickRunning ? 'Creating…' : 'Start'}
+                  </Button>
+                </>
+              )}
             </section>
           )}
 
@@ -707,8 +828,8 @@ Player D
           {selected && players.length > 0 && (
             <div className="space-y-3">
               <Button
-                variant="destructive"
-                className="w-full"
+                variant="outline"
+                className="w-full border-red-500 hover:border-red-400 hover:bg-red-500/10"
                 onClick={() => setDeleteConfirmOpen(true)}
                 disabled={deleting}
               >
@@ -726,7 +847,43 @@ Player D
               <CardTitle className="text-lg">Tournament Admin</CardTitle>
                <div className="flex items-center gap-2">
                  {selected && (
-                   <Button variant="destructive" size="sm" onClick={() => setRestartOpen(true)}>Restart</Button>
+                   <>
+                     {(players.length > 0 || matches.length > 0) && (
+                       <div className="flex gap-1">
+                         <Button
+                           variant={currentView === 'bracket' ? 'default' : 'outline'}
+                           size="sm"
+                           onClick={() => setCurrentView('bracket')}
+                           className="flex items-center gap-2"
+                         >
+                           Bracket
+                         </Button>
+                         <Button
+                           variant={currentView === 'analytics' ? 'default' : 'outline'}
+                           size="sm"
+                           onClick={() => setCurrentView('analytics')}
+                           className="flex items-center gap-2"
+                         >
+                           <BarChart3 className="h-4 w-4" />
+                           Analytics
+                         </Button>
+                         <Button
+                           variant={currentView === 'debug' ? 'default' : 'outline'}
+                           size="sm"
+                           onClick={() => setCurrentView('debug')}
+                           className="flex items-center gap-2"
+                         >
+                           🔍 Debug
+                         </Button>
+                       </div>
+                     )}
+                     {!isTournamentComplete && (
+                       <Button variant="outline" size="sm" onClick={() => window.location.assign(`/tournaments?c=${selected.id}`)}>
+                         Competition View
+                       </Button>
+                     )}
+                     <Button variant="outline" size="sm" onClick={() => setRestartOpen(true)}>Restart</Button>
+                   </>
                  )}
                </div>
              </div>
@@ -734,8 +891,17 @@ Player D
            <CardContent className="flex-1 min-h-0 p-0 overflow-hidden">
             {selected && (previewMatches.length > 0 || matches.length > 0) ? (
               <div className="h-full flex flex-col">
+                {/* Tournament completion indicator */}
+                {isTournamentComplete && (
+                  <div className="shrink-0 px-4 py-2 bg-green-500/20 border-b border-green-500/30">
+                    <p className="text-sm text-green-200 flex items-center gap-2">
+                      <span className="text-lg">🏆</span>
+                      Tournament Complete - Results are now read-only
+                    </p>
+                  </div>
+                )}
                 {/* Preview indicator when showing preview matches */}
-                {matches.length === 0 && previewMatches.length > 0 && (
+                {matches.length === 0 && previewMatches.length > 0 && currentView === 'bracket' && (
                   <div className="shrink-0 px-4 py-2 bg-amber-500/20 border-b border-amber-500/30">
                     <p className="text-sm text-amber-200 flex items-center gap-2">
                       <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span>
@@ -744,18 +910,37 @@ Player D
                   </div>
                 )}
                 <div className="flex-1 overflow-hidden">
-                  <BracketView
-                    matches={previewMatches}
-                    participants={previewParticipants}
-                    adminMode={matches.length > 0} // Only enable admin mode for actual matches
-                    onReport={matches.length > 0 ? onReportClick : undefined}
-                    onPlayerClick={matches.length > 0 ? onPlayerClick : undefined}
-                    highlightTarget={highlightTarget}
-                    disableKeyboardNavigation={true}
-                    forceAutoFit={true}
-                    showWinnerZoom={bracketZoomAnimation}
-                    processingMatchId={processingMatchId}
-                  />
+                  {currentView === 'bracket' ? (
+                    <BracketView
+                      ref={bracketViewRef}
+                      matches={previewMatches}
+                      participants={previewParticipants}
+                      adminMode={matches.length > 0 && !isTournamentComplete} // Only enable admin mode for actual matches that aren't complete
+                      onReport={matches.length > 0 && !isTournamentComplete ? onReportClick : undefined}
+                      onPlayerClick={matches.length > 0 && !isTournamentComplete ? onPlayerClick : undefined}
+                      highlightTarget={highlightTarget}
+                      disableKeyboardNavigation={true}
+                      forceAutoFit={true}
+                      showWinnerZoom={bracketZoomAnimation}
+                      processingMatchId={processingMatchId}
+                    />
+                  ) : currentView === 'analytics' ? (
+                    <div className="h-full overflow-auto p-4">
+                      <BracketAnalytics
+                        tournament={selected}
+                        players={players}
+                        matches={matches}
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-full overflow-auto p-4">
+                      <BracketDebugger
+                        tournament={selected}
+                        players={players}
+                        matches={matches}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -807,17 +992,43 @@ Player D
               Your Bracket Tournament has been created and is ready for competition. Would you like to navigate to the competition view to start reporting match results?
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNavigationModalOpen(false)}>
-              Stay Here
-            </Button>
-            <Button onClick={() => {
-              setNavigationModalOpen(false);
-              navigate(`/competition?tournament=${selected?.id}`);
-            }} variant="outline">
-              Go to Competition
-            </Button>
-          </DialogFooter>
+          <div className="space-y-4">
+            <div className="text-center">
+              <p className="text-sm text-gray-600 mb-2">Share this tournament with participants:</p>
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  const shareUrl = `${window.location.origin}/competition?tournament=${selected?.id}`;
+                  try {
+                    await navigator.clipboard.writeText(shareUrl);
+                    toast({ title: 'Link copied!', description: 'Share link copied to clipboard' });
+                  } catch {
+                    // Fallback for clipboard API not available
+                    const textArea = document.createElement('textarea');
+                    textArea.value = shareUrl;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    toast({ title: 'Link copied!', description: 'Share link copied to clipboard' });
+                  }
+                }}
+              >
+                📋 Copy Share Link
+              </Button>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNavigationModalOpen(false)}>
+                Stay Here
+              </Button>
+              <Button onClick={() => {
+                setNavigationModalOpen(false);
+                navigate(`/competition?tournament=${selected?.id}`);
+              }} variant="outline">
+                Go to Competition
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -838,8 +1049,9 @@ Player D
             >
               Cancel
             </Button>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="outline"
+              className="border-red-500 hover:border-red-400 hover:bg-red-500/10"
               onClick={handleDeleteTournament}
               disabled={deleting}
             >
@@ -864,6 +1076,61 @@ Player D
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Share Link Dialog */}
+      <Dialog open={showShareLinkDialog} onOpenChange={setShowShareLinkDialog}>
+        <DialogContent className="bg-gray-900 text-white border-white/20 max-w-md w-[95vw]">
+          <DialogHeader>
+            <DialogTitle className="text-arcade-neonYellow text-xl text-center">Share Tournament</DialogTitle>
+            <DialogDescription className="text-gray-300 text-center">
+              Copy the link to share your tournament with others
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            <div className="text-center text-6xl">🔗</div>
+            <div className="bg-gray-800 p-3 rounded border border-gray-700">
+              <p className="text-sm text-gray-400 break-all font-mono">{shareUrl}</p>
+            </div>
+          </div>
+
+          <DialogFooter className="flex gap-3 justify-center">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(shareUrl);
+                  toast({ title: 'Link copied!', description: 'Share link copied to clipboard' });
+                  setShowShareLinkDialog(false);
+                  navigate(`/competition?tournament=${selected?.id}`);
+                } catch {
+                  // Fallback for clipboard API not available
+                  const textArea = document.createElement('textarea');
+                  textArea.value = shareUrl;
+                  document.body.appendChild(textArea);
+                  textArea.select();
+                  document.execCommand('copy');
+                  document.body.removeChild(textArea);
+                  toast({ title: 'Link copied!', description: 'Share link copied to clipboard' });
+                  setShowShareLinkDialog(false);
+                  navigate(`/competition?tournament=${selected?.id}`);
+                }
+              }}
+            >
+              📋 Copy Link
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowShareLinkDialog(false);
+                navigate(`/competition?tournament=${selected?.id}`);
+              }}
+            >
+              Skip
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

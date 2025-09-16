@@ -9,6 +9,7 @@ import { useAchievements } from "@/hooks/useAchievements";
 import { getGameLogoUrl } from "@/lib/utils";
 import PlayerInsult from "./PlayerInsult";
 import { useTournament } from "@/contexts/TournamentContext";
+import { reportSubmissionFailure } from "@/utils/submissionMonitoring";
 
 interface Game {
   id: string;
@@ -54,6 +55,9 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
       });
       return;
     }
+
+    // Get current user for user_id field
+    const { data: { user } } = await supabase.auth.getUser();
 
     // Check if score submissions are locked for this tournament
     if (currentTournament.scores_locked) {
@@ -128,7 +132,8 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         const updateData = {
           score: scoreValue,
           updated_at: new Date().toISOString(),
-          tournament_id: currentTournament?.id
+          tournament_id: currentTournament?.id,
+          user_id: user?.id || null
         };
         
         const { data: updatedData, error } = await supabase
@@ -200,7 +205,8 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           player_name: truncatedName.toUpperCase(),
           score: scoreValue,
           game_id: game.id,
-          tournament_id: currentTournament?.id
+          tournament_id: currentTournament?.id,
+          user_id: user?.id || null
         };
         
         const { data: insertedData, error } = await supabase
@@ -282,7 +288,17 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
       
     } catch (error: any) {
       console.error('Error submitting score:', error);
-      
+
+      // Report submission failure for monitoring
+      await reportSubmissionFailure({
+        playerName: name,
+        score: scoreValue,
+        gameName: game.name,
+        error: error.message || 'Unknown error',
+        userAgent: navigator.userAgent,
+        location: 'desktop'
+      });
+
       // Handle specific constraint violations
       if (error.message?.includes('score_positive')) {
         toast({
@@ -292,7 +308,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         });
       } else if (error.message?.includes('score_reasonable')) {
         toast({
-          title: "Invalid Score", 
+          title: "Invalid Score",
           description: "Score is too high (maximum: 999,999,999)",
           variant: "destructive",
         });

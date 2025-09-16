@@ -155,7 +155,7 @@ export default function AuthVerify() {
           )}
 
           <div className="flex items-center gap-3">
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading} variant="outline">
               {loading ? "Verifying..." : "Verify"}
             </Button>
             {type === "recovery" && (

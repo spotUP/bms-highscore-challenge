@@ -112,24 +112,24 @@ const App = () => (
               <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
                   <Route path="/" element={<Layout><Index /></Layout>} />
-                  <Route path="/admin/brackets" element={<Layout topNavProps={{ hideBracketsLink: true, rightActions: <BracketAdminActions /> }}><BracketAdmin /></Layout>} />
-                  <Route path="/mobile-entry" element={<Layout><MobileEntry /></Layout>} />
+                  <Route path="/admin/brackets" element={<Layout topNavProps={{ hideBracketsLink: true, hideFullscreenButton: true, rightActions: <BracketAdminActions /> }}><BracketAdmin /></Layout>} />
+                  <Route path="/mobile-entry" element={<Layout topNavProps={{ hideFullscreenButton: true }}><MobileEntry /></Layout>} />
                   <Route path="/auth" element={<Layout hideTopNav><Auth /></Layout>} />
                   <Route path="/auth/verify" element={<Layout hideTopNav><AuthVerify /></Layout>} />
                   <Route path="/auth/expired" element={<Layout hideTopNav><LinkExpired /></Layout>} />
-                  <Route path="/admin" element={<Layout><Admin /></Layout>} />
-                  <Route path="/statistics" element={<Layout topNavProps={{ hideStatistics: true }}><Statistics /></Layout>} />
-                  <Route path="/player" element={<Layout><PlayerDashboard /></Layout>} />
-                  <Route path="/achievements" element={<Layout><Achievements /></Layout>} />
-                  <Route path="/demolition-man-submit" element={<Layout><DemolitionManSubmit /></Layout>} />
-                  <Route path="/competition" element={<Layout><Competition /></Layout>} />
+                  <Route path="/admin" element={<Layout topNavProps={{ hideFullscreenButton: true }}><Admin /></Layout>} />
+                  <Route path="/statistics" element={<Layout topNavProps={{ hideStatistics: true, hideFullscreenButton: true }}><Statistics /></Layout>} />
+                  <Route path="/player" element={<Layout topNavProps={{ hideFullscreenButton: true }}><PlayerDashboard /></Layout>} />
+                  <Route path="/achievements" element={<Layout topNavProps={{ hideFullscreenButton: true }}><Achievements /></Layout>} />
+                  <Route path="/demolition-man-submit" element={<Layout topNavProps={{ hideFullscreenButton: true }}><DemolitionManSubmit /></Layout>} />
+                  <Route path="/competition" element={<Layout topNavProps={{ hideFullscreenButton: true }}><Competition /></Layout>} />
                   {/* Tournament-scoped routes with access control */}
                   <Route path="/t/:slug" element={<Layout><TournamentAccessGuard><Index /></TournamentAccessGuard></Layout>} />
-                  <Route path="/t/:slug/admin" element={<Layout><TournamentAccessGuard><Admin /></TournamentAccessGuard></Layout>} />
-                  <Route path="/t/:slug/statistics" element={<Layout topNavProps={{ hideStatistics: true }}><TournamentAccessGuard><Statistics /></TournamentAccessGuard></Layout>} />
-                  <Route path="/t/:slug/achievements" element={<Layout><TournamentAccessGuard><Achievements /></TournamentAccessGuard></Layout>} />
-                  <Route path="/t/:slug/mobile-entry" element={<Layout><TournamentAccessGuard><MobileEntry /></TournamentAccessGuard></Layout>} />
-                  <Route path="/t/:slug/demolition-man-submit" element={<Layout><TournamentAccessGuard><DemolitionManSubmit /></TournamentAccessGuard></Layout>} />
+                  <Route path="/t/:slug/admin" element={<Layout topNavProps={{ hideFullscreenButton: true }}><TournamentAccessGuard><Admin /></TournamentAccessGuard></Layout>} />
+                  <Route path="/t/:slug/statistics" element={<Layout topNavProps={{ hideStatistics: true, hideFullscreenButton: true }}><TournamentAccessGuard><Statistics /></TournamentAccessGuard></Layout>} />
+                  <Route path="/t/:slug/achievements" element={<Layout topNavProps={{ hideFullscreenButton: true }}><TournamentAccessGuard><Achievements /></TournamentAccessGuard></Layout>} />
+                  <Route path="/t/:slug/mobile-entry" element={<Layout topNavProps={{ hideFullscreenButton: true }}><TournamentAccessGuard><MobileEntry /></TournamentAccessGuard></Layout>} />
+                  <Route path="/t/:slug/demolition-man-submit" element={<Layout topNavProps={{ hideFullscreenButton: true }}><TournamentAccessGuard><DemolitionManSubmit /></TournamentAccessGuard></Layout>} />
                 </Routes>
               </Suspense>
             </BrowserRouter>

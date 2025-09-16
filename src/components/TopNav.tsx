@@ -18,9 +18,10 @@ interface TopNavProps {
   hideTournamentSelector?: boolean;
   hideSpinButton?: boolean;
   hideStatistics?: boolean;
+  hideFullscreenButton?: boolean;
 }
 
-const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnimatedNavigate, rightActions, centerNav = false, hideBracketsLink = false, hideTournamentSelector = false, hideSpinButton = false, hideStatistics = false }) => {
+const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnimatedNavigate, rightActions, centerNav = false, hideBracketsLink = false, hideTournamentSelector = false, hideSpinButton = false, hideStatistics = false, hideFullscreenButton = false }) => {
   const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
   const { animatedNavigate } = usePageTransitions({ exitDuration: 600 });
@@ -104,10 +105,13 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
               {user ? (
                 <>
                   <PerformanceModeToggle displayType="switch" />
-                  <Button variant="outline" size="sm" className="theme-button" onClick={toggleFullscreen}>
-                    {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-                  </Button>
+                  {!hideFullscreenButton && (
+                    <Button variant="outline" size="sm" className="theme-button" onClick={toggleFullscreen}>
+                      {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                    </Button>
+                  )}
                   {!hideTournamentSelector && <TournamentDropdown />}
+                  <Button variant="outline" onClick={() => finalAnimatedNavigate('/')}>Highscores</Button>
                   {!hideSpinButton && <Button variant="outline" onClick={handleSpin}>Spin the Wheel</Button>}
                   {!hideStatistics && <Button variant="outline" onClick={() => finalAnimatedNavigate('/statistics')}>Statistics</Button>}
                   {!hideBracketsLink && (
@@ -165,10 +169,13 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
               {user ? (
                 <>
                   <PerformanceModeToggle displayType="switch" />
-                  <Button variant="outline" size="sm" className="theme-button" onClick={toggleFullscreen}>
-                    {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-                  </Button>
+                  {!hideFullscreenButton && (
+                    <Button variant="outline" size="sm" className="theme-button" onClick={toggleFullscreen}>
+                      {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                    </Button>
+                  )}
                   <TournamentDropdown />
+                  <Button variant="outline" onClick={() => finalAnimatedNavigate('/')}>Highscores</Button>
                   <Button variant="outline" onClick={handleSpin}>Spin the Wheel</Button>
                   <Button variant="outline" onClick={() => finalAnimatedNavigate('/statistics')}>Statistics</Button>
                   {!hideBracketsLink && (

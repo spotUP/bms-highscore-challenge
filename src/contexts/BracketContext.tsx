@@ -50,6 +50,7 @@ interface BracketContextType {
   getTournamentData: (tournamentId: string) => Promise<{ players: TournamentPlayer[]; matches: TournamentMatch[] }>;
   deleteTournament: (tournamentId: string) => Promise<boolean>;
   renameTournament: (tournamentId: string, newName: string) => Promise<boolean>;
+  autoAdvanceMatches: (tournamentId: string) => Promise<void>;
 }
 
 const BracketContext = createContext<BracketContextType | undefined>(undefined);
@@ -663,6 +664,140 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
     return true;
   };
 
+  // Validation function to prevent advancing too far ahead
+  const validateMatchAdvancement = async (match: TournamentMatch): Promise<string | null> => {
+    try {
+      // Get all matches in the tournament
+      const { data: allMatches, error: matchesErr } = await supabase
+        .from('bracket_matches')
+        .select('*')
+        .eq('tournament_id', match.tournament_id)
+        .order('round', { ascending: true });
+
+      if (matchesErr) throw matchesErr;
+
+      // For winners bracket matches (rounds 1-99)
+      if (match.round < 100) {
+        // Check if there are incomplete matches in earlier rounds
+        const earlierIncompleteMatches = allMatches.filter(m =>
+          m.round < match.round &&
+          m.round < 100 && // Only winners bracket
+          m.participant1_id &&
+          m.participant2_id &&
+          !m.winner_participant_id
+        );
+
+        if (earlierIncompleteMatches.length > 0) {
+          return `Please complete round ${earlierIncompleteMatches[0].round} matches before advancing to round ${match.round}.`;
+        }
+      }
+
+      // For losers bracket matches (rounds 100-999)
+      if (match.round >= 100 && match.round < 1000) {
+        // Check if there are incomplete matches in earlier losers rounds
+        const earlierLosersIncompleteMatches = allMatches.filter(m =>
+          m.round >= 100 &&
+          m.round < match.round &&
+          m.round < 1000 && // Only losers bracket
+          m.participant1_id &&
+          m.participant2_id &&
+          !m.winner_participant_id
+        );
+
+        if (earlierLosersIncompleteMatches.length > 0) {
+          const losersRound = earlierLosersIncompleteMatches[0].round - 100 + 1;
+          return `Please complete losers bracket round L${losersRound} matches before advancing further.`;
+        }
+
+        // Also check if winners bracket should feed into this losers round
+        const currentLosersRound = match.round - 100 + 1;
+        if (currentLosersRound % 2 === 0) { // Even losers rounds receive winners bracket dropdowns
+          const feedingWinnersRound = Math.ceil(currentLosersRound / 2) + 1;
+          const winnersMatches = allMatches.filter(m =>
+            m.round === feedingWinnersRound &&
+            m.participant1_id &&
+            m.participant2_id &&
+            !m.winner_participant_id
+          );
+
+          if (winnersMatches.length > 0) {
+            return `Please complete winners bracket round ${feedingWinnersRound} matches first - they feed into this losers bracket round.`;
+          }
+        }
+      }
+
+      // For Grand Final (round 1000)
+      if (match.round === 1000) {
+        // Check that both winners and losers bracket champions are determined
+        const winnersChampionMatches = allMatches.filter(m =>
+          m.round < 100 &&
+          m.participant1_id &&
+          m.participant2_id &&
+          !m.winner_participant_id
+        );
+
+        const losersChampionMatches = allMatches.filter(m =>
+          m.round >= 100 &&
+          m.round < 1000 &&
+          m.participant1_id &&
+          m.participant2_id &&
+          !m.winner_participant_id
+        );
+
+        if (winnersChampionMatches.length > 0) {
+          return `Please complete all winners bracket matches before the Grand Final.`;
+        }
+
+        if (losersChampionMatches.length > 0) {
+          return `Please complete all losers bracket matches before the Grand Final.`;
+        }
+      }
+
+      return null; // No validation errors
+    } catch (e) {
+      console.error('Error validating match advancement:', e);
+      return null; // Allow the match to proceed if validation fails
+    }
+  };
+
+  // Auto-advance single participant matches
+  const autoAdvanceSingleParticipantMatches = async (tournamentId: string): Promise<void> => {
+    try {
+      const { data: singleParticipantMatches, error } = await supabase
+        .from('bracket_matches')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .is('winner_participant_id', null)
+        .or('and(participant1_id.not.is.null,participant2_id.is.null),and(participant1_id.is.null,participant2_id.not.is.null)');
+
+      if (error) throw error;
+
+      console.log(`🔄 Found ${singleParticipantMatches?.length || 0} single-participant matches to auto-advance`);
+
+      for (const match of singleParticipantMatches || []) {
+        const winnerId = match.participant1_id || match.participant2_id;
+        if (winnerId) {
+          console.log(`🤖 Auto-advancing ${winnerId} in ${match.round >= 100 ? `L${match.round - 99}` : `R${match.round}`}P${match.position}`);
+
+          // Set the winner for this match
+          await supabase
+            .from('bracket_matches')
+            .update({
+              winner_participant_id: winnerId,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', match.id);
+
+          // Manually call advancement logic for this match
+          const matchWithTournament = { ...match, bracket_tournaments: { bracket_type: 'double' } } as any;
+          await reportWinnerDoubleElimination(matchWithTournament, winnerId);
+        }
+      }
+    } catch (e) {
+      console.error('Error auto-advancing single participant matches:', e);
+    }
+  };
+
   const reportWinner = async (matchId: string, winnerId: string): Promise<boolean> => {
     try {
       // Get tournament type first to determine advancement logic
@@ -678,6 +813,12 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (matchErr) throw matchErr;
+
+      // Validate that we're not advancing too far ahead
+      const validationError = await validateMatchAdvancement(matchWithTournament);
+      if (validationError) {
+        throw new Error(validationError);
+      }
 
       const match = matchWithTournament as TournamentMatch & {
         bracket_tournaments: { bracket_type: 'single' | 'double' }
@@ -838,37 +979,77 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
         const nextLosersRound = losersRound + 1;
         const nextRound = 100 + nextLosersRound - 1;
 
+        // Calculate next position - fix for 8-player double elimination
+        let nextPosition: number;
+
+        // Special handling for L2 → L3 in double elimination
+        // In L2 there are 2 matches, but L3 has only 1 match
+        // Both L2 winners should go to the single L3 match
+        if (losersRound === 2 && nextLosersRound === 3) {
+          nextPosition = 1;
+        } else {
+          // Default behavior for other rounds
+          nextPosition = Math.ceil(position / 2);
+        }
+
         // Check if this is losers bracket final (advances to grand final)
+        console.log(`🔍 LOSERS BRACKET: L${losersRound} → L${nextLosersRound}, looking for round ${nextRound} position ${nextPosition}`);
+
         const { data: nextLosersMatch, error: nextLosersErr } = await supabase
           .from('bracket_matches')
           .select('*')
           .eq('tournament_id', match.tournament_id)
           .eq('round', nextRound)
-          .eq('position', Math.ceil(position / 2))
+          .eq('position', nextPosition)
           .maybeSingle();
 
         if (nextLosersErr) throw nextLosersErr;
 
+        console.log(`🔍 LOSERS BRACKET: Next match found:`, nextLosersMatch ? 'YES' : 'NO (advancing to Grand Final)');
+
         if (nextLosersMatch) {
-          // Advance to next losers bracket round
-          const isLeftSide = (position % 2) === 1;
-          const updateField = isLeftSide ? 'participant1_id' : 'participant2_id';
+          // Determine which slot to fill
+          let updateField: 'participant1_id' | 'participant2_id';
+
+          // Special handling for L2 → L3: assign based on L2 position
+          if (losersRound === 2 && nextLosersRound === 3) {
+            // L2 position 1 winner → participant1_id, L2 position 2 winner → participant2_id
+            updateField = position === 1 ? 'participant1_id' : 'participant2_id';
+          } else {
+            // Default behavior: alternate sides based on position
+            const isLeftSide = (position % 2) === 1;
+            updateField = isLeftSide ? 'participant1_id' : 'participant2_id';
+          }
+
           await supabase
             .from('bracket_matches')
             .update({ [updateField]: winnerId })
             .eq('id', nextLosersMatch.id);
         } else {
           // This was losers bracket final - advance to grand final
-          await supabase
+          console.log(`🏆 LOSERS BRACKET FINAL: Advancing winner ${winnerId} to Grand Final`);
+          const { data: grandFinalUpdate, error: grandFinalErr } = await supabase
             .from('bracket_matches')
             .update({ participant2_id: winnerId })
             .eq('tournament_id', match.tournament_id)
             .eq('round', 1000)
-            .eq('position', 1);
+            .eq('position', 1)
+            .select('*')
+            .single();
+
+          if (grandFinalErr) {
+            console.error('🚨 GRAND FINAL UPDATE ERROR:', grandFinalErr);
+            throw grandFinalErr;
+          }
+
+          console.log(`🏆 GRAND FINAL UPDATED:`, grandFinalUpdate);
         }
 
         return true;
       }
+
+      // After any match completion, check for auto-advancement opportunities
+      await autoAdvanceSingleParticipantMatches(match.tournament_id);
 
       return true;
     } catch (e) {
@@ -1125,7 +1306,8 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
     reportWinner,
     getTournamentData,
     deleteTournament,
-    renameTournament
+    renameTournament,
+    autoAdvanceMatches: autoAdvanceSingleParticipantMatches
   };
 
   return (

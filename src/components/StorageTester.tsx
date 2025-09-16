@@ -232,7 +232,7 @@ const StorageTester: React.FC = () => {
                           }}
                         >Download</Button>
                         <Button
-                          variant="destructive"
+                          variant="outline"
                           size="sm"
                           onClick={async () => {
                             try {

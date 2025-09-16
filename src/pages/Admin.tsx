@@ -885,6 +885,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
   const [gameScores, setGameScores] = useState<Record<string, any[]>>({});
   const [gamesLoading, setGamesLoading] = useState(true);
   const [initialLoaded, setInitialLoaded] = useState(false);
+  const [hasAnimated, setHasAnimated] = useState(false);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [editingScore, setEditingScore] = useState<any | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -1075,6 +1076,13 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       }));
     }
   }, [currentTournament, editingGame]);
+
+  // Set hasAnimated to true when the page should animate for the first time
+  useEffect(() => {
+    if (!hasAnimated && !loading && !tournamentsLoading && !gamesLoading) {
+      setHasAnimated(true);
+    }
+  }, [hasAnimated, loading, tournamentsLoading, gamesLoading]);
 
   // Reset form
   const resetForm = () => {
@@ -1561,7 +1569,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
 
   const pageLayout = getPageLayout();
   
-  const shouldAnimate = !loading && !tournamentsLoading && !gamesLoading;
+  const shouldAnimate = !hasAnimated && !loading && !tournamentsLoading && !gamesLoading;
 
   const handleTabChange = (newTab: string) => {
     if (newTab !== activeTab) {
@@ -1603,7 +1611,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
   return (
     <div {...pageLayout} className={`${pageLayout.className || ''}`}>
       <PageContainer className="max-w-6xl mx-auto">
-        <div className={`${isExiting ? 'animate-slide-out-bottom' : shouldAnimate ? 'animate-slide-in-bottom' : 'opacity-0'}`}>
+        <div className={`${isExiting ? 'animate-slide-out-bottom' : hasAnimated ? 'opacity-100' : shouldAnimate ? 'animate-slide-in-bottom' : 'opacity-0'}`}>
           <PageHeader
             title="Admin Panel"
             subtitle={`Managing ${currentTournament?.name} tournament`}
@@ -1775,7 +1783,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                             <Button size="sm" variant="outline" onClick={() => { toast({ title: 'Edit Highscore Tournament', description: `Edit functionality for "${tournament.name}" would go here` }); }}><Pencil className="w-4 h-4" /></Button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
-                                <Button size="sm" variant="destructive" disabled={tournament.id === currentTournament?.id}><Trash2 className="w-4 h-4" /></Button>
+                                <Button size="sm" variant="outline" className="border-red-500 hover:border-red-400 hover:bg-red-500/10" disabled={tournament.id === currentTournament?.id}><Trash2 className="w-4 h-4" /></Button>
                               </AlertDialogTrigger>
                               <AlertDialogContent className="bg-gray-900 text-white border-white/20">
                                 <AlertDialogHeader><AlertDialogTitle>Delete Highscore Tournament</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete "{tournament.name}"? This action cannot be undone and will remove all games, scores, and members.</AlertDialogDescription></AlertDialogHeader>
@@ -1876,7 +1884,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                                           type="number"
                                                         />
                                                         <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => updateScoreInline(s.id)}>Save</Button>
-                                                        <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => handleDeleteScore(s.id)}>Delete</Button>
+                                                        <Button size="sm" variant="ghost" className="h-7 px-2 border border-red-500 hover:border-red-400 hover:bg-red-500/10" onClick={() => handleDeleteScore(s.id)}>Delete</Button>
                                                       </div>
                                                     );
                                                   })}
@@ -1899,7 +1907,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                           <TableCell className="text-right align-top">
                                             <div className="flex items-center justify-end gap-2 flex-wrap pl-2 relative z-50">
                                               <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] hover:bg-blue-600/20" title="Edit game" onClick={() => openEditDialog(game)}><Pencil className="w-3 h-3" /></Button>
-                                              <Button size="sm" variant="ghost" className="h-6 px-2 hover:bg-red-600/20" title="Delete game" onClick={() => handleDeleteGame(game.id)}><Trash2 className="w-3 h-3" /></Button>
+                                              <Button size="sm" variant="ghost" className="h-6 px-2 hover:bg-red-600/20 border border-red-500 hover:border-red-400" title="Delete game" onClick={() => handleDeleteGame(game.id)}><Trash2 className="w-3 h-3" /></Button>
                                             </div>
                                           </TableCell>
                                         </TableRow>
@@ -2100,7 +2108,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
           description="Are you sure you want to delete this game? This action cannot be undone."
           confirmText="Delete Game"
           cancelText="Cancel"
-          variant="destructive"
+          variant="outline"
           onConfirm={confirmDeleteGame}
         />
 
@@ -2111,7 +2119,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
           description="Are you sure you want to delete this score? This action cannot be undone."
           confirmText="Delete Score"
           cancelText="Cancel"
-          variant="destructive"
+          variant="outline"
           onConfirm={confirmDeleteScore}
         />
         </div>

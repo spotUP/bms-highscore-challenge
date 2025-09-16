@@ -106,7 +106,7 @@ const BracketManagement: React.FC = () => {
 
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm">
+                        <Button variant="outline" size="sm" className="border-red-500 hover:border-red-400 hover:bg-red-500/10">
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </AlertDialogTrigger>

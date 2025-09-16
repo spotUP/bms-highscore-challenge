@@ -176,7 +176,7 @@ const ResetFunctions = () => {
       description="🚨 This will delete ALL scores, achievements, and player statistics for the current competition. This action cannot be undone."
       confirmText="Delete Everything"
       cancelText="Cancel"
-      variant="destructive"
+      variant="outline"
       onConfirm={resetCompetitionScores}
     />
 
@@ -200,7 +200,7 @@ const ResetFunctions = () => {
       description="🚨 This will delete ALL player achievements and statistics permanently across ALL games. This action cannot be undone."
       confirmText="Delete All"
       cancelText="Cancel"
-      variant="destructive"
+      variant="outline"
       onConfirm={resetAllAchievements}
     />
     </>

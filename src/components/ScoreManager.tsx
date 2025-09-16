@@ -505,7 +505,8 @@ const ScoreManager = () => {
                         </Button>
                         <Button
                           size="sm"
-                          variant="destructive"
+                          variant="outline"
+                          className="border-red-500 hover:border-red-400 hover:bg-red-500/10"
                           onClick={() => handleDeleteScore(score.id)}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -575,7 +576,7 @@ const ScoreManager = () => {
       description="Are you sure you want to delete this score? This action cannot be undone."
       confirmText="Delete Score"
       cancelText="Cancel"
-      variant="destructive"
+      variant="outline"
       onConfirm={confirmDeleteScore}
     />
   </>
