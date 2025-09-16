@@ -116,17 +116,27 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
     let fallbackInterval: NodeJS.Timeout;
     let lastUpdateTime = Date.now();
 
-    // Check if we're on a potentially problematic setup
+    // Check if we're on a potentially problematic setup (enhanced Pi 5 detection)
     const userAgent = navigator.userAgent.toLowerCase();
     const isFirefoxLinux = userAgent.includes('firefox') && userAgent.includes('linux');
     const isARM = userAgent.includes('aarch64') || userAgent.includes('armv');
-    const needsFallback = isFirefoxLinux || isARM;
+    const isPi5 = isARM && userAgent.includes('linux');
+    const needsFallback = isFirefoxLinux || isARM || isPi5;
+
+    console.log('Pi5 Score Refresh Detection:', {
+      userAgent: userAgent.substring(0, 50) + '...',
+      isFirefoxLinux,
+      isARM,
+      isPi5,
+      needsFallback
+    });
 
     const handleUpdate = () => {
       // Skip updates during tests to prevent animations
       if (window.localStorage.getItem('suppressAnimations') === 'true') {
         return;
       }
+      console.log('🔄 Pi5: Refreshing scores at', new Date().toLocaleTimeString());
       lastUpdateTime = Date.now();
       refetch();
     };
@@ -147,31 +157,37 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
         .subscribe((status) => {
           console.log('Score subscription status:', status);
 
-          // If subscription fails or we're on a problematic setup, use polling
+          // If subscription fails or we're on a problematic setup, use aggressive polling
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || needsFallback) {
-            console.log('Setting up fallback polling for score updates');
+            const pollInterval = isPi5 ? 5000 : 10000; // 5 seconds for Pi 5, 10 for others
+            console.log(`🔧 Pi5: Setting up aggressive polling every ${pollInterval/1000}s for score updates`);
             if (fallbackInterval) clearInterval(fallbackInterval);
             fallbackInterval = setInterval(() => {
-              // Only poll if no recent updates from real-time
-              if (Date.now() - lastUpdateTime > 15000) {
+              // More frequent polling for Pi 5, less frequent checks for recent updates
+              const recentUpdateThreshold = isPi5 ? 8000 : 15000;
+              if (Date.now() - lastUpdateTime > recentUpdateThreshold) {
                 handleUpdate();
               }
-            }, 10000); // Poll every 10 seconds as fallback
+            }, pollInterval);
           }
         });
     } catch (error) {
       console.error('Error setting up real-time subscription:', error);
-      // Fallback to polling if subscription completely fails
-      fallbackInterval = setInterval(handleUpdate, 15000);
+      // Fallback to aggressive polling if subscription completely fails
+      const fallbackPollInterval = isPi5 ? 5000 : 15000;
+      console.log(`🚨 Pi5: Subscription failed, using fallback polling every ${fallbackPollInterval/1000}s`);
+      fallbackInterval = setInterval(handleUpdate, fallbackPollInterval);
     }
 
-    // Always set up a less frequent fallback polling as safety net
+    // Always set up safety net polling - more frequent for Pi 5
+    const safetyPollInterval = isPi5 ? 10000 : 30000;
+    const safetyThreshold = isPi5 ? 15000 : 30000;
     const safetyInterval = setInterval(() => {
-      if (Date.now() - lastUpdateTime > 30000) {
-        console.log('Safety net polling triggered');
+      if (Date.now() - lastUpdateTime > safetyThreshold) {
+        console.log('🛡️ Pi5: Safety net polling triggered');
         handleUpdate();
       }
-    }, 30000);
+    }, safetyPollInterval);
 
     return () => {
       if (channel) {

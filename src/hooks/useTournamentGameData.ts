@@ -312,13 +312,13 @@ export const useTournamentGameData = () => {
   // Pi 5 aggressive polling for Firefox compatibility
   const { forcePoll, isPi5 } = usePi5Polling({
     enabled: !!currentTournament,
-    interval: 8000, // Poll every 8 seconds on Pi 5 with Firefox
+    interval: 5000, // Poll every 5 seconds on Pi 5 with Firefox (more aggressive)
     onPoll: () => {
-      console.log('Pi5 Polling: Force refreshing tournament data');
+      console.log('🔄 Pi5 Polling: Force refreshing tournament data at', new Date().toLocaleTimeString());
       refetch();
     },
     onVisibilityChange: () => {
-      console.log('Pi5 Polling: Tab became visible, refreshing data');
+      console.log('👁️ Pi5 Polling: Tab became visible, refreshing data');
       refetch();
     }
   });
@@ -409,20 +409,29 @@ export const useTournamentGameData = () => {
     loadAllData();
   }, [currentTournament?.id]); // Only depend on tournament ID, not the loadAllData function
 
-  // Periodic refresh based on performance settings
+  // Get Pi detection at hook level
+  const { isRaspberryPi } = usePerformanceMode();
+
+  // Periodic refresh based on performance settings - more frequent for Pi
   useEffect(() => {
     if (!currentTournament) return;
+
+    // Use more aggressive refresh for Pi devices
+    const actualRefreshInterval = isRaspberryPi ? Math.min(refreshInterval, 10000) : refreshInterval;
+
+    console.log(`⏱️ Pi5: Setting up periodic refresh every ${actualRefreshInterval/1000}s`);
 
     const interval = setInterval(() => {
       // Skip periodic refresh during tests to prevent animations
       if (window.localStorage.getItem('suppressAnimations') === 'true') {
         return;
       }
+      console.log('⏰ Pi5: Periodic refresh triggered at', new Date().toLocaleTimeString());
       loadAllData();
-    }, refreshInterval);
+    }, actualRefreshInterval);
 
     return () => clearInterval(interval);
-  }, [currentTournament?.id, refreshInterval]); // Don't depend on loadAllData function
+  }, [currentTournament?.id, refreshInterval, isRaspberryPi]); // Don't depend on loadAllData function
 
   // Memoized derived data
   const activeGames = useMemo(() => {
