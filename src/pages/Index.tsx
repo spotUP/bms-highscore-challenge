@@ -120,6 +120,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
 
   // Enhanced realtime with fallback polling for Raspberry Pi/Firefox
   useEffect(() => {
+    console.log('🔄 Pi5: Setting up polling effect for tournament:', currentTournament?.id);
     if (!currentTournament?.id) return;
 
     let channel: any;
@@ -237,6 +238,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
     }, safetyPollInterval);
 
     return () => {
+      console.log('🔄 Pi5: Cleaning up polling effect for tournament:', currentTournament?.id);
       if (channel) {
         try {
           supabase.removeChannel(channel);
@@ -247,7 +249,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
       if (fallbackInterval) clearInterval(fallbackInterval);
       if (safetyInterval) clearInterval(safetyInterval);
     };
-  }, [currentTournament?.id, refetch]);
+  }, [currentTournament?.id]); // Removed refetch from dependency to prevent constant re-creation
 
   // Deterministic style for Tron edge runner per card
   const getRunnerStyle = (seed: string) => {
