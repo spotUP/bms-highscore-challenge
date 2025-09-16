@@ -437,7 +437,7 @@ const AchievementManager = () => {
           <div className="flex gap-2">
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={openCreateDialog}>
+                <Button onClick={openCreateDialog} variant="outline">
                   <Plus className="w-4 h-4 mr-2" />
                   Add Achievement
                 </Button>
@@ -559,7 +559,7 @@ const AchievementManager = () => {
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={saveAchievement}>
+                  <Button onClick={saveAchievement} variant="outline">
                     {editingAchievement ? 'Update' : 'Create'} Achievement
                   </Button>
                 </div>
@@ -638,7 +638,8 @@ const AchievementManager = () => {
                       </Button>
                       <Button
                         size="sm"
-                        variant="destructive"
+                        variant="outline"
+                        className="border-red-500 hover:border-red-400 hover:bg-red-500/10"
                         onClick={() => handleDeleteAchievement(achievement.id)}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -666,7 +667,7 @@ const AchievementManager = () => {
       description="Are you sure you want to delete this achievement? This will deactivate it but preserve existing unlocks."
       confirmText="Delete Achievement"
       cancelText="Cancel"
-      variant="destructive"
+      variant="outline"
       onConfirm={confirmDeleteAchievement}
     />
     </>

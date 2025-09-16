@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState, useEffect } from 'react';
+import React, { useMemo, useRef, useState, useEffect, useImperativeHandle, forwardRef } from 'react';
 import type { BracketMatch, BracketParticipant } from '@/contexts/BracketContext';
 
 interface BracketViewProps {
@@ -25,19 +25,29 @@ interface BracketViewPropsExtra extends BracketViewProps {
   // Admin view props
   disableKeyboardNavigation?: boolean;
   forceAutoFit?: boolean;
+  // Winner animation props
+  showWinnerZoom?: boolean;
 }
 
-const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, adminMode = false, onReport, onPlayerClick, highlightTarget, tournaments, selectedTournament, onTournamentChange, bracketType, isPublic, isCompleted, matchCount, tournamentTitle, disableKeyboardNavigation = false, forceAutoFit = false }) => {
+export interface BracketViewRef {
+  centerBracket: () => void;
+  centerOnFinal: () => void;
+}
+
+const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches, participants, adminMode = false, onReport, onPlayerClick, highlightTarget, tournaments, selectedTournament, onTournamentChange, bracketType, isPublic, isCompleted, matchCount, tournamentTitle, disableKeyboardNavigation = false, forceAutoFit = false, showWinnerZoom = false }, ref) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [showLegend, setShowLegend] = useState(true);
+  const [isAnimating, setIsAnimating] = useState(false);
   const restoredRef = useRef(false);
   const initialFitDoneRef = useRef(false);
   const dragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
+  const animationRef = useRef<number | null>(null);
 
   const matchHeight = 78;
+  const matchTotalHeight = matchHeight + 30; // Add space for choose winner badge
   const colWidth = 300; // horizontal distance between rounds
 
   // Build rounds and create position-based layout, split winners/losers/grand final
@@ -59,7 +69,7 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
     const layoutSection = (roundsArr: [number, BracketMatch[]][], sectionOffsetX: number, isReversed: boolean = false) => {
       roundsArr.forEach(([round, matchList], colIdx) => {
         const sortedMatches = matchList.slice().sort((a, b) => a.position - b.position);
-        const baseSpacing = Math.max(120, matchHeight + 40);
+        const baseSpacing = Math.max(120, matchTotalHeight + 40);
 
         // For mirrored losers bracket, reverse column index
         const actualColIdx = isReversed ? (roundsArr.length - 1 - colIdx) : colIdx;
@@ -138,7 +148,7 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
     const maxCols = Math.max(winnersCols, losersCols);
 
     // Define baseSpacing for use throughout the layout
-    const baseSpacing = Math.max(120, matchHeight + 40);
+    const baseSpacing = Math.max(120, matchTotalHeight + 40);
 
     // Winners bracket on the top
     const winnersOffsetX = 40;
@@ -257,8 +267,83 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
   }, [matches, matchHeight]);
 
   // Zoom controls (component scope)
-  const zoomIn = () => setScale(s => Math.min(3, s * 1.1));
-  const zoomOut = () => setScale(s => Math.max(0.3, s / 1.1));
+  const zoomIn = () => smoothZoomTo(Math.min(3, scale * 1.1));
+  const zoomOut = () => smoothZoomTo(Math.max(0.3, scale / 1.1));
+
+  // Smooth pan function with easing
+  const smoothPanTo = (targetX: number, targetY: number, duration: number = 300) => {
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+
+    const startTime = performance.now();
+    const startX = offset.x;
+    const startY = offset.y;
+    const deltaX = targetX - startX;
+    const deltaY = targetY - startY;
+
+    setIsAnimating(true);
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Ease out cubic for smooth deceleration
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+
+      const currentX = startX + deltaX * easeProgress;
+      const currentY = startY + deltaY * easeProgress;
+
+      setOffset({ x: currentX, y: currentY });
+
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        setIsAnimating(false);
+        animationRef.current = null;
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+  };
+
+  // Smooth pan by delta (relative movement)
+  const smoothPanBy = (deltaX: number, deltaY: number, duration: number = 300) => {
+    smoothPanTo(offset.x + deltaX, offset.y + deltaY, duration);
+  };
+
+  // Smooth zoom function with easing
+  const smoothZoomTo = (targetScale: number, duration: number = 200) => {
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+
+    const startTime = performance.now();
+    const startScale = scale;
+    const deltaScale = targetScale - startScale;
+
+    setIsAnimating(true);
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Ease out cubic for smooth deceleration
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+
+      const currentScale = startScale + deltaScale * easeProgress;
+      setScale(currentScale);
+
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        setIsAnimating(false);
+        animationRef.current = null;
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
+  };
 
   // Keyboard shortcuts: arrows to pan, +/- to zoom, 0 to fit, L to toggle legend
   useEffect(() => {
@@ -266,18 +351,27 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
 
     const handler = (e: KeyboardEvent) => {
       const step = e.shiftKey ? 60 : 30;
-      if (e.key === 'ArrowLeft') { setOffset(o => ({ ...o, x: o.x + step })); }
-      else if (e.key === 'ArrowRight') { setOffset(o => ({ ...o, x: o.x - step })); }
-      else if (e.key === 'ArrowUp') { setOffset(o => ({ ...o, y: o.y + step })); }
-      else if (e.key === 'ArrowDown') { setOffset(o => ({ ...o, y: o.y - step })); }
-      else if (e.key === '+' || e.key === '=') { setScale(s => Math.min(3, s * 1.06)); }
-      else if (e.key === '-') { setScale(s => Math.max(0.3, s / 1.06)); }
+      if (e.key === 'ArrowLeft') { smoothPanBy(step, 0, 250); }
+      else if (e.key === 'ArrowRight') { smoothPanBy(-step, 0, 250); }
+      else if (e.key === 'ArrowUp') { smoothPanBy(0, step, 250); }
+      else if (e.key === 'ArrowDown') { smoothPanBy(0, -step, 250); }
+      else if (e.key === '+' || e.key === '=') { smoothZoomTo(Math.min(3, scale * 1.06)); }
+      else if (e.key === '-') { smoothZoomTo(Math.max(0.3, scale / 1.06)); }
       else if (e.key === '0') { zoomToFit(); }
       else if (e.key.toLowerCase() === 'l') { setShowLegend(v => !v); }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [disableKeyboardNavigation]);
+  }, [disableKeyboardNavigation, smoothPanBy, smoothZoomTo, scale]);
+
+  // Cleanup animation on unmount
+  useEffect(() => {
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, []);
 
   // Persist/restore view state per competition
   const compId = useMemo(() => (matches && matches[0] ? (matches[0] as any).competition_id : null), [matches]);
@@ -350,6 +444,7 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
     const delta = -e.deltaY;
     // Gentle zoom factor for smoother control
     const factor = delta > 0 ? 1.03 : 0.97;
+    // Use immediate setScale for responsive wheel scrolling
     setScale(prev => Math.min(3, Math.max(0.3, prev * factor)));
   };
 
@@ -378,13 +473,13 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
   const finalX = winnersOffsetX + maxCols * colWidth + 100;
 
   // Compute section heights and total width for zoom-to-fit and backgrounds
-  const baseSpacing = Math.max(120, matchHeight + 40);
+  const baseSectionSpacing = Math.max(120, matchTotalHeight + 40);
   const computeSectionHeight = (roundsArr: [number, BracketMatch[]][]) => {
     if (roundsArr.length === 0) return 100;
     let maxHeight = 0;
     roundsArr.forEach(([round, matches]) => {
-      const roundSpacing = baseSpacing * Math.pow(2, Math.max(0, (round % 100) - 1));
-      const sectionHeight = matches.length * roundSpacing + matchHeight;
+      const roundSpacing = baseSectionSpacing * Math.pow(2, Math.max(0, (round % 100) - 1));
+      const sectionHeight = matches.length * roundSpacing + matchTotalHeight;
       maxHeight = Math.max(maxHeight, sectionHeight);
     });
     return maxHeight + 80; // padding
@@ -413,7 +508,7 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
       matchPositions.forEach((pos) => {
         const actualY = pos.y + 40; // Account for the 40px offset where matches are rendered
         minY = Math.min(minY, actualY);
-        maxY = Math.max(maxY, actualY + matchHeight);
+        maxY = Math.max(maxY, actualY + matchTotalHeight);
       });
     } else {
       minY = 40;
@@ -426,16 +521,58 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
     const sx = (w - marginX) / Math.max(1, actualContentWidth);
     const sy = (h - marginY) / Math.max(1, actualContentHeight);
     const newScale = Math.max(0.3, Math.min(3, Math.min(sx, sy) * 0.85));
-    setScale(newScale);
 
     const contentWScaled = actualContentWidth * newScale;
     const contentHScaled = actualContentHeight * newScale;
     const minYScaled = minY * newScale;
 
-    setOffset({
-      x: Math.round((w - contentWScaled) / 2),
-      y: Math.round((h - contentHScaled) / 2) - minYScaled
-    });
+    // Create coordinated fit animation that handles both zoom and pan
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+    }
+
+    const startTime = performance.now();
+    const startScale = scale;
+    const startX = offset.x;
+    const startY = offset.y;
+    const deltaScale = newScale - startScale;
+
+    setIsAnimating(true);
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / 500, 1);
+      const easeProgress = 1 - Math.pow(1 - progress, 3);
+
+      // Animate scale
+      const currentScale = startScale + deltaScale * easeProgress;
+      setScale(currentScale);
+
+      // Calculate target position based on current scale
+      const currentContentWScaled = actualContentWidth * currentScale;
+      const currentContentHScaled = actualContentHeight * currentScale;
+      const currentMinYScaled = minY * currentScale;
+
+      const currentTargetX = Math.round((w - currentContentWScaled) / 2);
+      const currentTargetY = Math.round((h - currentContentHScaled) / 2) - currentMinYScaled;
+
+      // Animate position to current target
+      const deltaX = currentTargetX - startX;
+      const deltaY = currentTargetY - startY;
+      const currentX = startX + deltaX * easeProgress;
+      const currentY = startY + deltaY * easeProgress;
+
+      setOffset({ x: currentX, y: currentY });
+
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        setIsAnimating(false);
+        animationRef.current = null;
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(animate);
   };
 
   // Zoom to section utility
@@ -449,13 +586,15 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
     const sx = (w - marginX) / Math.max(1, rectWidth);
     const sy = (h - marginY) / Math.max(1, rectHeight);
     const newScale = Math.max(0.3, Math.min(3, Math.min(sx, sy)));
-    setScale(newScale);
     const scaledWidth = rectWidth * newScale;
     const scaledHeight = rectHeight * newScale;
-    setOffset({
-      x: Math.round((w - scaledWidth) / 2) - Math.round(rectX * newScale),
-      y: Math.round((h - scaledHeight) / 2) - Math.round(20 * newScale) // align with section top y=20
-    });
+
+    const targetX = Math.round((w - scaledWidth) / 2) - Math.round(rectX * newScale);
+    const targetY = Math.round((h - scaledHeight) / 2) - Math.round(20 * newScale); // align with section top y=20
+
+    // Use smooth transitions for both zoom and pan
+    smoothZoomTo(newScale, 400);
+    smoothPanTo(targetX, targetY, 400);
   };
 
   const zoomToWinners = () => zoomToRect(winnersOffsetX - 20, maxCols * colWidth + 40, winnersHeight);
@@ -467,7 +606,13 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
     if (grandRounds.length === 0) return;
     zoomToRect(finalX - 20, colWidth + 40, grandHeight);
   };
-  const resetView = () => { setScale(1); setOffset({ x: 0, y: 0 }); };
+  const resetView = () => { smoothZoomTo(1, 400); smoothPanTo(0, 0, 400); };
+
+  // Expose centerBracket and centerOnFinal functions via ref
+  useImperativeHandle(ref, () => ({
+    centerBracket: zoomToFit,
+    centerOnFinal: zoomToGrand
+  }), []);
 
   // Refit on window resize to keep everything in view
   useEffect(() => {
@@ -535,7 +680,7 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseLeave}
       >
-        <g transform={`translate(${offset.x},${offset.y}) scale(${scale})`}>
+        <g transform={`translate(${offset.x},${offset.y}) scale(${scale})`} className={showWinnerZoom ? 'bracket-winner-zoom' : ''}>
           {/* Section backgrounds */}
           <rect x={winnersOffsetX - 20} y={winnersOffsetY - 20} width={maxCols * colWidth + 40} height={winnersHeight + 40} fill="none" stroke="none" />
           {losersRounds.length > 0 && (
@@ -577,19 +722,34 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                   const isHighlighted = !!highlightTarget && highlightTarget.round === m.round && highlightTarget.position === m.position;
                   const isNewMatch = !m.participant1_id && !m.participant2_id; // Empty match is "new"
                   const isWalkover = m.participant1_id && !m.participant2_id || !m.participant1_id && m.participant2_id;
+                  const hasParticipants = m.participant1_id && m.participant2_id;
+                  const needsWinner = hasParticipants && !m.winner_participant_id && adminMode;
                   return (
                     <g key={m.id} transform={`translate(${pos.x}, ${pos.y + 40})`}>
                       <g>
                         {/* Filled card */}
-                        <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6} fill="rgba(16,16,16,0.8)" className={isHighlighted ? 'boing' : ''} />
+                        <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6} fill="rgba(0,0,0,0.7)" className={isHighlighted ? 'boing' : ''} />
                         {/* Outline draw animation */}
                         <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6}
-                          fill="none" stroke="#60a5fa" strokeWidth="2"
+                          fill="none" stroke={needsWinner ? "#ff6b35" : "#60a5fa"} strokeWidth={needsWinner ? "3" : "2"}
                           strokeDasharray="100" strokeDashoffset="100" pathLength={100}>
                           <animate attributeName="stroke-dashoffset" from="100" to="0" dur="1.2s" begin={`${colIdx * 0.2}s`} fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1" keyTimes="0;1" />
+                          {needsWinner && (
+                            <animate attributeName="stroke" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
+                          )}
                         </rect>
-                        <text x={padX} y={padY + nameFontSize - 2} fill={p1Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>{p1 ? p1.display_name : '—'}</text>
-                        <text x={padX} y={padY + nameFontSize - 2 + lineHeight} fill={p2Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>{p2 ? p2.display_name : '—'}</text>
+                        <text x={padX} y={padY + nameFontSize - 2} fill={p1Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
+                          {p1 ? p1.display_name : '—'}
+                          {needsWinner && p1 && (
+                            <animate attributeName="fill" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
+                          )}
+                        </text>
+                        <text x={padX} y={padY + nameFontSize - 2 + lineHeight} fill={p2Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
+                          {p2 ? p2.display_name : '—'}
+                          {needsWinner && p2 && (
+                            <animate attributeName="fill" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
+                          )}
+                        </text>
                         {winner && (
                           <g>
                             <title>Winner</title>
@@ -597,11 +757,20 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                             <text x={168} y={padY + nameFontSize - 11} fill="white" fontSize={9} textAnchor="middle" style={{ pointerEvents: 'none' }}>Winner</text>
                           </g>
                         )}
+                        {needsWinner && (
+                          <g>
+                            <title>Click a player name to select winner</title>
+                            <text x={100} y={matchHeight + 18} fill="#ff6b35" fontSize={11} fontWeight="bold" textAnchor="middle" style={{ pointerEvents: 'none' }}>
+                              Click player name to pick winner
+                              <animate attributeName="fill" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
+                            </text>
+                          </g>
+                        )}
                         {isWalkover && (
                           <g>
                             <title>Walkover</title>
                             <rect x={160} y={padY + nameFontSize + 6} width={28} height={16} rx={4} ry={4} fill="#00e0a4" stroke="#00ff99" />
-                            <text x={174} y={padY + nameFontSize + 18} fill="#cccccc" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>WO</text>
+                            <text x={174} y={padY + nameFontSize + 18} fill="#000000" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>WO</text>
                           </g>
                         )}
                         {/* Admin click zones */}
@@ -655,19 +824,34 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                   const lineHeight = 30;
                   const isHighlighted = !!highlightTarget && highlightTarget.round === m.round && highlightTarget.position === m.position;
                   const isWalkover = m.participant1_id && !m.participant2_id || !m.participant1_id && m.participant2_id;
+                  const hasParticipants = m.participant1_id && m.participant2_id;
+                  const needsWinner = hasParticipants && !m.winner_participant_id && adminMode;
                   return (
                     <g key={m.id} transform={`translate(${pos.x}, ${pos.y + 40})`}>
                       <g>
                         {/* Filled card */}
-                        <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6} fill="rgba(16,16,16,0.8)" className={isHighlighted ? 'boing' : ''} />
+                        <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6} fill="rgba(0,0,0,0.7)" className={isHighlighted ? 'boing' : ''} />
                         {/* Outline draw animation */}
                         <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6}
-                          fill="none" stroke="#e879f9" strokeWidth="2"
+                          fill="none" stroke={needsWinner ? "#ff6b35" : "#e879f9"} strokeWidth={needsWinner ? "3" : "2"}
                           strokeDasharray="100" strokeDashoffset="100" pathLength={100}>
                           <animate attributeName="stroke-dashoffset" from="100" to="0" dur="1.2s" begin={`${colIdx * 0.2}s`} fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1" keyTimes="0;1" />
+                          {needsWinner && (
+                            <animate attributeName="stroke" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
+                          )}
                         </rect>
-                        <text x={padX} y={padY + nameFontSize - 2} fill={p1Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>{p1 ? p1.display_name : '—'}</text>
-                        <text x={padX} y={padY + nameFontSize - 2 + lineHeight} fill={p2Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>{p2 ? p2.display_name : '—'}</text>
+                        <text x={padX} y={padY + nameFontSize - 2} fill={p1Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
+                          {p1 ? p1.display_name : '—'}
+                          {needsWinner && p1 && (
+                            <animate attributeName="fill" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
+                          )}
+                        </text>
+                        <text x={padX} y={padY + nameFontSize - 2 + lineHeight} fill={p2Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
+                          {p2 ? p2.display_name : '—'}
+                          {needsWinner && p2 && (
+                            <animate attributeName="fill" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
+                          )}
+                        </text>
                         {winner && (
                           <g>
                             <title>Winner</title>
@@ -675,11 +859,20 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                             <text x={168} y={padY + nameFontSize - 11} fill="white" fontSize={9} textAnchor="middle" style={{ pointerEvents: 'none' }}>Winner</text>
                           </g>
                         )}
+                        {needsWinner && (
+                          <g>
+                            <title>Click a player name to select winner</title>
+                            <text x={100} y={matchHeight + 18} fill="#ff6b35" fontSize={11} fontWeight="bold" textAnchor="middle" style={{ pointerEvents: 'none' }}>
+                              Click player name to pick winner
+                              <animate attributeName="fill" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
+                            </text>
+                          </g>
+                        )}
                         {isWalkover && (
                           <g>
                             <title>Walkover</title>
                             <rect x={160} y={padY + nameFontSize + 6} width={28} height={16} rx={4} ry={4} fill="#00e0a4" stroke="#00ff99" />
-                            <text x={174} y={padY + nameFontSize + 18} fill="#cccccc" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>WO</text>
+                            <text x={174} y={padY + nameFontSize + 18} fill="#000000" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>WO</text>
                           </g>
                         )}
                         {adminMode && onPlayerClick && (
@@ -716,19 +909,34 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                 }
                 const padX = 24; const padY = 12; const nameFontSize = 20; const lineHeight = 30;
                 const isWalkover = false; // Grand Final should never be a walkover - it's populated with both champions
+                const hasParticipants = m.participant1_id && m.participant2_id;
+                const needsWinner = hasParticipants && !m.winner_participant_id && adminMode;
                 return (
                   <g key={m.id} transform={`translate(${pos.x}, ${pos.y + 40})`}>
                     <g>
                       {/* Filled card */}
-                      <rect x={0} y={0} width={220} height={matchHeight} rx={8} ry={8} fill="rgba(16,16,0,0.9)" />
+                      <rect x={0} y={0} width={220} height={matchHeight} rx={8} ry={8} fill="rgba(0,0,0,0.7)" />
                       {/* Outline draw animation */}
                       <rect x={0} y={0} width={220} height={matchHeight} rx={8} ry={8}
-                        fill="none" stroke="#FFD700" strokeWidth="2"
+                        fill="none" stroke={needsWinner ? "#ff6b35" : "#FFD700"} strokeWidth={needsWinner ? "4" : "2"}
                         strokeDasharray="100" strokeDashoffset="100" pathLength={100}>
                         <animate attributeName="stroke-dashoffset" from="100" to="0" dur="1.4s" begin={`0s`} fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1" keyTimes="0;1" />
+                        {needsWinner && (
+                          <animate attributeName="stroke" values="#ff6b35;#ffffff;#ff6b35" dur="0.6s" repeatCount="indefinite" />
+                        )}
                       </rect>
-                      <text x={padX} y={padY + nameFontSize - 2} fill={p1Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>{p1 ? p1.display_name : '—'}</text>
-                      <text x={padX} y={padY + nameFontSize - 2 + lineHeight} fill={p2Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>{p2 ? p2.display_name : '—'}</text>
+                      <text x={padX} y={padY + nameFontSize - 2} fill={p1Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
+                        {p1 ? p1.display_name : '—'}
+                        {needsWinner && p1 && (
+                          <animate attributeName="fill" values="#ff6b35;#ffffff;#ff6b35" dur="0.6s" repeatCount="indefinite" />
+                        )}
+                      </text>
+                      <text x={padX} y={padY + nameFontSize - 2 + lineHeight} fill={p2Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
+                        {p2 ? p2.display_name : '—'}
+                        {needsWinner && p2 && (
+                          <animate attributeName="fill" values="#ff6b35;#ffffff;#ff6b35" dur="0.6s" repeatCount="indefinite" />
+                        )}
+                      </text>
                       {winner && (
                         <g>
                           <title>Winner</title>
@@ -736,11 +944,20 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                           <text x={188} y={padY + nameFontSize - 11} fill="white" fontSize={9} textAnchor="middle" style={{ pointerEvents: 'none' }}>Winner</text>
                         </g>
                       )}
+                      {needsWinner && (
+                        <g>
+                          <title>Click a player name to crown champion</title>
+                          <text x={110} y={matchHeight + 18} fill="#ff6b35" fontSize={12} fontWeight="bold" textAnchor="middle" style={{ pointerEvents: 'none' }}>
+                            Click player name to crown champion
+                            <animate attributeName="fill" values="#ff6b35;#ffffff;#ff6b35" dur="0.6s" repeatCount="indefinite" />
+                          </text>
+                        </g>
+                      )}
                       {isWalkover && (
                         <g>
                           <title>Walkover</title>
                           <rect x={180} y={padY + nameFontSize + 6} width={28} height={16} rx={4} ry={4} fill="#00e0a4" stroke="#00ff99" />
-                          <text x={194} y={padY + nameFontSize + 18} fill="#cccccc" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>WO</text>
+                          <text x={194} y={padY + nameFontSize + 18} fill="#000000" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>WO</text>
                         </g>
                       )}
                       {/* Admin click zones */}
@@ -800,8 +1017,8 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                       stroke="#60a5fa"
                       strokeWidth="2"
                       fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                      strokeLinecap="square"
+                      strokeLinejoin="miter"
                       strokeDasharray="100" strokeDashoffset="100" pathLength={100}
                     >
                       <animate attributeName="stroke-dashoffset" from="100" to="0" dur="1.2s" begin={`${colIdx * 0.2 + 0.6}s`} fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1" keyTimes="0;1" />
@@ -844,8 +1061,8 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                       stroke="#e879f9"
                       strokeWidth="2"
                       fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                      strokeLinecap="square"
+                      strokeLinejoin="miter"
                       strokeDasharray="100" strokeDashoffset="100" pathLength={100}
                     >
                       <animate attributeName="stroke-dashoffset" from="100" to="0" dur="1.2s" begin={`${colIdx * 0.2 + 0.6}s`} fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1" keyTimes="0;1" />
@@ -875,9 +1092,9 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
 
               // From winners bracket to grand final on the right
               const x1 = winnersOffsetX + (winnersRounds.length - 1) * colWidth + 200; // Right edge of last winners match
-              const y1 = wPos.centerY;
+              const y1 = wPos.centerY + 40; // Add round offset for proper centering
               const x2 = finalX; // Left edge of GF
-              const y2 = gfPos.centerY;
+              const y2 = gfPos.centerY + 40; // Add round offset for proper centering
 
               // Create path going right then down/up to final
               const midX = x1 + 50;
@@ -890,8 +1107,8 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                   stroke="#60a5fa"
                   strokeWidth="2"
                   fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                  strokeLinecap="square"
+                  strokeLinejoin="miter"
                   strokeDasharray="100" strokeDashoffset="100" pathLength={100}
                 >
                   <animate attributeName="stroke-dashoffset" from="100" to="0" dur="1.4s" begin={`0.8s`} fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1" keyTimes="0;1" />
@@ -924,9 +1141,9 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
 
               // From losers bracket to grand final on the right
               const x1 = losersOffsetX + (losersRounds.length - 1) * colWidth + 200; // Right edge of last losers match
-              const y1 = lPos.centerY;
+              const y1 = lPos.centerY + 40; // Add round offset for proper centering
               const x2 = finalX; // Left edge of GF
-              const y2 = gfPos.centerY;
+              const y2 = gfPos.centerY + 40; // Add round offset for proper centering
 
               // Create path going right then up to final
               const midX = x1 + 50;
@@ -939,8 +1156,8 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
                   stroke="#e879f9"
                   strokeWidth="2"
                   fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                  strokeLinecap="square"
+                  strokeLinejoin="miter"
                   strokeDasharray="100" strokeDashoffset="100" pathLength={100}
                 >
                   <animate attributeName="stroke-dashoffset" from="100" to="0" dur="1.4s" begin={`0.8s`} fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1" keyTimes="0;1" />
@@ -1015,7 +1232,6 @@ const BracketView: React.FC<BracketViewPropsExtra> = ({ matches, participants, a
       </div>
     </div>
   );
-}
-;
+});
 
 export default BracketView;

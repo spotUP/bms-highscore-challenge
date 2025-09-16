@@ -54,6 +54,13 @@ const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = fa
                 <div className="text-gray-300 text-sm mb-2 border-b border-white/20 pb-2">
                   Welcome, {user.email}
                 </div>
+                <Button
+                  variant="ghost"
+                  onClick={() => handleAnimatedNavigation('/')}
+                  className="w-full justify-start text-left"
+                >
+                  Highscores
+                </Button>
                 {!hideBracketsLink && (
                   <Button
                     variant="ghost"

@@ -378,8 +378,9 @@ const UserManagement: React.FC = () => {
                             </Button>
                           )}
                           <Button
-                            variant="destructive"
+                            variant="outline"
                             size="sm"
+                            className="border-red-500 hover:border-red-400 hover:bg-red-500/10"
                             onClick={() => {
                               setUserToDelete(user);
                               setDeleteDialogOpen(true);
@@ -418,7 +419,8 @@ const UserManagement: React.FC = () => {
               Cancel
             </Button>
             <Button
-              variant="destructive"
+              variant="outline"
+              className="border-red-500 hover:border-red-400 hover:bg-red-500/10"
               onClick={() => userToDelete && deleteUser(userToDelete.id)}
             >
               Delete

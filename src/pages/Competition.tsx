@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useBrackets, Tournament, TournamentPlayer, TournamentMatch } from '@/contexts/BracketContext';
-import BracketView from '@/components/BracketView';
+import BracketView, { BracketViewRef } from '@/components/BracketView';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -12,6 +12,13 @@ import PerformanceModeToggle from '@/components/PerformanceModeToggle';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import AdvancedConfetti from '@/components/AdvancedConfetti';
 import { createPortal } from 'react-dom';
+import { createClient } from '@supabase/supabase-js';
+import { toast } from '@/hooks/use-toast';
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 // Helper function to check if tournament is complete - SAME LOGIC AS BracketAdmin
 const checkTournamentComplete = (matches: TournamentMatch[], bracketType: 'single' | 'double'): boolean => {
@@ -124,6 +131,7 @@ const Competition: React.FC = () => {
   const [winnerName, setWinnerName] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [bracketZoomAnimation, setBracketZoomAnimation] = useState(false);
+  const bracketViewRef = useRef<BracketViewRef>(null);
 
   // Update clock every second
   useEffect(() => {
@@ -134,10 +142,39 @@ const Competition: React.FC = () => {
   // Handle URL parameter for specific tournament
   useEffect(() => {
     const tournamentId = searchParams.get('tournament');
-    if (tournamentId && tournaments.length > 0) {
-      const tournament = tournaments.find(t => t.id === tournamentId);
-      if (tournament) {
-        setSelected(tournament);
+    if (tournamentId) {
+      // If a specific tournament ID is provided, try to find it or create a placeholder
+      if (tournaments.length > 0) {
+        const tournament = tournaments.find(t => t.id === tournamentId);
+        if (tournament) {
+          setSelected(tournament);
+        } else {
+          // Tournament not found in list, create a placeholder to load it directly
+          console.log('🔴 Competition: Tournament not found in list, creating placeholder for ID:', tournamentId);
+          setSelected({
+            id: tournamentId,
+            name: 'Loading Tournament...',
+            bracket_type: 'double',
+            status: 'active',
+            is_public: true,
+            created_at: '',
+            updated_at: '',
+            created_by: null
+          });
+        }
+      } else {
+        // No tournaments loaded yet, create placeholder
+        console.log('🔴 Competition: No tournaments loaded, creating placeholder for ID:', tournamentId);
+        setSelected({
+          id: tournamentId,
+          name: 'Loading Tournament...',
+          bracket_type: 'double',
+          status: 'active',
+          is_public: true,
+          created_at: '',
+          updated_at: '',
+          created_by: null
+        });
       }
     } else if (tournaments.length > 0 && !selected) {
       // Default to first tournament if none specified
@@ -164,33 +201,248 @@ const Competition: React.FC = () => {
     load();
   }, [selected, getTournamentData]);
 
-  const handleReportWinner = async (matchId: string, winnerId: string) => {
-    const success = await reportWinner(matchId, winnerId);
-    if (success && selected) {
-      // Reload tournament data
-      const data = await getTournamentData(selected.id);
-      if (data) {
-        setParticipants(data.players);
-        setMatches(data.matches);
+  // Real-time subscriptions + polling backup for live updates
+  useEffect(() => {
+    if (!selected) {
+      console.log('🔴 Competition: No selected tournament, skipping subscriptions');
+      return;
+    }
 
-        // Check if tournament is actually complete using proper logic
-        const isTournamentComplete = checkTournamentComplete(data.matches, selected?.bracket_type || 'single');
+    console.log('🔴 Competition: Setting up real-time subscriptions + polling for tournament:', selected.id);
+    console.log('🔴 Competition: Supabase client available:', !!supabase);
 
-        if (isTournamentComplete) {
-          const winner = getTournamentWinner(data.matches, data.players);
-          if (winner) {
-            console.log('Tournament completed! Winner:', winner.name);
-            // Start bracket zoom animation before showing the modal
-            setBracketZoomAnimation(true);
-            setTimeout(() => {
-              setBracketZoomAnimation(false);
-              setWinnerName(winner.name);
-              setWinnerOpen(true);
-              setShowConfetti(true);
-            }, 2000); // 2 seconds for the zoom animation
+    // Backup polling mechanism in case real-time subscriptions don't work
+    let pollInterval: NodeJS.Timeout | null = null;
+    let lastKnownMatchCount = matches.length;
+
+    const startPolling = () => {
+      console.log('🔴 Competition: Starting polling backup (every 3 seconds)');
+      pollInterval = setInterval(async () => {
+        try {
+          const data = await getTournamentData(selected.id);
+
+          // Only update if something actually changed (to avoid unnecessary re-renders)
+          const hasChanges = JSON.stringify(data.matches) !== JSON.stringify(matches) ||
+                            JSON.stringify(data.players) !== JSON.stringify(participants);
+
+          if (hasChanges) {
+            console.log('🔴 Competition: Polling detected changes, updating...');
+            setMatches(data.matches);
+            setParticipants(data.players);
+          }
+        } catch (error) {
+          console.error('🔴 Competition: Polling error:', error);
+        }
+      }, 3000); // Poll every 3 seconds
+    };
+
+    // Start polling immediately
+    startPolling();
+
+    // Subscribe to bracket matches changes
+    // Try without tournament filter first to see if filtering is the issue
+    const channelName = `bracket_matches_global_${selected.id}`;
+    console.log('🔴 Competition: Creating subscription channel:', channelName);
+
+    let matchesSubscription;
+    try {
+      matchesSubscription = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'bracket_matches',
+            // Remove filter to test if that's the issue
+          },
+          async (payload) => {
+          console.log('🔴 Competition: Bracket match updated:', payload);
+
+          // Filter to only handle changes for our tournament
+          if (payload.new && payload.new.tournament_id !== selected.id) {
+            console.log('🔴 Competition: Ignoring match update for different tournament:', payload.new.tournament_id);
+            return;
+          }
+
+          // Clear any fallback timer since we got the real-time update
+          if ((window as any).__competitionFallbackTimer) {
+            clearTimeout((window as any).__competitionFallbackTimer);
+            (window as any).__competitionFallbackTimer = null;
+          }
+
+          // Reload tournament data when matches change
+          try {
+            const data = await getTournamentData(selected.id);
+            setMatches(data.matches);
+
+            // Check if tournament is complete after match update
+            const isTournamentComplete = checkTournamentComplete(data.matches, selected.bracket_type || 'single');
+            if (isTournamentComplete) {
+              const winner = getTournamentWinner(data.matches, data.players);
+              if (winner) {
+                console.log('🔴 Competition: Tournament completed via subscription! Winner:', winner.name);
+                // Center on final match first, then start zoom animation
+                bracketViewRef.current?.centerOnFinal();
+
+                // Small delay to let centering finish, then start zoom animation
+                setTimeout(() => {
+                  setBracketZoomAnimation(true);
+                  setTimeout(() => {
+                    setBracketZoomAnimation(false);
+                    setWinnerName(winner.name);
+                    setWinnerOpen(true);
+                    setShowConfetti(true);
+                  }, 2000); // 2 seconds for the zoom animation
+                }, 200); // 200ms delay for centering
+              }
+            }
+          } catch (error) {
+            console.error('Failed to reload matches:', error);
           }
         }
+      )
+        .subscribe((status) => {
+          console.log('🔴 Competition: Matches subscription status:', status);
+        });
+    } catch (error) {
+      console.error('🔴 Competition: Failed to create matches subscription:', error);
+    }
+
+    // Subscribe to bracket players changes
+    const playersSubscription = supabase
+      .channel(`bracket_players_${selected.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bracket_players',
+          filter: `tournament_id=eq.${selected.id}`,
+        },
+        async (payload) => {
+          console.log('🔴 Competition: Bracket player updated:', payload);
+          // Reload tournament data when players change
+          try {
+            const data = await getTournamentData(selected.id);
+            setParticipants(data.players);
+          } catch (error) {
+            console.error('Failed to reload players:', error);
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscribe to tournament status changes
+    const tournamentSubscription = supabase
+      .channel(`bracket_tournaments_${selected.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'bracket_tournaments',
+          filter: `id=eq.${selected.id}`,
+        },
+        async (payload) => {
+          console.log('🔴 Competition: Tournament updated:', payload);
+          // Update tournament status in local state
+          if (payload.new && payload.new.status) {
+            setSelected(prev => prev ? { ...prev, status: payload.new.status } : prev);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log('🔴 Competition: Cleaning up subscriptions and polling');
+      if (pollInterval) clearInterval(pollInterval);
+      if (matchesSubscription) matchesSubscription.unsubscribe();
+      playersSubscription.unsubscribe();
+      tournamentSubscription.unsubscribe();
+    };
+  }, [selected, getTournamentData, matches, participants]);
+
+  const handleReportWinner = async (matchId: string, winnerId: string) => {
+    console.log('🔴 Competition: Reporting winner (optimistic):', { matchId, winnerId });
+
+    // Store original matches for potential rollback
+    const originalMatches = [...matches];
+
+    // Optimistic update: immediately update the match in local state
+    const optimisticMatches = matches.map(match => {
+      if (match.id === matchId) {
+        console.log('🔴 Competition: Optimistically updating match:', matchId, 'winner:', winnerId);
+        return {
+          ...match,
+          winner_participant_id: winnerId,
+          status: 'completed' as const
+        };
       }
+      return match;
+    });
+
+    // Immediately update UI
+    setMatches(optimisticMatches);
+
+    try {
+      // Now perform the actual database update in background
+      const success = await reportWinner(matchId, winnerId);
+      console.log('🔴 Competition: Background report winner result:', success);
+
+      if (!success) {
+        // Rollback optimistic update on failure
+        console.log('🔴 Competition: Rolling back optimistic update');
+        setMatches(originalMatches);
+        toast({
+          title: "Error",
+          description: "Failed to report winner. Please try again.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      if (selected) {
+        // Get fresh data to ensure we have all updates (like auto-advancement)
+        console.log('🔴 Competition: Getting fresh data after successful report...');
+        try {
+          const data = await getTournamentData(selected.id);
+          setMatches(data.matches);
+          setParticipants(data.players);
+
+          // Check if tournament is complete after match update
+          const isTournamentComplete = checkTournamentComplete(data.matches, selected.bracket_type || 'single');
+          if (isTournamentComplete) {
+            const winner = getTournamentWinner(data.matches, data.players);
+            if (winner) {
+              console.log('🔴 Competition: Tournament completed! Winner:', winner.name);
+              // Center on final match first, then start zoom animation
+              bracketViewRef.current?.centerOnFinal();
+
+              // Small delay to let centering finish, then start zoom animation
+              setTimeout(() => {
+                setBracketZoomAnimation(true);
+                setTimeout(() => {
+                  setBracketZoomAnimation(false);
+                  setWinnerName(winner.name);
+                  setWinnerOpen(true);
+                  setShowConfetti(true);
+                }, 2000); // 2 seconds for the zoom animation
+              }, 200); // 200ms delay for centering
+            }
+          }
+        } catch (error) {
+          console.error('Failed to refresh after winner report:', error);
+        }
+      }
+    } catch (error) {
+      // Handle validation errors and other failures
+      console.error('Error reporting winner:', error);
+      toast({
+        title: "Cannot advance",
+        description: error instanceof Error ? error.message : "An error occurred while reporting the winner.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -274,6 +526,7 @@ const Competition: React.FC = () => {
           </div>
         ) : (
           <BracketView
+            ref={bracketViewRef}
             matches={bracketMatches}
             participants={participantMap}
             adminMode={!!user}
@@ -316,9 +569,10 @@ const Competition: React.FC = () => {
                 onClick={() => {
                   setWinnerOpen(false);
                   setShowConfetti(false);
+                  navigate('/admin/brackets');
                 }}
               >
-                Close
+                OK
               </Button>
             </div>
           </div>

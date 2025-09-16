@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import misterGames from '@/data/mister-games.json';
@@ -13,6 +15,7 @@ interface RandomizeGamesProps {
 const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [excludeUsedGames, setExcludeUsedGames] = useState(true);
   const { toast } = useToast();
 
   const handleRandomizeGames = async () => {
@@ -46,37 +49,52 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
         return;
       }
       
-      // Get list of previously used games from competition history
-      const { data: previousGames, error: previousGamesError } = await supabase
-        .from('competition_games')
-        .select('game_name');
-      
-      if (previousGamesError) {
-        console.error('Error fetching previous games:', previousGamesError);
-        toast({
-          title: "Error",
-          description: `Failed to fetch previous games: ${previousGamesError.message}`,
-          variant: "destructive",
-        });
-        return;
+      let availableGames = misterGames;
+
+      // Only exclude used games if the switch is enabled
+      if (excludeUsedGames) {
+        // Get list of previously used games from competition history
+        const { data: previousGames, error: previousGamesError } = await supabase
+          .from('competition_games')
+          .select('game_name');
+
+        if (previousGamesError) {
+          console.error('Error fetching previous games:', previousGamesError);
+          toast({
+            title: "Error",
+            description: `Failed to fetch previous games: ${previousGamesError.message}`,
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Create a set of previously used game names for efficient lookup
+        const usedGameNames = new Set(previousGames?.map(g => g.game_name) || []);
+
+        // Filter out previously used games from the MiSTer games list
+        availableGames = misterGames.filter(game => !usedGameNames.has(game.name));
+
+        // Check if we have enough games available
+        if (availableGames.length < 5) {
+          toast({
+            title: "Not Enough Games Available",
+            description: `Only ${availableGames.length} games haven't been used in previous competitions. Need at least 5 games to randomize. Try disabling "Exclude previously used games" option.`,
+            variant: "destructive",
+          });
+          return;
+        }
       }
-      
-      // Create a set of previously used game names for efficient lookup
-      const usedGameNames = new Set(previousGames?.map(g => g.game_name) || []);
-      
-      // Filter out previously used games from the MiSTer games list
-      const availableGames = misterGames.filter(game => !usedGameNames.has(game.name));
-      
+
       // Check if we have enough games available
       if (availableGames.length < 5) {
         toast({
           title: "Not Enough Games Available",
-          description: `Only ${availableGames.length} games haven't been used in previous competitions. Need at least 5 games to randomize.`,
+          description: `Only ${availableGames.length} games available in the MiSTer collection. Need at least 5 games to randomize.`,
           variant: "destructive",
         });
         return;
       }
-      
+
       // Select 5 random games from the available games list
       const shuffled = [...availableGames].sort(() => 0.5 - Math.random());
       const selectedGames = shuffled.slice(0, 5);
@@ -184,13 +202,15 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
       
       // Success!
       const newGameNames = selectedGames.map(game => game.name);
-      const localLogosCount = selectedGames.filter(game => 
+      const localLogosCount = selectedGames.filter(game =>
         gameLogoMapping[game.name]
       ).length;
-      
+
+      const exclusionText = excludeUsedGames ? " (excluding previously used games)" : " (including all games)";
+
       toast({
         title: "Games Randomized!",
-        description: `New games selected: ${newGameNames.join(', ')}. Use Competition Manager to start the competition.`,
+        description: `New games selected${exclusionText}: ${newGameNames.join(', ')}. Use Competition Manager to start the competition.`,
       });
 
       // Games are now ready for competition - use Competition Manager to start
@@ -227,10 +247,28 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
         
         <div className="space-y-4 py-4">
           <p className="text-gray-300">
-            This will randomly select 5 new games from the MiSTer arcade cores collection 
-            and replace the current games in your highscore challenge. Games that have been used in previous competitions will be excluded. High-quality local game logos will be used when available.
+            This will randomly select 5 new games from the MiSTer arcade cores collection
+            and replace the current games in your highscore challenge. High-quality local game logos will be used when available.
           </p>
-          
+
+          <div className="flex items-center justify-between space-x-2">
+            <Label htmlFor="exclude-used-games" className="text-sm font-medium text-gray-300">
+              Exclude previously used games
+            </Label>
+            <Switch
+              id="exclude-used-games"
+              checked={excludeUsedGames}
+              onCheckedChange={setExcludeUsedGames}
+            />
+          </div>
+
+          <p className="text-gray-400 text-xs">
+            {excludeUsedGames
+              ? "Only games that haven't been used in previous competitions will be selected."
+              : "All games from the collection are available for selection, including previously used ones."
+            }
+          </p>
+
           <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-3">
             <p className="text-yellow-200 text-sm font-semibold">
               ⚠️ Warning: This will clear all existing scores!

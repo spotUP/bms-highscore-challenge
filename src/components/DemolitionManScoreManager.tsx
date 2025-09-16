@@ -376,7 +376,7 @@ const DemolitionManScoreManager = () => {
                     </Button>
                     <Button
                       size="sm"
-                      variant="destructive"
+                      variant="outline"
                       onClick={() => handleDeleteScore(score.id)}
                       className="bg-red-800 hover:bg-red-700"
                     >
@@ -404,7 +404,7 @@ const DemolitionManScoreManager = () => {
       description="Are you sure you want to delete this Standing Competition score? This action cannot be undone."
       confirmText="Delete Score"
       cancelText="Cancel"
-      variant="destructive"
+      variant="outline"
       onConfirm={confirmDeleteScore}
     />
     </>

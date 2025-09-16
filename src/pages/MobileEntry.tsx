@@ -9,6 +9,7 @@ import { useAchievements } from "@/hooks/useAchievements";
 import { getGameLogoUrl } from "@/lib/utils";
 import PlayerInsult from "@/components/PlayerInsult";
 import { useTournament } from "@/contexts/TournamentContext";
+import { reportSubmissionFailure } from "@/utils/submissionMonitoring";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -122,8 +123,8 @@ const MobileEntry = () => {
       return;
     }
 
-    if (name.trim().length > 50) {
-      toast.error("Player name must be 50 characters or less");
+    if (name.trim().length > 16) {
+      toast.error("Player name must be 16 characters or less");
       return;
     }
 
@@ -141,6 +142,9 @@ const MobileEntry = () => {
     }
 
     setIsSubmitting(true);
+
+    // Get current user for user_id field
+    const { data: { user } } = await supabase.auth.getUser();
 
     try {
       // First check if player already has a score for this game
@@ -169,7 +173,8 @@ const MobileEntry = () => {
           .from('scores')
           .update({
             score: scoreValue,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            user_id: user?.id || null
           })
           .eq('id', existingScore.id);
 
@@ -204,7 +209,8 @@ const MobileEntry = () => {
             player_name: name.toUpperCase(),
             score: scoreValue,
             game_id: game.id,
-            tournament_id: currentTournament?.id
+            tournament_id: currentTournament?.id,
+            user_id: user?.id || null
           });
 
         if (error) throw error;
@@ -270,8 +276,19 @@ const MobileEntry = () => {
         checkForNewAchievements(name);
       }, 1000);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error submitting score:', error);
+
+      // Report submission failure for monitoring
+      await reportSubmissionFailure({
+        playerName: name,
+        score: scoreValue,
+        gameName: game?.name || 'Unknown Game',
+        error: error.message || 'Unknown error',
+        userAgent: navigator.userAgent,
+        location: 'mobile'
+      });
+
       toast.error("Failed to submit score. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -323,15 +340,15 @@ const MobileEntry = () => {
           <div className="space-y-4">
             <Input
               type="text"
-              placeholder="Player Name (max 50 characters)"
+              placeholder="Player Name (max 16 characters)"
               value={name}
               onChange={(e) => {
                 const value = e.target.value;
-                if (value.length <= 50) {
+                if (value.length <= 16) {
                   setName(value);
                 }
               }}
-              maxLength={50}
+              maxLength={16}
               className="bg-black/30 border-arcade-neonCyan text-white text-center text-lg"
               autoFocus
             />

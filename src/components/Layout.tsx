@@ -13,6 +13,7 @@ interface LayoutProps {
     hideTournamentSelector?: boolean;
     hideSpinButton?: boolean;
     hideStatistics?: boolean;
+    hideFullscreenButton?: boolean;
     centerNav?: boolean;
     rightActions?: React.ReactNode;
   };

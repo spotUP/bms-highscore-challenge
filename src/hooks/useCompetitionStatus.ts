@@ -24,13 +24,18 @@ export function useCompetitionStatus(): CompetitionStatus {
   const [isLocked, setIsLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasInitialized, setHasInitialized] = useState(false);
 
   useEffect(() => {
     let mounted = true;
+    let timeoutId: NodeJS.Timeout;
 
     const fetchCompetitionStatus = async () => {
       try {
-        setLoading(true);
+        // Only show loading state if we haven't initialized yet
+        if (!hasInitialized) {
+          setLoading(true);
+        }
         setError(null);
         console.log('🏆 CompetitionStatus: Fetching status...');
 
@@ -63,18 +68,23 @@ export function useCompetitionStatus(): CompetitionStatus {
         }
 
         if (mounted) {
-          setCompetition(competitionData);
-          // If no active competition, scores should be locked regardless of tournament setting
-          setIsLocked(!competitionData || competitionData.status !== 'active' || tournamentLocked);
+          // Debounce updates to prevent flickering during rapid changes
+          timeoutId = setTimeout(() => {
+            if (mounted) {
+              setCompetition(competitionData);
+              // If no active competition, scores should be locked regardless of tournament setting
+              setIsLocked(!competitionData || competitionData.status !== 'active' || tournamentLocked);
+              setLoading(false);
+              setHasInitialized(true);
+            }
+          }, hasInitialized ? 100 : 0); // Small delay for subsequent updates
         }
       } catch (err) {
         console.error('Error in fetchCompetitionStatus:', err);
         if (mounted) {
           setError('Failed to load status');
-        }
-      } finally {
-        if (mounted) {
           setLoading(false);
+          setHasInitialized(true);
         }
       }
     };
@@ -83,12 +93,16 @@ export function useCompetitionStatus(): CompetitionStatus {
       fetchCompetitionStatus();
     } else {
       setLoading(false);
+      setHasInitialized(true);
     }
 
     return () => {
       mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     };
-  }, [currentTournament]);
+  }, [currentTournament, hasInitialized]);
 
   return {
     competition,

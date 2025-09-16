@@ -310,6 +310,11 @@ export const useTournamentGameData = () => {
   // Debounced refetch to avoid burst updates from realtime events
   const debouncedRef = useRef<number | null>(null);
   const debouncedRefetch = useCallback(() => {
+    // Skip updates during tests to prevent animations
+    if (window.localStorage.getItem('suppressAnimations') === 'true') {
+      return;
+    }
+
     if (debouncedRef.current) {
       clearTimeout(debouncedRef.current);
     }
@@ -393,6 +398,10 @@ export const useTournamentGameData = () => {
     if (!currentTournament) return;
 
     const interval = setInterval(() => {
+      // Skip periodic refresh during tests to prevent animations
+      if (window.localStorage.getItem('suppressAnimations') === 'true') {
+        return;
+      }
       loadAllData();
     }, refreshInterval);
 

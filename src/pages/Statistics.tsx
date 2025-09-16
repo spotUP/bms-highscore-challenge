@@ -330,13 +330,13 @@ const Statistics: React.FC<StatisticsProps> = ({ isExiting = false }) => {
 
   // Animation state - only animate once on initial load
   const [hasAnimated, setHasAnimated] = useState(false);
-  const shouldAnimate = !loading && !dataLoading;
+  const shouldAnimate = !hasAnimated && !loading && !dataLoading;
 
   useEffect(() => {
-    if (shouldAnimate && !hasAnimated) {
+    if (!hasAnimated && !loading && !dataLoading) {
       setHasAnimated(true);
     }
-  }, [shouldAnimate, hasAnimated]);
+  }, [hasAnimated, loading, dataLoading]);
 
   // Deterministic Tron edge runner style per card (desync animation)
   const getRunnerStyle = (seed: string) => {

@@ -9,13 +9,15 @@
     "prebuild": "tsx scripts/check-env.ts",
     "build": "vite build",
     "build:dev": "vite build --mode development",
+    "postbuild": "tsx scripts/deploy-tests.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . || true",
     "preview": "vite preview",
     "dedupe-achievements": "tsx scripts/remove-duplicate-achievements.ts",
     "apply-migration": "tsx scripts/apply-migration.ts",
     "check-env": "tsx scripts/check-env.ts",
-    "verify-storage": "tsx scripts/verify-storage.ts"
+    "verify-storage": "tsx scripts/verify-storage.ts",
+    "deploy-tests": "tsx scripts/deploy-tests.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
