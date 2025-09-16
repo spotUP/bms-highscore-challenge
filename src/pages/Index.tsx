@@ -123,23 +123,55 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
     const isPi5 = isARM && userAgent.includes('linux');
     const needsFallback = isFirefoxLinux || isARM || isPi5;
 
-    console.log('Pi5 Score Refresh Detection:', {
+    const handleUpdate = () => {
+      // Skip updates during tests to prevent animations
+      if (window.localStorage.getItem('suppressAnimations') === 'true') {
+        console.log('🚫 Pi5: Skipping update due to suppressAnimations');
+        return;
+      }
+      console.log('🔄 Pi5: Refreshing scores at', new Date().toLocaleTimeString());
+      console.log('🔄 Pi5: Calling refetch function...', typeof refetch);
+      lastUpdateTime = Date.now();
+      try {
+        refetch();
+        console.log('✅ Pi5: Refetch called successfully');
+      } catch (error) {
+        console.error('❌ Pi5: Error calling refetch:', error);
+      }
+    };
+
+    console.log('🔍 Pi5 Score Refresh Detection:', {
+      fullUserAgent: userAgent,
       userAgent: userAgent.substring(0, 50) + '...',
       isFirefoxLinux,
       isARM,
       isPi5,
-      needsFallback
+      needsFallback,
+      platform: navigator.platform,
+      hardwareConcurrency: navigator.hardwareConcurrency,
+      language: navigator.language,
+      cookieEnabled: navigator.cookieEnabled
     });
 
-    const handleUpdate = () => {
-      // Skip updates during tests to prevent animations
-      if (window.localStorage.getItem('suppressAnimations') === 'true') {
-        return;
-      }
-      console.log('🔄 Pi5: Refreshing scores at', new Date().toLocaleTimeString());
-      lastUpdateTime = Date.now();
-      refetch();
-    };
+    // For Pi5 or any ARM Linux device, skip WebSocket entirely and go straight to aggressive polling
+    if (isPi5 || (isARM && userAgent.includes('linux'))) {
+      console.log('🔥 Pi5/ARM DETECTED: Bypassing WebSocket, using FORCE POLLING mode', {
+        isPi5,
+        isARM,
+        isLinux: userAgent.includes('linux')
+      });
+
+      // Immediate aggressive polling for Pi 5 - no WebSocket attempts
+      const aggressiveInterval = setInterval(() => {
+        console.log('🔥 Pi5 FORCE POLL: Refreshing scores at', new Date().toLocaleTimeString());
+        handleUpdate();
+      }, 3000); // Every 3 seconds - very aggressive
+
+      return () => {
+        console.log('🔥 Pi5: Cleaning up force polling interval');
+        clearInterval(aggressiveInterval);
+      };
+    }
 
     try {
       channel = supabase
