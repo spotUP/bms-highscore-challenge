@@ -301,6 +301,10 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
           <div className="text-sm mt-2 bg-black/30 p-2 rounded">
             <div>📊 Poll Count: {pollCount}</div>
             <div>⏰ Last Poll: {lastPollTime ? lastPollTime.toLocaleTimeString() : 'Never'}</div>
+            <div className={suppressAnimations ? 'text-red-300' : 'text-green-300'}>
+              🚫 Suppress Animations: {suppressAnimations.toString()}
+              {suppressAnimations && ' ← BLOCKING UPDATES!'}
+            </div>
           </div>
           <div className="mt-3">
             <button
@@ -317,9 +321,20 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                 console.log('🧪 PI5 PAGE RELOAD TEST: Full page reload...');
                 window.location.reload();
               }}
-              className="bg-blue-500 text-white px-4 py-2 rounded font-bold hover:bg-blue-400"
+              className="bg-blue-500 text-white px-4 py-2 rounded font-bold hover:bg-blue-400 mr-3"
             >
               🔄 RELOAD PAGE
+            </button>
+            <button
+              onClick={() => {
+                console.log('🧪 PI5 CLEAR SUPPRESS: Clearing suppressAnimations flag...');
+                localStorage.removeItem('suppressAnimations');
+                console.log('✅ PI5 CLEAR SUPPRESS: Flag cleared, reloading page...');
+                window.location.reload();
+              }}
+              className="bg-green-500 text-white px-4 py-2 rounded font-bold hover:bg-green-400"
+            >
+              🧹 CLEAR SUPPRESS FLAG
             </button>
           </div>
         </div>
