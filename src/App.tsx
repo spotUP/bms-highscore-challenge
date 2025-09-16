@@ -17,6 +17,7 @@ import TournamentAccessGuard from "@/components/TournamentAccessGuard";
 import { ScoreNotificationsListener } from "@/components/ScoreNotification";
 import Layout from "@/components/Layout";
 import Index from "./pages/Index";
+import PerformanceMonitor from "@/components/PerformanceMonitor";
 import "./styles/performance.css";
 import { BracketProvider } from "@/contexts/BracketContext";
 
@@ -101,6 +102,8 @@ const App = () => (
             <Sonner />
             {/* Add Score Notifications Listener */}
             <ScoreNotificationsListener />
+            {/* Performance Monitor (Ctrl+Shift+P to toggle) */}
+            <PerformanceMonitor />
             <BrowserRouter
               future={{
                 v7_startTransition: true,
