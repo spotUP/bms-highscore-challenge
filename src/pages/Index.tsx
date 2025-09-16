@@ -11,6 +11,7 @@ import QRCodeDisplay from "@/components/QRCodeDisplay";
 import DynamicOverallLeaderboard from "@/components/DynamicOverallLeaderboard";
 import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import TournamentDropdown from "@/components/TournamentDropdown";
+import ManualRefreshButton from "@/components/ManualRefreshButton";
 import { useTournament } from "@/contexts/TournamentContext";
 import { dlog } from "@/lib/debug";
 import CompetitionStatus from "@/components/CompetitionStatus";
@@ -229,7 +230,10 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
           <div className={`${isMobile ? 'order-1' : 'h-full lg:col-span-4'} overflow-visible`}>
             {/* Competition Status Subheader */}
             <div className={`mb-4 status-bar-stable ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? '0ms' : '100ms')}}>
-              <CompetitionStatus />
+              <div className="flex items-center justify-between">
+                <CompetitionStatus />
+                <ManualRefreshButton onRefresh={refetch} />
+              </div>
             </div>
 
             <div className={`${isMobile ? 'flex flex-col space-y-6' : 'flex gap-3 h-full'}`} style={{overflow: 'visible', position: 'relative'}}>
