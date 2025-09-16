@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { usePerformanceMode } from '@/hooks/usePerformanceMode';
 import { useTournament } from '@/contexts/TournamentContext';
+import { usePi5Polling } from '@/hooks/usePi5Polling';
 import { dlog } from '@/lib/debug';
 
 interface Game {
@@ -304,8 +305,23 @@ export const useTournamentGameData = () => {
 
   // Refresh function
   const refetch = useCallback(() => {
+    console.log('useTournamentGameData: Refetch called');
     loadAllData();
   }, [loadAllData]);
+
+  // Pi 5 aggressive polling for Firefox compatibility
+  const { forcePoll, isPi5 } = usePi5Polling({
+    enabled: !!currentTournament,
+    interval: 8000, // Poll every 8 seconds on Pi 5 with Firefox
+    onPoll: () => {
+      console.log('Pi5 Polling: Force refreshing tournament data');
+      refetch();
+    },
+    onVisibilityChange: () => {
+      console.log('Pi5 Polling: Tab became visible, refreshing data');
+      refetch();
+    }
+  });
 
   // Debounced refetch to avoid burst updates from realtime events
   const debouncedRef = useRef<number | null>(null);
