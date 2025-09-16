@@ -107,33 +107,81 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   }, [refetch]);
 
 
-  // Realtime: auto-refresh when new score submissions are recorded for current tournament
+  // Enhanced realtime with fallback polling for Raspberry Pi/Firefox
   useEffect(() => {
     if (!currentTournament?.id) return;
 
-    const channel = supabase
-      .channel('index-score-subscriptions')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'score_submissions',
-          filter: `tournament_id=eq.${currentTournament.id}`,
-        },
-        () => {
-          // Skip updates during tests to prevent animations
-          if (window.localStorage.getItem('suppressAnimations') === 'true') {
-            return;
+    let channel: any;
+    let fallbackInterval: NodeJS.Timeout;
+    let lastUpdateTime = Date.now();
+
+    // Check if we're on a potentially problematic setup
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isFirefoxLinux = userAgent.includes('firefox') && userAgent.includes('linux');
+    const isARM = userAgent.includes('aarch64') || userAgent.includes('armv');
+    const needsFallback = isFirefoxLinux || isARM;
+
+    const handleUpdate = () => {
+      // Skip updates during tests to prevent animations
+      if (window.localStorage.getItem('suppressAnimations') === 'true') {
+        return;
+      }
+      lastUpdateTime = Date.now();
+      refetch();
+    };
+
+    try {
+      channel = supabase
+        .channel('index-score-subscriptions')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'score_submissions',
+            filter: `tournament_id=eq.${currentTournament.id}`,
+          },
+          handleUpdate
+        )
+        .subscribe((status) => {
+          console.log('Score subscription status:', status);
+
+          // If subscription fails or we're on a problematic setup, use polling
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || needsFallback) {
+            console.log('Setting up fallback polling for score updates');
+            if (fallbackInterval) clearInterval(fallbackInterval);
+            fallbackInterval = setInterval(() => {
+              // Only poll if no recent updates from real-time
+              if (Date.now() - lastUpdateTime > 15000) {
+                handleUpdate();
+              }
+            }, 10000); // Poll every 10 seconds as fallback
           }
-          // Debounce/lightweight: refetch scores immediately on event
-          refetch();
-        }
-      )
-      .subscribe();
+        });
+    } catch (error) {
+      console.error('Error setting up real-time subscription:', error);
+      // Fallback to polling if subscription completely fails
+      fallbackInterval = setInterval(handleUpdate, 15000);
+    }
+
+    // Always set up a less frequent fallback polling as safety net
+    const safetyInterval = setInterval(() => {
+      if (Date.now() - lastUpdateTime > 30000) {
+        console.log('Safety net polling triggered');
+        handleUpdate();
+      }
+    }, 30000);
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch (error) {
+          console.error('Error removing channel:', error);
+        }
+      }
+      if (fallbackInterval) clearInterval(fallbackInterval);
+      if (safetyInterval) clearInterval(safetyInterval);
     };
   }, [currentTournament?.id, refetch]);
 
