@@ -280,14 +280,18 @@ export const useTournamentGameData = () => {
 
   // Load all data
   const loadAllData = useCallback(async () => {
+    console.log('📊 useTournamentGameData: loadAllData called');
     if (!currentTournament) {
+      console.log('📊 useTournamentGameData: No tournament, setting loading false');
       setState(prev => ({ ...prev, loading: false }));
       return;
     }
 
+    console.log('📊 useTournamentGameData: Setting loading true for tournament:', currentTournament.id);
     setState(prev => ({ ...prev, loading: true, error: null }));
 
     try {
+      console.log('📊 useTournamentGameData: Starting data load operations...');
       await Promise.all([
         loadGames(),
         loadScores(),
@@ -295,17 +299,21 @@ export const useTournamentGameData = () => {
         loadAchievementHunters(),
         loadDemolitionManScores(),
       ]);
+      console.log('✅ useTournamentGameData: All data loaded successfully');
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('❌ useTournamentGameData: Error loading data:', error);
       setState(prev => ({ ...prev, error: 'Failed to load tournament data' }));
     } finally {
+      console.log('📊 useTournamentGameData: Setting loading false');
       setState(prev => ({ ...prev, loading: false }));
     }
   }, [currentTournament, loadGames, loadScores, loadOverallLeaders, loadAchievementHunters, loadDemolitionManScores]);
 
   // Refresh function
   const refetch = useCallback(() => {
-    console.log('useTournamentGameData: Refetch called');
+    console.log('🔄 useTournamentGameData: Refetch called');
+    console.log('🔄 useTournamentGameData: Current tournament:', currentTournament?.id);
+    console.log('🔄 useTournamentGameData: Loading state:', state.loading);
     loadAllData();
   }, [loadAllData]);
 
