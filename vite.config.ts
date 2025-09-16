@@ -22,9 +22,25 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // Disable linting during build
+  // Optimized build configuration for Raspberry Pi 5
   build: {
     chunkSizeWarningLimit: 1000,
+    // Enable better minification
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: mode === 'production',
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug'],
+      },
+    },
+    // Optimize for modern browsers (Pi 5 runs modern Chromium)
+    target: 'es2020',
+    // Better source maps for production
+    sourcemap: mode === 'development',
+    // Optimize CSS
+    cssMinify: true,
+    cssCodeSplit: true,
     rollupOptions: {
       onwarn: (warning, warn) => {
         // Suppress ESLint warnings during build
@@ -34,14 +50,52 @@ export default defineConfig(({ mode }) => ({
         warn(warning);
       },
       output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom'],
-          ui: ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select'],
-          charts: ['recharts'],
-          supabase: ['@supabase/supabase-js'],
-          reactQuery: ['@tanstack/react-query'],
+        // Improved chunk splitting for better caching
+        manualChunks: (id) => {
+          // Core vendor chunks
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'react-core';
+          }
+          // UI library chunks
+          if (id.includes('@radix-ui') || id.includes('@headlessui')) {
+            return 'ui-libs';
+          }
+          // Large libraries
+          if (id.includes('recharts')) {
+            return 'charts';
+          }
+          if (id.includes('@supabase')) {
+            return 'supabase';
+          }
+          if (id.includes('@tanstack/react-query')) {
+            return 'react-query';
+          }
+          // Animation libraries
+          if (id.includes('framer-motion') || id.includes('@react-spring')) {
+            return 'animations';
+          }
+          // Utilities
+          if (id.includes('lodash') || id.includes('date-fns')) {
+            return 'utils';
+          }
         },
+        // Optimize chunk names
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
       },
     },
+    // Report compressed size
+    reportCompressedSize: false,
+  },
+  // Optimize dependencies
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      '@supabase/supabase-js',
+      '@tanstack/react-query',
+    ],
+    exclude: ['@huggingface/transformers'], // Exclude heavy ML library from pre-bundling
   },
 }));

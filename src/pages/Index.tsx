@@ -8,7 +8,7 @@ import { parseStorageObjectUrl } from "@/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import LeaderboardEntry from "@/components/LeaderboardEntry";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
-import OverallLeaderboard from "@/components/OverallLeaderboard";
+import DynamicOverallLeaderboard from "@/components/DynamicOverallLeaderboard";
 import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import TournamentDropdown from "@/components/TournamentDropdown";
 import { useTournament } from "@/contexts/TournamentContext";
@@ -174,7 +174,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
         <div className={`grid gap-4 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-12rem)] grid-cols-1 lg:grid-cols-5'} overflow-visible`}>
           {/* Left column - Overall Leaderboard (smaller) */}
           <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-1'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-left' : 'animate-slide-in-left animation-delay-200')}`}>
-            <OverallLeaderboard />
+            <DynamicOverallLeaderboard />
           </div>
 
           {/* Right column - Game content (4 games instead of 5) */}
