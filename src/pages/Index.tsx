@@ -257,8 +257,19 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
               </div>
             </div>
 
-            <div className={`${isMobile ? 'flex flex-col space-y-6' : 'flex gap-3 h-full'}`} style={{overflow: 'visible', position: 'relative'}}>
-              {games.slice(0, 4).map((game) => {
+            <div className={`${isMobile ? 'flex flex-col space-y-6' : 'grid grid-cols-4 gap-3 h-full'}`} style={{overflow: 'visible', position: 'relative'}}>
+              {Array.from({ length: 4 }).map((_, index) => {
+                const game = games[index];
+                if (!game) {
+                  // Render empty placeholder to maintain grid layout
+                  return (
+                    <div key={`placeholder-${index}`} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full'} opacity-0`}>
+                      <div className="bg-black/10 border border-white/10 rounded-lg flex-1" />
+                    </div>
+                  );
+                }
+
+                // Game exists, render it
                 // Get logo URL - convert local paths to Supabase Storage URLs
                 const logoUrl = getGameLogoUrl(game.logo_url) || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
                 const storageRef = logoUrl && logoUrl.includes('supabase.co/storage/') ? parseStorageObjectUrl(logoUrl) : null;
@@ -278,7 +289,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                 }
 
                 return (
-                <section key={game.id} data-game-id={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full flex-1 min-w-0'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? `${(games.length - 1 - games.findIndex(g => g.id === game.id)) * 100}ms` : `${games.findIndex(g => g.id === game.id) * 200}ms`)}}>
+                <section key={game.id} data-game-id={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? `${(games.length - 1 - games.findIndex(g => g.id === game.id)) * 100}ms` : `${games.findIndex(g => g.id === game.id) * 200}ms`)}}>
                   {/* Card containing logo, scores and QR code */}
                   <Card
                     className="bg-black/30 border-white/20 theme-card flex-1 flex flex-col cursor-pointer hover:scale-[1.02] transition-transform duration-200"
@@ -345,7 +356,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                 );
               })}
               {!gamesLoading && games.length === 0 && (
-                <div className={`col-span-full text-center py-8 text-gray-400 ${suppressAnimations ? '' : (isExiting ? 'animate-wave-out-right' : 'animate-wave-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? '0ms' : '600ms')}}>
+                <div className={`col-span-4 text-center py-8 text-gray-400 ${suppressAnimations ? '' : (isExiting ? 'animate-wave-out-right' : 'animate-wave-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? '0ms' : '600ms')}}>
                   No active games found. Please contact an administrator.
                 </div>
               )}
