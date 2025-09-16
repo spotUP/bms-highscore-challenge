@@ -25,16 +25,8 @@ export default defineConfig(({ mode }) => ({
   // Optimized build configuration for Raspberry Pi 5
   build: {
     chunkSizeWarningLimit: 1000,
-    // Enable better minification - use esbuild for compatibility
-    minify: 'esbuild',
-    // ESBuild settings for production
-    esbuild: mode === 'production' ? {
-      drop: ['console', 'debugger'],
-      legalComments: 'none',
-      minifyIdentifiers: true,
-      minifySyntax: true,
-      minifyWhitespace: true,
-    } : undefined,
+    // Disable minification to prevent chart initialization issues
+    minify: false,
     // Optimize for modern browsers (Pi 5 runs modern Chromium)
     target: 'es2020',
     // Better source maps for production
