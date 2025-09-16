@@ -19,22 +19,26 @@ interface PerformanceInfo {
 const detectRaspberryPi = (): boolean => {
   const userAgent = navigator.userAgent.toLowerCase();
   const platform = navigator.platform?.toLowerCase() || '';
-  
+
   // Check for ARM architecture indicators
-  const isARM = platform.includes('arm') || 
+  const isARM = platform.includes('arm') ||
                 userAgent.includes('armv') ||
                 userAgent.includes('aarch64');
-  
+
   // Check for Raspberry Pi specific indicators
   const isRPi = userAgent.includes('raspbian') ||
                 userAgent.includes('raspberry') ||
                 platform.includes('linux arm');
-  
-  // Check for Chromium on Linux (common Pi setup)
-  const isChromiumLinux = userAgent.includes('chromium') && 
-                          userAgent.includes('linux');
-  
-  return isRPi || (isARM && isChromiumLinux);
+
+  // Check for browsers on Linux ARM (Firefox, Chromium, etc.)
+  const isLinuxARM = userAgent.includes('linux') && isARM;
+  const isFirefoxLinux = userAgent.includes('firefox') && userAgent.includes('linux');
+  const isChromiumLinux = userAgent.includes('chromium') && userAgent.includes('linux');
+
+  // Additional Pi 5 detection (often shows as aarch64)
+  const isPi5 = userAgent.includes('aarch64') && userAgent.includes('linux');
+
+  return isRPi || isLinuxARM || isFirefoxLinux || (isARM && isChromiumLinux) || isPi5;
 };
 
 // Detect low-end device based on various metrics
@@ -111,7 +115,7 @@ export const usePerformanceMode = (): PerformanceInfo => {
       isPerformanceMode: shouldOptimize,
       enableAnimations: !shouldOptimize,
       particleCount: shouldOptimize ? 200 : 800, // Further reduce for Pi
-      refreshInterval: shouldOptimize ? 60000 : 30000, // Less frequent updates
+      refreshInterval: shouldOptimize ? 20000 : 15000, // More frequent for better real-time feel
       enableBlur: !shouldOptimize,
       enableGradients: !shouldOptimize,
       enableTransitions: !shouldOptimize,
