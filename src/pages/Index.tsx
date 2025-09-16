@@ -62,6 +62,10 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   const isPi5Debug = isARM && userAgent.includes('linux');
   const isFirefoxLinux = userAgent.includes('firefox') && userAgent.includes('linux');
 
+  // Add counter to track force polling activity
+  const [pollCount, setPollCount] = useState(0);
+  const [lastPollTime, setLastPollTime] = useState<Date | null>(null);
+
   // Check if animations should be suppressed (during tests)
   const [suppressAnimations, setSuppressAnimations] = useState(
     window.localStorage.getItem('suppressAnimations') === 'true'
@@ -138,6 +142,11 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
       console.log('🔄 Pi5: Refreshing scores at', new Date().toLocaleTimeString());
       console.log('🔄 Pi5: Calling refetch function...', typeof refetch);
       lastUpdateTime = Date.now();
+
+      // Update debug counters
+      setPollCount(prev => prev + 1);
+      setLastPollTime(new Date());
+
       try {
         refetch();
         console.log('✅ Pi5: Refetch called successfully');
@@ -286,6 +295,30 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
           <div className="text-sm mt-1">
             Detection: isARM={isARM.toString()} | isLinux={userAgent.includes('linux').toString()} |
             isFirefox={userAgent.includes('firefox').toString()}
+          </div>
+          <div className="text-sm mt-2 bg-black/30 p-2 rounded">
+            <div>📊 Poll Count: {pollCount}</div>
+            <div>⏰ Last Poll: {lastPollTime ? lastPollTime.toLocaleTimeString() : 'Never'}</div>
+          </div>
+          <div className="mt-3">
+            <button
+              onClick={() => {
+                console.log('🧪 PI5 MANUAL TEST: Calling refetch directly...');
+                refetch();
+              }}
+              className="bg-yellow-400 text-black px-4 py-2 rounded font-bold hover:bg-yellow-300 mr-3"
+            >
+              🧪 MANUAL REFRESH TEST
+            </button>
+            <button
+              onClick={() => {
+                console.log('🧪 PI5 PAGE RELOAD TEST: Full page reload...');
+                window.location.reload();
+              }}
+              className="bg-blue-500 text-white px-4 py-2 rounded font-bold hover:bg-blue-400"
+            >
+              🔄 RELOAD PAGE
+            </button>
           </div>
         </div>
       )}
