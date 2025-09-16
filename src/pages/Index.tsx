@@ -56,6 +56,12 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   // Clean index page with single navigation via Layout component
   const { currentTournament, loading: tournamentLoading } = useTournament();
 
+  // Pi 5 detection for debug banner
+  const userAgent = navigator.userAgent.toLowerCase();
+  const isARM = userAgent.includes('aarch64') || userAgent.includes('armv');
+  const isPi5Debug = isARM && userAgent.includes('linux');
+  const isFirefoxLinux = userAgent.includes('firefox') && userAgent.includes('linux');
+
   // Check if animations should be suppressed (during tests)
   const [suppressAnimations, setSuppressAnimations] = useState(
     window.localStorage.getItem('suppressAnimations') === 'true'
@@ -267,6 +273,23 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
 
   return (
     <div className="p-3 md:p-4 overflow-visible">
+      {/* BIG FAT DEBUG BANNER FOR PI 5 */}
+      {(isPi5Debug || isFirefoxLinux) && (
+        <div className="mb-4 p-4 bg-red-600 border-4 border-yellow-400 rounded-lg text-white font-bold text-center animate-pulse">
+          <div className="text-2xl mb-2">🔥 RASPBERRY PI 5 DEBUG MODE ACTIVE 🔥</div>
+          <div className="text-lg">
+            Force Polling Every 3 Seconds | WebSocket Bypassed | ARM Linux Detected
+          </div>
+          <div className="text-sm mt-2 opacity-90">
+            User Agent: {userAgent.substring(0, 80)}...
+          </div>
+          <div className="text-sm mt-1">
+            Detection: isARM={isARM.toString()} | isLinux={userAgent.includes('linux').toString()} |
+            isFirefox={userAgent.includes('firefox').toString()}
+          </div>
+        </div>
+      )}
+
       <div className="w-full space-y-4 overflow-visible">
         <div className={`grid gap-4 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-12rem)] grid-cols-1 lg:grid-cols-5'} overflow-visible`}>
           {/* Left column - Overall Leaderboard (smaller) */}
