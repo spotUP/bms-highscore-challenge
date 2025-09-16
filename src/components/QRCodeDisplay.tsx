@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { QrCode } from 'lucide-react';
+import { usePerformanceMode } from '@/hooks/usePerformanceMode';
 
 interface QRCodeDisplayProps {
   gameId: string;
@@ -9,40 +10,75 @@ interface QRCodeDisplayProps {
 
 const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const performanceCanvasRef = useRef<HTMLCanvasElement>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
-  
+  const { isPerformanceMode, isRaspberryPi, isLowEnd } = usePerformanceMode();
+
+  // Check if we should use simplified QR code
+  const useSimpleQR = isPerformanceMode || isRaspberryPi || isLowEnd;
+
   useEffect(() => {
-    if (canvasRef.current) {
+    const targetCanvas = useSimpleQR ? performanceCanvasRef.current : canvasRef.current;
+
+    if (targetCanvas) {
       // Prefer an explicitly configured public site URL to avoid QR codes pointing at preview domains
       const envSiteUrl = (import.meta.env as any).VITE_PUBLIC_SITE_URL || (import.meta.env as any).VITE_SITE_URL;
       const base = (envSiteUrl && typeof envSiteUrl === 'string' ? envSiteUrl : window.location.origin).replace(/\/$/, '');
       const url = `${base}/mobile-entry?game=${gameId}`;
-      
-      QRCode.toCanvas(canvasRef.current, url, {
+
+      // For performance mode, use solid colors for better readability
+      const colors = useSimpleQR
+        ? {
+            dark: '#00FFFF', // Cyan for better visibility
+            light: '#000000' // Black background for contrast
+          }
+        : {
+            dark: '#000000', // black QR code pattern
+            light: '#FFFFFF00' // transparent background
+          };
+
+      QRCode.toCanvas(targetCanvas, url, {
         width: 200,
         margin: 2,
-        color: {
-          dark: '#000000', // black QR code pattern  
-          light: '#FFFFFF00' // transparent background
-        }
+        color: colors
       }, (error) => {
-        if (!error && canvasRef.current) {
+        if (!error && !useSimpleQR && canvasRef.current) {
           setQrDataUrl(canvasRef.current.toDataURL());
         }
       });
     }
-  }, [gameId]);
+  }, [gameId, useSimpleQR]);
 
+  // Performance mode: Simple, readable QR code
+  if (useSimpleQR) {
+    return (
+      <div className="space-y-4 text-center">
+        <div className="flex justify-center">
+          <div className="relative">
+            <canvas
+              ref={performanceCanvasRef}
+              className="border-2 border-cyan-500 rounded-lg shadow-lg"
+              style={{
+                boxShadow: '0 0 20px rgba(0, 255, 255, 0.5)'
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Standard mode: Animated gradient QR code
   return (
     <div className="space-y-4 text-center">
       <div className="flex justify-center">
         <div className="relative">
-          <canvas 
+          <canvas
             ref={canvasRef}
             className="opacity-0 absolute"
           />
           {qrDataUrl && (
-            <div 
+            <div
               className="rounded-lg"
               style={{
                 background: 'linear-gradient(45deg, #ff00ff, #00ffff, #ffff00, #ff00ff, #00ffff, #ffff00)',
