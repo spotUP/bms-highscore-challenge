@@ -143,10 +143,16 @@
     contain: layout style paint;
   }
 
-  /* Disable complex gradients */
+  /* Disable complex gradients (but preserve QR codes) */
   .gradient-bg,
   .arcade-gradient {
     background: #1a1a1a !important;
+  }
+
+  /* Ensure QR codes remain visible */
+  canvas {
+    opacity: 1 !important;
+    visibility: visible !important;
   }
 
   /* Optimize animations that must run */
