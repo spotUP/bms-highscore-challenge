@@ -13,6 +13,7 @@ import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import TournamentDropdown from "@/components/TournamentDropdown";
 import ManualRefreshButton from "@/components/ManualRefreshButton";
 import { useTournament } from "@/contexts/TournamentContext";
+import { usePerformanceMode } from "@/hooks/usePerformanceMode";
 import { dlog } from "@/lib/debug";
 import CompetitionStatus from "@/components/CompetitionStatus";
 import pacmanLogo from "@/assets/pacman-logo.png";
@@ -55,6 +56,7 @@ interface IndexProps {
 const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   // Clean index page with single navigation via Layout component
   const { currentTournament, loading: tournamentLoading } = useTournament();
+  const { isPerformanceMode } = usePerformanceMode();
 
 
   // Check if animations should be suppressed (during tests)
@@ -241,6 +243,14 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   return (
     <div className="p-3 md:p-4 overflow-visible">
       <div className="w-full space-y-4 overflow-visible">
+        {/* Competition Status Subheader - Full width */}
+        <div className={`status-bar-stable ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? '0ms' : '100ms')}}>
+          <div className="flex items-center justify-between">
+            <CompetitionStatus />
+            {!isPerformanceMode && <ManualRefreshButton onRefresh={refetch} />}
+          </div>
+        </div>
+
         <div className={`grid gap-4 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-12rem)] grid-cols-1 lg:grid-cols-5'} overflow-visible`}>
           {/* Left column - Overall Leaderboard (smaller) */}
           <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-1'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-left' : 'animate-slide-in-left animation-delay-200')}`}>
@@ -249,13 +259,6 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
 
           {/* Right column - Game content (4 games instead of 5) */}
           <div className={`${isMobile ? 'order-1' : 'h-full lg:col-span-4'} overflow-visible`}>
-            {/* Competition Status Subheader */}
-            <div className={`mb-4 status-bar-stable ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? '0ms' : '100ms')}}>
-              <div className="flex items-center justify-between">
-                <CompetitionStatus />
-                <ManualRefreshButton onRefresh={refetch} />
-              </div>
-            </div>
 
             <div className={`${isMobile ? 'flex flex-col space-y-6' : 'grid grid-cols-4 gap-3 h-full'}`} style={{overflow: 'visible', position: 'relative'}}>
               {Array.from({ length: 4 }).map((_, index) => {
