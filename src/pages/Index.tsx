@@ -56,15 +56,6 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   // Clean index page with single navigation via Layout component
   const { currentTournament, loading: tournamentLoading } = useTournament();
 
-  // Pi 5 detection for debug banner
-  const userAgent = navigator.userAgent.toLowerCase();
-  const isARM = userAgent.includes('aarch64') || userAgent.includes('armv');
-  const isPi5Debug = isARM && userAgent.includes('linux');
-  const isFirefoxLinux = userAgent.includes('firefox') && userAgent.includes('linux');
-
-  // Add counter to track force polling activity
-  const [pollCount, setPollCount] = useState(0);
-  const [lastPollTime, setLastPollTime] = useState<Date | null>(null);
 
   // Check if animations should be suppressed (during tests)
   const [suppressAnimations, setSuppressAnimations] = useState(
@@ -120,7 +111,6 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
 
   // Enhanced realtime with fallback polling for Raspberry Pi/Firefox
   useEffect(() => {
-    console.log('🔄 Pi5: Setting up polling effect for tournament:', currentTournament?.id);
     if (!currentTournament?.id) return;
 
     let channel: any;
@@ -137,54 +127,21 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
     const handleUpdate = () => {
       // Skip updates during tests to prevent animations
       if (window.localStorage.getItem('suppressAnimations') === 'true') {
-        console.log('🚫 Pi5: Skipping update due to suppressAnimations');
         return;
       }
-      console.log('🔄 Pi5: Refreshing scores at', new Date().toLocaleTimeString());
-      console.log('🔄 Pi5: Calling refetch function...', typeof refetch);
       lastUpdateTime = Date.now();
-
-      // Update debug counters
-      setPollCount(prev => prev + 1);
-      setLastPollTime(new Date());
-
-      try {
-        refetch();
-        console.log('✅ Pi5: Refetch called successfully');
-      } catch (error) {
-        console.error('❌ Pi5: Error calling refetch:', error);
-      }
+      refetch();
     };
 
-    console.log('🔍 Pi5 Score Refresh Detection:', {
-      fullUserAgent: userAgent,
-      userAgent: userAgent.substring(0, 50) + '...',
-      isFirefoxLinux,
-      isARM,
-      isPi5,
-      needsFallback,
-      platform: navigator.platform,
-      hardwareConcurrency: navigator.hardwareConcurrency,
-      language: navigator.language,
-      cookieEnabled: navigator.cookieEnabled
-    });
 
     // For Pi5 or any ARM Linux device, skip WebSocket entirely and go straight to aggressive polling
     if (isPi5 || (isARM && userAgent.includes('linux'))) {
-      console.log('🔥 Pi5/ARM DETECTED: Bypassing WebSocket, using FORCE POLLING mode', {
-        isPi5,
-        isARM,
-        isLinux: userAgent.includes('linux')
-      });
-
       // Immediate aggressive polling for Pi 5 - no WebSocket attempts
       const aggressiveInterval = setInterval(() => {
-        console.log('🔥 Pi5 FORCE POLL: Refreshing scores at', new Date().toLocaleTimeString());
         handleUpdate();
       }, 3000); // Every 3 seconds - very aggressive
 
       return () => {
-        console.log('🔥 Pi5: Cleaning up force polling interval');
         clearInterval(aggressiveInterval);
       };
     }
@@ -238,7 +195,6 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
     }, safetyPollInterval);
 
     return () => {
-      console.log('🔄 Pi5: Cleaning up polling effect for tournament:', currentTournament?.id);
       if (channel) {
         try {
           supabase.removeChannel(channel);
@@ -284,62 +240,6 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
 
   return (
     <div className="p-3 md:p-4 overflow-visible">
-      {/* BIG FAT DEBUG BANNER FOR PI 5 */}
-      {(isPi5Debug || isFirefoxLinux) && (
-        <div className="mb-4 p-4 bg-red-600 border-4 border-yellow-400 rounded-lg text-white font-bold text-center animate-pulse">
-          <div className="text-2xl mb-2">🔥 RASPBERRY PI 5 DEBUG MODE ACTIVE 🔥</div>
-          <div className="text-lg">
-            Force Polling Every 3 Seconds | WebSocket Bypassed | ARM Linux Detected
-          </div>
-          <div className="text-sm mt-2 opacity-90">
-            User Agent: {userAgent.substring(0, 80)}...
-          </div>
-          <div className="text-sm mt-1">
-            Detection: isARM={isARM.toString()} | isLinux={userAgent.includes('linux').toString()} |
-            isFirefox={userAgent.includes('firefox').toString()}
-          </div>
-          <div className="text-sm mt-2 bg-black/30 p-2 rounded">
-            <div>📊 Poll Count: {pollCount}</div>
-            <div>⏰ Last Poll: {lastPollTime ? lastPollTime.toLocaleTimeString() : 'Never'}</div>
-            <div className={suppressAnimations ? 'text-red-300' : 'text-green-300'}>
-              🚫 Suppress Animations: {suppressAnimations.toString()}
-              {suppressAnimations && ' ← BLOCKING UPDATES!'}
-            </div>
-          </div>
-          <div className="mt-3">
-            <button
-              onClick={() => {
-                console.log('🧪 PI5 MANUAL TEST: Calling refetch directly...');
-                refetch();
-              }}
-              className="bg-yellow-400 text-black px-4 py-2 rounded font-bold hover:bg-yellow-300 mr-3"
-            >
-              🧪 MANUAL REFRESH TEST
-            </button>
-            <button
-              onClick={() => {
-                console.log('🧪 PI5 PAGE RELOAD TEST: Full page reload...');
-                window.location.reload();
-              }}
-              className="bg-blue-500 text-white px-4 py-2 rounded font-bold hover:bg-blue-400 mr-3"
-            >
-              🔄 RELOAD PAGE
-            </button>
-            <button
-              onClick={() => {
-                console.log('🧪 PI5 CLEAR SUPPRESS: Clearing suppressAnimations flag...');
-                localStorage.removeItem('suppressAnimations');
-                console.log('✅ PI5 CLEAR SUPPRESS: Flag cleared, reloading page...');
-                window.location.reload();
-              }}
-              className="bg-green-500 text-white px-4 py-2 rounded font-bold hover:bg-green-400"
-            >
-              🧹 CLEAR SUPPRESS FLAG
-            </button>
-          </div>
-        </div>
-      )}
-
       <div className="w-full space-y-4 overflow-visible">
         <div className={`grid gap-4 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-12rem)] grid-cols-1 lg:grid-cols-5'} overflow-visible`}>
           {/* Left column - Overall Leaderboard (smaller) */}
