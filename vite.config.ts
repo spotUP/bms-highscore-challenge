@@ -53,10 +53,10 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('@radix-ui') || id.includes('@headlessui')) {
             return 'ui-libs';
           }
-          // Large libraries
-          if (id.includes('recharts')) {
-            return 'charts';
-          }
+          // Skip recharts chunking - let it bundle with main code to avoid initialization issues
+          // if (id.includes('recharts')) {
+          //   return 'charts';
+          // }
           if (id.includes('@supabase')) {
             return 'supabase';
           }
