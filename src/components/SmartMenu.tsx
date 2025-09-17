@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
-import { Menu, X, Home, BarChart3, Trophy, Brackets, Settings, LogOut, Gamepad2, BookOpen, Maximize, Minimize } from "lucide-react";
+import { Menu, X, Home, BarChart3, Trophy, Brackets, Settings, LogOut, Gamepad2, BookOpen, Maximize, Minimize, Database } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation } from "react-router-dom";
 import { useFullscreenContext } from "@/contexts/FullscreenContext";
@@ -100,6 +100,13 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
         <Button variant="ghost" onClick={() => handleAnimatedNavigation('/achievements')} className="w-full justify-start text-left mb-2">
           <Trophy size={16} className="mr-3" />
           Achievements
+        </Button>
+      )}
+
+      {!isCurrentPage('/games') && (
+        <Button variant="ghost" onClick={() => handleAnimatedNavigation('/games')} className="w-full justify-start text-left mb-2">
+          <Database size={16} className="mr-3" />
+          Games Database
         </Button>
       )}
 
@@ -203,6 +210,13 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
                 <Button variant="ghost" onClick={() => handleAnimatedNavigation('/achievements')} className="w-full justify-start text-left mb-2">
                   <Trophy size={16} className="mr-3" />
                   Achievements
+                </Button>
+              )}
+
+              {!isCurrentPage('/games') && (
+                <Button variant="ghost" onClick={() => handleAnimatedNavigation('/games')} className="w-full justify-start text-left mb-2">
+                  <Database size={16} className="mr-3" />
+                  Games Database
                 </Button>
               )}
 

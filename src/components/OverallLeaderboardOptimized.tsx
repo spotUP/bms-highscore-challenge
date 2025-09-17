@@ -41,16 +41,9 @@ const LeaderItem = React.memo(({
 }) => {
   const gradientClass = shouldOptimize ? 'text-white font-bold' : 'animated-gradient-vertical';
   const waveDelay = index * 0.3;
-  const swingDelay = index * 0.2;
 
   return (
-    <div
-      className={`flex items-center gap-3 py-1 ${shouldOptimize ? '' : 'animate-swing'}`}
-      style={{
-        animationDelay: `${swingDelay}s`,
-        '--wave-delay': `${waveDelay}s`
-      } as React.CSSProperties}
-    >
+    <div className="flex items-center gap-3 py-1">
       <RankIcon rank={index} type={type} />
       <div className="flex-1 flex items-baseline">
         <div className="flex-1">

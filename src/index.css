@@ -395,6 +395,28 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Custom line clamping utilities for game cards */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* React DatePicker - Match Site Theme */
 .react-datepicker {
   background-color: #111827 !important; /* bg-gray-900 */
@@ -872,31 +894,83 @@ body.theme-modern-light {
 
 /* Modern Dark */
 body.theme-modern-dark {
-  --background: 222 47% 7%;
-  --foreground: 210 40% 96%;
-  --card: 222 47% 9%;
-  --card-foreground: 210 40% 96%;
-  --popover: 222 47% 9%;
-  --popover-foreground: 210 40% 96%;
-  --primary: 199 89% 48%;
-  --primary-foreground: 210 40% 96%;
-  --secondary: 217 33% 17%;
-  --secondary-foreground: 210 40% 96%;
-  --muted: 217 33% 17%;
-  --muted-foreground: 215 20% 70%;
-  --accent: 220 50% 20%;
-  --accent-foreground: 210 40% 98%;
+  /* Clean, modern dark backgrounds */
+  --background: 222 47% 6%;
+  --foreground: 210 17% 98%;
+
+  /* Card styling similar to games page */
+  --card: 222 47% 8%;
+  --card-foreground: 210 17% 98%;
+
+  /* Popover and dropdown styling */
+  --popover: 222 47% 10%;
+  --popover-foreground: 210 17% 98%;
+
+  /* Vibrant primary color (blue-ish like RAWG) */
+  --primary: 217 91% 60%;
+  --primary-foreground: 222 47% 7%;
+
+  /* Muted secondary colors */
+  --secondary: 222 47% 13%;
+  --secondary-foreground: 210 17% 98%;
+
+  /* Muted text and backgrounds */
+  --muted: 217 33% 14%;
+  --muted-foreground: 215 20% 65%;
+
+  /* Accent colors */
+  --accent: 217 33% 17%;
+  --accent-foreground: 210 17% 98%;
+
+  /* Alert colors */
   --destructive: 0 84% 60%;
-  --destructive-foreground: 210 40% 96%;
-  --border: 215 28% 28%;
-  --input: 215 28% 28%;
-  --ring: 199 89% 48%;
-  --page-bg: radial-gradient(ellipse at center, rgba(10,12,20,0.95) 0%, rgba(12,16,28,0.9) 100%);
+  --destructive-foreground: 210 17% 98%;
+
+  /* Refined borders - subtle but visible */
+  --border: 217 33% 17%;
+  --input: 217 33% 18%;
+  --ring: 217 91% 60%;
+
+  /* Smooth gradient background like games page */
+  --page-bg: linear-gradient(to bottom, hsl(222 47% 5%) 0%, hsl(222 47% 7%) 100%);
+
+  /* Clean, modern font stack */
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
+
+/* Modern card styles with subtle depth */
 .theme-modern-dark .theme-card {
-  background-color: rgba(12,16,28,0.85);
-  border-color: rgba(255,255,255,0.08);
-  backdrop-filter: blur(1px);
+  background: hsl(222 47% 8%);
+  border: 1px solid hsl(217 33% 17% / 0.6);
+  backdrop-filter: blur(10px);
+  transition: all 0.2s ease;
+}
+
+.theme-modern-dark .theme-card:hover {
+  border-color: hsl(217 33% 20%);
+  box-shadow: 0 4px 12px 0 hsl(0 0% 0% / 0.1);
+}
+
+/* Button refinements for modern dark */
+.theme-modern-dark button {
+  transition: all 0.2s ease;
+}
+
+.theme-modern-dark button:hover {
+  transform: translateY(-1px);
+}
+
+/* Smooth transitions for interactive elements */
+.theme-modern-dark * {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-duration: 200ms;
+}
+
+/* Badge and tag styling similar to games page */
+.theme-modern-dark [role="badge"],
+.theme-modern-dark .badge {
+  font-weight: 500;
+  letter-spacing: 0.01em;
 }
 
 /* TRON Futuristic */
@@ -1417,30 +1491,29 @@ body.loading-animations {
   line-height: 1;
 }
 
-/* Swinging animation for score entries */
-@keyframes swingGentle {
+/* Left/right sway animation for score entries */
+@keyframes swayLeftRight {
   0% {
-    transform: rotate(0deg);
+    transform: translateX(0px);
   }
   20% {
-    transform: rotate(2deg);
+    transform: translateX(3px);
   }
   40% {
-    transform: rotate(-1.5deg);
+    transform: translateX(-2px);
   }
   60% {
-    transform: rotate(1deg);
+    transform: translateX(2px);
   }
   80% {
-    transform: rotate(-0.5deg);
+    transform: translateX(-1px);
   }
   100% {
-    transform: rotate(0deg);
+    transform: translateX(0px);
   }
 }
 
 .animate-swing {
-  animation: swingGentle 4s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
-  transform-origin: center top;
+  animation: swayLeftRight 4s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
   will-change: transform;
 }
