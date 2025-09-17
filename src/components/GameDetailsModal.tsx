@@ -82,7 +82,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
             {/* Main Game Info Row */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Game Logo */}
-              <div className="aspect-video w-full overflow-hidden rounded-lg border bg-gray-900/50 relative">
+              <div className="aspect-video w-full overflow-hidden rounded-lg border bg-gray-900 bg-opacity-50 relative">
                 {game.logo_url ? (
                   <img
                     src={game.logo_url}
@@ -273,7 +273,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
             {game.overview && (
               <div className="space-y-4">
                 <h3 className="font-semibold text-xl">Overview</h3>
-                <div className="bg-muted/30 p-4 rounded-lg">
+                <div className="bg-muted bg-opacity-30 p-4 rounded-lg">
                   <p className="text-sm leading-relaxed">{game.overview}</p>
                 </div>
               </div>
@@ -291,14 +291,14 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                     {game.developer && (
                       <div>
                         <h4 className="font-semibold text-sm text-muted-foreground mb-2">Developer</h4>
-                        <p className="text-sm bg-muted/20 p-2 rounded">{game.developer}</p>
+                        <p className="text-sm bg-muted bg-opacity-20 p-2 rounded">{game.developer}</p>
                       </div>
                     )}
 
                     {game.publisher && (
                       <div>
                         <h4 className="font-semibold text-sm text-muted-foreground mb-2">Publisher</h4>
-                        <p className="text-sm bg-muted/20 p-2 rounded">{game.publisher}</p>
+                        <p className="text-sm bg-muted bg-opacity-20 p-2 rounded">{game.publisher}</p>
                       </div>
                     )}
                   </div>
@@ -324,7 +324,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                         <Tag className="w-4 h-4" />
                         Series
                       </h4>
-                      <p className="text-sm bg-muted/20 p-2 rounded">{game.series}</p>
+                      <p className="text-sm bg-muted bg-opacity-20 p-2 rounded">{game.series}</p>
                     </div>
                   )}
 
@@ -384,7 +384,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                       <h4 className="font-semibold text-sm text-muted-foreground mb-3">Alternate Names</h4>
                       <div className="space-y-2 max-h-32 overflow-y-auto">
                         {game.alternative_names.map((name, index) => (
-                          <div key={index} className="text-sm bg-muted/20 p-2 rounded">
+                          <div key={index} className="text-sm bg-muted bg-opacity-20 p-2 rounded">
                             {name}
                           </div>
                         ))}
