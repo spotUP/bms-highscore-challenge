@@ -1,16 +1,17 @@
 -- URGENT: Run these SQL commands in Supabase SQL Editor to fix production search timeouts
 -- Go to: Supabase Dashboard -> SQL Editor -> New Query -> Paste and Run
+-- NOTE: Run each command ONE AT A TIME (not all together)
 
--- 1. Create a basic index for name prefix searches (MOST IMPORTANT)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_games_database_name_prefix
+-- 1. Create a basic index for name prefix searches (MOST IMPORTANT - RUN THIS FIRST)
+CREATE INDEX IF NOT EXISTS idx_games_database_name_prefix
 ON games_database (name text_pattern_ops);
 
--- 2. Create a case-insensitive index for better ILIKE performance
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_games_database_name_lower
+-- 2. Create a case-insensitive index for better ILIKE performance (RUN SECOND)
+CREATE INDEX IF NOT EXISTS idx_games_database_name_lower
 ON games_database (LOWER(name) text_pattern_ops);
 
--- 3. Create platform filter index
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_games_database_platform
+-- 3. Create platform filter index (RUN THIRD)
+CREATE INDEX IF NOT EXISTS idx_games_database_platform
 ON games_database (platform_name);
 
 -- 4. Check if indexes were created successfully
