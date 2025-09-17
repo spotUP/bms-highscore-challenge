@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { usePageTransitions } from "@/hooks/usePageTransitions";
 import PerformanceModeToggle from "@/components/PerformanceModeToggle";
 import ThemeSelector from "@/components/ThemeSelector";
@@ -19,7 +19,11 @@ const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = fa
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { animatedNavigate } = usePageTransitions({ exitDuration: 600 });
+
+  // Helper function to check if we're on the current page
+  const isCurrentPage = (path: string) => location.pathname === path;
 
   const handleMenuToggle = () => {
     setIsOpen(!isOpen);
@@ -55,17 +59,19 @@ const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = fa
                   Welcome, {user.email}
                 </div>
                 <Button
-                  variant="ghost"
-                  onClick={() => handleAnimatedNavigation('/')}
-                  className="w-full justify-start text-left"
+                  variant={isCurrentPage('/') ? 'default' : 'ghost'}
+                  onClick={isCurrentPage('/') ? undefined : () => handleAnimatedNavigation('/')}
+                  disabled={isCurrentPage('/')}
+                  className={`w-full justify-start text-left ${isCurrentPage('/') ? 'cursor-default' : ''}`}
                 >
                   Highscores
                 </Button>
                 {!hideBracketsLink && (
                   <Button
-                    variant="ghost"
-                    onClick={() => handleAnimatedNavigation('/admin/brackets')}
-                    className="w-full justify-start text-left"
+                    variant={isCurrentPage('/admin/brackets') ? 'default' : 'ghost'}
+                    onClick={isCurrentPage('/admin/brackets') ? undefined : () => handleAnimatedNavigation('/admin/brackets')}
+                    disabled={isCurrentPage('/admin/brackets')}
+                    className={`w-full justify-start text-left ${isCurrentPage('/admin/brackets') ? 'cursor-default' : ''}`}
                   >
                     Brackets
                   </Button>
@@ -81,17 +87,19 @@ const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = fa
                 )}
                 {!hideStatistics && (
                   <Button
-                    variant="ghost"
-                    onClick={() => handleAnimatedNavigation('/statistics')}
-                    className="w-full justify-start text-left"
+                    variant={isCurrentPage('/statistics') ? 'default' : 'ghost'}
+                    onClick={isCurrentPage('/statistics') ? undefined : () => handleAnimatedNavigation('/statistics')}
+                    disabled={isCurrentPage('/statistics')}
+                    className={`w-full justify-start text-left ${isCurrentPage('/statistics') ? 'cursor-default' : ''}`}
                   >
                     Statistics
                   </Button>
                 )}
                 <Button
-                  variant="ghost"
-                  onClick={() => handleAnimatedNavigation('/achievements')}
-                  className="w-full justify-start text-left"
+                  variant={isCurrentPage('/achievements') ? 'default' : 'ghost'}
+                  onClick={isCurrentPage('/achievements') ? undefined : () => handleAnimatedNavigation('/achievements')}
+                  disabled={isCurrentPage('/achievements')}
+                  className={`w-full justify-start text-left ${isCurrentPage('/achievements') ? 'cursor-default' : ''}`}
                 >
                   Achievements
                 </Button>
@@ -107,9 +115,10 @@ const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = fa
                 </div>
                 {isAdmin && (
                   <Button
-                    variant="ghost"
-                    onClick={() => handleAnimatedNavigation('/admin')}
-                    className="w-full justify-start text-left"
+                    variant={isCurrentPage('/admin') ? 'default' : 'ghost'}
+                    onClick={isCurrentPage('/admin') ? undefined : () => handleAnimatedNavigation('/admin')}
+                    disabled={isCurrentPage('/admin')}
+                    className={`w-full justify-start text-left ${isCurrentPage('/admin') ? 'cursor-default' : ''}`}
                   >
                     Admin Panel
                   </Button>

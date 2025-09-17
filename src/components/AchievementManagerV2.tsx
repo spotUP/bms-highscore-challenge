@@ -747,9 +747,16 @@ const AchievementManagerV2 = () => {
         description: `Player achievement for "${existingRecord.player_name}" removed successfully`,
       });
 
-      console.log('🔄 Refreshing data...');
-      loadPlayerAchievements();
-      await invalidateQueries();
+      console.log('🔄 Updating UI optimistically...');
+      // Optimistically remove the achievement from state without refetching
+      setPlayerAchievements(prev => prev.filter(pa => pa.id !== playerAchievementId));
+
+      // Only invalidate queries without forcing immediate refetch
+      // This updates cache but doesn't trigger loading state
+      await queryClient.invalidateQueries({
+        queryKey: ['achievements'],
+        refetchType: 'none'
+      });
 
     } catch (error: any) {
       console.error('❌ Error deleting player achievement:', error);
@@ -788,11 +795,13 @@ const AchievementManagerV2 = () => {
       return;
     }
     setEditingAchievement(achievement);
+    // Ensure badge icon matches the type
+    const typeInfo = ACHIEVEMENT_TYPES.find(t => t.value === achievement.type);
     setFormData({
       name: achievement.name,
       description: achievement.description,
       type: achievement.type,
-      badge_icon: achievement.badge_icon,
+      badge_icon: typeInfo?.icon || achievement.badge_icon,
       badge_color: achievement.badge_color,
       criteria: achievement.criteria,
       points: achievement.points,
@@ -1106,7 +1115,14 @@ const AchievementManagerV2 = () => {
                   <Label htmlFor="type">Type</Label>
                   <Select
                     value={formData.type}
-                    onValueChange={(value: AchievementType) => setFormData(prev => ({ ...prev, type: value }))}
+                    onValueChange={(value: AchievementType) => {
+                      const typeInfo = ACHIEVEMENT_TYPES.find(t => t.value === value);
+                      setFormData(prev => ({
+                        ...prev,
+                        type: value,
+                        badge_icon: typeInfo?.icon || '🏆'
+                      }));
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select achievement type" />
@@ -1157,21 +1173,17 @@ const AchievementManagerV2 = () => {
                 <div className="space-y-2">
                   <Label>Badge</Label>
                   <div className="flex space-x-2">
-                    <Select
-                      value={formData.badge_icon}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, badge_icon: value }))}
-                    >
-                      <SelectTrigger className="w-20">
-                        <SelectValue placeholder="Icon" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DEFAULT_ICONS.map(icon => (
-                          <SelectItem key={icon} value={icon}>
-                            {icon}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center space-x-2">
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
+                        style={{ backgroundColor: formData.badge_color }}
+                      >
+                        <span className="font-emoji">
+                          {formData.type ? getTypeIcon(formData.type) : '🏆'}
+                        </span>
+                      </div>
+                      <span className="text-sm text-gray-500">Auto-set from type</span>
+                    </div>
                     <Select
                       value={formData.badge_color}
                       onValueChange={(value) => setFormData(prev => ({ ...prev, badge_color: value }))}
@@ -1357,48 +1369,98 @@ const AchievementsTable = ({
   getCriteriaDisplay: (criteria: any, type: string) => string;
   isTournamentCreator: boolean;
   currentUserId: string | null;
-}) => (
-  <Table>
-    <TableHeader>
-      <TableRow>
-        <TableHead>Icon</TableHead>
-        <TableHead>Name</TableHead>
-        <TableHead>Description</TableHead>
-        <TableHead>Type</TableHead>
-        <TableHead>Criteria</TableHead>
-        <TableHead>Points</TableHead>
-        <TableHead>Status</TableHead>
-        <TableHead>Unlocks</TableHead>
-        {isTournamentCreator && <TableHead>Created By</TableHead>}
-        <TableHead>Actions</TableHead>
-      </TableRow>
-    </TableHeader>
-    <TableBody>
-      {achievements.map((achievement) => (
-        <TableRow key={achievement.id}>
-          <TableCell>
-            <div 
+}) => {
+  const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set());
+  const [localAchievements, setLocalAchievements] = React.useState(achievements);
+
+  // Update local state when props change
+  React.useEffect(() => {
+    setLocalAchievements(achievements);
+  }, [achievements]);
+
+  const handleDelete = async (achievement: any) => {
+    // Start the fade-out animation
+    setDeletingIds(prev => new Set([...prev, achievement.id]));
+
+    // Wait for animation, then remove from state (this will trigger the slide-up)
+    setTimeout(() => {
+      setLocalAchievements(prev => prev.filter(a => a.id !== achievement.id));
+      onDelete(achievement);
+
+      // Clean up animation state after a brief delay to let the slide-up complete
+      setTimeout(() => {
+        setDeletingIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(achievement.id);
+          return newSet;
+        });
+      }, 50);
+    }, 280); // Slightly before animation completes
+  };
+
+  const columnCount = isTournamentCreator ? 10 : 9;
+
+  return (
+    <div className="border rounded-md">
+      {/* Header */}
+      <div className={`grid ${isTournamentCreator ? 'grid-cols-10' : 'grid-cols-9'} gap-2 p-3 border-b bg-muted/50 font-medium text-sm`}>
+        <div>Icon</div>
+        <div>Name</div>
+        <div>Description</div>
+        <div>Type</div>
+        <div>Criteria</div>
+        <div>Points</div>
+        <div>Status</div>
+        <div>Unlocks</div>
+        {isTournamentCreator && <div>Created By</div>}
+        <div>Actions</div>
+      </div>
+
+      {/* Body */}
+      <div className="divide-y">
+      {localAchievements.map((achievement) => (
+        <div
+          key={achievement.id}
+          className={`grid ${isTournamentCreator ? 'grid-cols-10' : 'grid-cols-9'} gap-2 p-3 transition-all duration-300 ease-in-out overflow-hidden ${
+            deletingIds.has(achievement.id)
+              ? 'opacity-0 max-h-0 py-0 scale-y-0'
+              : 'opacity-100 max-h-20 scale-y-100'
+          }`}
+          style={{
+            transformOrigin: 'top',
+            transition: 'all 300ms ease-in-out'
+          }}
+        >
+          <div>
+            <div
               className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
               style={{ backgroundColor: achievement.badge_color }}
             >
-              {achievement.badge_icon}
+              <span className="font-emoji">
+                {getTypeIcon(achievement.type)}
+              </span>
             </div>
-          </TableCell>
-          <TableCell className="font-medium">{achievement.name}</TableCell>
-          <TableCell>{achievement.description}</TableCell>
-          <TableCell>
+          </div>
+
+          <div className="font-medium">{achievement.name}</div>
+
+          <div>{achievement.description}</div>
+
+          <div>
             <div className="flex items-center space-x-2">
-              <span>{getTypeIcon(achievement.type)}</span>
+              <span className="font-emoji text-base">{getTypeIcon(achievement.type)}</span>
               <span className="text-xs text-gray-500">
                 {ACHIEVEMENT_TYPES.find(t => t.value === achievement.type)?.label || achievement.type}
               </span>
             </div>
-          </TableCell>
-          <TableCell className="text-xs">
+          </div>
+
+          <div className="text-xs">
             {getCriteriaDisplay(achievement.criteria, achievement.type)}
-          </TableCell>
-          <TableCell>{achievement.points}</TableCell>
-          <TableCell>
+          </div>
+
+          <div>{achievement.points}</div>
+          <div>
             <div className="flex items-center space-x-2">
               {(() => {
                 const canEdit = isTournamentCreator || achievement.created_by === currentUserId;
@@ -1418,14 +1480,16 @@ const AchievementsTable = ({
                 );
               })()}
             </div>
-          </TableCell>
-          <TableCell>{achievement.unlock_count || 0}</TableCell>
+          </div>
+
+          <div>{achievement.unlock_count || 0}</div>
+
           {isTournamentCreator && (
-            <TableCell className="text-xs text-gray-500">
+            <div className="text-xs text-gray-500">
               {achievement.created_by === currentUserId ? 'You' : 'User'}
-            </TableCell>
+            </div>
           )}
-          <TableCell>
+          <div>
             <div className="flex space-x-2">
               {(() => {
                 const canEdit = isTournamentCreator || achievement.created_by === currentUserId;
@@ -1444,7 +1508,7 @@ const AchievementsTable = ({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => onDelete(achievement)}
+                      onClick={() => handleDelete(achievement)}
                       disabled={!canEdit}
                       className={canEdit ? "text-red-500 hover:text-red-600" : "text-gray-400 cursor-not-allowed"}
                       title={canEdit ? "Delete achievement" : "You can only delete achievements you created or achievements in tournaments you own"}
@@ -1455,12 +1519,13 @@ const AchievementsTable = ({
                 );
               })()}
             </div>
-          </TableCell>
-        </TableRow>
+          </div>
+        </div>
       ))}
-    </TableBody>
-  </Table>
-);
+      </div>
+    </div>
+  );
+};
 
 // Player Achievements Table Component
 const PlayerAchievementsTable = ({
@@ -1469,47 +1534,90 @@ const PlayerAchievementsTable = ({
 }: {
   playerAchievements: any[];
   onDelete: (id: string) => void;
-}) => (
-  <Table>
-    <TableHeader>
-      <TableRow>
-        <TableHead>Achievement</TableHead>
-        <TableHead>Player</TableHead>
-        <TableHead>Earned Date</TableHead>
-        <TableHead>Actions</TableHead>
-      </TableRow>
-    </TableHeader>
-    <TableBody>
-      {playerAchievements.map((playerAchievement) => (
-        <TableRow key={playerAchievement.id}>
-          <TableCell>
-            <div className="flex items-center gap-3">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
-                style={{ backgroundColor: playerAchievement.achievements.badge_color }}
-              >
-                {playerAchievement.achievements.badge_icon}
-              </div>
-              <span className="font-medium">{playerAchievement.achievements.name}</span>
+}) => {
+  const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set());
+  const [localAchievements, setLocalAchievements] = React.useState(playerAchievements);
+
+  // Update local state when props change
+  React.useEffect(() => {
+    setLocalAchievements(playerAchievements);
+  }, [playerAchievements]);
+
+  const handleDelete = async (id: string) => {
+    // Start the fade-out animation
+    setDeletingIds(prev => new Set([...prev, id]));
+
+    // Wait for animation, then remove from state (this will trigger the slide-up)
+    setTimeout(() => {
+      setLocalAchievements(prev => prev.filter(pa => pa.id !== id));
+      onDelete(id);
+
+      // Clean up animation state after a brief delay to let the slide-up complete
+      setTimeout(() => {
+        setDeletingIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(id);
+          return newSet;
+        });
+      }, 50);
+    }, 280); // Slightly before animation completes
+  };
+
+  return (
+    <div className="border rounded-md">
+      {/* Header */}
+      <div className="grid grid-cols-4 gap-4 p-3 border-b bg-muted/50 font-medium text-sm">
+        <div>Achievement</div>
+        <div>Player</div>
+        <div>Earned Date</div>
+        <div>Actions</div>
+      </div>
+
+      {/* Body */}
+      <div className="divide-y">
+      {localAchievements.map((playerAchievement, index) => (
+        <div
+          key={playerAchievement.id}
+          className={`grid grid-cols-4 gap-4 p-3 transition-all duration-300 ease-in-out overflow-hidden ${
+            deletingIds.has(playerAchievement.id)
+              ? 'opacity-0 max-h-0 py-0 scale-y-0'
+              : 'opacity-100 max-h-20 scale-y-100'
+          }`}
+          style={{
+            transformOrigin: 'top',
+            transition: 'all 300ms ease-in-out'
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
+              style={{ backgroundColor: playerAchievement.achievements.badge_color }}
+            >
+              {playerAchievement.achievements.badge_icon}
             </div>
-          </TableCell>
-          <TableCell className="font-medium">{playerAchievement.player_name}</TableCell>
-          <TableCell className="text-sm text-gray-500">
+            <span className="font-medium">{playerAchievement.achievements.name}</span>
+          </div>
+
+          <div className="font-medium">{playerAchievement.player_name}</div>
+
+          <div className="text-sm text-gray-500">
             {new Date(playerAchievement.earned_at).toLocaleDateString()}
-          </TableCell>
-          <TableCell>
+          </div>
+
+          <div>
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => onDelete(playerAchievement.id)}
+              onClick={() => handleDelete(playerAchievement.id)}
               className="text-red-500 hover:text-red-600"
               title="Remove this achievement from player"
             >
               <Trash2 className="w-4 h-4" />
             </Button>
-          </TableCell>
-        </TableRow>
+          </div>
+        </div>
       ))}
-    </TableBody>
-  </Table>
-);
+      </div>
+    </div>
+  );
+};

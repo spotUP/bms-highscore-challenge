@@ -36,18 +36,12 @@ interface AchievementHunter {
   total_points: number;
 }
 
-interface DemolitionManScore {
-  player_name: string;
-  score: number;
-  created_at: string;
-}
 
 interface TournamentGameDataState {
   games: Game[];
   scores: Score[];
   leaders: PlayerScore[];
   achievementHunters: AchievementHunter[];
-  demolitionManScores: DemolitionManScore[];
   loading: boolean;
   error: string | null;
 }
@@ -61,7 +55,6 @@ export const useTournamentGameData = () => {
     scores: [],
     leaders: [],
     achievementHunters: [],
-    demolitionManScores: [],
     loading: true,
     error: null,
   });
@@ -244,39 +237,6 @@ export const useTournamentGameData = () => {
     }
   }, [currentTournament]);
 
-  // Load Demolition Man scores for current tournament
-  const loadDemolitionManScores = useCallback(async () => {
-    if (!currentTournament) return;
-
-    try {
-      // Load Demolition Man scores with tournament_id filter
-      const { data: scoreData, error } = await supabase
-        .from('scores')
-        .select(`
-          player_name,
-          score,
-          created_at,
-          games!inner(name)
-        `)
-        .eq('tournament_id', currentTournament.id)
-        .eq('games.name', 'Standing Competition')
-        .order('score', { ascending: false })
-        .limit(5);
-
-      if (error) throw error;
-
-      const demolitionScores = scoreData?.map(item => ({
-        player_name: item.player_name,
-        score: item.score,
-        created_at: item.created_at
-      })) || [];
-
-      setState(prev => ({ ...prev, demolitionManScores: demolitionScores }));
-    } catch (error) {
-      console.error('Error loading Demolition Man scores:', error);
-      setState(prev => ({ ...prev, error: 'Failed to load Demolition Man scores' }));
-    }
-  }, [currentTournament]);
 
   // Load all data
   const loadAllData = useCallback(async () => {
@@ -293,7 +253,6 @@ export const useTournamentGameData = () => {
         loadScores(),
         loadOverallLeaders(),
         loadAchievementHunters(),
-        loadDemolitionManScores(),
       ]);
     } catch (error) {
       console.error('Error loading data:', error);
@@ -301,7 +260,7 @@ export const useTournamentGameData = () => {
     } finally {
       setState(prev => ({ ...prev, loading: false }));
     }
-  }, [currentTournament, loadGames, loadScores, loadOverallLeaders, loadAchievementHunters, loadDemolitionManScores]);
+  }, [currentTournament, loadGames, loadScores, loadOverallLeaders, loadAchievementHunters]);
 
   // Refresh function
   const refetch = useCallback(() => {

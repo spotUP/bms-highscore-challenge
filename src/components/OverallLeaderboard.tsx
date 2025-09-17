@@ -5,13 +5,12 @@ import { useTournamentGameData } from '@/hooks/useTournamentGameData';
 import { useTournament } from '@/contexts/TournamentContext';
 
 const OverallLeaderboard = React.memo(() => {
-  const { leaders, achievementHunters, demolitionManScores, loading } = useTournamentGameData();
+  const { leaders, achievementHunters, loading } = useTournamentGameData();
   const { currentTournament } = useTournament();
 
   // Local state to prevent flickering during updates
   const [displayLeaders, setDisplayLeaders] = useState(leaders);
   const [displayAchievementHunters, setDisplayAchievementHunters] = useState(achievementHunters);
-  const [displayDemolitionManScores, setDisplayDemolitionManScores] = useState(demolitionManScores);
   const [hasInitialLoad, setHasInitialLoad] = useState(false);
 
   // Update display data using efficient shallow comparisons instead of expensive JSON.stringify
@@ -37,15 +36,6 @@ const OverallLeaderboard = React.memo(() => {
     }
   }, [achievementHunters, loading, hasInitialLoad, displayAchievementHunters]);
 
-  useEffect(() => {
-    if (!loading && (demolitionManScores.length > 0 || !hasInitialLoad)) {
-      const scoresChanged = demolitionManScores.length !== displayDemolitionManScores.length ||
-        demolitionManScores.some((score, i) => score.player_name !== displayDemolitionManScores[i]?.player_name);
-      if (scoresChanged || !hasInitialLoad) {
-        setDisplayDemolitionManScores(demolitionManScores);
-      }
-    }
-  }, [demolitionManScores, loading, hasInitialLoad, displayDemolitionManScores]);
 
   const getRankIcon = useCallback((index: number) => {
     switch (index) {
@@ -73,18 +63,6 @@ const OverallLeaderboard = React.memo(() => {
     }
   }, []);
 
-  const getDemolitionRankIcon = useCallback((index: number) => {
-    switch (index) {
-      case 0:
-        return <span className="w-12 h-12 flex items-center justify-center text-4xl text-red-400">🏆</span>;
-      case 1:
-        return <span className="w-12 h-12 flex items-center justify-center text-4xl text-orange-300">🥈</span>;
-      case 2:
-        return <span className="w-12 h-12 flex items-center justify-center text-4xl text-yellow-600">🥉</span>;
-      default:
-        return <span className="w-12 h-12 flex items-center justify-center text-3xl font-bold text-white">#{index + 1}</span>;
-    }
-  }, []);
 
   // Only show loading on initial load, not on subsequent updates
   if (loading && !hasInitialLoad) {
@@ -158,36 +136,6 @@ const OverallLeaderboard = React.memo(() => {
         </div>
       </div>
 
-      {/* Demolition Man Eternal Leaderboard - Only show if enabled */}
-      {currentTournament?.demolition_man_active && (
-        <div className="flex-shrink-0 animate-slide-in-left animation-delay-800">
-          <span className="text-xl font-bold text-white mb-3 block">Demolition Man</span>
-          <div className="space-y-1 max-h-80 overflow-y-auto">
-              {displayDemolitionManScores.map((score, index) => (
-                <div key={`${score.player_name}-${score.created_at}`} className="flex items-center justify-between py-1">
-                  <div className="flex items-center gap-3">
-                    {getDemolitionRankIcon(index)}
-                    <div 
-                      className="font-arcade font-bold text-lg animated-gradient-vertical"
-                    >
-                      {score.player_name}
-                    </div>
-                  </div>
-                  <div 
-                    className="text-right font-bold font-arcade text-base animated-gradient-vertical"
-                  >
-                    {formatScore(score.score)}
-                  </div>
-                </div>
-              ))}
-              {displayDemolitionManScores.length === 0 && hasInitialLoad && (
-                <div className="text-center text-gray-400 py-4">
-                  No Demolition Man scores yet.
-                </div>
-              )}
-          </div>
-        </div>
-      )}
     </div>
   );
 });

@@ -16,6 +16,8 @@ interface LayoutProps {
     hideFullscreenButton?: boolean;
     centerNav?: boolean;
     rightActions?: React.ReactNode;
+    onShowRules?: () => void;
+    hideRulesButton?: boolean;
   };
 }
 
@@ -76,7 +78,7 @@ const Layout: React.FC<LayoutProps> = ({
   }, [getLeaderboardNames]);
 
   return (
-    <div className="min-h-screen text-white relative z-10"
+    <div className="min-h-screen text-white relative z-10 pt-4"
          style={{
            background: 'var(--page-bg)'
          }}>
@@ -89,7 +91,10 @@ const Layout: React.FC<LayoutProps> = ({
       )}
 
       <div className={`${shouldShowTopNav ? 'pt-4' : ''}`}>
-        {React.cloneElement(children as React.ReactElement, { isExiting })}
+        {React.isValidElement(children) ?
+          React.cloneElement(children, { isExiting }) :
+          children
+        }
       </div>
 
       <SpinTheWheel

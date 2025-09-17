@@ -3,10 +3,9 @@ import { Button } from '@/components/ui/button';
 import ThemeSelector from '@/components/ThemeSelector';
 import PerformanceModeToggle from '@/components/PerformanceModeToggle';
 import TournamentDropdown from '@/components/TournamentDropdown';
-import PublicTournamentBrowser from '@/components/PublicTournamentBrowser';
-import MobileMenu from '@/components/MobileMenu';
+import SmartMenu from '@/components/SmartMenu';
 import { useAuth } from '@/hooks/useAuth';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { usePageTransitions } from '@/hooks/usePageTransitions';
 
 interface TopNavProps {
@@ -19,16 +18,22 @@ interface TopNavProps {
   hideSpinButton?: boolean;
   hideStatistics?: boolean;
   hideFullscreenButton?: boolean;
+  onShowRules?: () => void;
+  hideRulesButton?: boolean;
 }
 
-const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnimatedNavigate, rightActions, centerNav = false, hideBracketsLink = false, hideTournamentSelector = false, hideSpinButton = false, hideStatistics = false, hideFullscreenButton = false }) => {
+const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnimatedNavigate, rightActions, centerNav = false, hideBracketsLink = false, hideTournamentSelector = false, hideSpinButton = false, hideStatistics = false, hideFullscreenButton = false, onShowRules, hideRulesButton = false }) => {
   const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { animatedNavigate } = usePageTransitions({ exitDuration: 600 });
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Use the animated navigate function passed from Layout, or fallback to our own
   const finalAnimatedNavigate = propAnimatedNavigate || animatedNavigate;
+
+  // Helper function to check if we're on the current page
+  const isCurrentPage = (path: string) => location.pathname === path;
   const [isFullscreen, setIsFullscreen] = useState<boolean>(!!document.fullscreenElement);
 
   useEffect(() => {
@@ -75,13 +80,13 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
   };
 
   return (
-    <div className="w-full relative z-20" style={{ contain: 'layout paint' }}>
+    <div className="w-full relative z-20">
       {centerNav ? (
         <div className="flex flex-col items-center gap-3">
-          <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight text-center">Retro Ranks</h1>
+          <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight text-center pl-4">Retro Ranks</h1>
           <div className="flex items-center gap-4">
             <div
-              className="hidden md:flex gap-4 items-center whitespace-nowrap flex-shrink-0 flex-none flex-nowrap min-w-max"
+              className="flex gap-4 items-center whitespace-nowrap flex-shrink-0 flex-none flex-nowrap min-w-max"
               style={{ width: 'max-content' }}
             >
               <div
@@ -111,41 +116,26 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
                     </Button>
                   )}
                   {!hideTournamentSelector && <TournamentDropdown />}
-                  <Button variant="outline" onClick={() => finalAnimatedNavigate('/')}>Highscores</Button>
-                  {!hideSpinButton && <Button variant="outline" onClick={handleSpin}>Spin the Wheel</Button>}
-                  {!hideStatistics && <Button variant="outline" onClick={() => finalAnimatedNavigate('/statistics')}>Statistics</Button>}
-                  {!hideBracketsLink && (
-                    <Button variant="outline" onClick={() => finalAnimatedNavigate('/admin/brackets')}>Brackets</Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    onClick={() => isAdmin && finalAnimatedNavigate('/admin')}
-                    style={{ visibility: isAdmin ? 'visible' : 'hidden' }}
-                    tabIndex={isAdmin ? 0 : -1}
-                    aria-hidden={!isAdmin}
-                    disabled={!isAdmin}
-                  >
-                    Admin Panel
-                  </Button>
-                  {rightActions}
-                  <Button variant="outline" onClick={signOut}>Sign Out</Button>
                 </>
-              ) : (
-                <>
-                  <PublicTournamentBrowser />
-                  <Button onClick={() => finalAnimatedNavigate('/auth')} variant="outline">Sign In</Button>
-                </>
-              )}
+              ) : null}
+              <SmartMenu
+                animatedNavigate={finalAnimatedNavigate}
+                onShowRules={onShowRules}
+                onSpinWheel={onSpinWheel}
+                hideBracketsLink={hideBracketsLink}
+                hideStatistics={hideStatistics}
+                hideSpinButton={hideSpinButton}
+                hideRulesButton={hideRulesButton}
+              />
             </div>
-            <MobileMenu onSpinWheel={handleSpin} />
           </div>
         </div>
       ) : (
         <div className="flex items-center">
-          <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight">Retro Ranks</h1>
+          <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight pl-4">Retro Ranks</h1>
           <div className="ml-auto flex items-center">
             <div
-              className="hidden md:flex gap-4 items-center whitespace-nowrap flex-shrink-0 flex-none flex-nowrap min-w-max"
+              className="flex gap-4 items-center whitespace-nowrap flex-shrink-0 flex-none flex-nowrap min-w-max"
               style={{ width: 'max-content' }}
             >
               <div
@@ -175,33 +165,18 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
                     </Button>
                   )}
                   <TournamentDropdown />
-                  <Button variant="outline" onClick={() => finalAnimatedNavigate('/')}>Highscores</Button>
-                  <Button variant="outline" onClick={handleSpin}>Spin the Wheel</Button>
-                  <Button variant="outline" onClick={() => finalAnimatedNavigate('/statistics')}>Statistics</Button>
-                  {!hideBracketsLink && (
-                    <Button variant="outline" onClick={() => finalAnimatedNavigate('/admin/brackets')}>Brackets</Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    onClick={() => isAdmin && finalAnimatedNavigate('/admin')}
-                    style={{ visibility: isAdmin ? 'visible' : 'hidden' }}
-                    tabIndex={isAdmin ? 0 : -1}
-                    aria-hidden={!isAdmin}
-                    disabled={!isAdmin}
-                  >
-                    Admin Panel
-                  </Button>
-                  {rightActions}
-                  <Button variant="outline" onClick={signOut}>Sign Out</Button>
                 </>
-              ) : (
-                <>
-                  <PublicTournamentBrowser />
-                  <Button onClick={() => finalAnimatedNavigate('/auth')} variant="outline">Sign In</Button>
-                </>
-              )}
+              ) : null}
+              <SmartMenu
+                animatedNavigate={finalAnimatedNavigate}
+                onShowRules={onShowRules}
+                onSpinWheel={onSpinWheel}
+                hideBracketsLink={hideBracketsLink}
+                hideStatistics={hideStatistics}
+                hideSpinButton={hideSpinButton}
+                hideRulesButton={hideRulesButton}
+              />
             </div>
-            <MobileMenu onSpinWheel={handleSpin} />
           </div>
         </div>
       )}
