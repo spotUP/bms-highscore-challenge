@@ -18,20 +18,21 @@ class LaunchBoxService {
   private baseUrl = 'https://gamesdb.launchbox-app.com';
   private imagesUrl = 'https://images.launchbox-app.com';
 
-  // Use CORS proxy only in development (localhost)
+  // Use CORS proxy for all browser requests since LaunchBox doesn't allow direct CORS
   private isDevelopment = typeof window !== 'undefined' &&
     (window.location.hostname === 'localhost' ||
      window.location.hostname === '127.0.0.1' ||
      window.location.hostname.includes('localhost'));
 
-  private corsProxy = this.isDevelopment ? 'https://api.allorigins.win/get?url=' : '';
+  // Always use CORS proxy in browser environments since LaunchBox API doesn't support CORS
+  private corsProxy = typeof window !== 'undefined' ? 'https://api.allorigins.win/get?url=' : '';
 
   // Cache to avoid repeated requests for the same game
   private logoCache = new Map<string, string | null>();
 
   constructor() {
     console.log(`🌐 LaunchBox Service initialized in ${this.isDevelopment ? 'DEVELOPMENT' : 'PRODUCTION'} mode`);
-    console.log(`📡 API calls will be ${this.corsProxy ? 'PROXIED via ' + this.corsProxy : 'DIRECT'}`);
+    console.log(`📡 API calls will be ${this.corsProxy ? 'PROXIED via ' + this.corsProxy.replace('https://api.allorigins.win/get?url=', 'AllOrigins CORS proxy') : 'DIRECT'}`);
   }
 
   // Rate limiting
