@@ -25,14 +25,15 @@ class LaunchBoxService {
      window.location.hostname.includes('localhost'));
 
   // Always use CORS proxy in browser environments since LaunchBox API doesn't support CORS
-  private corsProxy = typeof window !== 'undefined' ? 'https://api.allorigins.win/get?url=' : '';
+  // Try multiple proxy services for better reliability
+  private corsProxy = typeof window !== 'undefined' ? 'https://corsproxy.io/?' : '';
 
   // Cache to avoid repeated requests for the same game
   private logoCache = new Map<string, string | null>();
 
   constructor() {
     console.log(`🌐 LaunchBox Service initialized in ${this.isDevelopment ? 'DEVELOPMENT' : 'PRODUCTION'} mode`);
-    console.log(`📡 API calls will be ${this.corsProxy ? 'PROXIED via ' + this.corsProxy.replace('https://api.allorigins.win/get?url=', 'AllOrigins CORS proxy') : 'DIRECT'}`);
+    console.log(`📡 API calls will be ${this.corsProxy ? 'PROXIED via ' + this.corsProxy.replace('https://corsproxy.io/?', 'corsproxy.io').replace('https://api.allorigins.win/get?url=', 'AllOrigins') : 'DIRECT'}`);
   }
 
   // Rate limiting
@@ -142,7 +143,7 @@ class LaunchBoxService {
         try {
           // Add timeout to fetch request
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+          const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout for proxy
 
           const response = await fetch(url, {
             signal: controller.signal,
@@ -195,7 +196,7 @@ class LaunchBoxService {
       const searchUrl = `${this.baseUrl}/games/results/${encodeURIComponent(gameName)}`;
       const finalUrl = this.corsProxy ? `${this.corsProxy}${encodeURIComponent(searchUrl)}` : searchUrl;
 
-      console.log('Searching LaunchBox for:', gameName, 'at', searchUrl, this.isDevelopment ? '(via proxy)' : '(direct)');
+      console.log('Searching LaunchBox for:', gameName, 'at', searchUrl, this.corsProxy ? '(via proxy)' : '(direct)');
 
       const response = await this.makeRequest(finalUrl);
       if (!response.ok) {
@@ -204,12 +205,12 @@ class LaunchBoxService {
 
       // Handle response differently for proxied vs direct requests
       let html: string;
-      if (this.corsProxy) {
-        // Proxied response - extract from JSON
+      if (this.corsProxy && this.corsProxy.includes('allorigins')) {
+        // AllOrigins proxy - extract from JSON
         const data = await response.json();
         html = data.contents;
       } else {
-        // Direct response - use HTML directly
+        // Direct response or corsproxy.io - use HTML directly
         html = await response.text();
       }
       console.log('LaunchBox search response length:', html.length);
@@ -299,12 +300,12 @@ class LaunchBoxService {
 
       // Handle response differently for proxied vs direct requests
       let html: string;
-      if (this.corsProxy) {
-        // Proxied response - extract from JSON
+      if (this.corsProxy && this.corsProxy.includes('allorigins')) {
+        // AllOrigins proxy - extract from JSON
         const data = await response.json();
         html = data.contents;
       } else {
-        // Direct response - use HTML directly
+        // Direct response or corsproxy.io - use HTML directly
         html = await response.text();
       }
 
