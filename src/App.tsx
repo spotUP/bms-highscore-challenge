@@ -10,6 +10,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { AchievementProvider } from "@/contexts/AchievementContext";
 import { TournamentProvider } from "@/contexts/TournamentContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { FullscreenProvider } from "@/contexts/FullscreenContext";
 import HyperspaceEffect from "@/components/HyperspaceEffect";
 import VHSOverlay from "@/components/VHSOverlay";
 import PerformanceWrapper from "@/components/PerformanceWrapper";
@@ -108,60 +109,62 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <BracketProvider>
-      <TournamentProvider>
-        <AchievementProvider>
-          <ThemeProvider>
-          <PerformanceWrapper>
-            <TooltipProvider>
-            <HyperspaceEffect />
-            <VHSOverlay />
-            <Toaster />
-            <Sonner />
-            {/* Add Score Notifications Listener */}
-            <ScoreNotificationsListener />
-            {/* Performance Monitor (Ctrl+Shift+P to toggle) */}
-            <PerformanceMonitor />
-            <BrowserRouter
-              future={{
-                v7_startTransition: true,
-                v7_relativeSplatPath: true,
-              }}
-            >
-              {/* Persist and restore last visited route so reload returns to Admin if that was the last page */}
-              <RoutePersistence />
-              <Suspense fallback={<LoadingSpinner />}>
-                <Routes>
-                  <Route path="/" element={<IndexWithRules />} />
-                  <Route path="/admin/brackets" element={<Layout topNavProps={{ hideBracketsLink: true, hideFullscreenButton: true, rightActions: <BracketAdminActions /> }}><BracketAdmin /></Layout>} />
-                  <Route path="/mobile-entry" element={<Layout topNavProps={{ hideFullscreenButton: true }}><MobileEntry /></Layout>} />
-                  <Route path="/auth" element={<Layout hideTopNav><Auth /></Layout>} />
-                  <Route path="/auth/verify" element={<Layout hideTopNav><AuthVerify /></Layout>} />
-                  <Route path="/auth/expired" element={<Layout hideTopNav><LinkExpired /></Layout>} />
-                  <Route path="/admin" element={<Layout topNavProps={{ hideFullscreenButton: true }}><Admin /></Layout>} />
-                  <Route path="/statistics" element={<Layout topNavProps={{ hideStatistics: true, hideFullscreenButton: true }}><Statistics /></Layout>} />
-                  <Route path="/player" element={<Layout topNavProps={{ hideFullscreenButton: true }}><PlayerDashboard /></Layout>} />
-                  <Route path="/achievements" element={<Layout topNavProps={{ hideFullscreenButton: true }}><Achievements /></Layout>} />
-                  <Route path="/competition" element={<Layout topNavProps={{ hideFullscreenButton: true }}><Competition /></Layout>} />
-                  {/* Tournament-scoped routes with access control */}
-                  <Route path="/t/:slug" element={<Layout topNavProps={{
-                    onShowRules: () => {
-                      // Create a custom event for tournament routes
-                      const rulesEvent = new CustomEvent('showTournamentRules');
-                      document.dispatchEvent(rulesEvent);
-                    }
-                  }}><TournamentAccessGuard><Index /></TournamentAccessGuard></Layout>} />
-                  <Route path="/t/:slug/admin" element={<Layout topNavProps={{ hideFullscreenButton: true }}><TournamentAccessGuard><Admin /></TournamentAccessGuard></Layout>} />
-                  <Route path="/t/:slug/statistics" element={<Layout topNavProps={{ hideStatistics: true, hideFullscreenButton: true }}><TournamentAccessGuard><Statistics /></TournamentAccessGuard></Layout>} />
-                  <Route path="/t/:slug/achievements" element={<Layout topNavProps={{ hideFullscreenButton: true }}><TournamentAccessGuard><Achievements /></TournamentAccessGuard></Layout>} />
-                  <Route path="/t/:slug/mobile-entry" element={<Layout topNavProps={{ hideFullscreenButton: true }}><TournamentAccessGuard><MobileEntry /></TournamentAccessGuard></Layout>} />
-                </Routes>
-              </Suspense>
-            </BrowserRouter>
-            </TooltipProvider>
-          </PerformanceWrapper>
-          </ThemeProvider>
-        </AchievementProvider>
-      </TournamentProvider>
+        <TournamentProvider>
+          <AchievementProvider>
+            <ThemeProvider>
+              <FullscreenProvider>
+                <PerformanceWrapper>
+                  <TooltipProvider>
+                    <HyperspaceEffect />
+                    <VHSOverlay />
+                    <Toaster />
+                    <Sonner />
+                    {/* Add Score Notifications Listener */}
+                    <ScoreNotificationsListener />
+                    {/* Performance Monitor (Ctrl+Shift+P to toggle) */}
+                    <PerformanceMonitor />
+                    <BrowserRouter
+                      future={{
+                        v7_startTransition: true,
+                        v7_relativeSplatPath: true,
+                      }}
+                    >
+                      {/* Persist and restore last visited route so reload returns to Admin if that was the last page */}
+                      <RoutePersistence />
+                      <Suspense fallback={<LoadingSpinner />}>
+                        <Routes>
+                          <Route path="/" element={<IndexWithRules />} />
+                          <Route path="/admin/brackets" element={<Layout topNavProps={{ hideBracketsLink: true, rightActions: <BracketAdminActions /> }}><BracketAdmin /></Layout>} />
+                          <Route path="/mobile-entry" element={<Layout><MobileEntry /></Layout>} />
+                          <Route path="/auth" element={<Layout hideTopNav><Auth /></Layout>} />
+                          <Route path="/auth/verify" element={<Layout hideTopNav><AuthVerify /></Layout>} />
+                          <Route path="/auth/expired" element={<Layout hideTopNav><LinkExpired /></Layout>} />
+                          <Route path="/admin" element={<Layout><Admin /></Layout>} />
+                          <Route path="/statistics" element={<Layout topNavProps={{ hideStatistics: true }}><Statistics /></Layout>} />
+                          <Route path="/player" element={<Layout><PlayerDashboard /></Layout>} />
+                          <Route path="/achievements" element={<Layout><Achievements /></Layout>} />
+                          <Route path="/competition" element={<Layout><Competition /></Layout>} />
+                          {/* Tournament-scoped routes with access control */}
+                          <Route path="/t/:slug" element={<Layout topNavProps={{
+                            onShowRules: () => {
+                              // Create a custom event for tournament routes
+                              const rulesEvent = new CustomEvent('showTournamentRules');
+                              document.dispatchEvent(rulesEvent);
+                            }
+                          }}><TournamentAccessGuard><Index /></TournamentAccessGuard></Layout>} />
+                          <Route path="/t/:slug/admin" element={<Layout><TournamentAccessGuard><Admin /></TournamentAccessGuard></Layout>} />
+                          <Route path="/t/:slug/statistics" element={<Layout topNavProps={{ hideStatistics: true }}><TournamentAccessGuard><Statistics /></TournamentAccessGuard></Layout>} />
+                          <Route path="/t/:slug/achievements" element={<Layout><TournamentAccessGuard><Achievements /></TournamentAccessGuard></Layout>} />
+                          <Route path="/t/:slug/mobile-entry" element={<Layout><TournamentAccessGuard><MobileEntry /></TournamentAccessGuard></Layout>} />
+                        </Routes>
+                      </Suspense>
+                    </BrowserRouter>
+                  </TooltipProvider>
+                </PerformanceWrapper>
+              </FullscreenProvider>
+            </ThemeProvider>
+          </AchievementProvider>
+        </TournamentProvider>
       </BracketProvider>
     </AuthProvider>
   </QueryClientProvider>

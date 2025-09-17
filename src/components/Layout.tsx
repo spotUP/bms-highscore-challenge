@@ -31,6 +31,7 @@ const Layout: React.FC<LayoutProps> = ({
   const [isSpinWheelOpen, setIsSpinWheelOpen] = useState(false);
   const { gameScores } = useTournamentGameData();
 
+
   // Pages that should not show TopNav
   const noNavPages = ['/auth', '/auth/verify', '/auth/expired'];
   const shouldShowTopNav = !hideTopNav && !noNavPages.includes(location.pathname);
