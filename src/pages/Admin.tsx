@@ -28,6 +28,7 @@ import WebhookConfig from "@/components/WebhookConfig";
 import UserManagement from "@/components/UserManagement";
 import ResetFunctions from "@/components/ResetFunctions";
 import PerformanceToggle from "@/components/PerformanceToggle";
+import { RatingTest } from "@/components/RatingTest";
 import PerformanceModeToggle from "@/components/PerformanceModeToggle";
 import ThemeSelector from "@/components/ThemeSelector";
 import CompetitionManager from "@/components/CompetitionManager";
@@ -2068,6 +2069,9 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
             <TabsTrigger value="users">
               <Users className="w-4 h-4 mr-2" />Users
             </TabsTrigger>
+            <TabsTrigger value="ratings-test">
+              <TestTube className="w-4 h-4 mr-2" />Rating Test
+            </TabsTrigger>
             <TabsTrigger value="system">
               <Settings className="w-4 h-4 mr-2" />System
             </TabsTrigger>
@@ -2500,6 +2504,16 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
           </TabsContent>
           <TabsContent value="achievements" className={`mt-6 ${enableAnimations ? (tabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}><AchievementManagerV2 /></TabsContent>
           <TabsContent value="users" className={`mt-6 ${enableAnimations ? (tabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}><UserManagement /></TabsContent>
+
+          <TabsContent value="ratings-test" className={`mt-6 ${enableAnimations ? (tabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}>
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-2xl font-bold">Enhanced Rating System Test</h2>
+                <p className="text-muted-foreground">Test the new multi-source rating aggregation system</p>
+              </div>
+              <RatingTest />
+            </div>
+          </TabsContent>
         </Tabs>
         </div>
 

@@ -9,11 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import ImagePasteUpload from "@/components/ImagePasteUpload";
-import GameLogoSuggestions, { GameLogoSuggestionsRef } from "@/components/GameLogoSuggestions";
 import { useTournament } from "@/contexts/TournamentContext";
 import { searchArcadeGameLogo, isArcadeGame } from "@/utils/arcadeLogoSearch";
 import { launchBoxService } from "@/services/launchboxService";
@@ -56,12 +53,8 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
   const [games, setGames] = useState(initialGames);
   const [newGame, setNewGame] = useState({
     name: '',
-    description: '',
-    logo_url: '',
-    is_active: true,
-    include_in_challenge: true
+    description: ''
   });
-  const logoSuggestionsRef = useRef<GameLogoSuggestionsRef>(null);
 
   // Update games when initialGames prop changes and auto-search logos for arcade games
   React.useEffect(() => {
@@ -169,16 +162,8 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
     // Reset new game form
     setNewGame({
       name: '',
-      description: '',
-      logo_url: '',
-      is_active: true,
-      include_in_challenge: true
+      description: ''
     });
-
-    // Clear logo suggestions
-    if (logoSuggestionsRef.current) {
-      logoSuggestionsRef.current.clearSuggestions();
-    }
   };
 
   const removeGameFromList = (gameIdOrIndex: number) => {
@@ -283,13 +268,13 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
         <DialogHeader>
           <DialogTitle>Create New Tournament</DialogTitle>
         </DialogHeader>
-        <Tabs defaultValue="tournament" className="w-full">
+        <Tabs defaultValue="tournament" className="w-full h-[600px] flex flex-col">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="tournament">Tournament Details</TabsTrigger>
             <TabsTrigger value="games">Games ({games.length})</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="tournament" className="space-y-4 mt-4">
+          <TabsContent value="tournament" className="space-y-4 mt-4 flex-1 overflow-y-auto px-1">
             <div>
               <Label htmlFor="name" className="text-white">Tournament Name</Label>
               <Input
@@ -319,49 +304,6 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
               />
             </div>
 
-            <div>
-              <Label htmlFor="slug" className="text-white">Tournament Slug</Label>
-              <div className="relative">
-                <Input
-                  id="slug"
-                  value={createForm.slug}
-                  onChange={(e) => {
-                    const newSlug = generateSlug(e.target.value);
-                    setCreateForm(prev => ({ ...prev, slug: newSlug }));
-                    // Debounce slug availability check
-                    setTimeout(() => checkSlugAvailability(newSlug), 500);
-                  }}
-                  placeholder="my-awesome-tournament"
-                  className={`bg-black/50 border-gray-700 text-white ${
-                    slugAvailable === false ? 'border-red-500' :
-                    slugAvailable === true ? 'border-green-500' : ''
-                  }`}
-                />
-                {slugAvailable === true && (
-                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-green-500">
-                    ✓
-                  </div>
-                )}
-                {slugAvailable === false && (
-                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500">
-                    ✗
-                  </div>
-                )}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">
-                URL: /t/{createForm.slug || 'tournament-slug'}
-              </p>
-              {slugAvailable === false && (
-                <p className="text-xs text-red-500 mt-1">
-                  This slug is already taken. Please choose a different one.
-                </p>
-              )}
-              {slugAvailable === true && (
-                <p className="text-xs text-green-500 mt-1">
-                  This slug is available!
-                </p>
-              )}
-            </div>
 
             <div>
               <Label htmlFor="visibility" className="text-white">Visibility</Label>
@@ -501,83 +443,12 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
             </Button>
           </TabsContent>
 
-          <TabsContent value="games" className="space-y-4 mt-4">
-            {/* Add New Game Section */}
-            <div className="border rounded-lg p-4 space-y-4">
-              <h4 className="font-semibold text-white">Add Game</h4>
-
-              <div>
-                <Label htmlFor="game-name" className="text-white">Game Name *</Label>
-                <Input
-                  id="game-name"
-                  value={newGame.name}
-                  onChange={(e) => setNewGame(prev => ({ ...prev, name: e.target.value }))}
-                  placeholder="Enter game name (logos search automatically as you type)"
-                  className="bg-black/50 border-white/20 text-white"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="game-description" className="text-white">Description</Label>
-                <Textarea
-                  id="game-description"
-                  value={newGame.description}
-                  onChange={(e) => setNewGame(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Optional game description"
-                  className="bg-black/50 border-white/20 text-white"
-                />
-              </div>
-
-              <div>
-                <Label className="text-white">Game Logo</Label>
-                <ImagePasteUpload
-                  onImageSelect={(url) => setNewGame(prev => ({ ...prev, logo_url: url }))}
-                  currentImageUrl={newGame.logo_url}
-                  placeholder="Paste image or drag & drop"
-                />
-              </div>
-
-              <GameLogoSuggestions
-                ref={logoSuggestionsRef}
-                gameName={newGame.name}
-                onLogoSelect={(url) => setNewGame(prev => ({ ...prev, logo_url: url }))}
-              />
-
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="game-active"
-                    checked={newGame.is_active}
-                    onCheckedChange={(checked) => setNewGame(prev => ({ ...prev, is_active: !!checked }))}
-                  />
-                  <Label htmlFor="game-active" className="text-white">Active</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="game-include-challenge"
-                    checked={newGame.include_in_challenge}
-                    onCheckedChange={(checked) => setNewGame(prev => ({ ...prev, include_in_challenge: !!checked }))}
-                  />
-                  <Label htmlFor="game-include-challenge" className="text-white">Include in Challenge</Label>
-                </div>
-              </div>
-
-              <Button
-                onClick={addGameToList}
-                disabled={!newGame.name.trim()}
-                className="w-full"
-                variant="outline"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Game to Tournament
-              </Button>
-            </div>
-
+          <TabsContent value="games" className="mt-4 flex-1 flex flex-col overflow-y-auto">
             {/* Games List */}
-            {games.length > 0 && (
-              <div className="border rounded-lg p-4">
+            {games.length > 0 ? (
+              <div className="border rounded-lg p-4 flex-1 flex flex-col">
                 <h4 className="font-semibold text-white mb-3">Games to Add ({games.length})</h4>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
+                <div className="space-y-2 flex-1 overflow-y-auto">
                   {games.map((game, index) => (
                     <div key={game.id || `game-${index}`} className="flex items-center justify-between p-2 bg-black/30 rounded">
                       <div className="flex items-center space-x-3">
@@ -607,15 +478,22 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
                   ))}
                 </div>
               </div>
+            ) : (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-gray-400 text-center">No games selected. Go back to the games browser to select games for your tournament.</p>
+              </div>
             )}
 
-            <Button
-              onClick={handleCreateTournament}
-              disabled={!createForm.name.trim() || !createForm.slug.trim() || isCreating || slugAvailable === false}
-              className="w-full"
-            >
-              {isCreating ? 'Creating...' : `Create Tournament${games.length > 0 ? ` with ${games.length} Games` : ''}`}
-            </Button>
+            {/* Create Tournament Button - Always at bottom */}
+            <div className="mt-4">
+              <Button
+                onClick={handleCreateTournament}
+                disabled={!createForm.name.trim() || !createForm.slug.trim() || isCreating || slugAvailable === false}
+                className="w-full"
+              >
+                {isCreating ? 'Creating...' : `Create Tournament${games.length > 0 ? ` with ${games.length} Games` : ''}`}
+              </Button>
+            </div>
           </TabsContent>
         </Tabs>
       </DialogContent>

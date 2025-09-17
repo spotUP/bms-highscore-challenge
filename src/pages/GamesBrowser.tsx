@@ -8,9 +8,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { Search, Filter, Star, Users, Calendar, Gamepad2, Shuffle, Plus } from "lucide-react";
+import { Search, Filter, Star, Users, Calendar, Gamepad2, Shuffle, Plus, Info, Heart } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { GameLogo } from "@/components/GameLogo";
+import { GameDetailsModal } from "@/components/GameDetailsModal";
+import { GameRatingDisplay } from "@/components/GameRatingDisplay";
+import { CreateTournamentModal } from "@/components/CreateTournamentModal";
 
 interface Game {
   id: string;
@@ -60,8 +63,13 @@ const GamesBrowser: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedGames, setSelectedGames] = useState<Set<string>>(new Set());
+  const [favoriteGames, setFavoriteGames] = useState<Set<string>>(new Set());
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const [totalGames, setTotalGames] = useState(0);
+  const [selectedGameForModal, setSelectedGameForModal] = useState<Game | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isTournamentModalOpen, setIsTournamentModalOpen] = useState(false);
+  const [activeMainTab, setActiveMainTab] = useState<'all' | 'favorites'>('all');
 
   const [filters, setFilters] = useState<FilterState>({
     search: '',
@@ -299,6 +307,57 @@ const GamesBrowser: React.FC = () => {
     });
   }, []);
 
+  const toggleFavorite = useCallback((gameId: string) => {
+    setFavoriteGames(prev => {
+      const newFavorites = new Set(prev);
+      if (newFavorites.has(gameId)) {
+        newFavorites.delete(gameId);
+      } else {
+        newFavorites.add(gameId);
+      }
+      return newFavorites;
+    });
+  }, []);
+
+  const openGameModal = useCallback((game: Game, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent card selection
+    setSelectedGameForModal(game);
+    setIsModalOpen(true);
+  }, []);
+
+  const closeGameModal = useCallback(() => {
+    setIsModalOpen(false);
+    setSelectedGameForModal(null);
+  }, []);
+
+  const openTournamentModal = useCallback(() => {
+    setIsTournamentModalOpen(true);
+  }, []);
+
+  const closeTournamentModal = useCallback(() => {
+    setIsTournamentModalOpen(false);
+  }, []);
+
+  // Convert selected games to the format expected by CreateTournamentModal
+  const getSelectedGamesForTournament = useCallback(() => {
+    return games
+      .filter(game => selectedGames.has(game.id))
+      .map(game => ({
+        id: parseInt(game.database_id?.toString() || '0'),
+        name: game.name,
+        description: game.overview,
+        logo_url: game.logo_url
+      }));
+  }, [games, selectedGames]);
+
+  // Filter games based on active tab
+  const displayedGames = useMemo(() => {
+    if (activeMainTab === 'favorites') {
+      return games.filter(game => favoriteGames.has(game.id));
+    }
+    return games;
+  }, [games, favoriteGames, activeMainTab]);
+
   if (loading) {
     return (
       <div className="container mx-auto py-8">
@@ -331,7 +390,21 @@ const GamesBrowser: React.FC = () => {
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Main Tabs */}
+      <Tabs value={activeMainTab} onValueChange={(value) => setActiveMainTab(value as 'all' | 'favorites')} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="all" className="flex items-center gap-2">
+            <Gamepad2 className="w-4 h-4" />
+            All Games ({totalGames})
+          </TabsTrigger>
+          <TabsTrigger value="favorites" className="flex items-center gap-2">
+            <Heart className="w-4 h-4" />
+            Favorites ({favoriteGames.size})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="all">
+          {/* Filters */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Filters</CardTitle>
@@ -510,10 +583,10 @@ const GamesBrowser: React.FC = () => {
 
       {/* Games Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {games.map(game => (
+        {displayedGames.map(game => (
           <Card
             key={game.id}
-            className={`cursor-pointer transition-all hover:shadow-lg overflow-hidden ${
+            className={`cursor-pointer transition-all hover:shadow-lg overflow-hidden flex flex-col h-full ${
               selectedGames.has(game.id) ? 'ring-2 ring-primary' : ''
             }`}
             onClick={() => toggleGameSelection(game.id)}
@@ -534,6 +607,23 @@ const GamesBrowser: React.FC = () => {
                   onError={() => handleImageError(game.id)}
                 />
               )}
+
+              {/* Heart icon for favorites */}
+              <button
+                className="absolute top-2 left-2 z-10 p-1 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFavorite(game.id);
+                }}
+              >
+                <Heart
+                  className={`w-5 h-5 ${
+                    favoriteGames.has(game.id)
+                      ? 'text-red-500 fill-red-500'
+                      : 'text-white'
+                  }`}
+                />
+              </button>
 
               {selectedGames.has(game.id) && (
                 <div className="absolute top-2 right-2">
@@ -562,63 +652,95 @@ const GamesBrowser: React.FC = () => {
               </div>
             </CardHeader>
 
-            <CardContent className="space-y-3">
-              {/* Ratings and Players */}
-              <div className="flex items-center gap-4 text-sm">
-                {game.community_rating && (
-                  <div className="flex items-center gap-1">
-                    <Star className="w-4 h-4 text-yellow-500" />
-                    <span>{game.community_rating.toFixed(1)}</span>
-                    {game.community_rating_count && (
-                      <span className="text-muted-foreground">({game.community_rating_count})</span>
+            <CardContent className="flex flex-col flex-grow">
+              <div className="flex flex-col space-y-3 flex-grow">
+                {/* Enhanced Ratings and Players */}
+                <div className="space-y-2">
+                  {/* Rating Display */}
+                  {game.community_rating && (
+                    <GameRatingDisplay
+                      gameName={game.name}
+                      platform={game.platform_name}
+                      launchboxRating={game.community_rating}
+                      launchboxRatingCount={game.community_rating_count}
+                      showSources={false}
+                      className="text-sm"
+                    />
+                  )}
+
+                  {/* Players and Co-op */}
+                  <div className="flex items-center gap-4 text-sm">
+                    {game.max_players && (
+                      <div className="flex items-center gap-1">
+                        <Users className="w-4 h-4" />
+                        <span>{game.max_players}P</span>
+                      </div>
+                    )}
+
+                    {game.cooperative && (
+                      <Badge variant="secondary" className="text-xs">Co-op</Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Genres */}
+                {game.genres && game.genres.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {game.genres.slice(0, 3).map(genre => (
+                      <Badge key={genre} variant="outline" className="text-xs">
+                        {genre}
+                      </Badge>
+                    ))}
+                    {game.genres.length > 3 && (
+                      <Badge variant="outline" className="text-xs">
+                        +{game.genres.length - 3}
+                      </Badge>
                     )}
                   </div>
                 )}
 
-                {game.max_players && (
-                  <div className="flex items-center gap-1">
-                    <Users className="w-4 h-4" />
-                    <span>{game.max_players}P</span>
+                {/* Developer/Publisher */}
+                {(game.developer || game.publisher) && (
+                  <div className="text-xs text-muted-foreground">
+                    {game.developer && <div>Dev: {game.developer}</div>}
+                    {game.publisher && game.publisher !== game.developer && (
+                      <div>Pub: {game.publisher}</div>
+                    )}
                   </div>
                 )}
 
-                {game.cooperative && (
-                  <Badge variant="secondary" className="text-xs">Co-op</Badge>
+                {/* Overview */}
+                {game.overview && (
+                  <p className="text-xs text-muted-foreground line-clamp-3">
+                    {game.overview}
+                  </p>
                 )}
               </div>
 
-              {/* Genres */}
-              {game.genres && game.genres.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {game.genres.slice(0, 3).map(genre => (
-                    <Badge key={genre} variant="outline" className="text-xs">
-                      {genre}
-                    </Badge>
-                  ))}
-                  {game.genres.length > 3 && (
-                    <Badge variant="outline" className="text-xs">
-                      +{game.genres.length - 3}
-                    </Badge>
-                  )}
+              {/* Action Buttons */}
+              <div className="mt-auto pt-3 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant={selectedGames.has(game.id) ? "default" : "outline"}
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleGameSelection(game.id);
+                    }}
+                  >
+                    <Plus className={`w-4 h-4 mr-1 ${selectedGames.has(game.id) ? 'rotate-45' : ''}`} />
+                    {selectedGames.has(game.id) ? 'Added' : 'Add'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => openGameModal(game, e)}
+                  >
+                    <Info className="w-4 h-4 mr-1" />
+                    Info
+                  </Button>
                 </div>
-              )}
-
-              {/* Developer/Publisher */}
-              {(game.developer || game.publisher) && (
-                <div className="text-xs text-muted-foreground">
-                  {game.developer && <div>Dev: {game.developer}</div>}
-                  {game.publisher && game.publisher !== game.developer && (
-                    <div>Pub: {game.publisher}</div>
-                  )}
-                </div>
-              )}
-
-              {/* Overview */}
-              {game.overview && (
-                <p className="text-xs text-muted-foreground line-clamp-3">
-                  {game.overview}
-                </p>
-              )}
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -635,6 +757,160 @@ const GamesBrowser: React.FC = () => {
           <Button onClick={clearFilters}>Clear All Filters</Button>
         </div>
       )}
+        </TabsContent>
+
+        <TabsContent value="favorites">
+          {/* Favorites Content */}
+          {favoriteGames.size === 0 ? (
+            <div className="text-center py-12">
+              <Heart className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+              <h3 className="text-xl font-semibold mb-2">No favorites yet</h3>
+              <p className="text-muted-foreground mb-4">
+                Click the heart icon on games in the "All Games" tab to add them to your favorites.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Your Favorite Games</h3>
+                <div className="text-sm text-muted-foreground">
+                  {favoriteGames.size} game{favoriteGames.size !== 1 ? 's' : ''} favorited
+                </div>
+              </div>
+
+              {/* Favorites Games Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {displayedGames.map(game => (
+                  <Card
+                    key={game.id}
+                    className={`cursor-pointer transition-all hover:shadow-lg overflow-hidden flex flex-col h-full ${
+                      selectedGames.has(game.id) ? 'ring-2 ring-primary' : ''
+                    }`}
+                    onClick={() => toggleGameSelection(game.id)}
+                  >
+                    {/* Game Logo - Use stored URL or fallback to LaunchBox */}
+                    <div className="relative aspect-video w-full overflow-hidden">
+                      {game.logo_url ? (
+                        <img
+                          src={game.logo_url}
+                          alt={`${game.name} logo`}
+                          className="w-full h-full object-contain bg-gray-900 p-2"
+                          onError={() => handleImageError(game.id)}
+                        />
+                      ) : (
+                        <GameLogo
+                          gameName={game.name}
+                          className="w-full h-full"
+                          onError={() => handleImageError(game.id)}
+                        />
+                      )}
+
+                      {/* Heart icon for favorites */}
+                      <button
+                        className="absolute top-2 left-2 z-10 p-1 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(game.id);
+                        }}
+                      >
+                        <Heart
+                          className={`w-5 h-5 ${
+                            favoriteGames.has(game.id)
+                              ? 'text-red-500 fill-red-500'
+                              : 'text-white'
+                          }`}
+                        />
+                      </button>
+
+                      {selectedGames.has(game.id) && (
+                        <div className="absolute top-2 right-2">
+                          <Plus className="w-6 h-6 text-white bg-primary rounded-full p-1 rotate-45" />
+                        </div>
+                      )}
+                      {/* Platform badge */}
+                      <div className="absolute bottom-2 left-2">
+                        <Badge variant="secondary" className="text-xs bg-black/70 text-white border-none">
+                          {game.platform_name}
+                        </Badge>
+                      </div>
+                      {/* Year badge */}
+                      {game.release_year && (
+                        <div className="absolute bottom-2 right-2">
+                          <Badge variant="outline" className="text-xs bg-black/70 text-white border-white/20">
+                            {game.release_year}
+                          </Badge>
+                        </div>
+                      )}
+                    </div>
+
+                    <CardHeader className="pb-3 pt-4">
+                      <div className="flex items-start justify-between">
+                        <CardTitle className="text-lg leading-tight">{game.name}</CardTitle>
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="flex flex-col flex-grow">
+                      <div className="flex flex-col space-y-3 flex-grow">
+                        {/* Enhanced Ratings and Players */}
+                        <div className="space-y-2">
+                          {/* Rating Display */}
+                          {game.community_rating && (
+                            <GameRatingDisplay
+                              gameName={game.name}
+                              platform={game.platform_name}
+                              launchboxRating={game.community_rating}
+                              launchboxRatingCount={game.community_rating_count}
+                              showSources={false}
+                              className="text-sm"
+                            />
+                          )}
+
+                          {/* Players and Co-op */}
+                          <div className="flex items-center gap-4 text-sm">
+                            {game.max_players && (
+                              <div className="flex items-center gap-1">
+                                <Users className="w-4 h-4" />
+                                <span>{game.max_players}P</span>
+                              </div>
+                            )}
+                            {game.cooperative && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-green-400">Co-op</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 mt-auto">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={(e) => toggleGameSelection(game.id)}
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            Add
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={(e) => openGameModal(game, e)}
+                          >
+                            <Info className="w-4 h-4 mr-1" />
+                            More Info
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Selection Actions */}
       {selectedGames.size > 0 && (
@@ -646,12 +922,26 @@ const GamesBrowser: React.FC = () => {
             <Button size="sm" onClick={() => setSelectedGames(new Set())}>
               Clear
             </Button>
-            <Button size="sm">
+            <Button size="sm" onClick={openTournamentModal}>
               Create Competition
             </Button>
           </div>
         </Card>
       )}
+
+      {/* Game Details Modal */}
+      <GameDetailsModal
+        game={selectedGameForModal}
+        isOpen={isModalOpen}
+        onClose={closeGameModal}
+      />
+
+      {/* Tournament Creation Modal */}
+      <CreateTournamentModal
+        isOpen={isTournamentModalOpen}
+        onClose={closeTournamentModal}
+        initialGames={getSelectedGamesForTournament()}
+      />
     </div>
   );
 };

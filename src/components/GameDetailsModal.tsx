@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Dialog,
   DialogContent,
@@ -9,452 +9,427 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { RAWGGame } from "@/utils/rawgApi";
+import { GameLogo } from "./GameLogo";
+import { GameRatingDisplay } from "./GameRatingDisplay";
+import { GameMediaGallery } from "./GameMediaGallery";
 import {
   Star,
   Calendar,
   Users,
+  Gamepad2,
+  Play,
   Globe,
-  Clock,
+  BookOpen,
   Monitor,
-  ExternalLink,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  Maximize2
+  Palette,
+  Tag
 } from "lucide-react";
 
+interface Game {
+  id: string;
+  name: string;
+  platform_name: string;
+  database_id: number | null;
+  release_year: number | null;
+  overview: string | null;
+  max_players: number | null;
+  cooperative: boolean | null;
+  community_rating: number | null;
+  community_rating_count: number | null;
+  esrb_rating: string | null;
+  genres: string[];
+  developer: string | null;
+  publisher: string | null;
+  video_url: string | null;
+  screenshot_url: string | null;
+  cover_url: string | null;
+  logo_url: string | null;
+  // Additional LaunchBox fields
+  series?: string | null;
+  region?: string | null;
+  alternative_names?: string[];
+  play_modes?: string[];
+  themes?: string[];
+  wikipedia_url?: string | null;
+  video_urls?: string[];
+  release_type?: string | null;
+  release_date?: string | null;
+}
+
 interface GameDetailsModalProps {
-  game: RAWGGame | null;
+  game: Game | null;
   isOpen: boolean;
   onClose: () => void;
 }
-
-const cleanDescription = (description: string | undefined): string => {
-  if (!description) return '';
-
-  // Remove HTML tags and decode entities
-  return description
-    .replace(/<[^>]*>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
-    .trim();
-};
 
 export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
   game,
   isOpen,
   onClose
 }) => {
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-
   if (!game) return null;
-
-  const releaseDate = game.released ? new Date(game.released) : null;
-  const description = cleanDescription(game.description || game.description_raw);
-
-  // Prepare all images for gallery (background + screenshots)
-  const allImages = [
-    ...(game.background_image ? [{ id: 'background', image: game.background_image }] : []),
-    ...(game.short_screenshots || []).slice(1) // Skip first screenshot as it's usually the same as background
-  ];
-
-  const openLightbox = (index: number) => {
-    setCurrentImageIndex(index);
-    setLightboxOpen(true);
-  };
-
-  const nextImage = () => {
-    setCurrentImageIndex((prev) => (prev + 1) % allImages.length);
-  };
-
-  const prevImage = () => {
-    setCurrentImageIndex((prev) => (prev - 1 + allImages.length) % allImages.length);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowRight') nextImage();
-    if (e.key === 'ArrowLeft') prevImage();
-    if (e.key === 'Escape') setLightboxOpen(false);
-  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0">
-        <div className="relative">
-          {/* Background Image Header */}
-          {game.background_image && (
-            <div className="relative h-64 overflow-hidden">
-              <img
-                src={game.background_image}
-                alt={game.name}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-background/20 to-transparent" />
+      <DialogContent className="max-w-[76vw] max-h-[95vh] w-full h-full overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-bold pr-8">{game.name}</DialogTitle>
+        </DialogHeader>
 
-              {/* Close button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-4 right-4 text-white hover:bg-white/20"
-                onClick={onClose}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-
-              {/* Title overlay */}
-              <div className="absolute bottom-6 left-6 right-6">
-                <h1 className="text-3xl font-bold text-white mb-2 drop-shadow-lg">
-                  {game.name}
-                </h1>
-                <div className="flex items-center gap-4 text-white/90">
-                  {releaseDate && (
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-4 h-4" />
-                      <span>{releaseDate.getFullYear()}</span>
-                    </div>
-                  )}
-                  {game.rating > 0 && (
-                    <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      <span>{game.rating.toFixed(1)}</span>
-                    </div>
-                  )}
-                  {game.metacritic && (
-                    <div className={`px-2 py-1 rounded text-xs font-bold ${
-                      game.metacritic >= 75 ? 'bg-green-500' :
-                      game.metacritic >= 50 ? 'bg-yellow-500' : 'bg-red-500'
-                    } text-white`}>
-                      Metacritic {game.metacritic}
-                    </div>
-                  )}
+        <div className="space-y-8">
+          {/* Game Media Section */}
+          <div className="space-y-6">
+            {/* Main Game Info Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Game Logo */}
+              <div className="aspect-video w-full overflow-hidden rounded-lg border bg-gray-900/50 relative">
+                {game.logo_url ? (
+                  <img
+                    src={game.logo_url}
+                    alt={`${game.name} logo`}
+                    className="w-full h-full object-contain p-4"
+                  />
+                ) : (
+                  <GameLogo
+                    gameName={game.name}
+                    className="w-full h-full"
+                    enableLazyLoading={false}
+                  />
+                )}
+                <div className="absolute top-2 left-2">
+                  <Badge variant="secondary" className="text-xs">Logo</Badge>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* Content */}
-          <ScrollArea className="max-h-[calc(90vh-16rem)] p-6">
-            <div className="space-y-6">
-              {/* Description */}
-              {description && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">About</h3>
-                  <p className="text-muted-foreground leading-relaxed">
-                    {description}
-                  </p>
+              {/* Cover Art */}
+              {game.cover_url && (
+                <div className="aspect-[3/4] w-full overflow-hidden rounded-lg border relative">
+                  <img
+                    src={game.cover_url}
+                    alt={`${game.name} cover`}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-2 left-2">
+                    <Badge variant="secondary" className="text-xs">Cover</Badge>
+                  </div>
                 </div>
               )}
 
-              {/* Quick Info Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Screenshot */}
+              {game.screenshot_url && (
+                <div className="aspect-video w-full overflow-hidden rounded-lg border relative">
+                  <img
+                    src={game.screenshot_url}
+                    alt={`${game.name} screenshot`}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-2 left-2">
+                    <Badge variant="secondary" className="text-xs">Screenshot</Badge>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Video Section */}
+            {game.video_url && (
+              <div>
+                <h3 className="font-semibold text-lg mb-4">Video</h3>
+                <div className="max-w-2xl">
+                  <div className="aspect-video w-full overflow-hidden rounded-lg border">
+                    {(() => {
+                      // Extract YouTube ID from URL
+                      const extractYouTubeId = (url: string): string | null => {
+                        if (!url || typeof url !== 'string') return null;
+
+                        const cleanUrl = url.trim();
+                        const patterns = [
+                          /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/,
+                          /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/,
+                          /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+                          /(?:https?:\/\/)?(?:www\.)?youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
+                          /(?:https?:\/\/)?(?:m\.)?youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/,
+                          /[?&]v=([a-zA-Z0-9_-]{11})/
+                        ];
+
+                        for (const pattern of patterns) {
+                          const match = cleanUrl.match(pattern);
+                          if (match && match[1] && match[1].length === 11) {
+                            return match[1];
+                          }
+                        }
+                        return null;
+                      };
+
+                      const youtubeId = extractYouTubeId(game.video_url);
+
+                      if (youtubeId) {
+                        return (
+                          <iframe
+                            src={`https://www.youtube.com/embed/${youtubeId}`}
+                            className="w-full h-full"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            title={`${game.name} Video`}
+                          />
+                        );
+                      } else {
+                        // Fallback for non-YouTube videos
+                        return (
+                          <video
+                            src={game.video_url}
+                            controls
+                            className="w-full h-full object-contain"
+                            title={`${game.name} Video`}
+                          />
+                        );
+                      }
+                    })()}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Game Details Section */}
+          <div className="space-y-8">
+            {/* Main Game Information */}
+            <div className="space-y-6">
+              <h3 className="font-semibold text-xl">Game Information</h3>
+
+              {/* Core Details Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm text-muted-foreground">Platform</h4>
+                  <Badge variant="secondary" className="text-sm w-fit">
+                    <Gamepad2 className="w-4 h-4 mr-1" />
+                    {game.platform_name}
+                  </Badge>
+                </div>
+
+                {(game.release_date || game.release_year) && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-sm text-muted-foreground">Release Date</h4>
+                    <Badge variant="outline" className="text-sm w-fit">
+                      <Calendar className="w-4 h-4 mr-1" />
+                      {game.release_date || game.release_year}
+                    </Badge>
+                  </div>
+                )}
+
+                {game.release_type && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-sm text-muted-foreground">Game Type</h4>
+                    <Badge variant="outline" className="text-sm w-fit">
+                      {game.release_type}
+                    </Badge>
+                  </div>
+                )}
+
+                {game.max_players && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-sm text-muted-foreground">Max Players</h4>
+                    <Badge variant="outline" className="text-sm w-fit">
+                      <Users className="w-4 h-4 mr-1" />
+                      {game.max_players}
+                    </Badge>
+                  </div>
+                )}
+
+                {game.cooperative !== null && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-sm text-muted-foreground">Cooperative</h4>
+                    <Badge variant={game.cooperative ? "secondary" : "outline"} className="text-sm w-fit">
+                      {game.cooperative ? "Yes" : "No"}
+                    </Badge>
+                  </div>
+                )}
+
+                {game.esrb_rating && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-sm text-muted-foreground">ESRB Rating</h4>
+                    <Badge variant="outline" className="text-sm w-fit">
+                      {game.esrb_rating}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+
+              {/* Enhanced Rating Display */}
+              <div>
+                <h4 className="font-semibold text-sm text-muted-foreground mb-3">Community Rating</h4>
+                <GameRatingDisplay
+                  gameName={game.name}
+                  platform={game.platform_name}
+                  launchboxRating={game.community_rating}
+                  launchboxRatingCount={game.community_rating_count}
+                  showSources={true}
+                />
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Overview Section */}
+            {game.overview && (
+              <div className="space-y-4">
+                <h3 className="font-semibold text-xl">Overview</h3>
+                <div className="bg-muted/30 p-4 rounded-lg">
+                  <p className="text-sm leading-relaxed">{game.overview}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Detailed Metadata */}
+            <div className="space-y-6">
+              <h3 className="font-semibold text-xl">Detailed Information</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Left Column */}
-                <div className="space-y-4">
+                <div className="space-y-6">
+                  {/* Developer & Publisher */}
+                  <div className="space-y-4">
+                    {game.developer && (
+                      <div>
+                        <h4 className="font-semibold text-sm text-muted-foreground mb-2">Developer</h4>
+                        <p className="text-sm bg-muted/20 p-2 rounded">{game.developer}</p>
+                      </div>
+                    )}
+
+                    {game.publisher && (
+                      <div>
+                        <h4 className="font-semibold text-sm text-muted-foreground mb-2">Publisher</h4>
+                        <p className="text-sm bg-muted/20 p-2 rounded">{game.publisher}</p>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Genres */}
                   {game.genres && game.genres.length > 0 && (
                     <div>
-                      <h4 className="font-medium mb-2">Genres</h4>
+                      <h4 className="font-semibold text-sm text-muted-foreground mb-3">Genres</h4>
                       <div className="flex flex-wrap gap-2">
                         {game.genres.map(genre => (
-                          <Badge key={genre.id} variant="secondary">
-                            {genre.name}
+                          <Badge key={genre} variant="secondary" className="text-sm">
+                            {genre}
                           </Badge>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Platforms */}
-                  {game.platforms && game.platforms.length > 0 && (
+                  {/* Series */}
+                  {game.series && (
                     <div>
-                      <h4 className="font-medium mb-2">Platforms</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {game.platforms.slice(0, 6).map(platform => (
-                          <Badge key={platform.platform.id} variant="outline">
-                            {platform.platform.name}
-                          </Badge>
-                        ))}
-                        {game.platforms.length > 6 && (
-                          <Badge variant="outline">
-                            +{game.platforms.length - 6} more
-                          </Badge>
-                        )}
-                      </div>
+                      <h4 className="font-semibold text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                        <Tag className="w-4 h-4" />
+                        Series
+                      </h4>
+                      <p className="text-sm bg-muted/20 p-2 rounded">{game.series}</p>
                     </div>
                   )}
 
-                  {/* Tags */}
-                  {game.tags && game.tags.length > 0 && (
+                  {/* Region */}
+                  {game.region && (
                     <div>
-                      <h4 className="font-medium mb-2">Tags</h4>
-                      <div className="flex flex-wrap gap-1">
-                        {game.tags.slice(0, 8).map(tag => (
-                          <Badge key={tag.id} variant="secondary" className="text-xs">
-                            {tag.name}
-                          </Badge>
-                        ))}
-                        {game.tags.length > 8 && (
-                          <Badge variant="secondary" className="text-xs">
-                            +{game.tags.length - 8}
-                          </Badge>
-                        )}
-                      </div>
+                      <h4 className="font-semibold text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                        <Globe className="w-4 h-4" />
+                        Region
+                      </h4>
+                      <Badge variant="outline" className="text-sm">
+                        {game.region}
+                      </Badge>
                     </div>
                   )}
                 </div>
 
                 {/* Right Column */}
-                <div className="space-y-4">
-                  {/* Game Details */}
-                  <div className="space-y-3">
-                    <h4 className="font-medium">Details</h4>
-
-                    {releaseDate && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Calendar className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Release Date:</span>
-                        <span>{releaseDate.toLocaleDateString('en-US', {
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric'
-                        })}</span>
-                      </div>
-                    )}
-
-                    {game.developers && game.developers.length > 0 && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Users className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Developer:</span>
-                        <span>{game.developers[0].name}</span>
-                      </div>
-                    )}
-
-                    {game.publishers && game.publishers.length > 0 && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Monitor className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Publisher:</span>
-                        <span>{game.publishers[0].name}</span>
-                      </div>
-                    )}
-
-                    {game.playtime && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Clock className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-muted-foreground">Playtime:</span>
-                        <span>{game.playtime} hours</span>
-                      </div>
-                    )}
-
-                    {game.esrb_rating && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="text-muted-foreground">ESRB Rating:</span>
-                        <Badge variant="outline">{game.esrb_rating.name}</Badge>
-                      </div>
-                    )}
-
-                    {game.website && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <Globe className="w-4 h-4 text-muted-foreground" />
-                        <a
-                          href={game.website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline flex items-center gap-1"
-                        >
-                          Official Website
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Where to Buy */}
-                  {game.stores && game.stores.length > 0 && (
+                <div className="space-y-6">
+                  {/* Play Modes */}
+                  {game.play_modes && game.play_modes.length > 0 && (
                     <div>
-                      <h4 className="font-medium mb-2">Where to Buy</h4>
-                      <div className="space-y-2">
-                        {game.stores.slice(0, 5).map(store => (
-                          <a
-                            key={store.id}
-                            href={store.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 text-sm text-primary hover:underline"
-                          >
-                            <span>{store.store.name}</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
+                      <h4 className="font-semibold text-sm text-muted-foreground mb-3 flex items-center gap-1">
+                        <Monitor className="w-4 h-4" />
+                        Play Modes
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {game.play_modes.map(mode => (
+                          <Badge key={mode} variant="secondary" className="text-sm">
+                            {mode}
+                          </Badge>
                         ))}
                       </div>
                     </div>
                   )}
-                </div>
-              </div>
 
-              {/* Image Gallery */}
-              {allImages.length > 0 && (
-                <div>
-                  <h4 className="font-medium mb-3 flex items-center gap-2">
-                    Screenshots & Media
-                    <Badge variant="secondary" className="text-xs">
-                      {allImages.length}
-                    </Badge>
-                  </h4>
-
-                  {/* Main featured image */}
-                  {allImages.length > 0 && (
-                    <div className="mb-4">
-                      <div
-                        className="relative group cursor-pointer rounded-lg overflow-hidden bg-muted"
-                        onClick={() => openLightbox(0)}
-                      >
-                        <img
-                          src={allImages[0].image}
-                          alt="Featured screenshot"
-                          className="w-full h-64 md:h-80 object-cover group-hover:scale-105 transition-transform duration-300"
-                          loading="lazy"
-                        />
-                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-center justify-center">
-                          <Maximize2 className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                        </div>
-                        <div className="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
-                          1 / {allImages.length}
-                        </div>
+                  {/* Themes */}
+                  {game.themes && game.themes.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-sm text-muted-foreground mb-3 flex items-center gap-1">
+                        <Palette className="w-4 h-4" />
+                        Themes
+                      </h4>
+                      <div className="flex flex-wrap gap-2">
+                        {game.themes.map(theme => (
+                          <Badge key={theme} variant="outline" className="text-sm">
+                            {theme}
+                          </Badge>
+                        ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Thumbnail grid */}
-                  {allImages.length > 1 && (
-                    <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                      {allImages.slice(1, 13).map((screenshot, index) => (
-                        <div
-                          key={screenshot.id}
-                          className="relative group cursor-pointer rounded overflow-hidden bg-muted aspect-video"
-                          onClick={() => openLightbox(index + 1)}
-                        >
-                          <img
-                            src={screenshot.image}
-                            alt={`Screenshot ${index + 2}`}
-                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
-                            loading="lazy"
-                          />
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
-                        </div>
-                      ))}
-
-                      {/* Show more indicator */}
-                      {allImages.length > 13 && (
-                        <div
-                          className="relative group cursor-pointer rounded overflow-hidden bg-muted/50 aspect-video flex items-center justify-center border-2 border-dashed border-muted-foreground/30"
-                          onClick={() => openLightbox(13)}
-                        >
-                          <div className="text-center">
-                            <span className="text-sm font-medium text-muted-foreground">
-                              +{allImages.length - 13}
-                            </span>
-                            <div className="text-xs text-muted-foreground">more</div>
+                  {/* Alternative Names */}
+                  {game.alternative_names && game.alternative_names.length > 0 && (
+                    <div>
+                      <h4 className="font-semibold text-sm text-muted-foreground mb-3">Alternate Names</h4>
+                      <div className="space-y-2 max-h-32 overflow-y-auto">
+                        {game.alternative_names.map((name, index) => (
+                          <div key={index} className="text-sm bg-muted/20 p-2 rounded">
+                            {name}
                           </div>
-                        </div>
-                      )}
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* External Links */}
+                  {game.wikipedia_url && (
+                    <div>
+                      <h4 className="font-semibold text-sm text-muted-foreground mb-3 flex items-center gap-1">
+                        <BookOpen className="w-4 h-4" />
+                        External Links
+                      </h4>
+                      <div className="space-y-2">
+                        <Button variant="outline" size="sm" asChild className="w-full justify-start">
+                          <a href={game.wikipedia_url} target="_blank" rel="noopener noreferrer">
+                            <Globe className="w-4 h-4 mr-2" />
+                            Wikipedia Page
+                          </a>
+                        </Button>
+                      </div>
                     </div>
                   )}
                 </div>
-              )}
+              </div>
             </div>
-          </ScrollArea>
+
+            {/* Enhanced Media Gallery */}
+            <Separator />
+
+            <GameMediaGallery
+              gameName={game.name}
+              platform={game.platform_name}
+              existingMedia={{
+                screenshot_url: game.screenshot_url,
+                cover_url: game.cover_url,
+                logo_url: game.logo_url,
+                video_url: game.video_url
+              }}
+            />
+
+          </div>
         </div>
       </DialogContent>
-
-      {/* Lightbox Modal */}
-      {lightboxOpen && (
-        <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
-          <DialogContent
-            className="max-w-[95vw] max-h-[95vh] p-0 border-none bg-black/95"
-            onKeyDown={handleKeyDown}
-          >
-            <div className="relative w-full h-full flex items-center justify-center">
-              {/* Close button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-4 right-4 z-10 text-white hover:bg-white/20"
-                onClick={() => setLightboxOpen(false)}
-              >
-                <X className="w-6 h-6" />
-              </Button>
-
-              {/* Navigation buttons */}
-              {allImages.length > 1 && (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute left-4 top-1/2 -translate-y-1/2 z-10 text-white hover:bg-white/20"
-                    onClick={prevImage}
-                  >
-                    <ChevronLeft className="w-8 h-8" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-4 top-1/2 -translate-y-1/2 z-10 text-white hover:bg-white/20"
-                    onClick={nextImage}
-                  >
-                    <ChevronRight className="w-8 h-8" />
-                  </Button>
-                </>
-              )}
-
-              {/* Main image */}
-              <div className="relative max-w-full max-h-full p-8">
-                <img
-                  src={allImages[currentImageIndex]?.image}
-                  alt={`Screenshot ${currentImageIndex + 1}`}
-                  className="max-w-full max-h-full object-contain rounded-lg"
-                />
-
-                {/* Image counter */}
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/60 text-white text-sm px-3 py-1 rounded-full">
-                  {currentImageIndex + 1} / {allImages.length}
-                </div>
-              </div>
-
-              {/* Thumbnail strip */}
-              {allImages.length > 1 && (
-                <div className="absolute bottom-4 left-4 right-4">
-                  <div className="flex justify-center">
-                    <div className="flex gap-2 bg-black/60 p-2 rounded-lg max-w-full overflow-x-auto">
-                      {allImages.map((image, index) => (
-                        <button
-                          key={image.id}
-                          onClick={() => setCurrentImageIndex(index)}
-                          className={`flex-shrink-0 w-16 h-10 rounded overflow-hidden border-2 transition-all ${
-                            index === currentImageIndex
-                              ? 'border-white'
-                              : 'border-transparent hover:border-white/50'
-                          }`}
-                        >
-                          <img
-                            src={image.image}
-                            alt={`Thumbnail ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
     </Dialog>
   );
 };
