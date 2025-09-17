@@ -75,7 +75,7 @@ const GamesBrowser: React.FC = () => {
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const gamesPerPage = 12; // Reduced from 24 to 12 for better performance
+  const gamesPerPage = 8; // Further reduced from 12 to 8 for better performance
 
   // Extract unique values for filters - load these separately for better performance
   const [allGenres, setAllGenres] = useState<string[]>([]);
@@ -177,10 +177,10 @@ const GamesBrowser: React.FC = () => {
         `); // Removed count: 'exact' to improve performance
 
       // Apply search filter - use prefix search for better performance on large datasets
-      if (filters.search) {
+      if (filters.search && filters.search.length >= 3) {
         const searchTerm = filters.search.toLowerCase();
         // Use prefix search (starts with) for better performance than wildcard search
-        // This will work with a simple index on LOWER(name)
+        // Minimum 3 characters to avoid expensive queries on short terms
         query = query.ilike('name', `${searchTerm}%`);
       }
 
@@ -350,7 +350,7 @@ const GamesBrowser: React.FC = () => {
                   <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search games by name..."
+                      placeholder="Search games by name (min 3 characters)..."
                       value={filters.search}
                       onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
                       className="pl-10"
