@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useTournament } from '@/contexts/TournamentContext';
 import PlayerInsult from '@/components/PlayerInsult';
@@ -106,17 +105,8 @@ export const ScoreNotificationsListener: React.FC = () => {
 
           console.log('ScoreNotificationsListener: Found game:', game);
 
-          // Show the toast notification
-          console.log('ScoreNotificationsListener: Showing toast notification');
-          try {
-            toast.success(`${submission.player_name} scored ${submission.score.toLocaleString()} in ${game.name}!`, {
-              duration: 5000,
-              position: 'top-center',
-            });
-            console.log('ScoreNotificationsListener: Toast called successfully');
-          } catch (toastError) {
-            console.error('ScoreNotificationsListener: Toast error:', toastError);
-          }
+          // Toast notification removed - only celebration modal is shown
+          console.log('ScoreNotificationsListener: Skipping toast notification (disabled)');
 
           // Trigger global celebration modal + confetti
           console.log('ScoreNotificationsListener: Triggering celebration modal for:', submission.player_name);
@@ -145,14 +135,25 @@ export const ScoreNotificationsListener: React.FC = () => {
           table: 'player_achievements',
         },
         async (payload) => {
-          const pa = payload.new as { achievement_id: string };
-          const { data: achievement } = await supabase
+          console.log('ScoreNotificationsListener: Achievement event received:', payload);
+          const pa = payload.new as { achievement_id: string; player_name: string };
+          console.log('ScoreNotificationsListener: Fetching achievement data for:', pa.achievement_id);
+
+          const { data: achievement, error } = await supabase
             .from('achievements')
             .select('id, name, description, badge_icon, badge_color, points')
             .eq('id', pa.achievement_id)
             .single();
 
+          if (error) {
+            console.error('ScoreNotificationsListener: Error fetching achievement:', error);
+            return;
+          }
+
+          console.log('ScoreNotificationsListener: Achievement data:', achievement);
+
           if (achievement && showAchievementNotification) {
+            console.log('ScoreNotificationsListener: Showing achievement notification for:', achievement.name);
             showAchievementNotification({
               id: achievement.id,
               name: achievement.name,
@@ -160,6 +161,11 @@ export const ScoreNotificationsListener: React.FC = () => {
               badge_icon: achievement.badge_icon,
               badge_color: achievement.badge_color,
               points: achievement.points,
+            });
+          } else {
+            console.log('ScoreNotificationsListener: Cannot show achievement notification:', {
+              hasAchievement: !!achievement,
+              hasShowFunction: !!showAchievementNotification
             });
           }
         }

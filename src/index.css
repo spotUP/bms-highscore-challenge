@@ -202,7 +202,7 @@
   to   { opacity: 0; transform: translateX(100%); }
 }
 .fly-out-right-offscreen {
-  animation: flyOutRightOffscreen 900ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: flyOutRightOffscreen 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   will-change: transform, opacity;
   transform: translateZ(0);
   overflow-anchor: none;
@@ -217,7 +217,7 @@
   to   { opacity: 0; transform: translateX(-100%); }
 }
 .fly-out-left-offscreen {
-  animation: flyOutLeftOffscreen 850ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: flyOutLeftOffscreen 500ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
   will-change: transform, opacity;
   transform: translateZ(0);
   overflow-anchor: none;
@@ -246,11 +246,11 @@
 }
 
 .animate-slide-out-left {
-  animation: flyOutLeft 600ms cubic-bezier(0.55, 0.055, 0.675, 0.19) both;
+  animation: flyOutLeft 350ms cubic-bezier(0.55, 0.055, 0.675, 0.19) both;
 }
 
 .animate-slide-out-right {
-  animation: flyOutRight 600ms cubic-bezier(0.55, 0.055, 0.675, 0.19) both;
+  animation: flyOutRight 350ms cubic-bezier(0.55, 0.055, 0.675, 0.19) both;
 }
 
 /* Bottom slide-in animation */
@@ -268,7 +268,7 @@
   to   { opacity: 0; transform: translateY(100%); }
 }
 .animate-slide-out-bottom {
-  animation: flyOutBottom 800ms cubic-bezier(0.55, 0.055, 0.675, 0.19) both;
+  animation: flyOutBottom 500ms cubic-bezier(0.55, 0.055, 0.675, 0.19) both;
 }
 
 /* Fast tab transition animations */
@@ -980,9 +980,27 @@ html, body {
   scrollbar-gutter: stable both-edges; /* reserve scrollbar space to avoid content shift */
 }
 
+/* Hide scrollbars globally while maintaining scroll functionality */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none; /* Chrome, Safari, Edge */
+}
+
+/* Apply scrollbar gutter to all scrollable containers to prevent layout jumping */
+.overflow-y-auto, .overflow-auto {
+  scrollbar-gutter: stable;
+}
+
 /* Temporary override for wave animations - allow overflow during page load */
 body.loading-animations {
   overflow-x: visible !important;
+  scrollbar-gutter: stable both-edges; /* Maintain scrollbar stability during animations */
 }
 
 /* Force overflow visibility for wave animations */
@@ -1001,22 +1019,6 @@ body.loading-animations {
   backface-visibility: hidden; /* Prevent flickering during 3D transforms */
   contain: layout style; /* Contain layout and style changes */
   min-height: 72px; /* Reserve minimum height to prevent layout shifts */
-}
-
-
-/* Off-screen slide-in animation for left panels */
-@keyframes flyInLeftOffscreen {
-  from { opacity: 0; transform: translateX(-100%); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-.fly-in-left-offscreen {
-  animation: flyInLeftOffscreen 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
-  will-change: transform, opacity;
-  transform: translateZ(0);
-  overflow-anchor: none;
-  contain: layout paint;
-  position: relative;
-  z-index: 0;
 }
 
 /* Fade and bounce-in animation for new brackets */
@@ -1064,7 +1066,7 @@ body.loading-animations {
   }
 }
 .animate-wave-out-right {
-  animation: waveOutToRight 600ms cubic-bezier(0.55, 0.055, 0.675, 0.19) both;
+  animation: waveOutToRight 350ms cubic-bezier(0.55, 0.055, 0.675, 0.19) both;
   will-change: transform, opacity;
   backface-visibility: hidden;
   position: relative;
@@ -1102,5 +1104,72 @@ body.loading-animations {
   animation: bracketWinnerZoom 2000ms cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
   transform-origin: center center;
   will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* Elastic rubberband bounce animation for winner modals */
+@keyframes elasticBounce {
+  0% {
+    opacity: 0;
+    transform: scale(0.1) rotate(-12deg);
+  }
+  20% {
+    opacity: 0.8;
+    transform: scale(1.4) rotate(8deg);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(0.7) rotate(-5deg);
+  }
+  55% {
+    transform: scale(1.25) rotate(3deg);
+  }
+  65% {
+    transform: scale(0.85) rotate(-2deg);
+  }
+  75% {
+    transform: scale(1.15) rotate(1deg);
+  }
+  85% {
+    transform: scale(0.93) rotate(-0.5deg);
+  }
+  92% {
+    transform: scale(1.08) rotate(0.3deg);
+  }
+  96% {
+    transform: scale(0.97) rotate(-0.1deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes elasticBounceOut {
+  0% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+  20% {
+    opacity: 0.9;
+    transform: scale(1.1) rotate(2deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.3) rotate(-5deg);
+  }
+}
+
+.elastic-bounce-in {
+  animation: elasticBounce 1200ms cubic-bezier(0.68, -0.55, 0.265, 1.55) both;
+  transform-origin: center center;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+.elastic-bounce-out {
+  animation: elasticBounceOut 400ms cubic-bezier(0.55, 0.085, 0.68, 0.53) both;
+  transform-origin: center center;
+  will-change: transform, opacity;
   backface-visibility: hidden;
 }

@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import AdvancedConfetti from '@/components/AdvancedConfetti';
 import { createPortal } from 'react-dom';
 import { createClient } from '@supabase/supabase-js';
-import { toast } from '@/hooks/use-toast';
+import { useToast } from '@/hooks/use-toast';
 
 const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL,
@@ -117,8 +117,9 @@ const getTournamentWinner = (matches: TournamentMatch[], players: TournamentPlay
 };
 
 const Competition: React.FC = () => {
-  const { tournaments, getTournamentData, reportWinner } = useBrackets();
+  const { tournaments, getTournamentData, reportWinner, generateBracket } = useBrackets();
   const { user, isAdmin, signOut } = useAuth();
+  const { toast } = useToast();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { animatedNavigate } = usePageTransitions({ exitDuration: 600 });
@@ -189,7 +190,35 @@ const Competition: React.FC = () => {
       try {
         const data = await getTournamentData(selected.id);
         setParticipants(data.players);
-        setMatches(data.matches);
+
+        // Auto-generate bracket if there are players but no matches
+        if (data.players.length >= 2 && data.matches.length === 0) {
+          console.log('🔴 Competition: Auto-generating bracket for tournament with players but no matches');
+          toast({
+            title: 'Generating Bracket',
+            description: 'Creating tournament bracket structure...',
+          });
+
+          const success = await generateBracket(selected.id, { mode: 'seeded' });
+          if (success) {
+            // Reload the data after generation
+            const newData = await getTournamentData(selected.id);
+            setMatches(newData.matches);
+            toast({
+              title: 'Bracket Generated',
+              description: 'Tournament bracket has been created successfully!',
+            });
+          } else {
+            toast({
+              title: 'Generation Failed',
+              description: 'Could not generate bracket. Please try from the admin page.',
+              variant: 'destructive',
+            });
+            setMatches([]);
+          }
+        } else {
+          setMatches(data.matches);
+        }
       } catch (error) {
         console.error('Failed to load bracket data:', error);
         setParticipants([]);
@@ -199,7 +228,7 @@ const Competition: React.FC = () => {
       }
     };
     load();
-  }, [selected, getTournamentData]);
+  }, [selected, getTournamentData, generateBracket]);
 
   // Real-time subscriptions + polling backup for live updates
   useEffect(() => {

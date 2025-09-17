@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useBrackets, Tournament, TournamentPlayer, TournamentMatch } from '@/contexts/BracketContext';
 import { useAuth } from '@/hooks/useAuth';
+import { usePerformanceMode } from '@/hooks/usePerformanceMode';
 import { useToast } from '@/components/ui/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -105,7 +106,20 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { enableAnimations } = usePerformanceMode();
 
+  // Prevent page scrolling on this admin page
+  useEffect(() => {
+    // Save original overflow style
+    const originalOverflow = document.body.style.overflow;
+    // Prevent page scrolling
+    document.body.style.overflow = 'hidden';
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
 
   const { tournaments, loading, refresh, createTournament, addPlayers, generateBracket, reportWinner, getTournamentData, deleteTournament } = useBrackets();
 
@@ -665,15 +679,15 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
   }, [selected, matches.length, bracketMatches, quickNamesList, players]);
 
   return (
-    <div className="h-[100dvh] overflow-hidden flex flex-col">
+    <div className={`h-[calc(100dvh-5rem)] overflow-hidden flex flex-col ${enableAnimations ? (isExiting ? 'animate-slide-out-bottom' : 'animate-slide-in-bottom') : ''}`}>
       {/* Desktop two-column layout */}
-      <div className="grid grid-cols-12 gap-3 flex-1 min-h-0 overflow-hidden p-2">
-      <div className="col-span-12 lg:col-span-4 xl:col-span-3 space-y-4 min-h-0 h-full pr-2"><div className={`${isExiting ? 'fly-out-left-offscreen' : 'fly-in-left-offscreen anim-delay-50'} h-full min-h-0`}>
+      <div className="grid grid-cols-12 gap-2 flex-1 min-h-0 overflow-hidden p-1">
+      <div className="col-span-12 lg:col-span-4 xl:col-span-3 space-y-2 min-h-0 h-full"><div className="h-full min-h-0">
       {/* Unified Left Panel */}
       <Card className="h-full flex flex-col overflow-hidden bg-black/20 backdrop-blur-sm border-white/10">
-        <CardContent className="flex-1 min-h-0 overflow-auto space-y-5">
+        <CardContent className="flex-1 min-h-0 overflow-auto space-y-3 p-3">
           {/* Select/Create Tournament */}
-          <section className="mt-4 space-y-1.5">
+          <section className="space-y-1.5">
             <h3 className="text-sm font-semibold text-gray-200">Tournament</h3>
             <Select
               value={showCreateForm ? 'CREATE_NEW' : (selected?.id || '')}
@@ -840,7 +854,7 @@ Player D
         </CardContent>
       </Card>
       </div></div>
-      <div className="col-span-12 lg:col-span-8 xl:col-span-9 min-h-0 h-full flex flex-col"><div className={`${isExiting ? 'fly-out-right-offscreen' : 'fly-in-right-offscreen anim-delay-100'} h-full flex flex-col min-h-0`}>
+      <div className="col-span-12 lg:col-span-8 xl:col-span-9 min-h-0 h-full flex flex-col"><div className="h-full flex flex-col min-h-0">
         <Card className="h-full flex flex-col overflow-hidden bg-black/20 backdrop-blur-sm border-white/10">
           <CardHeader className="pb-3 shrink-0">
             <div className="flex items-center justify-between">
@@ -878,7 +892,7 @@ Player D
                        </div>
                      )}
                      {!isTournamentComplete && (
-                       <Button variant="outline" size="sm" onClick={() => window.location.assign(`/tournaments?c=${selected.id}`)}>
+                       <Button variant="outline" size="sm" onClick={() => window.location.assign(`/competition?tournament=${selected.id}`)}>
                          Competition View
                        </Button>
                      )}

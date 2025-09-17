@@ -25,7 +25,7 @@ const Layout: React.FC<LayoutProps> = ({
   topNavProps = {}
 }) => {
   const location = useLocation();
-  const { isExiting, animatedNavigate } = usePageTransitions({ exitDuration: 600 });
+  const { isExiting, animatedNavigate } = usePageTransitions({ exitDuration: 550 });
   const [isSpinWheelOpen, setIsSpinWheelOpen] = useState(false);
   const { gameScores } = useTournamentGameData();
 

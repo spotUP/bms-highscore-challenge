@@ -245,7 +245,7 @@ const loadDemolitionManScores = async () => {
         created_at,
         games!inner(name)
       `)
-      .eq('games.name', 'Demolition Man')
+      .eq('games.name', 'Standing Competition')
       .order('score', { ascending: false })
       .limit(5);
 

@@ -108,7 +108,7 @@ const PlayerInsult: React.FC<PlayerInsultProps> = ({ isVisible, playerName, onCo
         setShowConfetti(false); // Stop confetti
         setTimeout(() => {
           onComplete(); // Use the original callback directly
-        }, 500); // Wait for fade out animation
+        }, 400); // Wait for elastic bounce out animation (400ms)
       }, 10000);
     } else if (!isVisible) {
       // Reset when component becomes invisible
@@ -142,11 +142,11 @@ const PlayerInsult: React.FC<PlayerInsultProps> = ({ isVisible, playerName, onCo
       
       {/* Message Modal */}
       <div className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none">
-        <div 
+        <div
           className={`
-            text-white p-8 rounded-2xl shadow-2xl 
-            text-center max-w-md mx-4 transform transition-all duration-500 ease-in-out
-            ${isAnimating ? 'scale-100 opacity-100' : 'scale-75 opacity-0'}
+            text-white p-8 rounded-2xl shadow-2xl
+            text-center max-w-md mx-4 transform
+            ${isAnimating ? 'elastic-bounce-in' : 'elastic-bounce-out'}
           `}
           style={{
             background: (playerName.toLowerCase() === 'ronny' || playerName.toLowerCase() === 'lars')

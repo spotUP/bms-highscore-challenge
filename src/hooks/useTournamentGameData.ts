@@ -259,7 +259,7 @@ export const useTournamentGameData = () => {
           games!inner(name)
         `)
         .eq('tournament_id', currentTournament.id)
-        .eq('games.name', 'Demolition Man')
+        .eq('games.name', 'Standing Competition')
         .order('score', { ascending: false })
         .limit(5);
 

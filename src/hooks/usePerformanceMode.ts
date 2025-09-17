@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { dlog } from '@/lib/debug';
 
@@ -72,42 +72,57 @@ const detectLowEndDevice = (): boolean => {
 
 export const usePerformanceMode = (): PerformanceInfo => {
   const queryClient = useQueryClient();
-  const [performanceInfo, setPerformanceInfo] = useState<PerformanceInfo>({
-    isLowEnd: false,
-    isRaspberryPi: false,
-    isPerformanceMode: false,
-    enableAnimations: true,
-    particleCount: 800,
-    refreshInterval: 30000,
-    enableBlur: true,
-    enableGradients: true,
-    enableTransitions: true,
-    togglePerformanceMode: (enabled: boolean) => {
-      localStorage.setItem('performance-mode', enabled ? 'enabled' : 'disabled');
-      // Force re-render by updating state instead of reloading
-      setPerformanceInfo(prev => ({ ...prev, isPerformanceMode: enabled }));
-    },
-  });
 
-  useEffect(() => {
+  // Memoize expensive detection to prevent repeated calculations causing layout jumps
+  const detectionResults = useMemo(() => {
     const isRaspberryPi = detectRaspberryPi();
     const isLowEnd = isRaspberryPi || detectLowEndDevice();
-    
-    // Also check for user preference
-    const userPreference = localStorage.getItem('performance-mode');
-    const forcePerformanceMode = userPreference === 'enabled';
-    
-    const shouldOptimize = isLowEnd || forcePerformanceMode;
-    
-    dlog('Performance Detection:', {
+
+    dlog('Performance Detection (memoized):', {
       isRaspberryPi,
       isLowEnd,
-      forcePerformanceMode,
       userAgent: navigator.userAgent,
       platform: navigator.platform,
       cores: navigator.hardwareConcurrency,
       memory: (navigator as any).deviceMemory
     });
+
+    return { isRaspberryPi, isLowEnd };
+  }, []); // Empty dependency array ensures this runs only once
+
+  const [performanceInfo, setPerformanceInfo] = useState<PerformanceInfo>(() => {
+    // Initialize with correct values immediately to prevent flickering
+    const { isRaspberryPi, isLowEnd } = detectionResults;
+    const userPreference = localStorage.getItem('performance-mode');
+    const forcePerformanceMode = userPreference === 'enabled';
+    const shouldOptimize = isLowEnd || forcePerformanceMode;
+
+    return {
+      isLowEnd,
+      isRaspberryPi,
+      isPerformanceMode: shouldOptimize,
+      enableAnimations: !shouldOptimize,
+      particleCount: shouldOptimize ? 200 : 800,
+      refreshInterval: shouldOptimize ? 20000 : 15000,
+      enableBlur: !shouldOptimize,
+      enableGradients: !shouldOptimize,
+      enableTransitions: !shouldOptimize,
+      togglePerformanceMode: (enabled: boolean) => {
+        localStorage.setItem('performance-mode', enabled ? 'enabled' : 'disabled');
+        // Force re-render by updating state instead of reloading
+        setPerformanceInfo(prev => ({ ...prev, isPerformanceMode: enabled }));
+      },
+    };
+  });
+
+  useEffect(() => {
+    const { isRaspberryPi, isLowEnd } = detectionResults;
+
+    // Also check for user preference
+    const userPreference = localStorage.getItem('performance-mode');
+    const forcePerformanceMode = userPreference === 'enabled';
+
+    const shouldOptimize = isLowEnd || forcePerformanceMode;
 
     setPerformanceInfo({
       isLowEnd,
@@ -127,7 +142,7 @@ export const usePerformanceMode = (): PerformanceInfo => {
         window.dispatchEvent(new CustomEvent('performanceModeChanged', { detail: { enabled } }));
       },
     });
-  }, []);
+  }, [detectionResults]);
 
   // Listen for global performance mode changes (broadcast by togglePerformanceMode)
   useEffect(() => {
