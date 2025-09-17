@@ -253,7 +253,9 @@ export const GameMediaGallery: React.FC<GameMediaGalleryProps> = ({
 
       setLoading(true);
       try {
+        console.log(`🎮 GameMediaGallery: Fetching media for "${gameName}" with existing:`, existingMedia);
         const media = await gameMediaService.getGameMedia(gameName, platform, existingMedia);
+        console.log(`📦 GameMediaGallery: Received media for "${gameName}":`, media);
         setGameMedia(media);
       } catch (error) {
         console.error('Error fetching game media:', error);

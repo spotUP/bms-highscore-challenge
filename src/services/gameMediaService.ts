@@ -287,9 +287,11 @@ class GameMediaService {
     }
   ): Promise<GameMedia> {
     const cacheKey = `${gameName}-${platform || 'unknown'}`;
+    console.log(`🎮 GameMediaService: Fetching media for "${gameName}" (${platform})`);
 
     // Check cache first
     if (this.mediaCache.has(cacheKey)) {
+      console.log(`📦 GameMediaService: Cache hit for "${gameName}"`);
       return this.mediaCache.get(cacheKey)!;
     }
 
@@ -300,6 +302,7 @@ class GameMediaService {
 
     // Add existing LaunchBox media
     if (existingMedia?.screenshot_url) {
+      console.log(`📸 GameMediaService: Adding screenshot from LaunchBox - ${existingMedia.screenshot_url}`);
       screenshots.push({
         id: 'launchbox-screenshot',
         url: existingMedia.screenshot_url,
@@ -308,6 +311,7 @@ class GameMediaService {
     }
 
     if (existingMedia?.video_url) {
+      console.log(`🎥 GameMediaService: Adding video from LaunchBox - ${existingMedia.video_url}`);
       const youtubeId = this.extractYouTubeId(existingMedia.video_url);
 
       if (youtubeId) {
@@ -389,6 +393,12 @@ class GameMediaService {
 
     // Cache the result
     this.mediaCache.set(cacheKey, gameMedia);
+
+    console.log(`✅ GameMediaService: Returning media for "${gameName}":`, {
+      screenshots: gameMedia.screenshots.length,
+      videos: gameMedia.videos.length,
+      total: gameMedia.totalMediaCount
+    });
 
     return gameMedia;
   }
