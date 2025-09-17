@@ -40,13 +40,24 @@ const LeaderItem = React.memo(({
   shouldOptimize: boolean;
 }) => {
   const gradientClass = shouldOptimize ? 'text-white font-bold' : 'animated-gradient-vertical';
+  const waveDelay = index * 0.3;
+  const swingDelay = index * 0.2;
 
   return (
-    <div className="flex items-center gap-3 py-1">
+    <div
+      className={`flex items-center gap-3 py-1 ${shouldOptimize ? '' : 'animate-swing'}`}
+      style={{
+        animationDelay: `${swingDelay}s`,
+        '--wave-delay': `${waveDelay}s`
+      } as React.CSSProperties}
+    >
       <RankIcon rank={index} type={type} />
       <div className="flex-1 flex items-baseline">
         <div className="flex-1">
-          <div className={`font-arcade font-bold text-lg ${gradientClass}`}>
+          <div
+            className={`font-arcade font-bold text-lg ${gradientClass}`}
+            style={{ '--wave-delay': `${waveDelay}s` } as React.CSSProperties}
+          >
             {player.player_name}
           </div>
           {type === 'standard' && (
@@ -60,7 +71,10 @@ const LeaderItem = React.memo(({
             </div>
           )}
         </div>
-        <div className={`font-bold font-arcade text-base ${gradientClass}`}>
+        <div
+          className={`font-bold font-arcade text-base ${gradientClass}`}
+          style={{ '--wave-delay': `${waveDelay}s` } as React.CSSProperties}
+        >
           {type === 'demolition' ? formatScore(player.score) : formatScore(player.total_ranking_points || 0)}
         </div>
       </div>
@@ -75,6 +89,9 @@ const OverallLeaderboardOptimized = React.memo(() => {
   const { leaders, achievementHunters, loading } = useTournamentGameData();
   const { currentTournament } = useTournament();
   const { shouldOptimize, throttle } = useRaspberryPiOptimizations();
+
+  // TODO: Add demolition man scores when implemented
+  const demolitionManScores = useMemo(() => [], []);
 
   // Local state with throttled updates for Pi
   const [displayData, setDisplayData] = useState({
