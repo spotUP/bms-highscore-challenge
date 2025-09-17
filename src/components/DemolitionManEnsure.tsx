@@ -51,16 +51,29 @@ const DemolitionManEnsure: React.FC = () => {
       if (existingGame && !findError) {
         gameId = existingGame.id;
       } else {
-        // Game doesn't exist, we'll just mark it as unavailable
-        const error = new Error('Standing Competition game not found');
-        throw error;
+        // Game doesn't exist, create it
+        const { data: newGame, error: createError } = await supabase
+          .from('games')
+          .insert({
+            name: 'Standing Competition',
+            is_active: true
+          })
+          .select('id')
+          .single();
+
+        if (createError || !newGame) {
+          throw new Error('Failed to create Standing Competition game: ' + (createError?.message || 'Unknown error'));
+        }
+
+        gameId = newGame.id;
       }
 
 
       setGameExists(true);
+      const action = existingGame ? 'verified' : 'created';
       toast({
         title: "Success!",
-        description: `Standing Competition eternal leaderboard is now available (ID: ${gameId})`,
+        description: `Standing Competition game ${action} successfully (ID: ${gameId})`,
       });
 
     } catch (error: any) {

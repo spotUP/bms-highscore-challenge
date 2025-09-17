@@ -441,6 +441,7 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
   }, [forceAutoFit, matches, participants]); // Include both matches and participants for admin mode
 
   const onWheel: React.WheelEventHandler<SVGSVGElement> = (e) => {
+    e.preventDefault(); // Prevent page scrolling when zooming in bracket
     const delta = -e.deltaY;
     // Gentle zoom factor for smoother control
     const factor = delta > 0 ? 1.03 : 0.97;

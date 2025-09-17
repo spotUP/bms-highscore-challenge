@@ -84,13 +84,15 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   // Monitor localStorage for animation suppression changes
   useEffect(() => {
     const checkSuppression = () => {
-      setSuppressAnimations(window.localStorage.getItem('suppressAnimations') === 'true');
+      const newValue = window.localStorage.getItem('suppressAnimations') === 'true';
+      // Only update state if the value has actually changed
+      setSuppressAnimations(prev => prev !== newValue ? newValue : prev);
     };
 
     // Listen for storage events
     window.addEventListener('storage', checkSuppression);
-    // Also check periodically in case the flag is set from the same tab
-    const interval = setInterval(checkSuppression, 500);
+    // Also check periodically in case the flag is set from the same tab (reduced frequency)
+    const interval = setInterval(checkSuppression, 2000); // Reduced from 500ms to 2s
 
     return () => {
       window.removeEventListener('storage', checkSuppression);
@@ -136,16 +138,11 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
     };
 
 
-    // For Pi5 or any ARM Linux device, skip WebSocket entirely and go straight to aggressive polling
+    // For Pi5 or any ARM Linux device, skip WebSocket entirely and rely on usePi5Polling hook
     if (isPi5 || (isARM && userAgent.includes('linux'))) {
-      // Immediate aggressive polling for Pi 5 - no WebSocket attempts
-      const aggressiveInterval = setInterval(() => {
-        handleUpdate();
-      }, 3000); // Every 3 seconds - very aggressive
-
-      return () => {
-        clearInterval(aggressiveInterval);
-      };
+      // Pi5 polling is now handled by usePi5Polling hook in useTournamentGameData
+      // This prevents duplicate polling timers that cause layout jumps
+      return () => {}; // No-op cleanup
     }
 
     try {
@@ -164,14 +161,13 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
         .subscribe((status) => {
           console.log('Score subscription status:', status);
 
-          // If subscription fails or we're on a problematic setup, use aggressive polling
+          // If subscription fails or we're on a problematic setup, use fallback polling
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || needsFallback) {
-            const pollInterval = isPi5 ? 5000 : 10000; // 5 seconds for Pi 5, 10 for others
-            console.log(`🔧 Pi5: Setting up aggressive polling every ${pollInterval/1000}s for score updates`);
+            const pollInterval = 15000; // Standard 15 second fallback (Pi5 polling handled elsewhere)
+            console.log(`🔧 Setting up fallback polling every ${pollInterval/1000}s for score updates`);
             if (fallbackInterval) clearInterval(fallbackInterval);
             fallbackInterval = setInterval(() => {
-              // More frequent polling for Pi 5, less frequent checks for recent updates
-              const recentUpdateThreshold = isPi5 ? 8000 : 15000;
+              const recentUpdateThreshold = 20000; // Allow 20s before fallback polling
               if (Date.now() - lastUpdateTime > recentUpdateThreshold) {
                 handleUpdate();
               }
@@ -180,18 +176,18 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
         });
     } catch (error) {
       console.error('Error setting up real-time subscription:', error);
-      // Fallback to aggressive polling if subscription completely fails
-      const fallbackPollInterval = isPi5 ? 5000 : 15000;
-      console.log(`🚨 Pi5: Subscription failed, using fallback polling every ${fallbackPollInterval/1000}s`);
+      // Fallback to polling if subscription completely fails (Pi5 polling handled elsewhere)
+      const fallbackPollInterval = 20000; // Conservative fallback
+      console.log(`🚨 Subscription failed, using emergency fallback polling every ${fallbackPollInterval/1000}s`);
       fallbackInterval = setInterval(handleUpdate, fallbackPollInterval);
     }
 
-    // Always set up safety net polling - more frequent for Pi 5
-    const safetyPollInterval = isPi5 ? 10000 : 30000;
-    const safetyThreshold = isPi5 ? 15000 : 30000;
+    // Safety net polling (Pi5 has dedicated polling via usePi5Polling hook)
+    const safetyPollInterval = 45000; // Conservative 45 second safety net
+    const safetyThreshold = 60000; // 1 minute threshold
     const safetyInterval = setInterval(() => {
       if (Date.now() - lastUpdateTime > safetyThreshold) {
-        console.log('🛡️ Pi5: Safety net polling triggered');
+        console.log('🛡️ Safety net polling triggered');
         handleUpdate();
       }
     }, safetyPollInterval);
@@ -280,7 +276,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                 }
 
                 return (
-                <section key={game.id} data-game-id={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? `${(games.length - 1 - games.findIndex(g => g.id === game.id)) * 100}ms` : `${games.findIndex(g => g.id === game.id) * 200}ms`)}}>
+                <section key={game.id} data-game-id={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? `${(games.length - 1 - games.findIndex(g => g.id === game.id)) * 50}ms` : `${games.findIndex(g => g.id === game.id) * 200}ms`)}}>
                   {/* Card containing logo, scores and QR code */}
                   <Card
                     className="bg-black/30 border-white/20 theme-card flex-1 flex flex-col cursor-pointer hover:scale-[1.02] transition-transform duration-200"

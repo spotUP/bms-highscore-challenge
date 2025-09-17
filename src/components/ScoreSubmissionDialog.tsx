@@ -196,9 +196,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           console.log('ScoreSubmissionDialog: Score submission recorded successfully');
         }
 
-        // Show message for all players
-        setInsultPlayerName(truncatedName);
-        setShowPlayerInsult(true);
+        // Congratulations now handled by global ScoreNotificationsListener
       } else {
         // Insert new score for this player/game combination
         const scoreData = {
@@ -267,9 +265,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           console.log('ScoreSubmissionDialog: Score submission recorded successfully');
         }
 
-        // Show message for all players
-        setInsultPlayerName(truncatedName);
-        setShowPlayerInsult(true);
+        // Congratulations now handled by global ScoreNotificationsListener
       }
       
       setName("");
@@ -281,10 +277,8 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         checkForNewAchievements(truncatedName);
       }, 1000);
 
-      // Only close the dialog if we're not showing the player insult modal
-      if (!showPlayerInsult) {
-        onClose();
-      }
+      // Close the dialog immediately since congratulations modal is handled globally
+      onClose();
       
     } catch (error: any) {
       console.error('Error submitting score:', error);

@@ -25,7 +25,7 @@ const DemolitionManSubmit = () => {
         const { data: games, error } = await supabase
           .from('games')
           .select('id, name')
-          .eq('name', 'Demolition Man')
+          .eq('name', 'Standing Competition')
           .single();
 
         if (games && !error) {

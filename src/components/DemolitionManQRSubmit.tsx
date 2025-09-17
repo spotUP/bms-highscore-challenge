@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,11 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Zap, RefreshCw, ExternalLink } from 'lucide-react';
+import { Zap, RefreshCw, ExternalLink, Download } from 'lucide-react';
 import { getCardStyle, getTypographyStyle } from '@/utils/designSystem';
 
 const DemolitionManQRSubmit = () => {
   const { toast } = useToast();
+  const qrRef = useRef<HTMLDivElement>(null);
   const [qrUrl, setQrUrl] = useState('');
   const [playerName, setPlayerName] = useState('');
   const [score, setScore] = useState('');
@@ -123,6 +124,39 @@ const DemolitionManQRSubmit = () => {
     }
   };
 
+  const downloadQRCode = () => {
+    const svgElement = qrRef.current?.querySelector('svg');
+    if (!svgElement) {
+      toast({
+        title: "Error",
+        description: "QR Code not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Clone the SVG to avoid modifying the original
+    const svgData = new XMLSerializer().serializeToString(svgElement);
+    const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const svgUrl = URL.createObjectURL(svgBlob);
+
+    // Create download link
+    const downloadLink = document.createElement('a');
+    downloadLink.href = svgUrl;
+    downloadLink.download = 'standing-competition-qr-code.svg';
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+
+    // Cleanup
+    URL.revokeObjectURL(svgUrl);
+
+    toast({
+      title: "Success",
+      description: "QR Code downloaded as SVG",
+    });
+  };
+
   return (
     <Card className={getCardStyle('primary')}>
       <CardHeader>
@@ -134,8 +168,8 @@ const DemolitionManQRSubmit = () => {
       <CardContent className="space-y-6">
         {/* QR Code Section */}
         <div className="text-center space-y-4">
-          <div className="bg-white p-4 rounded-lg inline-block">
-            <QRCodeSVG 
+          <div ref={qrRef} className="bg-white p-4 rounded-lg inline-block">
+            <QRCodeSVG
               value={qrUrl}
               size={200}
               bgColor="#FFFFFF"
@@ -144,7 +178,7 @@ const DemolitionManQRSubmit = () => {
               includeMargin={true}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-3">
             <p className="text-sm text-gray-400">
               Scan this QR code to quickly submit Standing Competition scores
             </p>
@@ -152,6 +186,15 @@ const DemolitionManQRSubmit = () => {
               <ExternalLink className="w-3 h-3" />
               <span className="font-mono break-all">{qrUrl}</span>
             </div>
+            <Button
+              onClick={downloadQRCode}
+              variant="outline"
+              size="sm"
+              className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download QR Code
+            </Button>
           </div>
         </div>
 

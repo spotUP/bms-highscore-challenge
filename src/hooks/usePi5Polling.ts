@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useMemo } from 'react';
 
 interface Pi5PollingConfig {
   enabled: boolean;
@@ -12,23 +12,25 @@ export const usePi5Polling = ({ enabled, interval, onPoll, onVisibilityChange }:
   const lastPollRef = useRef<number>(0);
   const isActiveRef = useRef<boolean>(true);
 
-  // Detect if we're on Pi 5 with Firefox
-  const isPi5Firefox = useCallback(() => {
+  // Memoized Pi5 detection to prevent constant re-calculation and logging
+  const isPi5Firefox = useMemo(() => {
     const userAgent = navigator.userAgent.toLowerCase();
     const isFirefox = userAgent.includes('firefox');
     const isLinux = userAgent.includes('linux');
     const isARM = userAgent.includes('aarch64') || userAgent.includes('armv');
+    const result = isFirefox && isLinux && isARM;
 
-    console.log('Pi5 Detection:', {
+    // Only log once when memoized
+    console.log('Pi5 Detection (memoized):', {
       userAgent,
       isFirefox,
       isLinux,
       isARM,
-      result: isFirefox && isLinux && isARM
+      result
     });
 
-    return isFirefox && isLinux && isARM;
-  }, []);
+    return result;
+  }, []); // Empty dependency array ensures this runs only once
 
   // Aggressive polling function
   const poll = useCallback(() => {
@@ -53,7 +55,7 @@ export const usePi5Polling = ({ enabled, interval, onPoll, onVisibilityChange }:
   useEffect(() => {
     if (!enabled) return;
 
-    const needsAgressivePolling = isPi5Firefox();
+    const needsAgressivePolling = isPi5Firefox;
 
     if (needsAgressivePolling) {
       console.log('Pi5 Polling: Setting up aggressive polling every', interval, 'ms');
@@ -131,6 +133,6 @@ export const usePi5Polling = ({ enabled, interval, onPoll, onVisibilityChange }:
 
   return {
     forcePoll: poll,
-    isPi5: isPi5Firefox()
+    isPi5: isPi5Firefox
   };
 };

@@ -93,13 +93,17 @@ const OverallLeaderboardOptimized = React.memo(() => {
     }
   }, [shouldOptimize, throttle]);
 
-  // Update display data when source data changes
+  // Update display data when source data changes (using efficient shallow comparison)
   useEffect(() => {
     if (!loading && (leaders.length > 0 || achievementHunters.length > 0 || !hasInitialLoad)) {
+      // Efficient shallow comparison instead of expensive JSON.stringify
       const hasChanges =
-        JSON.stringify(leaders) !== JSON.stringify(displayData.leaders) ||
-        JSON.stringify(achievementHunters) !== JSON.stringify(displayData.achievementHunters) ||
-        JSON.stringify(demolitionManScores) !== JSON.stringify(displayData.demolitionManScores);
+        leaders.length !== displayData.leaders.length ||
+        achievementHunters.length !== displayData.achievementHunters.length ||
+        demolitionManScores.length !== displayData.demolitionManScores.length ||
+        leaders.some((leader, i) => leader.player_name !== displayData.leaders[i]?.player_name) ||
+        achievementHunters.some((hunter, i) => hunter.player_name !== displayData.achievementHunters[i]?.player_name) ||
+        demolitionManScores.some((score, i) => score.player_name !== displayData.demolitionManScores[i]?.player_name);
 
       if (hasChanges || !hasInitialLoad) {
         updateDisplayData({

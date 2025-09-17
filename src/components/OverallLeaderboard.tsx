@@ -14,11 +14,12 @@ const OverallLeaderboard = React.memo(() => {
   const [displayDemolitionManScores, setDisplayDemolitionManScores] = useState(demolitionManScores);
   const [hasInitialLoad, setHasInitialLoad] = useState(false);
 
-  // Update display data only when new data is significantly different or on initial load
+  // Update display data using efficient shallow comparisons instead of expensive JSON.stringify
   useEffect(() => {
     if (!loading && (leaders.length > 0 || !hasInitialLoad)) {
-      // Deep comparison to avoid unnecessary updates
-      const leadersChanged = JSON.stringify(leaders) !== JSON.stringify(displayLeaders);
+      // Efficient shallow comparison
+      const leadersChanged = leaders.length !== displayLeaders.length ||
+        leaders.some((leader, i) => leader.player_name !== displayLeaders[i]?.player_name);
       if (leadersChanged || !hasInitialLoad) {
         setDisplayLeaders(leaders);
       }
@@ -28,7 +29,8 @@ const OverallLeaderboard = React.memo(() => {
 
   useEffect(() => {
     if (!loading && (achievementHunters.length > 0 || !hasInitialLoad)) {
-      const huntersChanged = JSON.stringify(achievementHunters) !== JSON.stringify(displayAchievementHunters);
+      const huntersChanged = achievementHunters.length !== displayAchievementHunters.length ||
+        achievementHunters.some((hunter, i) => hunter.player_name !== displayAchievementHunters[i]?.player_name);
       if (huntersChanged || !hasInitialLoad) {
         setDisplayAchievementHunters(achievementHunters);
       }
@@ -37,7 +39,8 @@ const OverallLeaderboard = React.memo(() => {
 
   useEffect(() => {
     if (!loading && (demolitionManScores.length > 0 || !hasInitialLoad)) {
-      const scoresChanged = JSON.stringify(demolitionManScores) !== JSON.stringify(displayDemolitionManScores);
+      const scoresChanged = demolitionManScores.length !== displayDemolitionManScores.length ||
+        demolitionManScores.some((score, i) => score.player_name !== displayDemolitionManScores[i]?.player_name);
       if (scoresChanged || !hasInitialLoad) {
         setDisplayDemolitionManScores(demolitionManScores);
       }
