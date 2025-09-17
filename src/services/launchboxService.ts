@@ -29,6 +29,7 @@ class LaunchBoxService {
 
   // Cache to avoid repeated requests for the same game
   private logoCache = new Map<string, string | null>();
+  private pendingRequests = new Map<string, Promise<string | null>>();
 
   constructor() {
     console.log(`🌐 LaunchBox Service initialized in ${this.isDevelopment ? 'DEVELOPMENT' : 'PRODUCTION'} mode`);
@@ -39,7 +40,7 @@ class LaunchBoxService {
   private requestQueue: Array<() => Promise<void>> = [];
   private isProcessingQueue = false;
   private lastRequestTime = 0;
-  private minRequestInterval = 200; // Reduced to 200ms between requests for better UX
+  private minRequestInterval = 100; // Further reduced to 100ms for faster loading
 
   // Circuit breaker to stop making requests when API is overloaded
   private circuitBreakerFailures = 0;
@@ -146,7 +147,7 @@ class LaunchBoxService {
         try {
           // Add timeout to fetch request
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout for proxy
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for better UX
 
           const response = await fetch(url, {
             signal: controller.signal,
@@ -225,8 +226,8 @@ class LaunchBoxService {
       // Limit results and fetch clear logos for each game
       const limitedGames = gameMatches.slice(0, limit);
 
-      // Process games in smaller batches to avoid overwhelming the API
-      const batchSize = 3; // Process 3 at a time instead of all at once
+      // Process games in optimized batches for faster loading
+      const batchSize = 5; // Increased batch size for faster loading
       const gamesWithLogos: (PromiseSettledResult<LaunchBoxGame | null>)[] = [];
 
       for (let i = 0; i < limitedGames.length; i += batchSize) {
@@ -425,6 +426,11 @@ class LaunchBoxService {
         return this.logoCache.get(cacheKey) || null;
       }
 
+      // Check if request is already pending to avoid duplicate requests
+      if (this.pendingRequests.has(cacheKey)) {
+        return await this.pendingRequests.get(cacheKey)!;
+      }
+
       // Skip problematic game names that are likely to cause timeouts
       if (this.isProblematicGameName(gameName)) {
         console.log('Skipping problematic game name:', gameName);
@@ -432,17 +438,33 @@ class LaunchBoxService {
         return null;
       }
 
-      const results = await this.searchGames(gameName, 1);
-      const logoUrl = results.games[0]?.clearLogoUrl || null;
+      // Create and store the pending request
+      const requestPromise = this.fetchLogoFromAPI(gameName, cacheKey);
+      this.pendingRequests.set(cacheKey, requestPromise);
 
-      // Cache the result
-      this.logoCache.set(cacheKey, logoUrl);
+      const logoUrl = await requestPromise;
+
+      // Clean up pending request
+      this.pendingRequests.delete(cacheKey);
 
       return logoUrl;
     } catch (error) {
       console.error('Error getting clear logo:', error);
       return null;
     }
+  }
+
+  /**
+   * Internal method to fetch logo from API
+   */
+  private async fetchLogoFromAPI(gameName: string, cacheKey: string): Promise<string | null> {
+    const results = await this.searchGames(gameName, 1);
+    const logoUrl = results.games[0]?.clearLogoUrl || null;
+
+    // Cache the result
+    this.logoCache.set(cacheKey, logoUrl);
+
+    return logoUrl;
   }
 }
 

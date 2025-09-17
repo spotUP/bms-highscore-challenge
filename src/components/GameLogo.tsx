@@ -117,8 +117,8 @@ export const GameLogo: React.FC<GameLogoProps> = ({
         <div className="text-center p-2">
           {isVisible ? (
             <>
-              <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin mx-auto mb-1"></div>
-              <div className="text-xs opacity-75">Loading...</div>
+              <div className="w-3 h-3 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin mx-auto mb-1"></div>
+              <div className="text-xs opacity-75">Loading logo...</div>
             </>
           ) : (
             <div className="text-xs opacity-50">•••</div>
