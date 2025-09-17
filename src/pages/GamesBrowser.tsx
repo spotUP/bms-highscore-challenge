@@ -177,10 +177,10 @@ const GamesBrowser: React.FC = () => {
         `); // Removed count: 'exact' to improve performance
 
       // Apply search filter - use prefix search for better performance on large datasets
-      if (filters.search && filters.search.length >= 3) {
+      if (filters.search && filters.search.length >= 4) {
         const searchTerm = filters.search.toLowerCase();
         // Use prefix search (starts with) for better performance than wildcard search
-        // Minimum 3 characters to avoid expensive queries on short terms
+        // Minimum 4 characters to avoid expensive queries until indexes are in place
         query = query.ilike('name', `${searchTerm}%`);
       }
 
@@ -350,7 +350,7 @@ const GamesBrowser: React.FC = () => {
                   <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search games by name (min 3 characters)..."
+                      placeholder="Search games by name (min 4 characters)..."
                       value={filters.search}
                       onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
                       className="pl-10"
