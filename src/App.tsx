@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
-import { Suspense, lazy, useEffect, useRef } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { usePageTransitions } from "@/hooks/usePageTransitions";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AchievementProvider } from "@/contexts/AchievementContext";
@@ -17,6 +17,7 @@ import TournamentAccessGuard from "@/components/TournamentAccessGuard";
 import { ScoreNotificationsListener } from "@/components/ScoreNotification";
 import Layout from "@/components/Layout";
 import Index from "./pages/Index";
+import CompetitionRulesModal from "@/components/CompetitionRulesModal";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import "./styles/performance.css";
 import { BracketProvider } from "@/contexts/BracketContext";
@@ -30,12 +31,28 @@ const Admin = lazy(() => import("./pages/Admin"));
 const Statistics = lazy(() => import("./pages/Statistics"));
 const PlayerDashboard = lazy(() => import("./pages/PlayerDashboard"));
 const Achievements = lazy(() => import("./pages/Achievements"));
-const DemolitionManSubmit = lazy(() => import("./pages/DemolitionManSubmit"));
 const Brackets = lazy(() => import("./pages/Brackets"));
 const BracketAdmin = lazy(() => import("./pages/BracketAdmin"));
 const Competition = lazy(() => import("./pages/Competition"));
 
 const queryClient = new QueryClient();
+
+// Wrapper component for Index page with rules modal
+const IndexWithRules = ({ isExiting }: { isExiting?: boolean }) => {
+  const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
+
+  return (
+    <Layout topNavProps={{
+      onShowRules: () => setIsRulesModalOpen(true)
+    }}>
+      <Index isExiting={isExiting} />
+      <CompetitionRulesModal
+        isOpen={isRulesModalOpen}
+        onClose={() => setIsRulesModalOpen(false)}
+      />
+    </Layout>
+  );
+};
 
 // Component for Bracket Admin specific actions
 const BracketAdminActions = () => {
@@ -114,7 +131,7 @@ const App = () => (
               <RoutePersistence />
               <Suspense fallback={<LoadingSpinner />}>
                 <Routes>
-                  <Route path="/" element={<Layout><Index /></Layout>} />
+                  <Route path="/" element={<IndexWithRules />} />
                   <Route path="/admin/brackets" element={<Layout topNavProps={{ hideBracketsLink: true, hideFullscreenButton: true, rightActions: <BracketAdminActions /> }}><BracketAdmin /></Layout>} />
                   <Route path="/mobile-entry" element={<Layout topNavProps={{ hideFullscreenButton: true }}><MobileEntry /></Layout>} />
                   <Route path="/auth" element={<Layout hideTopNav><Auth /></Layout>} />
@@ -124,15 +141,19 @@ const App = () => (
                   <Route path="/statistics" element={<Layout topNavProps={{ hideStatistics: true, hideFullscreenButton: true }}><Statistics /></Layout>} />
                   <Route path="/player" element={<Layout topNavProps={{ hideFullscreenButton: true }}><PlayerDashboard /></Layout>} />
                   <Route path="/achievements" element={<Layout topNavProps={{ hideFullscreenButton: true }}><Achievements /></Layout>} />
-                  <Route path="/demolition-man-submit" element={<Layout topNavProps={{ hideFullscreenButton: true }}><DemolitionManSubmit /></Layout>} />
                   <Route path="/competition" element={<Layout topNavProps={{ hideFullscreenButton: true }}><Competition /></Layout>} />
                   {/* Tournament-scoped routes with access control */}
-                  <Route path="/t/:slug" element={<Layout><TournamentAccessGuard><Index /></TournamentAccessGuard></Layout>} />
+                  <Route path="/t/:slug" element={<Layout topNavProps={{
+                    onShowRules: () => {
+                      // Create a custom event for tournament routes
+                      const rulesEvent = new CustomEvent('showTournamentRules');
+                      document.dispatchEvent(rulesEvent);
+                    }
+                  }}><TournamentAccessGuard><Index /></TournamentAccessGuard></Layout>} />
                   <Route path="/t/:slug/admin" element={<Layout topNavProps={{ hideFullscreenButton: true }}><TournamentAccessGuard><Admin /></TournamentAccessGuard></Layout>} />
                   <Route path="/t/:slug/statistics" element={<Layout topNavProps={{ hideStatistics: true, hideFullscreenButton: true }}><TournamentAccessGuard><Statistics /></TournamentAccessGuard></Layout>} />
                   <Route path="/t/:slug/achievements" element={<Layout topNavProps={{ hideFullscreenButton: true }}><TournamentAccessGuard><Achievements /></TournamentAccessGuard></Layout>} />
                   <Route path="/t/:slug/mobile-entry" element={<Layout topNavProps={{ hideFullscreenButton: true }}><TournamentAccessGuard><MobileEntry /></TournamentAccessGuard></Layout>} />
-                  <Route path="/t/:slug/demolition-man-submit" element={<Layout topNavProps={{ hideFullscreenButton: true }}><TournamentAccessGuard><DemolitionManSubmit /></TournamentAccessGuard></Layout>} />
                 </Routes>
               </Suspense>
             </BrowserRouter>

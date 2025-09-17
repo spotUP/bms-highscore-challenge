@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,9 +27,6 @@ import GameLogoSuggestions, { GameLogoSuggestionsRef } from "@/components/GameLo
 import WebhookConfig from "@/components/WebhookConfig";
 import UserManagement from "@/components/UserManagement";
 import ResetFunctions from "@/components/ResetFunctions";
-import DemolitionManQRSubmit from "@/components/DemolitionManQRSubmit";
-import DemolitionManEnsure from "@/components/DemolitionManEnsure";
-import DemolitionManScoreManager from "@/components/DemolitionManScoreManager";
 import PerformanceToggle from "@/components/PerformanceToggle";
 import CompetitionManager from "@/components/CompetitionManager";
 import AchievementManagerV2 from "@/components/AchievementManagerV2";
@@ -57,12 +57,19 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
   const { createTournament } = useTournament();
   const { toast } = useToast();
   const [isCreating, setIsCreating] = useState(false);
-  const [createForm, setCreateForm] = useState({
-    name: '',
-    description: '',
-    slug: '',
-    is_public: false,
-    demolition_man_active: false,
+  const [createForm, setCreateForm] = useState(() => {
+    const now = new Date();
+    const oneMonthLater = new Date(now);
+    oneMonthLater.setMonth(now.getMonth() + 1);
+
+    return {
+      name: '',
+      description: '',
+      slug: '',
+      is_public: false,
+      start_time: now.toISOString().slice(0, 16), // Format for datetime-local
+      end_time: oneMonthLater.toISOString().slice(0, 16), // Format for datetime-local
+    };
   });
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
 
@@ -113,21 +120,38 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
     }
 
     setIsCreating(true);
+    // Convert datetime-local values to ISO strings for the database
+    const formatDateTimeForDatabase = (dateTimeLocal: string) => {
+      if (!dateTimeLocal) return null;
+      try {
+        return new Date(dateTimeLocal).toISOString();
+      } catch {
+        return null;
+      }
+    };
+
     const tournament = await createTournament({
       name: createForm.name.trim(),
       description: createForm.description.trim() || undefined,
       slug: createForm.slug.trim().toLowerCase(),
       is_public: createForm.is_public,
-      demolition_man_active: createForm.demolition_man_active,
+      start_time: formatDateTimeForDatabase(createForm.start_time),
+      end_time: formatDateTimeForDatabase(createForm.end_time),
     });
 
     if (tournament) {
+      // Reset form with new default dates
+      const now = new Date();
+      const oneMonthLater = new Date(now);
+      oneMonthLater.setMonth(now.getMonth() + 1);
+
       setCreateForm({
         name: '',
         description: '',
         slug: '',
         is_public: false,
-        demolition_man_active: false,
+          start_time: now.toISOString().slice(0, 16),
+        end_time: oneMonthLater.toISOString().slice(0, 16),
       });
       setSlugAvailable(null);
       toast({
@@ -141,7 +165,7 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create New Highscore Tournament</DialogTitle>
         </DialogHeader>
@@ -245,15 +269,107 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
           </Select>
         </div>
 
-        <div className="flex items-center space-x-2">
-          <Switch
-            id="create-demolition-man"
-            checked={createForm.demolition_man_active}
-            onCheckedChange={(checked) => setCreateForm(prev => ({ ...prev, demolition_man_active: checked }))}
-          />
-          <Label htmlFor="create-demolition-man" className="text-white">
-            Enable Standing Competition Leaderboard
-          </Label>
+        <div className="space-y-4">
+          <div>
+            <Label className="text-white">Start Date & Time</Label>
+            <div className="relative">
+              <DatePicker
+                selected={createForm.start_time ? new Date(createForm.start_time) : null}
+                onChange={(date) => setCreateForm(prev => ({
+                  ...prev,
+                  start_time: date ? date.toISOString().slice(0, 16) : ''
+                }))}
+                showTimeSelect
+                dateFormat="yyyy-MM-dd h:mm aa"
+                className="w-full px-3 py-2 pr-10 bg-black/50 border border-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                wrapperClassName="w-full"
+                placeholderText="Select start date and time"
+                renderCustomHeader={({
+                  date,
+                  decreaseMonth,
+                  increaseMonth,
+                  prevMonthButtonDisabled,
+                  nextMonthButtonDisabled,
+                }) => (
+                  <div className="flex items-center justify-between px-2 py-2">
+                    <button
+                      onClick={decreaseMonth}
+                      disabled={prevMonthButtonDisabled}
+                      type="button"
+                      className="p-1 text-white hover:bg-white/10 rounded disabled:opacity-50"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-white font-semibold">
+                      {date.toLocaleDateString("en-US", {
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </span>
+                    <button
+                      onClick={increaseMonth}
+                      disabled={nextMonthButtonDisabled}
+                      type="button"
+                      className="p-1 text-white hover:bg-white/10 rounded disabled:opacity-50"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              />
+              <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
+          <div>
+            <Label className="text-white">End Date & Time</Label>
+            <div className="relative">
+              <DatePicker
+                selected={createForm.end_time ? new Date(createForm.end_time) : null}
+                onChange={(date) => setCreateForm(prev => ({
+                  ...prev,
+                  end_time: date ? date.toISOString().slice(0, 16) : ''
+                }))}
+                showTimeSelect
+                dateFormat="yyyy-MM-dd h:mm aa"
+                className="w-full px-3 py-2 pr-10 bg-black/50 border border-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                wrapperClassName="w-full"
+                placeholderText="Select end date and time"
+                renderCustomHeader={({
+                  date,
+                  decreaseMonth,
+                  increaseMonth,
+                  prevMonthButtonDisabled,
+                  nextMonthButtonDisabled,
+                }) => (
+                  <div className="flex items-center justify-between px-2 py-2">
+                    <button
+                      onClick={decreaseMonth}
+                      disabled={prevMonthButtonDisabled}
+                      type="button"
+                      className="p-1 text-white hover:bg-white/10 rounded disabled:opacity-50"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <span className="text-white font-semibold">
+                      {date.toLocaleDateString("en-US", {
+                        month: "long",
+                        year: "numeric",
+                      })}
+                    </span>
+                    <button
+                      onClick={increaseMonth}
+                      disabled={nextMonthButtonDisabled}
+                      type="button"
+                      className="p-1 text-white hover:bg-white/10 rounded disabled:opacity-50"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              />
+              <Calendar className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+            </div>
+          </div>
         </div>
 
         <Button
@@ -888,10 +1004,13 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
   const [gamesLoading, setGamesLoading] = useState(true);
   const [initialLoaded, setInitialLoaded] = useState(false);
   const [hasAnimated, setHasAnimated] = useState(false);
+  const [showContent, setShowContent] = useState(false);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [editingScore, setEditingScore] = useState<any | null>(null);
+  const [editingTournament, setEditingTournament] = useState<any | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isScoreDialogOpen, setIsScoreDialogOpen] = useState(false);
+  const [isTournamentEditOpen, setIsTournamentEditOpen] = useState(false);
   const [isCreateTournamentOpen, setIsCreateTournamentOpen] = useState(false);
   const [isSuggestGamesOpen, setIsSuggestGamesOpen] = useState(false);
   const [scoreFormData, setScoreFormData] = useState({
@@ -905,6 +1024,14 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     is_active: true,
     include_in_challenge: true,
     tournament_id: currentTournament?.id || ""
+  });
+  const [tournamentFormData, setTournamentFormData] = useState({
+    name: "",
+    slug: "",
+    description: "",
+    is_public: false,
+    start_time: "",
+    end_time: ""
   });
   const gameLogoSuggestionsRef = useRef<GameLogoSuggestionsRef>(null);
   const [isResetting, setIsResetting] = useState(false);
@@ -1079,12 +1206,22 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     }
   }, [currentTournament, editingGame]);
 
-  // Set hasAnimated to true when the page should animate for the first time
+  // Simple animation trigger on mount
   useEffect(() => {
-    if (!hasAnimated && !loading && !tournamentsLoading && !gamesLoading) {
-      setHasAnimated(true);
+    // Only show content if not exiting
+    if (!isExiting) {
+      setShowContent(true);
+      // Start animation after a brief moment
+      const timer = setTimeout(() => {
+        setHasAnimated(true);
+      }, 50);
+      return () => clearTimeout(timer);
+    } else {
+      // Reset animation states when exiting
+      setShowContent(false);
+      setHasAnimated(false);
     }
-  }, [hasAnimated, loading, tournamentsLoading, gamesLoading]);
+  }, [isExiting]);
 
   // Reset form
   const resetForm = () => {
@@ -1546,6 +1683,79 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     }
   };
 
+  // Open edit tournament dialog
+  const openEditTournamentDialog = (tournament: any) => {
+    console.log('Opening edit dialog for tournament:', tournament);
+    setEditingTournament(tournament);
+
+    // Format dates for datetime-local input (YYYY-MM-DDTHH:MM format)
+    const formatDateTimeForInput = (dateString: string | null) => {
+      if (!dateString) return "";
+      try {
+        const date = new Date(dateString);
+        return date.toISOString().slice(0, 16); // Keep YYYY-MM-DDTHH:MM
+      } catch {
+        return "";
+      }
+    };
+
+    const formData = {
+      name: tournament.name || "",
+      slug: tournament.slug || "",
+      description: tournament.description || "",
+      is_public: tournament.is_public || false,
+      start_time: formatDateTimeForInput(tournament.start_time),
+      end_time: formatDateTimeForInput(tournament.end_time)
+    };
+    console.log('Setting form data:', formData);
+    setTournamentFormData(formData);
+    console.log('Setting dialog open to true');
+    setIsTournamentEditOpen(true);
+  };
+
+  // Handle tournament edit form submission
+  const handleEditTournament = async () => {
+    if (!editingTournament) return;
+
+    try {
+      // Convert datetime-local values to ISO strings
+      const formatDateTimeForDatabase = (dateTimeLocal: string) => {
+        if (!dateTimeLocal) return null;
+        try {
+          return new Date(dateTimeLocal).toISOString();
+        } catch {
+          return null;
+        }
+      };
+
+      const success = await updateTournament(editingTournament.id, {
+        name: tournamentFormData.name,
+        slug: tournamentFormData.slug,
+        description: tournamentFormData.description,
+        is_public: tournamentFormData.is_public,
+        start_time: formatDateTimeForDatabase(tournamentFormData.start_time),
+        end_time: formatDateTimeForDatabase(tournamentFormData.end_time),
+      });
+
+      if (success) {
+        toast({
+          title: "Success",
+          description: "Tournament updated successfully"
+        });
+        setIsTournamentEditOpen(false);
+        setEditingTournament(null);
+        await refreshTournaments();
+      }
+    } catch (error) {
+      console.error('Error updating tournament:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update tournament",
+        variant: "destructive"
+      });
+    }
+  };
+
 
   if (!user || (!isAdmin && !hasPermission('admin'))) {
     return null; // Will redirect via useEffect
@@ -1571,7 +1781,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
 
   const pageLayout = getPageLayout();
   
-  const shouldAnimate = enableAnimations && !hasAnimated && !loading && !tournamentsLoading && !gamesLoading;
+  const shouldAnimate = showContent && !hasAnimated;
 
   const handleTabChange = (newTab: string) => {
     if (newTab !== activeTab) {
@@ -1623,41 +1833,42 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
   return (
     <div {...pageLayout} className={`${pageLayout.className || ''}`}>
       <PageContainer className="max-w-6xl mx-auto">
-        <div className={`${isExiting ? 'animate-slide-out-bottom' : hasAnimated ? 'opacity-100' : shouldAnimate ? 'animate-slide-in-bottom' : 'opacity-0'}`}>
+        <div className={`transition-all duration-300 ${
+          isExiting
+            ? 'animate-slide-out-bottom'
+            : showContent
+              ? (hasAnimated ? 'opacity-100 transform-none' : 'animate-slide-in-bottom')
+              : 'opacity-0 translate-y-full'
+        }`}>
           <PageHeader
             title="Admin Panel"
             subtitle={`Managing ${currentTournament?.name} tournament`}
-          >
-            <div className="flex items-center gap-4">
-              <Button
-                onClick={() => navigate('/')}
-                variant="outline"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back to Leaderboard
-              </Button>
-            </div>
-          </PageHeader>
+          />
 
           <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 bg-gray-900 border border-white/20">
-            <TabsTrigger value="create-tournament" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Trophy className="w-4 h-4 mr-2" />Competitions</TabsTrigger>
-            <TabsTrigger value="achievements" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Trophy className="w-4 h-4 mr-2" />Achievements</TabsTrigger>
-            <TabsTrigger value="users" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><Users className="w-4 h-4 mr-2" />Users</TabsTrigger>
-            <TabsTrigger value="system" className="data-[state=active]:bg-arcade-neonCyan data-[state=active]:text-black"><TestTube className="w-4 h-4 mr-2" />System</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="create-tournament">
+              <Trophy className="w-4 h-4 mr-2" />Competitions
+            </TabsTrigger>
+            <TabsTrigger value="achievements">
+              <BarChart3 className="w-4 h-4 mr-2" />Achievements
+            </TabsTrigger>
+            <TabsTrigger value="users">
+              <Users className="w-4 h-4 mr-2" />Users
+            </TabsTrigger>
+            <TabsTrigger value="system">
+              <Settings className="w-4 h-4 mr-2" />System
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="create-tournament" className={`mt-6 ${enableAnimations ? (tabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}>
             <Tabs value={competitionSubTab} onValueChange={handleCompetitionSubTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-3 bg-gray-700 border border-white/10 rounded-md">
-                <TabsTrigger value="tournaments" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="tournaments">
                   <Trophy className="w-3 h-3 mr-1" />Highscore Tournaments
                 </TabsTrigger>
-                <TabsTrigger value="brackets" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+                <TabsTrigger value="brackets">
                   <Zap className="w-3 h-3 mr-1" />Bracket Tournaments
-                </TabsTrigger>
-                <TabsTrigger value="standing" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
-                  <BarChart3 className="w-3 h-3 mr-1" />Standing Competition
                 </TabsTrigger>
               </TabsList>
 
@@ -1792,7 +2003,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                 </div>
                               </DialogContent>
                             </Dialog>
-                            <Button size="sm" variant="outline" onClick={() => { toast({ title: 'Edit Highscore Tournament', description: `Edit functionality for "${tournament.name}" would go here` }); }}><Pencil className="w-4 h-4" /></Button>
+                            <Button size="sm" variant="outline" onClick={() => openEditTournamentDialog(tournament)}><Pencil className="w-4 h-4" /></Button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <Button size="sm" variant="outline" className="border-red-500 hover:border-red-400 hover:bg-red-500/10" disabled={tournament.id === currentTournament?.id}><Trash2 className="w-4 h-4" /></Button>
@@ -1961,17 +2172,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="standing" className={`mt-6 ${enableAnimations ? (competitionSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}>
-                <Card className={getCardStyle('primary')}>
-                  <CardHeader>
-                    <CardTitle className={getTypographyStyle('h3')}>Standing Competition</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <DemolitionManScoreManager />
-                    <DemolitionManQRSubmit />
-                  </CardContent>
-                </Card>
-              </TabsContent>
             </Tabs>
 
             {/* Shared Dialogs */}
@@ -1989,20 +2189,17 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
 
           <TabsContent value="system" className={`mt-6 ${enableAnimations ? (tabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}>
             <Tabs value={systemSubTab} onValueChange={handleSystemSubTabChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-5 bg-gray-700 border border-white/10 rounded-md">
-                <TabsTrigger value="performance" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="performance">
                   <Zap className="w-3 h-3 mr-1" />Performance
                 </TabsTrigger>
-                <TabsTrigger value="demolition" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
-                  <BarChart3 className="w-3 h-3 mr-1" />Standing Competition
-                </TabsTrigger>
-                <TabsTrigger value="reset" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+                <TabsTrigger value="reset">
                   <RotateCcw className="w-3 h-3 mr-1" />Reset Functions
                 </TabsTrigger>
-                <TabsTrigger value="webhooks" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+                <TabsTrigger value="webhooks">
                   <Webhook className="w-3 h-3 mr-1" />Webhooks
                 </TabsTrigger>
-                <TabsTrigger value="tests" className="data-[state=active]:bg-gray-600 data-[state=active]:text-white text-gray-300 text-sm">
+                <TabsTrigger value="tests">
                   <TestTube className="w-3 h-3 mr-1" />Tests
                 </TabsTrigger>
               </TabsList>
@@ -2014,9 +2211,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                 </Card>
               </TabsContent>
 
-              <TabsContent value="demolition" className={`mt-6 ${enableAnimations ? (systemSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}>
-                <DemolitionManEnsure />
-              </TabsContent>
 
               <TabsContent value="reset" className={`mt-6 ${enableAnimations ? (systemSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}>
                 <ResetFunctions />
@@ -2034,6 +2228,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
           <TabsContent value="achievements" className={`mt-6 ${enableAnimations ? (tabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}><AchievementManagerV2 /></TabsContent>
           <TabsContent value="users" className={`mt-6 ${enableAnimations ? (tabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}><UserManagement /></TabsContent>
         </Tabs>
+        </div>
 
         {/* Shared Add/Edit Game Dialog */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -2112,6 +2307,154 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
           </DialogContent>
         </Dialog>
 
+        {/* Edit Tournament Dialog */}
+        <Dialog open={isTournamentEditOpen} onOpenChange={setIsTournamentEditOpen}>
+          <DialogContent className="bg-gray-900 text-white border-white/20 max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Edit Tournament</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label className="text-white">Tournament Name</Label>
+                <Input
+                  value={tournamentFormData.name}
+                  onChange={(e) => setTournamentFormData(prev => ({ ...prev, name: e.target.value }))}
+                  className="bg-black/50 border-white/20 text-white"
+                  placeholder="Enter tournament name"
+                />
+              </div>
+              <div>
+                <Label className="text-white">Slug</Label>
+                <Input
+                  value={tournamentFormData.slug}
+                  onChange={(e) => setTournamentFormData(prev => ({ ...prev, slug: e.target.value }))}
+                  className="bg-black/50 border-white/20 text-white"
+                  placeholder="tournament-slug"
+                />
+              </div>
+              <div>
+                <Label className="text-white">Description</Label>
+                <Input
+                  value={tournamentFormData.description}
+                  onChange={(e) => setTournamentFormData(prev => ({ ...prev, description: e.target.value }))}
+                  className="bg-black/50 border-white/20 text-white"
+                  placeholder="Optional description"
+                />
+              </div>
+              <div className="space-y-4">
+                <div className="max-w-sm">
+                  <Label className="text-white">Start Date & Time</Label>
+                  <DatePicker
+                    selected={tournamentFormData.start_time ? new Date(tournamentFormData.start_time) : null}
+                    onChange={(date) => setTournamentFormData(prev => ({
+                      ...prev,
+                      start_time: date ? date.toISOString().slice(0, 16) : ''
+                    }))}
+                    showTimeSelect
+                    dateFormat="yyyy-MM-dd h:mm aa"
+                    className="w-full px-3 py-2 bg-black/50 border border-white/20 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    wrapperClassName="w-full"
+                    placeholderText="Select start date and time"
+                    renderCustomHeader={({
+                      date,
+                      decreaseMonth,
+                      increaseMonth,
+                      prevMonthButtonDisabled,
+                      nextMonthButtonDisabled,
+                    }) => (
+                      <div className="flex items-center justify-between px-2 py-2">
+                        <button
+                          onClick={decreaseMonth}
+                          disabled={prevMonthButtonDisabled}
+                          type="button"
+                          className="p-1 text-white hover:bg-white/10 rounded disabled:opacity-50"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-white font-semibold">
+                          {date.toLocaleDateString("en-US", {
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </span>
+                        <button
+                          onClick={increaseMonth}
+                          disabled={nextMonthButtonDisabled}
+                          type="button"
+                          className="p-1 text-white hover:bg-white/10 rounded disabled:opacity-50"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  />
+                </div>
+                <div className="max-w-sm">
+                  <Label className="text-white">End Date & Time</Label>
+                  <DatePicker
+                    selected={tournamentFormData.end_time ? new Date(tournamentFormData.end_time) : null}
+                    onChange={(date) => setTournamentFormData(prev => ({
+                      ...prev,
+                      end_time: date ? date.toISOString().slice(0, 16) : ''
+                    }))}
+                    showTimeSelect
+                    dateFormat="yyyy-MM-dd h:mm aa"
+                    className="w-full px-3 py-2 bg-black/50 border border-white/20 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    wrapperClassName="w-full"
+                    placeholderText="Select end date and time"
+                    renderCustomHeader={({
+                      date,
+                      decreaseMonth,
+                      increaseMonth,
+                      prevMonthButtonDisabled,
+                      nextMonthButtonDisabled,
+                    }) => (
+                      <div className="flex items-center justify-between px-2 py-2">
+                        <button
+                          onClick={decreaseMonth}
+                          disabled={prevMonthButtonDisabled}
+                          type="button"
+                          className="p-1 text-white hover:bg-white/10 rounded disabled:opacity-50"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-white font-semibold">
+                          {date.toLocaleDateString("en-US", {
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </span>
+                        <button
+                          onClick={increaseMonth}
+                          disabled={nextMonthButtonDisabled}
+                          type="button"
+                          className="p-1 text-white hover:bg-white/10 rounded disabled:opacity-50"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="edit-tournament-public"
+                  checked={tournamentFormData.is_public}
+                  onCheckedChange={(checked) => setTournamentFormData(prev => ({ ...prev, is_public: checked }))}
+                />
+                <Label htmlFor="edit-tournament-public" className="text-white">Make Public</Label>
+              </div>
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button variant="outline" onClick={() => setIsTournamentEditOpen(false)}>Cancel</Button>
+                <Button onClick={handleEditTournament} disabled={!tournamentFormData.name.trim() || !tournamentFormData.slug.trim()}>
+                  Update Tournament
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
         {/* Confirmation Dialogs */}
         <ConfirmationDialog
           open={deleteGameDialog.open}
@@ -2134,7 +2477,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
           variant="outline"
           onConfirm={confirmDeleteScore}
         />
-        </div>
       </PageContainer>
     </div>
   );

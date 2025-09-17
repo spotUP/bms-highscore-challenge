@@ -111,7 +111,7 @@ const CompetitionStatus: React.FC = () => {
 
   return (
     <div className="bg-black/20 border border-white/20 rounded-lg p-4 backdrop-blur-sm status-bar-stable">
-      <div className="flex flex-wrap items-center gap-6 text-sm">
+      <div className="flex flex-wrap items-center justify-center gap-6 text-sm min-h-[2rem]">
         {competition ? (
           <>
             {/* Competition Status */}

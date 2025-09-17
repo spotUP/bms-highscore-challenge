@@ -7,18 +7,18 @@ import { useRaspberryPiOptimizations } from '@/hooks/useRaspberryPiOptimizations
 // Memoized rank icon component
 const RankIcon = React.memo(({ rank, type = 'standard' }: { rank: number; type?: string }) => {
   if (rank === 0) {
-    const emoji = type === 'achievement' ? '🌟' : type === 'demolition' ? '🏆' : '🏆';
-    const color = type === 'demolition' ? 'text-red-400' : '';
+    const emoji = type === 'achievement' ? '🌟' : '🏆';
+    const color = '';
     return <span className={`w-12 h-12 flex items-center justify-center text-4xl ${color}`}>{emoji}</span>;
   }
   if (rank === 1) {
-    const emoji = type === 'achievement' ? '⭐' : type === 'demolition' ? '🥈' : '🥈';
-    const color = type === 'demolition' ? 'text-orange-300' : '';
+    const emoji = type === 'achievement' ? '⭐' : '🥈';
+    const color = '';
     return <span className={`w-12 h-12 flex items-center justify-center text-4xl ${color}`}>{emoji}</span>;
   }
   if (rank === 2) {
-    const emoji = type === 'achievement' ? '✨' : type === 'demolition' ? '🥉' : '🥉';
-    const color = type === 'demolition' ? 'text-yellow-600' : '';
+    const emoji = type === 'achievement' ? '✨' : '🥉';
+    const color = '';
     return <span className={`w-12 h-12 flex items-center justify-center text-4xl ${color}`}>{emoji}</span>;
   }
 
@@ -72,7 +72,7 @@ LeaderItem.displayName = 'LeaderItem';
 
 // Optimized main component
 const OverallLeaderboardOptimized = React.memo(() => {
-  const { leaders, achievementHunters, demolitionManScores, loading } = useTournamentGameData();
+  const { leaders, achievementHunters, loading } = useTournamentGameData();
   const { currentTournament } = useTournament();
   const { shouldOptimize, throttle } = useRaspberryPiOptimizations();
 

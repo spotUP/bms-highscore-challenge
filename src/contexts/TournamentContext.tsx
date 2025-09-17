@@ -21,9 +21,10 @@ export interface Tournament {
   max_members?: number | null;
   created_at: string;
   updated_at: string | null;
-  demolition_man_active?: boolean | null;
   is_locked?: boolean; // New: lock/unlock tournaments (default false)
   scores_locked: boolean; // New: lock/unlock score submissions (default false)
+  start_time?: string | null;
+  end_time?: string | null;
 }
 
 export interface TournamentMember {
@@ -61,7 +62,8 @@ interface CreateTournamentData {
   slug: string;
   description?: string;
   is_public?: boolean;
-  demolition_man_active?: boolean;
+  start_time?: string | null;
+  end_time?: string | null;
 }
 
 const TournamentContext = createContext<TournamentContextType | undefined>(undefined);
@@ -406,14 +408,12 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     if (!user) return null;
 
     try {
-      // Extract demolition_man_active from data since it's not in the database schema
-      const { demolition_man_active, ...tournamentData } = data;
       
       // Try initial insert
       let { data: tournament, error } = await supabase
         .from('tournaments')
         .insert({
-          ...tournamentData,
+          ...data,
           created_by: user.id,
           is_public: data.is_public ?? false,
         })
@@ -423,9 +423,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       // If slug is duplicate, retry once with a short random suffix
       if (error && error.code === '23505' && (error.message || '').includes('tournaments_slug_key')) {
         const suffix = Math.random().toString(36).slice(2, 6);
-        const retrySlug = `${tournamentData.slug}-${suffix}`.toLowerCase();
+        const retrySlug = `${data.slug}-${suffix}`.toLowerCase();
         const retryPayload = {
-          ...tournamentData,
+          ...data,
           slug: retrySlug,
           created_by: user.id,
           is_public: data.is_public ?? false,

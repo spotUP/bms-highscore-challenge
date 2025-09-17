@@ -38,6 +38,8 @@ const UserManagement: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [localUsers, setLocalUsers] = useState<User[]>([]);
   const { toast } = useToast();
 
   const roles = [
@@ -76,6 +78,11 @@ const UserManagement: React.FC = () => {
     loadUsers();
     loadUserRoles();
   }, []);
+
+  // Update local state when users change
+  useEffect(() => {
+    setLocalUsers(users);
+  }, [users]);
 
   const loadUsers = async () => {
     try {
@@ -167,6 +174,26 @@ const UserManagement: React.FC = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleAnimatedDelete = async (user: User) => {
+    // Start the fade-out animation
+    setDeletingIds(prev => new Set([...prev, user.id]));
+
+    // Wait for animation, then remove from state (this will trigger the slide-up)
+    setTimeout(() => {
+      setLocalUsers(prev => prev.filter(u => u.id !== user.id));
+      deleteUser(user.id);
+
+      // Clean up animation state after a brief delay to let the slide-up complete
+      setTimeout(() => {
+        setDeletingIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(user.id);
+          return newSet;
+        });
+      }, 50);
+    }, 280); // Slightly before animation completes
   };
 
   const deleteUser = async (userId: string) => {
@@ -304,31 +331,43 @@ const UserManagement: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Last Sign In</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map((user) => {
+            <div className="border rounded-md">
+              {/* Header */}
+              <div className="grid grid-cols-6 gap-2 p-3 border-b bg-muted/50 font-medium text-sm">
+                <div>Email</div>
+                <div>Role</div>
+                <div>Status</div>
+                <div>Created</div>
+                <div>Last Sign In</div>
+                <div className="text-right">Actions</div>
+              </div>
+
+              {/* Body */}
+              <div className="divide-y">
+                {localUsers.map((user) => {
                   const userRole = getUserRole(user.id);
                   const role = roles.find(r => r.value === userRole) || roles[2]; // default to 'user'
 
                   return (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium">
+                    <div
+                      key={user.id}
+                      className={`grid grid-cols-6 gap-2 p-3 transition-all duration-300 ease-in-out overflow-hidden ${
+                        deletingIds.has(user.id)
+                          ? 'opacity-0 max-h-0 py-0 scale-y-0'
+                          : 'opacity-100 max-h-20 scale-y-100'
+                      }`}
+                      style={{
+                        transformOrigin: 'top',
+                        transition: 'all 300ms ease-in-out'
+                      }}
+                    >
+                      <div className="font-medium">
                         <div className="flex items-center gap-2">
                           <Mail className="w-4 h-4 text-gray-400" />
                           {user.email}
                         </div>
-                      </TableCell>
-                      <TableCell>
+                      </div>
+                      <div>
                         <Select
                           value={userRole || 'user'}
                           onValueChange={(value) => updateUserRole(user.id, value)}
@@ -344,19 +383,19 @@ const UserManagement: React.FC = () => {
                             ))}
                           </SelectContent>
                         </Select>
-                      </TableCell>
-                      <TableCell>
+                      </div>
+                      <div>
                         <Badge variant={user.email_confirmed_at ? "default" : "secondary"}>
                           {user.email_confirmed_at ? "Confirmed" : "Pending"}
                         </Badge>
-                      </TableCell>
-                      <TableCell>
+                      </div>
+                      <div>
                         <div className="flex items-center gap-1 text-sm text-gray-400">
                           <Calendar className="w-4 h-4" />
                           {new Date(user.created_at).toLocaleDateString()}
                         </div>
-                      </TableCell>
-                      <TableCell>
+                      </div>
+                      <div>
                         {user.last_sign_in_at ? (
                           <div className="flex items-center gap-1 text-sm text-gray-400">
                             <Calendar className="w-4 h-4" />
@@ -365,8 +404,8 @@ const UserManagement: React.FC = () => {
                         ) : (
                           <span className="text-gray-500">Never</span>
                         )}
-                      </TableCell>
-                      <TableCell className="text-right">
+                      </div>
+                      <div className="text-right">
                         <div className="flex justify-end gap-2">
                           {!user.email_confirmed_at && (
                             <Button
@@ -381,20 +420,17 @@ const UserManagement: React.FC = () => {
                             variant="outline"
                             size="sm"
                             className="border-red-500 hover:border-red-400 hover:bg-red-500/10"
-                            onClick={() => {
-                              setUserToDelete(user);
-                              setDeleteDialogOpen(true);
-                            }}
+                            onClick={() => handleAnimatedDelete(user)}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </div>
-                      </TableCell>
-                    </TableRow>
+                      </div>
+                    </div>
                   );
                 })}
-              </TableBody>
-            </Table>
+              </div>
+            </div>
 
             {users.length === 0 && (
               <div className="text-center py-8 text-gray-400">

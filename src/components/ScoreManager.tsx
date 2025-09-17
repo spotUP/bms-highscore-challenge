@@ -58,6 +58,8 @@ const ScoreManager = () => {
   const [editingScore, setEditingScore] = useState<Score | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedCompetition, setSelectedCompetition] = useState<string>("current");
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [localScores, setLocalScores] = useState<Score[]>([]);
   const [formData, setFormData] = useState({
     player_name: "",
     score: "",
@@ -68,7 +70,7 @@ const ScoreManager = () => {
   // Load scores and games
   const loadData = async () => {
     try {
-      // Load games (excluding Demolition Man which has its own manager)
+      // Load games
       const { data: gamesData, error: gamesError } = await supabase
         .from('games')
         .select('id, name')
@@ -88,7 +90,7 @@ const ScoreManager = () => {
       if (competitionsError) throw competitionsError;
       setCompetitions(competitionsData || []);
 
-      // Load current scores with game names (excluding Demolition Man)
+      // Load current scores with game names
       const { data: scoresData, error: scoresError } = await supabase
         .from('scores')
         .select(`
@@ -144,6 +146,11 @@ const ScoreManager = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Update local scores when scores change
+  useEffect(() => {
+    setLocalScores(scores);
+  }, [scores]);
 
   // Load competition scores when selection changes
   useEffect(() => {
@@ -320,25 +327,52 @@ const ScoreManager = () => {
     }
   };
 
+  // Animated delete handler
+  const handleAnimatedDelete = async (score: Score) => {
+    // Start the fade-out animation
+    setDeletingIds(prev => new Set([...prev, score.id]));
+
+    // Wait for animation, then remove from state (this will trigger the slide-up)
+    setTimeout(() => {
+      setLocalScores(prev => prev.filter(s => s.id !== score.id));
+      // Call the actual delete function
+      confirmDeleteScore(score.id);
+
+      // Clean up animation state after a brief delay to let the slide-up complete
+      setTimeout(() => {
+        setDeletingIds(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(score.id);
+          return newSet;
+        });
+      }, 50);
+    }, 280); // Slightly before animation completes
+  };
+
   // Delete score via confirmation dialog
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
   const handleDeleteScore = (id: string) => setDeleteDialog({ open: true, id });
-  const confirmDeleteScore = async () => {
-    if (!deleteDialog.id) return;
+  const confirmDeleteScore = async (scoreId?: string) => {
+    const idToDelete = scoreId || deleteDialog.id;
+    if (!idToDelete) return;
     try {
       const { error } = await supabase
         .from('scores')
         .delete()
-        .eq('id', deleteDialog.id);
+        .eq('id', idToDelete);
 
       if (error) throw error;
-      
+
       toast({
         title: "Success",
         description: "Score deleted successfully"
       });
-      
-      loadData();
+
+      if (!scoreId) {
+        // Only reload data if this was called via dialog
+        loadData();
+        setDeleteDialog({ open: false, id: null });
+      }
     } catch (error) {
       console.error('Error deleting score:', error);
       toast({
@@ -457,44 +491,58 @@ const ScoreManager = () => {
         </div>
       </CardHeader>
       <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow className="border-white/20">
-              <TableHead className="text-white">Player</TableHead>
-              <TableHead className="text-white">Score</TableHead>
-              <TableHead className="text-white">Game</TableHead>
-              {selectedCompetition !== "current" && (
-                <>
-                  <TableHead className="text-white">Rank</TableHead>
-                  <TableHead className="text-white">Points</TableHead>
-                </>
-              )}
-              <TableHead className="text-white">Date</TableHead>
-              {selectedCompetition === "current" && (
-                <TableHead className="text-white">Actions</TableHead>
-              )}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <div className="border rounded-md">
+          {/* Header */}
+          <div className={`grid gap-2 p-3 border-b bg-muted/50 font-medium text-sm border-white/20 ${
+            selectedCompetition === "current" ? 'grid-cols-5' : 'grid-cols-6'
+          }`}>
+            <div className="text-white">Player</div>
+            <div className="text-white">Score</div>
+            <div className="text-white">Game</div>
+            {selectedCompetition !== "current" && (
+              <>
+                <div className="text-white">Rank</div>
+                <div className="text-white">Points</div>
+              </>
+            )}
+            <div className="text-white">Date</div>
+            {selectedCompetition === "current" && (
+              <div className="text-white">Actions</div>
+            )}
+          </div>
+
+          {/* Body */}
+          <div>
             {selectedCompetition === "current" ? (
               <>
-                {scores.map((score, index) => (
-                  <TableRow key={score.id} className="border-white/20">
-                    <TableCell 
+                {localScores.map((score, index) => (
+                  <div
+                    key={score.id}
+                    className={`grid grid-cols-5 gap-2 p-3 border-white/20 border-b transition-all duration-300 ease-in-out overflow-hidden ${
+                      deletingIds.has(score.id)
+                        ? 'opacity-0 max-h-0 py-0 scale-y-0'
+                        : 'opacity-100 max-h-20 scale-y-100'
+                    }`}
+                    style={{
+                      transformOrigin: 'top',
+                      transition: 'all 300ms ease-in-out'
+                    }}
+                  >
+                    <div
                       className="font-arcade font-bold text-2xl animated-gradient"
                       style={{ animationDelay: `${index * 0.1}s` }}
-                    >{score.player_name}</TableCell>
-                    <TableCell 
+                    >{score.player_name}</div>
+                    <div
                       className="font-bold font-arcade text-xl animated-gradient"
                       style={{ animationDelay: `${index * 0.1 + 0.2}s` }}
                     >
                       {formatScore(score.score)}
-                    </TableCell>
-                    <TableCell className="text-gray-300">{score.games?.name || 'Unknown'}</TableCell>
-                    <TableCell className="text-gray-300">
+                    </div>
+                    <div className="text-gray-300">{score.games?.name || 'Unknown'}</div>
+                    <div className="text-gray-300">
                       {new Date(score.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
+                    </div>
+                    <div>
                       <div className="flex space-x-2">
                         <Button
                           size="sm"
@@ -507,20 +555,18 @@ const ScoreManager = () => {
                           size="sm"
                           variant="outline"
                           className="border-red-500 hover:border-red-400 hover:bg-red-500/10"
-                          onClick={() => handleDeleteScore(score.id)}
+                          onClick={() => handleAnimatedDelete(score)}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
-                    </TableCell>
-                  </TableRow>
+                    </div>
+                  </div>
                 ))}
                 {scores.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-gray-400 py-8">
-                      No scores found. Add the first score!
-                    </TableCell>
-                  </TableRow>
+                  <div className="col-span-5 text-center text-gray-400 py-8">
+                    No scores found. Add the first score!
+                  </div>
                 )}
               </>
             ) : (
@@ -565,8 +611,8 @@ const ScoreManager = () => {
                 )}
               </>
             )}
-          </TableBody>
-        </Table>
+          </div>
+        </div>
       </CardContent>
     </Card>
     <ConfirmationDialog
