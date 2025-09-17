@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
-import { Menu, X, Home, BarChart3, Trophy, Brackets, Settings, LogOut, Gamepad2, BookOpen } from "lucide-react";
+import { Menu, X, Home, BarChart3, Trophy, Brackets, Settings, LogOut, Gamepad2, BookOpen, Maximize, Minimize } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation } from "react-router-dom";
+import { useFullscreenContext } from "@/contexts/FullscreenContext";
 
 interface SmartMenuProps {
   animatedNavigate: (path: string) => void;
@@ -30,6 +31,8 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut, isAdmin } = useAuth();
   const location = useLocation();
+  const { isFullscreen, toggleFullscreen } = useFullscreenContext();
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const isCurrentPage = (path: string) => location.pathname === path;
 
@@ -52,6 +55,23 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
   useEffect(() => {
     setIsOpen(false);
   }, [location.pathname]);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
 
   const renderAuthenticatedMenu = () => (
     <>
@@ -98,6 +118,12 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
         </Button>
       )}
 
+      {/* Fullscreen Toggle */}
+      <Button variant="ghost" onClick={() => handleNavigation(toggleFullscreen)} className="w-full justify-start text-left mb-2 hover:bg-purple-500/10 text-purple-200">
+        {isFullscreen ? <Minimize size={16} className="mr-3 text-purple-300" /> : <Maximize size={16} className="mr-3 text-purple-300" />}
+        {isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+      </Button>
+
       {/* Admin Section */}
       {isAdmin && (
         <>
@@ -132,7 +158,7 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
   );
 
   return (
-    <div className="relative pr-4">
+    <div className="relative pr-4" ref={menuRef}>
       <Button
         variant="outline"
         size={variant === 'mobile' ? 'icon' : 'sm'}
@@ -157,9 +183,57 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
           <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent rounded-xl pointer-events-none" />
 
           {user ? renderAuthenticatedMenu() : (
-            <Button variant="ghost" onClick={() => handleAnimatedNavigation('/auth')} className="w-full justify-start text-left">
-              Sign In
-            </Button>
+            <>
+              {/* Main Navigation for guests */}
+              {!isCurrentPage('/') && (
+                <Button variant="ghost" onClick={() => handleAnimatedNavigation('/')} className="w-full justify-start text-left mb-2">
+                  <Home size={16} className="mr-3" />
+                  Highscores
+                </Button>
+              )}
+
+              {!hideStatistics && !isCurrentPage('/statistics') && (
+                <Button variant="ghost" onClick={() => handleAnimatedNavigation('/statistics')} className="w-full justify-start text-left mb-2">
+                  <BarChart3 size={16} className="mr-3" />
+                  Statistics
+                </Button>
+              )}
+
+              {!isCurrentPage('/achievements') && (
+                <Button variant="ghost" onClick={() => handleAnimatedNavigation('/achievements')} className="w-full justify-start text-left mb-2">
+                  <Trophy size={16} className="mr-3" />
+                  Achievements
+                </Button>
+              )}
+
+              {/* Actions for guests */}
+              {onSpinWheel && !hideSpinButton && (
+                <Button variant="ghost" onClick={() => handleNavigation(onSpinWheel)} className="w-full justify-start text-left mb-2 hover:bg-blue-500/10 text-blue-200">
+                  <Gamepad2 size={16} className="mr-3 text-blue-300" />
+                  Spin the Wheel
+                </Button>
+              )}
+
+              {onShowRules && !hideRulesButton && (
+                <Button variant="ghost" onClick={() => handleNavigation(onShowRules)} className="w-full justify-start text-left mb-2 hover:bg-blue-500/10 text-blue-200">
+                  <BookOpen size={16} className="mr-3 text-blue-300" />
+                  Competition Rules
+                </Button>
+              )}
+
+              {/* Fullscreen toggle for guests */}
+              <Button variant="ghost" onClick={() => handleNavigation(toggleFullscreen)} className="w-full justify-start text-left mb-2 hover:bg-purple-500/10 text-purple-200">
+                {isFullscreen ? <Minimize size={16} className="mr-3 text-purple-300" /> : <Maximize size={16} className="mr-3 text-purple-300" />}
+                {isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+              </Button>
+
+              {/* Sign In */}
+              <div className="border-t border-white/20 my-3 pt-3">
+                <Button variant="ghost" onClick={() => handleAnimatedNavigation('/auth')} className="w-full justify-start text-left">
+                  Sign In
+                </Button>
+              </div>
+            </>
           )}
 
           {rightActions && (

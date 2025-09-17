@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Plus, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy, Zap, RotateCcw } from "lucide-react";
+import { Pencil, Trash2, Plus, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy, Zap, RotateCcw, Maximize, Palette } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { isPlaceholderLogo, formatScore } from "@/lib/utils";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
@@ -28,6 +28,8 @@ import WebhookConfig from "@/components/WebhookConfig";
 import UserManagement from "@/components/UserManagement";
 import ResetFunctions from "@/components/ResetFunctions";
 import PerformanceToggle from "@/components/PerformanceToggle";
+import PerformanceModeToggle from "@/components/PerformanceModeToggle";
+import ThemeSelector from "@/components/ThemeSelector";
 import CompetitionManager from "@/components/CompetitionManager";
 import AchievementManagerV2 from "@/components/AchievementManagerV2";
 import BracketManagement from "@/components/BracketManagement";
@@ -36,6 +38,7 @@ import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHe
 import { useUserRoles } from "@/hooks/useUserRoles";
 import { useTournament } from "@/contexts/TournamentContext";
 import { usePerformanceMode } from "@/hooks/usePerformanceMode";
+import { useFullscreenContext } from "@/contexts/FullscreenContext";
 
 interface AdminProps {
   isExiting?: boolean;
@@ -997,6 +1000,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
   const { user, isAdmin, loading } = useAuth();
   const { currentTournament, userTournaments, hasPermission, updateTournament, deleteTournament, refreshTournaments, currentUserRole, cloneTournament, switchTournament, loading: tournamentsLoading } = useTournament();
   const { enableAnimations } = usePerformanceMode();
+  const { fullscreenEnabled, toggleFullscreenPreference, loading: fullscreenLoading } = useFullscreenContext();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [games, setGames] = useState<Game[]>([]);
@@ -2205,10 +2209,71 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
               </TabsList>
 
               <TabsContent value="performance" className={`mt-6 ${enableAnimations ? (systemSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}>
-                <Card className={getCardStyle('primary')}>
-                  <CardHeader><CardTitle className={getTypographyStyle('h3')}>Performance Settings</CardTitle></CardHeader>
-                  <CardContent><PerformanceToggle /></CardContent>
-                </Card>
+                <div className="space-y-6">
+                  <Card className={getCardStyle('primary')}>
+                    <CardHeader><CardTitle className={getTypographyStyle('h3')}>Performance Settings</CardTitle></CardHeader>
+                    <CardContent>
+                      <div className="space-y-6">
+                        <PerformanceToggle />
+                        <div className="border-t pt-4">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium">Performance Mode Toggle</p>
+                              <p className="text-xs text-muted-foreground">
+                                Quick toggle for performance mode in the navigation
+                              </p>
+                            </div>
+                            <PerformanceModeToggle displayType="switch" />
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className={getCardStyle('primary')}>
+                    <CardHeader>
+                      <CardTitle className={getTypographyStyle('h3')}>
+                        <Maximize className="w-4 h-4 mr-2 inline-block" />
+                        Fullscreen Preference
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">Auto-enable fullscreen</p>
+                          <p className="text-xs text-muted-foreground">
+                            Automatically enter fullscreen mode when you visit the application
+                          </p>
+                        </div>
+                        <Switch
+                          checked={fullscreenEnabled}
+                          onCheckedChange={toggleFullscreenPreference}
+                          disabled={fullscreenLoading}
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className={getCardStyle('primary')}>
+                    <CardHeader>
+                      <CardTitle className={getTypographyStyle('h3')}>
+                        <Palette className="w-4 h-4 mr-2 inline-block" />
+                        Theme Settings
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">Application Theme</p>
+                          <p className="text-xs text-muted-foreground">
+                            Choose your preferred visual theme for the application
+                          </p>
+                        </div>
+                        <ThemeSelector />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               </TabsContent>
 
 

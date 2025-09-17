@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import ThemeSelector from '@/components/ThemeSelector';
-import PerformanceModeToggle from '@/components/PerformanceModeToggle';
 import TournamentDropdown from '@/components/TournamentDropdown';
 import SmartMenu from '@/components/SmartMenu';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,12 +15,11 @@ interface TopNavProps {
   hideTournamentSelector?: boolean;
   hideSpinButton?: boolean;
   hideStatistics?: boolean;
-  hideFullscreenButton?: boolean;
   onShowRules?: () => void;
   hideRulesButton?: boolean;
 }
 
-const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnimatedNavigate, rightActions, centerNav = false, hideBracketsLink = false, hideTournamentSelector = false, hideSpinButton = false, hideStatistics = false, hideFullscreenButton = false, onShowRules, hideRulesButton = false }) => {
+const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnimatedNavigate, rightActions, centerNav = false, hideBracketsLink = false, hideTournamentSelector = false, hideSpinButton = false, hideStatistics = false, onShowRules, hideRulesButton = false }) => {
   const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -34,8 +31,11 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
 
   // Helper function to check if we're on the current page
   const isCurrentPage = (path: string) => location.pathname === path;
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(!!document.fullscreenElement);
 
+  // Handle logo click to go to retroranks.com
+  const handleLogoClick = () => {
+    window.open('https://www.retroranks.com', '_blank');
+  };
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -58,22 +58,6 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    const onFs = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener('fullscreenchange', onFs);
-    return () => document.removeEventListener('fullscreenchange', onFs);
-  }, []);
-
-  const toggleFullscreen = async () => {
-    try {
-      if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen();
-      } else {
-        await document.exitFullscreen();
-      }
-    } catch {}
-  };
-
   const handleSpin = () => {
     if (onSpinWheel) return onSpinWheel();
     finalAnimatedNavigate('/');
@@ -83,7 +67,12 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
     <div className="w-full relative z-20">
       {centerNav ? (
         <div className="flex flex-col items-center gap-3">
-          <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight text-center pl-4">Retro Ranks</h1>
+          <h1
+            className="text-3xl md:text-4xl font-bold animated-gradient leading-tight text-center pl-4 cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={handleLogoClick}
+          >
+            Retro Ranks
+          </h1>
           <div className="flex items-center gap-4">
             <div
               className="flex gap-4 items-center whitespace-nowrap flex-shrink-0 flex-none flex-nowrap min-w-max"
@@ -106,15 +95,8 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
                   second: '2-digit'
                 })}
               </div>
-              <ThemeSelector />
               {user ? (
                 <>
-                  <PerformanceModeToggle displayType="switch" />
-                  {!hideFullscreenButton && (
-                    <Button variant="outline" size="sm" className="theme-button" onClick={toggleFullscreen}>
-                      {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-                    </Button>
-                  )}
                   {!hideTournamentSelector && <TournamentDropdown />}
                 </>
               ) : null}
@@ -132,7 +114,12 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
         </div>
       ) : (
         <div className="flex items-center">
-          <h1 className="text-3xl md:text-4xl font-bold animated-gradient leading-tight pl-4">Retro Ranks</h1>
+          <h1
+            className="text-3xl md:text-4xl font-bold animated-gradient leading-tight pl-4 cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={handleLogoClick}
+          >
+            Retro Ranks
+          </h1>
           <div className="ml-auto flex items-center">
             <div
               className="flex gap-4 items-center whitespace-nowrap flex-shrink-0 flex-none flex-nowrap min-w-max"
@@ -155,15 +142,8 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
                   second: '2-digit'
                 })}
               </div>
-              <ThemeSelector />
               {user ? (
                 <>
-                  <PerformanceModeToggle displayType="switch" />
-                  {!hideFullscreenButton && (
-                    <Button variant="outline" size="sm" className="theme-button" onClick={toggleFullscreen}>
-                      {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-                    </Button>
-                  )}
                   <TournamentDropdown />
                 </>
               ) : null}
