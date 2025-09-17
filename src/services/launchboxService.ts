@@ -43,8 +43,8 @@ class LaunchBoxService {
 
   // Circuit breaker to stop making requests when API is overloaded
   private circuitBreakerFailures = 0;
-  private circuitBreakerThreshold = 2; // Stop after 2 consecutive failures (reduced from 3)
-  private circuitBreakerResetTime = 180000; // Reset after 3 minutes (reduced from 5)
+  private circuitBreakerThreshold = 5; // Allow more failures before opening (increased from 2)
+  private circuitBreakerResetTime = 120000; // Reset after 2 minutes (reduced from 3)
   private circuitBreakerOpenTime = 0;
   private isCircuitBreakerOpen = false;
 
@@ -70,7 +70,11 @@ class LaunchBoxService {
    */
   private recordResult(success: boolean, errorType?: string) {
     if (success) {
-      this.circuitBreakerFailures = 0;
+      // Reset failure count on any success
+      if (this.circuitBreakerFailures > 0) {
+        console.log('LaunchBox request succeeded, resetting failure count');
+        this.circuitBreakerFailures = 0;
+      }
     } else {
       this.circuitBreakerFailures++;
       if (this.circuitBreakerFailures >= this.circuitBreakerThreshold) {
@@ -397,6 +401,20 @@ class LaunchBoxService {
   }
 
   /**
+   * Check if a game name is likely to cause API issues
+   */
+  private isProblematicGameName(gameName: string): boolean {
+    const cleanName = gameName.trim();
+
+    // Skip very short names or names with special characters that cause timeouts
+    if (cleanName.length <= 2) return true;
+    if (cleanName.startsWith('-') && cleanName.length <= 10) return true;
+    if (cleanName.includes('_'.repeat(5))) return true; // Skip names like "_________"
+
+    return false;
+  }
+
+  /**
    * Get clear logo for a specific game by name (simplified interface)
    */
   async getClearLogo(gameName: string): Promise<string | null> {
@@ -405,6 +423,13 @@ class LaunchBoxService {
       const cacheKey = gameName.toLowerCase();
       if (this.logoCache.has(cacheKey)) {
         return this.logoCache.get(cacheKey) || null;
+      }
+
+      // Skip problematic game names that are likely to cause timeouts
+      if (this.isProblematicGameName(gameName)) {
+        console.log('Skipping problematic game name:', gameName);
+        this.logoCache.set(cacheKey, null);
+        return null;
       }
 
       const results = await this.searchGames(gameName, 1);
