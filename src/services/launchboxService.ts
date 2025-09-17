@@ -25,15 +25,14 @@ class LaunchBoxService {
      window.location.hostname.includes('localhost'));
 
   // Always use CORS proxy in browser environments since LaunchBox API doesn't support CORS
-  // Try multiple proxy services for better reliability
-  private corsProxy = typeof window !== 'undefined' ? 'https://corsproxy.io/?' : '';
+  private corsProxy = typeof window !== 'undefined' ? 'https://api.allorigins.win/get?url=' : '';
 
   // Cache to avoid repeated requests for the same game
   private logoCache = new Map<string, string | null>();
 
   constructor() {
     console.log(`🌐 LaunchBox Service initialized in ${this.isDevelopment ? 'DEVELOPMENT' : 'PRODUCTION'} mode`);
-    console.log(`📡 API calls will be ${this.corsProxy ? 'PROXIED via ' + this.corsProxy.replace('https://corsproxy.io/?', 'corsproxy.io').replace('https://api.allorigins.win/get?url=', 'AllOrigins') : 'DIRECT'}`);
+    console.log(`📡 API calls will be ${this.corsProxy ? 'PROXIED via ' + this.corsProxy.replace('https://api.allorigins.win/get?url=', 'AllOrigins CORS proxy') : 'DIRECT'}`);
   }
 
   // Rate limiting
@@ -330,23 +329,52 @@ class LaunchBoxService {
    * Extract clear logo URL from game page HTML
    */
   private extractClearLogoUrl(html: string): string | undefined {
-    // Find the "Clear Logo" text position
+    // Try multiple approaches to find clear logos
+
+    // Method 1: Look for "Clear Logo" text and find images after it
     const clearLogoIndex = html.indexOf('Clear Logo');
-    if (clearLogoIndex === -1) {
-      console.log('No "Clear Logo" section found');
-      return undefined;
+    if (clearLogoIndex !== -1) {
+      const afterClearLogo = html.substring(clearLogoIndex, clearLogoIndex + 2000);
+      const imageMatch = afterClearLogo.match(/https:\/\/images\.launchbox-app\.com\/[^"'\s]+\.png/);
+      if (imageMatch) {
+        console.log('Found clear logo via "Clear Logo" text:', imageMatch[0]);
+        return imageMatch[0];
+      }
     }
 
-    // Look for the first image URL after "Clear Logo"
-    const afterClearLogo = html.substring(clearLogoIndex);
-    const imageMatch = afterClearLogo.match(/https:\/\/images\.launchbox-app\.com\/\/[a-f0-9-]+\.png/);
+    // Method 2: Look for any clear logo images in the entire page
+    const clearLogoPatterns = [
+      /https:\/\/images\.launchbox-app\.com\/[^"'\s]*clear[^"'\s]*\.png/gi,
+      /https:\/\/images\.launchbox-app\.com\/[^"'\s]*logo[^"'\s]*\.png/gi,
+      /https:\/\/images\.launchbox-app\.com\/[^"'\s]+\.png/g
+    ];
 
-    if (imageMatch) {
-      console.log('Found clear logo:', imageMatch[0]);
-      return imageMatch[0];
+    for (const pattern of clearLogoPatterns) {
+      const matches = html.match(pattern);
+      if (matches && matches.length > 0) {
+        // Filter for likely clear logo URLs (avoid fanart, screenshots, etc.)
+        const clearLogos = matches.filter(url => {
+          const urlLower = url.toLowerCase();
+          return (urlLower.includes('clear') || urlLower.includes('logo')) &&
+                 !urlLower.includes('fanart') &&
+                 !urlLower.includes('screenshot') &&
+                 !urlLower.includes('banner');
+        });
+
+        if (clearLogos.length > 0) {
+          console.log('Found clear logo via pattern matching:', clearLogos[0]);
+          return clearLogos[0];
+        }
+
+        // If no specific clear logos found, try the first PNG that might be a logo
+        if (matches.length > 0) {
+          console.log('Found potential logo image:', matches[0]);
+          return matches[0];
+        }
+      }
     }
 
-    console.log('No image found after "Clear Logo" text');
+    console.log('No clear logo found in HTML');
     return undefined;
   }
 
