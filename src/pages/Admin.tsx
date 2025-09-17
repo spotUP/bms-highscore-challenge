@@ -56,7 +56,18 @@ interface Game {
   updated_at: string;
 }
 
-const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+interface CreateTournamentFormProps {
+  isOpen: boolean;
+  onClose: () => void;
+  initialGames?: Array<{
+    id?: number;
+    name: string;
+    description?: string;
+    logo_url?: string;
+  }>;
+}
+
+const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTournamentFormProps) => {
   const { createTournament } = useTournament();
   const { toast } = useToast();
   const [isCreating, setIsCreating] = useState(false);
@@ -75,6 +86,15 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
     };
   });
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
+  const [games, setGames] = useState(initialGames);
+  const [newGame, setNewGame] = useState({
+    name: '',
+    description: '',
+    logo_url: '',
+    is_active: true,
+    include_in_challenge: true
+  });
+  const logoSuggestionsRef = useRef<GameLogoSuggestionsRef>(null);
 
   const generateSlug = (name: string) => {
     return name
@@ -112,6 +132,42 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
     }
   };
 
+  const addGameToList = () => {
+    if (!newGame.name.trim()) {
+      toast({
+        title: "Error",
+        description: "Game name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setGames(prev => [...prev, {
+      ...newGame,
+      id: Date.now(), // temporary ID for UI
+      name: newGame.name.trim(),
+      description: newGame.description.trim() || undefined,
+    }]);
+
+    // Reset new game form
+    setNewGame({
+      name: '',
+      description: '',
+      logo_url: '',
+      is_active: true,
+      include_in_challenge: true
+    });
+
+    // Clear logo suggestions
+    if (logoSuggestionsRef.current) {
+      logoSuggestionsRef.current.clearSuggestions();
+    }
+  };
+
+  const removeGameFromList = (gameId: number) => {
+    setGames(prev => prev.filter(game => game.id !== gameId));
+  };
+
   const handleCreateTournament = async () => {
     if (!createForm.name.trim() || !createForm.slug.trim()) {
       toast({
@@ -143,6 +199,33 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
     });
 
     if (tournament) {
+      // Add games to the newly created tournament
+      for (const game of games) {
+        try {
+          const { error } = await supabase
+            .from('games')
+            .insert({
+              name: game.name,
+              description: game.description,
+              logo_url: game.logo_url || null,
+              is_active: true,
+              include_in_challenge: true,
+              tournament_id: tournament.id,
+            });
+
+          if (error) {
+            console.error('Error adding game:', error);
+            toast({
+              title: "Warning",
+              description: `Failed to add game "${game.name}" to tournament`,
+              variant: "destructive",
+            });
+          }
+        } catch (error) {
+          console.error('Error adding game:', error);
+        }
+      }
+
       // Reset form with new default dates
       const now = new Date();
       const oneMonthLater = new Date(now);
@@ -153,13 +236,14 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
         description: '',
         slug: '',
         is_public: false,
-          start_time: now.toISOString().slice(0, 16),
+        start_time: now.toISOString().slice(0, 16),
         end_time: oneMonthLater.toISOString().slice(0, 16),
       });
+      setGames([]);
       setSlugAvailable(null);
       toast({
         title: "Success",
-        description: "Highscore tournament created successfully!",
+        description: `Tournament created successfully! ${games.length > 0 ? `${games.length} games added.` : ''}`,
       });
       onClose(); // Close the modal
     }
@@ -168,11 +252,17 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create New Highscore Tournament</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <Tabs defaultValue="tournament" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="tournament">Tournament Details</TabsTrigger>
+            <TabsTrigger value="games">Games ({games.length})</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="tournament" className="space-y-4 mt-4">
         <div>
           <Label htmlFor="name" className="text-white">Highscore Tournament Name</Label>
           <Input
@@ -382,7 +472,125 @@ const CreateTournamentForm = ({ isOpen, onClose }: { isOpen: boolean; onClose: (
         >
           {isCreating ? 'Creating...' : 'Create Tournament'}
         </Button>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="games" className="space-y-4 mt-4">
+            {/* Add New Game Section */}
+            <div className="border rounded-lg p-4 space-y-4">
+              <h4 className="font-semibold text-white">Add Game</h4>
+
+              <div>
+                <Label htmlFor="game-name" className="text-white">Game Name *</Label>
+                <Input
+                  id="game-name"
+                  value={newGame.name}
+                  onChange={(e) => setNewGame(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Enter game name (logos search automatically as you type)"
+                  className="bg-black/50 border-white/20 text-white"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="game-description" className="text-white">Description</Label>
+                <Textarea
+                  id="game-description"
+                  value={newGame.description}
+                  onChange={(e) => setNewGame(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Optional game description"
+                  className="bg-black/50 border-white/20 text-white"
+                />
+              </div>
+
+              <div>
+                <Label className="text-white">Game Logo</Label>
+                <ImagePasteUpload
+                  onImageSelect={(url) => setNewGame(prev => ({ ...prev, logo_url: url }))}
+                  currentImageUrl={newGame.logo_url}
+                  placeholder="Paste image or drag & drop"
+                />
+              </div>
+
+              <GameLogoSuggestions
+                ref={logoSuggestionsRef}
+                gameName={newGame.name}
+                onLogoSelect={(url) => setNewGame(prev => ({ ...prev, logo_url: url }))}
+              />
+
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="game-active"
+                    checked={newGame.is_active}
+                    onCheckedChange={(checked) => setNewGame(prev => ({ ...prev, is_active: !!checked }))}
+                  />
+                  <Label htmlFor="game-active" className="text-white">Active</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="game-include-challenge"
+                    checked={newGame.include_in_challenge}
+                    onCheckedChange={(checked) => setNewGame(prev => ({ ...prev, include_in_challenge: !!checked }))}
+                  />
+                  <Label htmlFor="game-include-challenge" className="text-white">Include in Challenge</Label>
+                </div>
+              </div>
+
+              <Button
+                onClick={addGameToList}
+                disabled={!newGame.name.trim()}
+                className="w-full"
+                variant="outline"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add Game to Tournament
+              </Button>
+            </div>
+
+            {/* Games List */}
+            {games.length > 0 && (
+              <div className="border rounded-lg p-4">
+                <h4 className="font-semibold text-white mb-3">Games to Add ({games.length})</h4>
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {games.map((game) => (
+                    <div key={game.id} className="flex items-center justify-between p-2 bg-black/30 rounded">
+                      <div className="flex items-center space-x-3">
+                        {game.logo_url && (
+                          <img
+                            src={game.logo_url}
+                            alt={game.name}
+                            className="w-8 h-8 rounded object-cover"
+                          />
+                        )}
+                        <div>
+                          <p className="font-medium text-white">{game.name}</p>
+                          {game.description && (
+                            <p className="text-xs text-gray-400 truncate max-w-48">{game.description}</p>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => removeGameFromList(game.id!)}
+                        variant="ghost"
+                        size="sm"
+                        className="text-red-400 hover:text-red-300"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Button
+              onClick={handleCreateTournament}
+              disabled={!createForm.name.trim() || !createForm.slug.trim() || isCreating || slugAvailable === false}
+              className="w-full"
+            >
+              {isCreating ? 'Creating...' : `Create Tournament${games.length > 0 ? ` with ${games.length} Games` : ''}`}
+            </Button>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

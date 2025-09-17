@@ -1,104 +1,40 @@
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const supabaseUrl = process.env.VITE_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-// Load environment variables
-dotenv.config();
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!supabaseUrl || !supabaseKey) {
+if (!supabaseUrl || !supabaseServiceKey) {
   console.error('Missing required environment variables');
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
-  }
-});
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-async function runMigration() {
-  console.log('Starting to apply migration...');
+async function applyMigration() {
+  console.log('🔄 Applying image schema migration...');
 
-  try {
-    // Determine migration file path from CLI arg or fallback to previous default
-    const argPath = process.argv[2];
-    const migrationPath = argPath
-      ? path.isAbsolute(argPath)
-        ? argPath
-        : path.join(process.cwd(), argPath)
-      : path.join(
-          __dirname,
-          '../supabase/migrations/20250910212000_add_achievement_functions.sql'
-        );
+  // Apply the changes one by one
+  const migrations = [
+    'ALTER TABLE games_database ADD COLUMN IF NOT EXISTS screenshot_url TEXT',
+    'ALTER TABLE games_database ADD COLUMN IF NOT EXISTS cover_url TEXT',
+    'ALTER TABLE games_database ADD COLUMN IF NOT EXISTS logo_url TEXT',
+    'CREATE INDEX IF NOT EXISTS idx_games_database_screenshot ON games_database(screenshot_url) WHERE screenshot_url IS NOT NULL',
+    'CREATE INDEX IF NOT EXISTS idx_games_database_cover ON games_database(cover_url) WHERE cover_url IS NOT NULL'
+  ];
 
-    if (!fs.existsSync(migrationPath)) {
-      console.error(`Migration file not found: ${migrationPath}`);
-      process.exit(1);
+  for (const sql of migrations) {
+    console.log(`Running: ${sql}`);
+    const { error } = await supabase.rpc('exec_sql', { sql_query: sql });
+
+    if (error) {
+      console.error('❌ Error:', error);
+    } else {
+      console.log('✅ Success');
     }
-
-    const sql = fs.readFileSync(migrationPath, 'utf8');
-    
-    // Split the SQL into individual statements
-    const statements = sql
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-
-    // Execute each statement
-    for (const statement of statements) {
-      console.log('Executing:', statement.substring(0, 100) + '...');
-      
-      try {
-        // Execute raw SQL using Supabase client
-        const { data, error } = await supabase.rpc('exec_sql', { sql: statement });
-        
-        if (error) {
-          // Ignore "already exists" errors and similar
-          if (error.message?.includes('already exists') || 
-              error.message?.includes('relation') || 
-              error.message?.includes('function') ||
-              error.message?.includes('trigger') ||
-              error.message?.includes('does not exist') ||
-              error.message?.includes('duplicate')) {
-            console.log('  (statement already applied or relation exists)');
-          } else {
-            throw error;
-          }
-        } else {
-          console.log('  Success');
-        }
-      } catch (error: any) {
-        // Ignore common "already exists" type errors
-        if (error.message?.includes('already exists') || 
-            error.message?.includes('relation') ||
-            error.message?.includes('function') ||
-            error.message?.includes('trigger') ||
-            error.message?.includes('does not exist') ||
-            error.message?.includes('duplicate')) {
-          console.log('  (statement already applied)');
-        } else {
-          console.error('  Error executing statement:', error);
-          throw error;
-        }
-      }
-    }
-
-    console.log('Migration applied successfully!');
-    
-  } catch (error) {
-    console.error('Error applying migration:', error);
-    process.exit(1);
   }
+
+  console.log('🎉 Migration complete!');
 }
 
 // Run the migration
-runMigration().catch(console.error);
+applyMigration();
