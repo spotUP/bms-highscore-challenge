@@ -313,9 +313,11 @@ class GameMediaService {
     if (existingMedia?.video_url) {
       console.log(`🎥 GameMediaService: Adding video from LaunchBox - ${existingMedia.video_url}`);
       const youtubeId = this.extractYouTubeId(existingMedia.video_url);
+      console.log(`🔗 GameMediaService: YouTube ID extracted for "${gameName}": ${youtubeId} from ${existingMedia.video_url}`);
 
       if (youtubeId) {
         // It's a YouTube video
+        console.log(`▶️ GameMediaService: Adding YouTube video for "${gameName}"`);
         videos.push({
           id: 'launchbox-video',
           url: `https://www.youtube.com/watch?v=${youtubeId}`,

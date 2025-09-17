@@ -161,11 +161,14 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                       };
 
                       const youtubeId = extractYouTubeId(game.video_url);
+                      console.log(`🎬 GameDetailsModal: YouTube ID for "${game.name}": ${youtubeId} from ${game.video_url}`);
 
                       if (youtubeId) {
+                        const embedUrl = `https://www.youtube.com/embed/${youtubeId}`;
+                        console.log(`📺 GameDetailsModal: Creating iframe with URL: ${embedUrl}`);
                         return (
                           <iframe
-                            src={`https://www.youtube.com/embed/${youtubeId}`}
+                            src={embedUrl}
                             className="w-full h-full"
                             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                             allowFullScreen
