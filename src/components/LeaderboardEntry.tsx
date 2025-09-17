@@ -25,9 +25,16 @@ const LeaderboardEntry = React.memo(({ rank, name, score, isNewScore }: Leaderbo
   };
 
   const waveDelay = (rank - 1) * 0.3; // 300ms delay per rank for more visible wave effect
+  const swingDelay = (rank - 1) * 0.2; // 200ms stagger for swinging animation
 
   return (
-    <div className="flex items-center justify-between py-1">
+    <div
+      className="flex items-center justify-between py-1 animate-swing"
+      style={{
+        animationDelay: `${swingDelay}s`,
+        '--wave-delay': `${waveDelay}s`
+      } as React.CSSProperties}
+    >
       <div className="flex items-center gap-3">
         {getRankIcon(rank)}
         <div className="flex-1">
