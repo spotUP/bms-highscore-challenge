@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { GameLogo } from "./GameLogo";
 import { GameRatingDisplay } from "./GameRatingDisplay";
 import { GameMediaGallery } from "./GameMediaGallery";
 import {
@@ -77,33 +76,15 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
         </DialogHeader>
 
         <div className="space-y-8">
-          {/* Game Media Section */}
-          <div className="space-y-6">
-            {/* Main Game Info Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Game Logo */}
-              <div className="aspect-video w-full overflow-hidden rounded-lg border bg-gray-900 bg-opacity-50 relative">
-                {game.logo_url ? (
-                  <img
-                    src={game.logo_url}
-                    alt={`${game.name} logo`}
-                    className="w-full h-full object-contain p-4"
-                  />
-                ) : (
-                  <GameLogo
-                    gameName={game.name}
-                    className="w-full h-full"
-                    enableLazyLoading={false}
-                  />
-                )}
-                <div className="absolute top-2 left-2">
-                  <Badge variant="secondary" className="text-xs">Logo</Badge>
-                </div>
-              </div>
+          {/* Two Column Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+            {/* Left Column - Game Information */}
+            <div className="lg:col-span-2 space-y-6">
+              <h3 className="font-semibold text-xl">Game Information</h3>
 
               {/* Cover Art */}
               {game.cover_url && (
-                <div className="aspect-[3/4] w-full overflow-hidden rounded-lg border relative">
+                <div className="aspect-[3/4] w-full max-w-sm mx-auto overflow-hidden rounded-lg border relative">
                   <img
                     src={game.cover_url}
                     alt={`${game.name} cover`}
@@ -115,20 +96,8 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                 </div>
               )}
 
-              {/* Screenshot section removed - now using RAWG via GameMediaGallery */}
-            </div>
-
-            {/* Video section removed - now using RAWG via GameMediaGallery */}
-          </div>
-
-          {/* Game Details Section */}
-          <div className="space-y-8">
-            {/* Main Game Information */}
-            <div className="space-y-6">
-              <h3 className="font-semibold text-xl">Game Information</h3>
-
               {/* Core Details Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <h4 className="font-semibold text-sm text-muted-foreground">Platform</h4>
                   <Badge variant="secondary" className="text-sm w-fit">
@@ -185,6 +154,132 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                 )}
               </div>
 
+              {/* Developer & Publisher */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {game.developer && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-sm text-muted-foreground">Developer</h4>
+                    <Badge variant="outline" className="text-sm w-fit">
+                      {game.developer}
+                    </Badge>
+                  </div>
+                )}
+
+                {game.publisher && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-sm text-muted-foreground">Publisher</h4>
+                    <Badge variant="outline" className="text-sm w-fit">
+                      {game.publisher}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+
+              {/* Genres */}
+              {game.genres && game.genres.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-sm text-muted-foreground mb-3">Genres</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {game.genres.map(genre => (
+                      <Badge key={genre} variant="secondary" className="text-sm">
+                        {genre}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+
+              {/* Series */}
+              {game.series && (
+                <div>
+                  <h4 className="font-semibold text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                    <Tag className="w-4 h-4" />
+                    Series
+                  </h4>
+                  <p className="text-sm bg-muted bg-opacity-20 p-2 rounded">{game.series}</p>
+                </div>
+              )}
+
+              {/* Region */}
+              {game.region && (
+                <div>
+                  <h4 className="font-semibold text-sm text-muted-foreground mb-2 flex items-center gap-1">
+                    <Globe className="w-4 h-4" />
+                    Region
+                  </h4>
+                  <Badge variant="outline" className="text-sm">
+                    {game.region}
+                  </Badge>
+                </div>
+              )}
+
+              {/* Play Modes */}
+              {game.play_modes && game.play_modes.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-sm text-muted-foreground mb-3 flex items-center gap-1">
+                    <Monitor className="w-4 h-4" />
+                    Play Modes
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {game.play_modes.map(mode => (
+                      <Badge key={mode} variant="secondary" className="text-sm">
+                        {mode}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Themes */}
+              {game.themes && game.themes.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-sm text-muted-foreground mb-3 flex items-center gap-1">
+                    <Palette className="w-4 h-4" />
+                    Themes
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {game.themes.map(theme => (
+                      <Badge key={theme} variant="outline" className="text-sm">
+                        {theme}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Alternative Names */}
+              {game.alternative_names && game.alternative_names.length > 0 && (
+                <div>
+                  <h4 className="font-semibold text-sm text-muted-foreground mb-3">Alternate Names</h4>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {game.alternative_names.map((name, index) => (
+                      <div key={index} className="text-sm bg-muted bg-opacity-20 p-2 rounded">
+                        {name}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* External Links */}
+              {game.wikipedia_url && (
+                <div>
+                  <h4 className="font-semibold text-sm text-muted-foreground mb-3 flex items-center gap-1">
+                    <BookOpen className="w-4 h-4" />
+                    External Links
+                  </h4>
+                  <div className="space-y-2">
+                    <Button variant="outline" size="sm" asChild className="w-full justify-start">
+                      <a href={game.wikipedia_url} target="_blank" rel="noopener noreferrer">
+                        <Globe className="w-4 h-4 mr-2" />
+                        Wikipedia Page
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Enhanced Rating Display */}
               <div>
                 <h4 className="font-semibold text-sm text-muted-foreground mb-3">Community Rating</h4>
@@ -198,151 +293,46 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
               </div>
             </div>
 
+            {/* Right Column - YouTube Video */}
+            <div className="lg:col-span-3">
+              {game.video_url && (
+                <div>
+                  <h3 className="font-semibold text-xl mb-4">Video</h3>
+                  <div className="aspect-[4/3] w-full overflow-hidden rounded-lg border relative">
+                    <iframe
+                      src={game.video_url.includes('youtube.com') || game.video_url.includes('youtu.be')
+                        ? `https://www.youtube.com/embed/${game.video_url.split('/').pop()?.split('=').pop()?.split('&')[0]}`
+                        : game.video_url
+                      }
+                      title={`${game.name} video`}
+                      className="w-full h-full"
+                      allowFullScreen
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    />
+                    <div className="absolute top-2 left-2">
+                      <Badge variant="secondary" className="text-xs">Video</Badge>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Game Details Section */}
+          <div className="space-y-8">
+
             <Separator />
 
             {/* Overview Section */}
             {game.overview && (
               <div className="space-y-4">
-                <h3 className="font-semibold text-xl">Overview</h3>
-                <div className="bg-muted bg-opacity-30 p-4 rounded-lg">
+                <h4 className="font-semibold text-sm text-muted-foreground">Overview</h4>
+                <div className="bg-muted bg-opacity-20 p-3 rounded">
                   <p className="text-sm leading-relaxed">{game.overview}</p>
                 </div>
               </div>
             )}
 
-            {/* Detailed Metadata */}
-            <div className="space-y-6">
-              <h3 className="font-semibold text-xl">Detailed Information</h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Left Column */}
-                <div className="space-y-6">
-                  {/* Developer & Publisher */}
-                  <div className="space-y-4">
-                    {game.developer && (
-                      <div>
-                        <h4 className="font-semibold text-sm text-muted-foreground mb-2">Developer</h4>
-                        <p className="text-sm bg-muted bg-opacity-20 p-2 rounded">{game.developer}</p>
-                      </div>
-                    )}
-
-                    {game.publisher && (
-                      <div>
-                        <h4 className="font-semibold text-sm text-muted-foreground mb-2">Publisher</h4>
-                        <p className="text-sm bg-muted bg-opacity-20 p-2 rounded">{game.publisher}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Genres */}
-                  {game.genres && game.genres.length > 0 && (
-                    <div>
-                      <h4 className="font-semibold text-sm text-muted-foreground mb-3">Genres</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {game.genres.map(genre => (
-                          <Badge key={genre} variant="secondary" className="text-sm">
-                            {genre}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Series */}
-                  {game.series && (
-                    <div>
-                      <h4 className="font-semibold text-sm text-muted-foreground mb-2 flex items-center gap-1">
-                        <Tag className="w-4 h-4" />
-                        Series
-                      </h4>
-                      <p className="text-sm bg-muted bg-opacity-20 p-2 rounded">{game.series}</p>
-                    </div>
-                  )}
-
-                  {/* Region */}
-                  {game.region && (
-                    <div>
-                      <h4 className="font-semibold text-sm text-muted-foreground mb-2 flex items-center gap-1">
-                        <Globe className="w-4 h-4" />
-                        Region
-                      </h4>
-                      <Badge variant="outline" className="text-sm">
-                        {game.region}
-                      </Badge>
-                    </div>
-                  )}
-                </div>
-
-                {/* Right Column */}
-                <div className="space-y-6">
-                  {/* Play Modes */}
-                  {game.play_modes && game.play_modes.length > 0 && (
-                    <div>
-                      <h4 className="font-semibold text-sm text-muted-foreground mb-3 flex items-center gap-1">
-                        <Monitor className="w-4 h-4" />
-                        Play Modes
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {game.play_modes.map(mode => (
-                          <Badge key={mode} variant="secondary" className="text-sm">
-                            {mode}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Themes */}
-                  {game.themes && game.themes.length > 0 && (
-                    <div>
-                      <h4 className="font-semibold text-sm text-muted-foreground mb-3 flex items-center gap-1">
-                        <Palette className="w-4 h-4" />
-                        Themes
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {game.themes.map(theme => (
-                          <Badge key={theme} variant="outline" className="text-sm">
-                            {theme}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Alternative Names */}
-                  {game.alternative_names && game.alternative_names.length > 0 && (
-                    <div>
-                      <h4 className="font-semibold text-sm text-muted-foreground mb-3">Alternate Names</h4>
-                      <div className="space-y-2 max-h-32 overflow-y-auto">
-                        {game.alternative_names.map((name, index) => (
-                          <div key={index} className="text-sm bg-muted bg-opacity-20 p-2 rounded">
-                            {name}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* External Links */}
-                  {game.wikipedia_url && (
-                    <div>
-                      <h4 className="font-semibold text-sm text-muted-foreground mb-3 flex items-center gap-1">
-                        <BookOpen className="w-4 h-4" />
-                        External Links
-                      </h4>
-                      <div className="space-y-2">
-                        <Button variant="outline" size="sm" asChild className="w-full justify-start">
-                          <a href={game.wikipedia_url} target="_blank" rel="noopener noreferrer">
-                            <Globe className="w-4 h-4 mr-2" />
-                            Wikipedia Page
-                          </a>
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
 
             {/* Enhanced Media Gallery */}
             <Separator />

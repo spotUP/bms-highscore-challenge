@@ -1,5 +1,5 @@
 // Basic logging utility with debug mode support
-let isDebugMode = process.env.NODE_ENV === 'development';
+let isDebugMode = false; // Disabled for production-ready console
 
 export const dlog = (...args: any[]) => {
   if (isDebugMode) {

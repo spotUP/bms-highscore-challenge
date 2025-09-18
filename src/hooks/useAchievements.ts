@@ -45,7 +45,6 @@ export const useAchievements = () => {
     // Skip if we've shown this achievement in the last minute
     const lastShown = notifiedAchievements.get(key) || 0;
     if (Date.now() - lastShown < 60000) { // 1 minute cooldown
-      console.log(`⏭️ Skipping duplicate achievement: ${achievement.name} (shown recently)`);
       return;
     }
     
@@ -100,9 +99,6 @@ export const useAchievements = () => {
 
       if (duplicates.length > 0) {
         console.warn('⚠️ Found duplicate achievements in database:', duplicates);
-        console.log('Full achievement data for player:', data);
-      } else {
-        console.log('✅ No duplicate achievements found in database');
       }
       
       return { hasDuplicates: duplicates.length > 0, duplicates, allAchievements: data };
@@ -114,11 +110,9 @@ export const useAchievements = () => {
 
   const cleanupDuplicateAchievements = useCallback(async (playerName: string, tournamentId: string) => {
     try {
-      console.log('🧹 Starting cleanup of duplicate achievements for', playerName);
       const { hasDuplicates, duplicates, allAchievements } = await checkForDuplicateAchievements(playerName, tournamentId) || {};
       
       if (!hasDuplicates || !duplicates?.length || !allAchievements?.length) {
-        console.log('No duplicates to clean up');
         return;
       }
 
@@ -138,7 +132,6 @@ export const useAchievements = () => {
         }
       }
 
-      console.log(`Found ${achievementsToDelete.length} duplicate achievements to remove`);
       
       if (achievementsToDelete.length > 0) {
         // Delete duplicates (you might want to back these up first)
@@ -149,8 +142,6 @@ export const useAchievements = () => {
           
         if (error) {
           console.error('Error deleting duplicate achievements:', error);
-        } else {
-          console.log(`✅ Successfully removed ${achievementsToDelete.length} duplicate achievements`);
         }
       }
       
@@ -219,16 +210,12 @@ export const useAchievements = () => {
 
           showToastIfNew({ ...(ach || {}), achievement_id: ach?.id }, row.score_id);
         })
-        .subscribe((status: string) => {
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ Realtime subscription active for achievements');
-          }
-        });
+        .subscribe();
 
       (globalThis as any).__ach_rtChannel = chan;
       (globalThis as any).__ach_rtInit = true;
     } catch (e) {
-      console.log('⚠️ Realtime subscription setup failed:', e);
+      // Realtime subscription setup failed, continuing without realtime
     }
   }, [currentTournament, showToastIfNew]);
 
@@ -237,12 +224,10 @@ export const useAchievements = () => {
   const CHECK_DEBOUNCE_MS = 2000; // 2 second debounce window
 
   const checkForNewAchievements = useCallback(async (playerName: string) => {
-    // Debug: Check and clean duplicate achievements in the database
+    // Check and clean duplicate achievements in the database
     if (currentTournament?.id) {
-      console.log('🔍 Checking for duplicate achievements...');
       const result = await checkForDuplicateAchievements(playerName, currentTournament.id);
       if (result?.hasDuplicates) {
-        console.log('🧹 Found duplicates, cleaning up...');
         await cleanupDuplicateAchievements(playerName, currentTournament.id);
       }
     }
@@ -251,20 +236,17 @@ export const useAchievements = () => {
       
       // Skip if we've checked for this player very recently
       if (
-        lastCheckRef.current && 
-        lastCheckRef.current.playerName === playerName && 
+        lastCheckRef.current &&
+        lastCheckRef.current.playerName === playerName &&
         (now - lastCheckRef.current.timestamp) < CHECK_DEBOUNCE_MS
       ) {
-        console.log('⏭️ Skipping duplicate achievement check for', playerName);
         return;
       }
 
       lastCheckRef.current = { playerName, timestamp: now };
-      console.log('🎯 Achievement system called for:', playerName, 'tournament:', currentTournament?.id);
       
       // Only check achievements if we have a current tournament
       if (!currentTournament) {
-        console.log('⚠️ No current tournament - skipping achievements');
         return;
       }
       
@@ -273,9 +255,6 @@ export const useAchievements = () => {
 
       // Require authenticated user for user-scoped achievements
       const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError) {
-        console.log('⚠️ Could not get auth user for achievements (will use anonymous path):', userError.message);
-      }
 
       const userId = userData?.user?.id;
       // Ensure realtime subscription (once per session)
@@ -285,10 +264,8 @@ export const useAchievements = () => {
       const rtActive = !!(globalThis as any).__ach_rtInit && !!(globalThis as any).__ach_rtChannel;
       const doBackfill = rtActive && !(globalThis as any).__ach_rtBackfillDone;
       if (!userId) {
-        console.log('👤 Not logged in - using tournament/player_name achievements RPC');
         try {
           if (rtActive && !doBackfill) {
-            console.log('📡 Realtime active - skipping anonymous polling');
             return;
           }
           let attempts = 0;
@@ -302,7 +279,6 @@ export const useAchievements = () => {
             });
             if (error) {
               lastError = error;
-              console.log('⚠️ Anonymous achievement RPC error (attempt', attempts + 1, '):', error.message);
               await new Promise((r) => setTimeout(r, 600));
             } else {
               newAchievements = data as any[];
@@ -313,9 +289,6 @@ export const useAchievements = () => {
             attempts++;
           }
 
-          if (lastError) {
-            console.log('⚠️ Anonymous achievement RPC final error:', lastError.message);
-          }
 
           if (Array.isArray(newAchievements) && newAchievements.length > 0) {
             // Filter out achievements that were already shown recently
@@ -327,26 +300,21 @@ export const useAchievements = () => {
             });
             
             if (uniqueNewAchievements.length > 0) {
-              console.log(`🏆 Found ${uniqueNewAchievements.length} new achievements for ${playerName} (after deduplication)`);
               uniqueNewAchievements.forEach((achievement: any, index: number) => {
                 setTimeout(() => {
                   showToastIfNew(achievement);
                 }, index * 1000);
               });
               sendMultipleAchievementsWebhook(playerName, uniqueNewAchievements);
-            } else {
-              console.log('ℹ️ All achievements were shown recently, skipping display');
             }
           } else {
-            console.log('📭 No new achievements found for anonymous player', playerName, 'in tournament', currentTournament.id);
           }
 
           if (doBackfill) {
             (globalThis as any).__ach_rtBackfillDone = true;
           }
         } catch (error) {
-          console.log('⚠️ Anonymous achievement system not available - ensure migrations are applied');
-          console.log('🔧 Error details:', error);
+          console.error('Anonymous achievement system error:', error);
         }
         return;
       }
@@ -354,7 +322,6 @@ export const useAchievements = () => {
       // Query recent achievements for this user within the current tournament
       try {
         if (rtActive && !doBackfill) {
-          console.log('📡 Realtime active - skipping user-scoped polling');
           return;
         }
         let attempts = 0;
@@ -368,7 +335,6 @@ export const useAchievements = () => {
           });
           if (error) {
             lastError = error;
-            console.log('⚠️ User achievement RPC error (attempt', attempts + 1, '):', error.message);
             await new Promise((r) => setTimeout(r, 600));
           } else {
             newAchievements = data as any[];
@@ -379,13 +345,9 @@ export const useAchievements = () => {
           attempts++;
         }
 
-        if (lastError) {
-          console.log('⚠️ User achievement RPC final error:', lastError.message);
-        }
 
         // Show notification and send webhook for each new achievement
         if (Array.isArray(newAchievements) && newAchievements.length > 0) {
-          console.log(`🏆 Found ${newAchievements.length} new achievements for ${playerName}`);
           
           // If RPC doesn't include created_by, we trust it is already scoped for this user.
           // Otherwise, filter by created_by === userId if present.
@@ -402,16 +364,13 @@ export const useAchievements = () => {
           
           // Send single webhook with all achievements
           sendMultipleAchievementsWebhook(playerName, newAchievements as any[]);
-        } else {
-          console.log('📭 No new achievements found for user', userId, 'in tournament', currentTournament.id);
         }
 
         if (doBackfill) {
           (globalThis as any).__ach_rtBackfillDone = true;
         }
       } catch (error) {
-        console.log('⚠️ User-scoped achievement system not available - ensure migrations are applied');
-        console.log('🔧 Error details:', error);
+        console.error('User-scoped achievement system error:', error);
       }
     } catch (error) {
       console.error('Error in checkForNewAchievements:', error);
@@ -423,10 +382,6 @@ export const useAchievements = () => {
     achievements: any[]
   ) => {
     try {
-      console.log('🚀 Sending achievement webhook for', achievements.length, 'achievements:', {
-        player_name: playerName,
-        achievements: achievements.map(a => a.achievement_name)
-      });
 
       // Get the most recent score for this player to provide context
       const { data: recentScore } = await supabase
@@ -458,7 +413,6 @@ export const useAchievements = () => {
       if (webhookResponse.error) {
         console.error('❌ Achievement webhook error:', webhookResponse.error);
       } else {
-        console.log('✅ Achievement webhook sent successfully:', webhookResponse.data);
       }
     } catch (error) {
       console.error('❌ Achievement webhook call failed:', error);
@@ -471,11 +425,6 @@ export const useAchievements = () => {
     playerAchievement: any
   ) => {
     try {
-      console.log('🚀 Sending achievement webhook:', {
-        player_name: playerName,
-        achievement: achievement.name,
-        points: achievement.points
-      });
 
       // Get the most recent score for this player to provide context
       const { data: recentScore } = await supabase
@@ -507,7 +456,6 @@ export const useAchievements = () => {
       if (webhookResponse.error) {
         console.error('❌ Achievement webhook error:', webhookResponse.error);
       } else {
-        console.log('✅ Achievement webhook sent successfully:', webhookResponse.data);
       }
     } catch (error) {
       console.error('❌ Achievement webhook call failed:', error);

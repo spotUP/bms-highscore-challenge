@@ -58,7 +58,6 @@ const PlayerDashboard = () => {
   const loadPlayerData = async () => {
     try {
       setError(null);
-      console.log('Loading player data for:', playerName);
       
       // Try to load player stats (this might fail if table doesn't exist)
       let statsData = null;
@@ -69,15 +68,12 @@ const PlayerDashboard = () => {
           .eq('player_name', playerName?.toUpperCase())
           .single();
 
-        console.log('Player stats result:', { data, statsError });
         
         if (statsError && statsError.code !== 'PGRST116') {
-          console.warn('Player stats error (non-critical):', statsError);
         } else {
           statsData = data;
         }
       } catch (statsErr) {
-        console.warn('Player stats table might not exist:', statsErr);
       }
 
       // Try to load achievements (this might fail if table doesn't exist)
@@ -93,15 +89,12 @@ const PlayerDashboard = () => {
           .order('unlocked_at', { ascending: false })
           .limit(5);
 
-        console.log('Player achievements result:', { data, achievementsError });
         
         if (achievementsError) {
-          console.warn('Player achievements error (non-critical):', achievementsError);
         } else {
           achievementsData = data || [];
         }
       } catch (achievementsErr) {
-        console.warn('Player achievements table might not exist:', achievementsErr);
       }
 
       // Load games and scores (these should exist)
@@ -117,13 +110,10 @@ const PlayerDashboard = () => {
           .order('created_at', { ascending: false })
       ]);
 
-      console.log('Games and scores results:', { gamesResult, scoresResult });
 
       if (gamesResult.error) {
-        console.warn('Games error:', gamesResult.error);
       }
       if (scoresResult.error) {
-        console.warn('Scores error:', scoresResult.error);
       }
 
       setPlayerStats(statsData);
@@ -131,7 +121,6 @@ const PlayerDashboard = () => {
       setGames(gamesResult.data || []);
       setScores(scoresResult.data || []);
       
-      console.log('Player dashboard data loaded successfully');
     } catch (error) {
       console.error('Critical error loading player data:', error);
       setError(error instanceof Error ? error.message : 'Unknown error occurred');

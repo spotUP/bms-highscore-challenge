@@ -8,13 +8,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { Search, Filter, Star, Users, Calendar, Gamepad2, Shuffle, Plus, Info, Heart } from "lucide-react";
+import { Search, Filter, Star, Users, Calendar, Gamepad2, Shuffle, Plus, Info, Heart, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { GameLogo } from "@/components/GameLogo";
 import { RAWGGameImage } from "@/components/RAWGGameImage";
 import { GameDetailsModal } from "@/components/GameDetailsModal";
 import { GameRatingDisplay } from "@/components/GameRatingDisplay";
+import { ratingAggregationService } from "@/services/ratingAggregationService";
 import { CreateTournamentModal } from "@/components/CreateTournamentModal";
+import { useGameDatabaseFavorites } from "@/hooks/useGameDatabaseFavorites";
 
 interface Game {
   id: string;
@@ -35,6 +37,7 @@ interface Game {
   screenshot_url: string | null;
   cover_url: string | null;
   logo_url: string | null;
+  aggregatedRating?: number; // For client-side sorting by external API ratings
 }
 
 interface Platform {
@@ -52,6 +55,8 @@ interface FilterState {
   minRating: number;
   esrbRating: string;
   cooperative: string;
+  sortBy: string;
+  sortDirection: 'asc' | 'desc';
 }
 
 const GamesBrowser: React.FC = () => {
@@ -63,13 +68,17 @@ const GamesBrowser: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedGames, setSelectedGames] = useState<Set<string>>(new Set());
-  const [favoriteGames, setFavoriteGames] = useState<Set<string>>(new Set());
+  // Use Supabase for favorites instead of localStorage
+  const { favoriteGameIds, favoriteGamesDetails, toggleFavorite: toggleFavoriteInDB, isFavorited } = useGameDatabaseFavorites();
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const [totalGames, setTotalGames] = useState(0);
   const [selectedGameForModal, setSelectedGameForModal] = useState<Game | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTournamentModalOpen, setIsTournamentModalOpen] = useState(false);
   const [activeMainTab, setActiveMainTab] = useState<'all' | 'favorites'>('all');
+  const [searchInput, setSearchInput] = useState(''); // Separate state for input field
+  const [favoritesSortBy, setFavoritesSortBy] = useState('name');
+  const [favoritesSortDirection, setFavoritesSortDirection] = useState<'asc' | 'desc'>('asc');
 
   const [filters, setFilters] = useState<FilterState>({
     search: '',
@@ -79,11 +88,13 @@ const GamesBrowser: React.FC = () => {
     minPlayers: 1,
     minRating: 0,
     esrbRating: 'all',
-    cooperative: 'all'
+    cooperative: 'all',
+    sortBy: 'name',
+    sortDirection: 'asc'
   });
 
   const [currentPage, setCurrentPage] = useState(1);
-  const gamesPerPage = 8; // Further reduced from 12 to 8 for better performance
+  const gamesPerPage = 20; // Increased to show more search results
 
   // Extract unique values for filters - load these separately for better performance
   const [allGenres, setAllGenres] = useState<string[]>([]);
@@ -143,16 +154,34 @@ const GamesBrowser: React.FC = () => {
     loadPlatforms();
   }, []);
 
-  // Debounce search to avoid too many requests
+  // Load games when filters change (excluding search) or page changes
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      loadGames();
-    }, filters.search ? 500 : 0); // 500ms delay for search, immediate for other filters
-
-    return () => clearTimeout(timeoutId);
+    loadGames();
   }, [filters, currentPage]);
 
+  // Handle search on Enter key
+  const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      setFilters(prev => ({
+        ...prev,
+        search: searchInput
+      }));
+      setCurrentPage(1); // Reset to first page for new search
+    }
+  };
+
+  // Handle clearing search
+  const handleClearSearch = () => {
+    setSearchInput('');
+    setFilters(prev => ({
+      ...prev,
+      search: ''
+    }));
+    setCurrentPage(1);
+  };
+
   const loadGames = async () => {
+
     // Use searchLoading for search operations, loading for initial load
     if (filters.search || filters.platform !== 'all' || filters.yearRange[0] > 1970 || filters.yearRange[1] < 2024) {
       setSearchLoading(true);
@@ -184,35 +213,85 @@ const GamesBrowser: React.FC = () => {
           logo_url
         `); // Removed count: 'exact' to improve performance
 
-      // Apply search filter - optimized for better performance
+      // Apply search filter - improved fuzzy matching to handle punctuation, spaces, and variations
       if (filters.search && filters.search.length >= 3) {
         const searchTerm = filters.search.toLowerCase().trim();
 
-        // Use a simple ilike search on the name field with basic normalization
-        // This reduces the query complexity from 11 OR conditions to just 1
-        let normalizedSearch = searchTerm
+        // Create variations to handle common issues
+        const searchVariations = [searchTerm];
+
+        // Remove all punctuation and normalize spaces for fuzzy matching
+        const normalizedTerm = searchTerm
           .replace(/[^\w\s]/g, '') // Remove all punctuation
-          .replace(/\s+/g, ' ') // Normalize whitespace
+          .replace(/\s+/g, ' ')    // Normalize multiple spaces to single space
           .trim();
 
-        // Handle common word replacements for better matching
-        normalizedSearch = normalizedSearch
-          .replace(/\s+n\s+/gi, ' ') // Remove standalone 'n'
-          .replace(/\s+and\s+/gi, ' ') // Remove 'and'
-          .trim();
+        if (normalizedTerm !== searchTerm) {
+          searchVariations.push(normalizedTerm);
+        }
 
-        // Split into words and search for each word presence (all must match)
-        const searchWords = normalizedSearch.split(/\s+/).filter(word => word.length > 0);
+        // Add apostrophe variations
+        if (searchTerm.includes("'")) {
+          // If search has apostrophes, also try without them
+          searchVariations.push(searchTerm.replace(/['']/g, ''));
+        } else {
+          // If search has no apostrophes, try adding them in common positions
+          // For "solomons key" -> "solomon's key"
+          const withApostrophe = searchTerm.replace(/(\w)s\s/g, "$1's ");
+          if (withApostrophe !== searchTerm) {
+            searchVariations.push(withApostrophe);
+          }
+        }
 
-        if (searchWords.length === 1) {
-          // Single word: simple ilike search
-          query = query.ilike('name', `%${searchWords[0]}%`);
-        } else if (searchWords.length > 1) {
-          // Multiple words: each word must appear somewhere in the name
-          searchWords.forEach(word => {
-            query = query.ilike('name', `%${word}%`);
+        // Add variations with common word concatenations
+        // "dragon ninja" -> "dragonninja"
+        const concatenated = searchTerm.replace(/\s+/g, '');
+        if (concatenated !== searchTerm && concatenated.length >= 3) {
+          searchVariations.push(concatenated);
+        }
+
+        // Add specific variations for common game naming patterns
+        // "vs dragon ninja" -> "vs. dragonninja" and vice versa
+        if (searchTerm.includes('vs') || searchTerm.includes('dragon ninja')) {
+          const vsVariations = [
+            searchTerm.replace(/\bvs\b/g, 'vs.'),
+            searchTerm.replace(/\bvs\.\b/g, 'vs'),
+            searchTerm.replace(/dragon ninja/g, 'dragonninja'),
+            searchTerm.replace(/dragonninja/g, 'dragon ninja'),
+          ];
+
+          vsVariations.forEach(variation => {
+            if (variation !== searchTerm) {
+              searchVariations.push(variation);
+            }
           });
         }
+
+        // Add variations with spaces added between words
+        // "dragonninja" -> "dragon ninja"
+        if (!searchTerm.includes(' ') && searchTerm.length > 6) {
+          // Try to split common compound words
+          const commonSplits = [
+            { from: 'vs', to: ' vs ' },
+            { from: 'ninja', to: ' ninja' },
+            { from: 'dragon', to: 'dragon ' },
+            { from: 'dudes', to: 'dudes ' },
+          ];
+
+          for (const split of commonSplits) {
+            if (searchTerm.includes(split.from)) {
+              const splitTerm = searchTerm.replace(split.from, split.to).replace(/\s+/g, ' ').trim();
+              if (splitTerm !== searchTerm) {
+                searchVariations.push(splitTerm);
+              }
+            }
+          }
+        }
+
+        // Remove duplicates and create OR conditions
+        const uniqueVariations = [...new Set(searchVariations)];
+        const conditions = uniqueVariations.map(term => `name.ilike.%${term}%`).join(',');
+        query = query.or(conditions);
       }
 
       // Apply platform filter
@@ -225,8 +304,14 @@ const GamesBrowser: React.FC = () => {
         query = query.gte('release_year', filters.yearRange[0]).lte('release_year', filters.yearRange[1]);
       }
 
-      // Special case: Show interesting arcade games when no filters are applied
-      const hasActiveFilters = filters.search ||
+      // Apply minimum community rating filter
+      if (filters.minRating > 0) {
+        query = query.gte('community_rating', filters.minRating);
+      }
+
+      // Special case: Show interesting arcade games when no actual filters are applied
+      // (but still allow sorting of featured games)
+      const hasActualFilters = filters.search ||
                               filters.platform !== 'all' ||
                               filters.yearRange[0] > 1970 ||
                               filters.yearRange[1] < 2024 ||
@@ -235,8 +320,8 @@ const GamesBrowser: React.FC = () => {
                               filters.esrbRating !== 'all' ||
                               filters.cooperative !== 'all';
 
-      if (!hasActiveFilters) {
-        // Show a randomized mix of interesting arcade games
+      if (!hasActualFilters) {
+        // Show a curated mix of interesting arcade games, but allow sorting them
         const allFeaturedGames = [
           'Street Fighter', 'Pac-Man', 'Donkey Kong', 'Mortal Kombat', 'Final Fight',
           'Galaga', 'Centipede', 'Asteroids', 'Space Invaders', 'Frogger',
@@ -248,36 +333,113 @@ const GamesBrowser: React.FC = () => {
           'Berzerk', 'Moon Patrol', 'Xevious', 'Phoenix', 'Gyruss'
         ];
 
-        // Optimized featured games query - use IN clause with exact matches instead of multiple ilike
-        const featuredGameNames = allFeaturedGames.slice(0, 10); // Limit to reduce query complexity
+        // Use more featured games to get better variety after sorting
+        const featuredGameNames = allFeaturedGames.slice(0, 20);
 
         // Apply featured games filter and platform, use IN for better performance
         query = query
           .in('name', featuredGameNames)
           .eq('platform_name', 'Arcade')
-          .limit(50); // Fetch more games since we'll filter out ones without images
+          .limit(100); // Fetch more games to have good selection after sorting
       }
 
       // Apply pagination (skip for featured games since we filter afterwards)
-      if (hasActiveFilters) {
+      if (hasActualFilters) {
         const startIndex = (currentPage - 1) * gamesPerPage;
         query = query.range(startIndex, startIndex + gamesPerPage - 1);
       }
 
-      query = query.order('name');
+      // Apply sorting
+      let orderColumn = 'name';
+      let ascending = filters.sortDirection === 'asc';
+
+      switch (filters.sortBy) {
+        case 'rating':
+          orderColumn = 'community_rating';
+          // For rating, reverse the logic: asc = high to low, desc = low to high
+          ascending = filters.sortDirection === 'asc' ? false : true;
+          break;
+        case 'year':
+          orderColumn = 'release_year';
+          break;
+        case 'players':
+          orderColumn = 'max_players';
+          break;
+        case 'platform':
+          orderColumn = 'platform_name';
+          break;
+        default: // name
+          orderColumn = 'name';
+      }
+
+      // Apply sorting - skip database sorting for ratings (we'll do client-side)
+      if (filters.sortBy !== 'rating') {
+        query = query.order(orderColumn, { ascending });
+      } else {
+        // For rating sort, just filter out null ratings for better performance
+        query = query.not('community_rating', 'is', null);
+      }
 
       const { data: gamesData, error: gamesError } = await query;
 
       if (gamesError) throw gamesError;
 
-      // For featured games (no active filters), randomize and limit results
+      // For featured games (no actual filters), limit results but keep sorting applied
       let finalGamesData = gamesData || [];
-      if (!hasActiveFilters && gamesData) {
-        // Shuffle the results and take only what we need for the page
-        // Note: RAWG fallback will handle images for games without stored images
-        const shuffledGames = [...gamesData].sort(() => Math.random() - 0.5);
-        finalGamesData = shuffledGames.slice(0, gamesPerPage);
+      if (!hasActualFilters && gamesData) {
+        // Take first games from the sorted results (no shuffling, let database sorting work)
+        finalGamesData = gamesData.slice(0, gamesPerPage);
+      }
 
+      // Handle client-side rating sorting with external API data
+      if (filters.sortBy === 'rating' && finalGamesData.length > 0) {
+        console.log('Fetching aggregated ratings for', finalGamesData.length, 'games...');
+
+        // Fetch aggregated ratings for all games in parallel
+        const ratingPromises = finalGamesData.map(async (game) => {
+          try {
+            const gameRatings = await ratingAggregationService.getCachedGameRatings(
+              game.name,
+              game.platform_name,
+              game.community_rating && game.community_rating_count ? {
+                rating: game.community_rating,
+                count: game.community_rating_count
+              } : undefined
+            );
+            return {
+              ...game,
+              aggregatedRating: gameRatings.aggregated.averageRating
+            };
+          } catch (error) {
+            console.error('Error fetching rating for', game.name, ':', error);
+            return {
+              ...game,
+              aggregatedRating: game.community_rating || 0
+            };
+          }
+        });
+
+        try {
+          const gamesWithRatings = await Promise.all(ratingPromises);
+
+          // Sort by aggregated ratings
+          gamesWithRatings.sort((a, b) => {
+            const aRating = a.aggregatedRating || 0;
+            const bRating = b.aggregatedRating || 0;
+
+            // For rating: asc = high to low, desc = low to high
+            return filters.sortDirection === 'asc' ? bRating - aRating : aRating - bRating;
+          });
+
+          finalGamesData = gamesWithRatings;
+          console.log('Sorted by aggregated ratings:', finalGamesData.slice(0, 5).map(g => ({
+            name: g.name,
+            rating: g.aggregatedRating
+          })));
+        } catch (error) {
+          console.error('Error sorting by aggregated ratings:', error);
+          // Fall back to original data if rating fetch fails
+        }
       }
 
       setGames(finalGamesData);
@@ -319,6 +481,7 @@ const GamesBrowser: React.FC = () => {
   };
 
   const clearFilters = useCallback(() => {
+    setSearchInput(''); // Also clear search input
     setFilters({
       search: '',
       platform: 'all',
@@ -327,7 +490,9 @@ const GamesBrowser: React.FC = () => {
       minPlayers: 1,
       minRating: 0,
       esrbRating: 'all',
-      cooperative: 'all'
+      cooperative: 'all',
+      sortBy: 'name',
+      sortDirection: 'asc'
     });
     setCurrentPage(1);
   }, []);
@@ -374,17 +539,13 @@ const GamesBrowser: React.FC = () => {
     });
   }, []);
 
-  const toggleFavorite = useCallback((gameId: string) => {
-    setFavoriteGames(prev => {
-      const newFavorites = new Set(prev);
-      if (newFavorites.has(gameId)) {
-        newFavorites.delete(gameId);
-      } else {
-        newFavorites.add(gameId);
-      }
-      return newFavorites;
-    });
-  }, []);
+  const toggleFavorite = useCallback(async (gameId: string) => {
+    // Look for the game in either the main games list or favorites details
+    const game = games.find(g => g.id === gameId) || favoriteGamesDetails.find(g => g.id === gameId);
+    if (game) {
+      await toggleFavoriteInDB(game);
+    }
+  }, [games, favoriteGamesDetails, toggleFavoriteInDB]);
 
   const openGameModal = useCallback((game: Game, event: React.MouseEvent) => {
     event.stopPropagation(); // Prevent card selection
@@ -407,23 +568,128 @@ const GamesBrowser: React.FC = () => {
 
   // Convert selected games to the format expected by CreateTournamentModal
   const getSelectedGamesForTournament = useCallback(() => {
-    return games
+    // Look for selected games in both the main games array and favorites array
+    const allGames = [...games, ...favoriteGamesDetails];
+
+    // Remove duplicates by game id
+    const uniqueGames = allGames.filter((game, index, self) =>
+      index === self.findIndex(g => g.id === game.id)
+    );
+
+    return uniqueGames
       .filter(game => selectedGames.has(game.id))
       .map(game => ({
         id: parseInt(game.database_id?.toString() || '0'),
         name: game.name,
         description: game.overview,
-        logo_url: game.logo_url
+        // Use stored logo_url first (should contain clear logos), then fallback to other images
+        logo_url: game.logo_url || game.cover_url || game.screenshot_url,
+        cover_url: game.cover_url,
+        screenshot_url: game.screenshot_url,
+        platform_name: game.platform_name
       }));
-  }, [games, selectedGames]);
+  }, [games, favoriteGamesDetails, selectedGames]);
 
-  // Filter games based on active tab
+  // State for favorites with aggregated ratings
+  const [favoritesWithRatings, setFavoritesWithRatings] = useState<Game[]>([]);
+  const [favoritesRatingLoading, setFavoritesRatingLoading] = useState(false);
+
+  // Fetch aggregated ratings for favorites when sorting by rating
+  useEffect(() => {
+    const fetchFavoritesRatings = async () => {
+      if (activeMainTab === 'favorites' && favoritesSortBy === 'rating' && favoriteGamesDetails.length > 0) {
+        setFavoritesRatingLoading(true);
+        console.log('Fetching aggregated ratings for', favoriteGamesDetails.length, 'favorite games...');
+
+        try {
+          // Fetch aggregated ratings for all favorite games in parallel
+          const ratingPromises = favoriteGamesDetails.map(async (game) => {
+            try {
+              const gameRatings = await ratingAggregationService.getCachedGameRatings(
+                game.name,
+                game.platform_name,
+                game.community_rating && game.community_rating_count ? {
+                  rating: game.community_rating,
+                  count: game.community_rating_count
+                } : undefined
+              );
+              return {
+                ...game,
+                aggregatedRating: gameRatings.aggregated.averageRating
+              };
+            } catch (error) {
+              console.error('Error fetching rating for', game.name, ':', error);
+              return {
+                ...game,
+                aggregatedRating: game.community_rating || 0
+              };
+            }
+          });
+
+          const gamesWithRatings = await Promise.all(ratingPromises);
+          setFavoritesWithRatings(gamesWithRatings);
+          console.log('Fetched aggregated ratings for favorites:', gamesWithRatings.slice(0, 3).map(g => ({
+            name: g.name,
+            rating: g.aggregatedRating
+          })));
+        } catch (error) {
+          console.error('Error fetching aggregated ratings for favorites:', error);
+          setFavoritesWithRatings(favoriteGamesDetails.map(game => ({ ...game, aggregatedRating: game.community_rating || 0 })));
+        } finally {
+          setFavoritesRatingLoading(false);
+        }
+      } else if (activeMainTab === 'favorites' && favoritesSortBy !== 'rating') {
+        // For non-rating sorts, just use the original data
+        setFavoritesWithRatings(favoriteGamesDetails);
+      }
+    };
+
+    fetchFavoritesRatings();
+  }, [activeMainTab, favoritesSortBy, favoriteGamesDetails]);
+
+  // Filter and sort games based on active tab
   const displayedGames = useMemo(() => {
     if (activeMainTab === 'favorites') {
-      return games.filter(game => favoriteGames.has(game.id));
+      if (favoritesRatingLoading) {
+        return favoriteGamesDetails; // Show original data while loading
+      }
+
+      // Sort favorites using fetched aggregated ratings
+      const gamesToSort = favoritesSortBy === 'rating' ? favoritesWithRatings : favoriteGamesDetails;
+      const sorted = [...gamesToSort].sort((a, b) => {
+        let comparison = 0;
+
+        switch (favoritesSortBy) {
+          case 'rating':
+            const aRating = (a as Game & { aggregatedRating?: number }).aggregatedRating ?? a.community_rating ?? 0;
+            const bRating = (b as Game & { aggregatedRating?: number }).aggregatedRating ?? b.community_rating ?? 0;
+            // For rating: asc = high to low, desc = low to high
+            comparison = favoritesSortDirection === 'asc' ? bRating - aRating : aRating - bRating;
+            break;
+          case 'year':
+            const aYear = a.release_year || 0;
+            const bYear = b.release_year || 0;
+            comparison = aYear - bYear;
+            break;
+          case 'players':
+            const aPlayers = a.max_players || 0;
+            const bPlayers = b.max_players || 0;
+            comparison = aPlayers - bPlayers;
+            break;
+          case 'platform':
+            comparison = (a.platform_name || '').localeCompare(b.platform_name || '');
+            break;
+          default: // name
+            comparison = a.name.localeCompare(b.name);
+        }
+
+        return favoritesSortDirection === 'desc' ? -comparison : comparison;
+      });
+
+      return sorted;
     }
     return games;
-  }, [games, favoriteGames, activeMainTab]);
+  }, [games, favoriteGamesDetails, favoritesWithRatings, favoritesRatingLoading, activeMainTab, favoritesSortBy, favoritesSortDirection]);
 
   if (loading) {
     return (
@@ -466,7 +732,7 @@ const GamesBrowser: React.FC = () => {
           </TabsTrigger>
           <TabsTrigger value="favorites" className="flex items-center gap-2">
             <Heart className="w-4 h-4" />
-            Favorites ({favoriteGames.size})
+            Favorites ({favoriteGameIds.size})
           </TabsTrigger>
         </TabsList>
 
@@ -490,25 +756,47 @@ const GamesBrowser: React.FC = () => {
                   <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
-                      placeholder="Search games by name (min 3 characters)..."
-                      value={filters.search}
-                      onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                      className="pl-10"
+                      placeholder="Search games by name and press Enter..."
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                      onKeyPress={handleSearchKeyPress}
+                      className={`pl-10 ${searchLoading ? 'pr-16' : 'pr-10'}`}
                       disabled={searchLoading}
                     />
+                    {searchInput && !searchLoading && (
+                      <button
+                        onClick={handleClearSearch}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 w-4 h-4 flex items-center justify-center"
+                        title="Clear search"
+                      >
+                        ✕
+                      </button>
+                    )}
                     {searchLoading && (
-                      <div className="absolute right-3 top-3">
+                      <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                         <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
                       </div>
                     )}
                   </div>
+                  {filters.search && (
+                    <div className="text-xs text-blue-600 mt-1">
+                      Searching for: "{filters.search}"
+                    </div>
+                  )}
                 </div>
 
                 <div>
                   <label className="text-sm font-medium mb-2 block">Platform</label>
                   <Select
                     value={filters.platform}
-                    onValueChange={(value) => setFilters(prev => ({ ...prev, platform: value }))}
+                    onValueChange={(value) => {
+                      setFilters(prev => ({
+                        ...prev,
+                        platform: value,
+                        search: searchInput || prev.search // Apply pending search input if any
+                      }));
+                      setCurrentPage(1); // Reset to first page when platform changes
+                    }}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -544,6 +832,41 @@ const GamesBrowser: React.FC = () => {
                   </Select>
                 </div>
               </div>
+
+              {/* Sorting Controls */}
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="text-sm font-medium mb-2 block">Sort By</label>
+                    <Select
+                      value={filters.sortBy}
+                      onValueChange={(value) => setFilters(prev => ({ ...prev, sortBy: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="name">Name (A-Z)</SelectItem>
+                        <SelectItem value="rating">Rating (High to Low)</SelectItem>
+                        <SelectItem value="year">Release Year</SelectItem>
+                        <SelectItem value="players">Max Players</SelectItem>
+                        <SelectItem value="platform">Platform</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setFilters(prev => ({
+                      ...prev,
+                      sortDirection: prev.sortDirection === 'asc' ? 'desc' : 'asc'
+                    }))}
+                    title={`Current: ${filters.sortDirection === 'asc' ? 'Ascending' : 'Descending'} - Click to reverse`}
+                  >
+                    {filters.sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
             </TabsContent>
 
             <TabsContent value="advanced" className="space-y-4">
@@ -575,7 +898,7 @@ const GamesBrowser: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-2 block">Min Rating: {filters.minRating}</label>
+                  <label className="text-sm font-medium mb-2 block">Min Community Rating: {filters.minRating}</label>
                   <Slider
                     value={[filters.minRating]}
                     onValueChange={(value) => setFilters(prev => ({ ...prev, minRating: value[0] }))}
@@ -614,7 +937,12 @@ const GamesBrowser: React.FC = () => {
       {/* Results Summary */}
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Showing {games.length} of {totalGames.toLocaleString()} games
+          Showing {((currentPage - 1) * gamesPerPage) + 1}-{Math.min(currentPage * gamesPerPage, totalGames)} of {totalGames.toLocaleString()} games
+          {totalPages > 1 && (
+            <span className="ml-2 text-blue-600 font-medium">
+              • Page {currentPage} of {totalPages} - Use Next/Previous to see more
+            </span>
+          )}
           {selectedGames.size > 0 && (
             <span className="ml-2">
               • {selectedGames.size} selected
@@ -624,23 +952,25 @@ const GamesBrowser: React.FC = () => {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4 py-2">
             <Button
               variant="outline"
-              size="sm"
+              size="default"
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
+              className="px-6 py-2"
             >
               Previous
             </Button>
-            <span className="text-sm">
+            <span className="text-sm font-medium px-4 py-2 bg-gray-100 text-gray-900 rounded-md">
               Page {currentPage} of {totalPages}
             </span>
             <Button
               variant="outline"
-              size="sm"
+              size="default"
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
+              className="px-6 py-2"
             >
               Next
             </Button>
@@ -686,7 +1016,7 @@ const GamesBrowser: React.FC = () => {
 
               {/* Heart icon for favorites */}
               <button
-                className="absolute top-2 left-2 z-10 p-1 transition-colors"
+                className="absolute top-2 left-2 z-10 p-1 transition-colors bg-black/20 rounded-full backdrop-blur-sm"
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleFavorite(game.id);
@@ -694,7 +1024,7 @@ const GamesBrowser: React.FC = () => {
               >
                 <Heart
                   className={`w-5 h-5 ${
-                    favoriteGames.has(game.id)
+                    favoriteGameIds.has(game.id)
                       ? 'text-red-500 fill-red-500'
                       : 'text-white'
                   }`}
@@ -822,6 +1152,35 @@ const GamesBrowser: React.FC = () => {
         ))}
       </div>
 
+      {/* Bottom Pagination */}
+      {totalPages > 1 && games.length > 0 && (
+        <div className="flex justify-center py-8">
+          <div className="flex items-center gap-4 py-3 px-6 bg-white rounded-lg shadow-sm border">
+            <Button
+              variant="outline"
+              size="default"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="px-6 py-2"
+            >
+              Previous
+            </Button>
+            <span className="text-sm font-medium px-4 py-2 bg-gray-100 text-gray-900 rounded-md">
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="default"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="px-6 py-2"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* No Results */}
       {games.length === 0 && !loading && (
         <div className="text-center py-12">
@@ -837,7 +1196,7 @@ const GamesBrowser: React.FC = () => {
 
         <TabsContent value="favorites">
           {/* Favorites Content */}
-          {favoriteGames.size === 0 ? (
+          {favoriteGameIds.size === 0 ? (
             <div className="text-center py-12">
               <Heart className="w-16 h-16 mx-auto text-gray-400 mb-4" />
               <h3 className="text-xl font-semibold mb-2">No favorites yet</h3>
@@ -850,7 +1209,39 @@ const GamesBrowser: React.FC = () => {
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold">Your Favorite Games</h3>
                 <div className="text-sm text-muted-foreground">
-                  {favoriteGames.size} game{favoriteGames.size !== 1 ? 's' : ''} favorited
+                  {favoriteGameIds.size} game{favoriteGameIds.size !== 1 ? 's' : ''} favorited
+                </div>
+              </div>
+
+              {/* Favorites Sorting Controls */}
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="text-sm font-medium mb-2 block">Sort By</label>
+                    <Select
+                      value={favoritesSortBy}
+                      onValueChange={setFavoritesSortBy}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="name">Name (A-Z)</SelectItem>
+                        <SelectItem value="rating">Rating (High to Low)</SelectItem>
+                        <SelectItem value="year">Release Year</SelectItem>
+                        <SelectItem value="players">Max Players</SelectItem>
+                        <SelectItem value="platform">Platform</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setFavoritesSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')}
+                    title={`Current: ${favoritesSortDirection === 'asc' ? 'Ascending' : 'Descending'} - Click to reverse`}
+                  >
+                    {favoritesSortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </Button>
                 </div>
               </div>
 
@@ -892,7 +1283,7 @@ const GamesBrowser: React.FC = () => {
 
                       {/* Heart icon for favorites */}
                       <button
-                        className="absolute top-2 left-2 z-10 p-1 transition-colors"
+                        className="absolute top-2 left-2 z-10 p-1 transition-colors bg-black/20 rounded-full backdrop-blur-sm"
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleFavorite(game.id);
@@ -900,7 +1291,7 @@ const GamesBrowser: React.FC = () => {
                       >
                         <Heart
                           className={`w-5 h-5 ${
-                            favoriteGames.has(game.id)
+                            favoriteGameIds.has(game.id)
                               ? 'text-red-500 fill-red-500'
                               : 'text-white'
                           }`}
@@ -969,13 +1360,16 @@ const GamesBrowser: React.FC = () => {
                         {/* Action Buttons */}
                         <div className="flex gap-2 mt-auto">
                           <Button
-                            variant="outline"
+                            variant={selectedGames.has(game.id) ? "default" : "outline"}
                             size="sm"
                             className="flex-1"
-                            onClick={(e) => toggleGameSelection(game.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleGameSelection(game.id);
+                            }}
                           >
-                            <Plus className="w-4 h-4 mr-1" />
-                            Add
+                            <Plus className={`w-4 h-4 mr-1 ${selectedGames.has(game.id) ? 'rotate-45' : ''}`} />
+                            {selectedGames.has(game.id) ? 'Added' : 'Add'}
                           </Button>
                           <Button
                             variant="outline"

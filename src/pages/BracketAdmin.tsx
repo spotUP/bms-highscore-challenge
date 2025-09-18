@@ -223,7 +223,6 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
   useEffect(() => {
     if (!selected) return;
 
-    console.log('🔄 BracketAdmin: Setting up real-time subscription for tournament:', selected.id);
 
     const channel = supabase
       .channel(`bracket_matches_admin_${selected.id}`)
@@ -233,7 +232,6 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
         table: 'bracket_matches',
         filter: `tournament_id=eq.${selected.id}`
       }, async (payload) => {
-        console.log('🔄 BracketAdmin: Match updated via real-time:', payload);
 
         // Optimistic update for faster response
         if (payload.eventType === 'UPDATE' && payload.new) {
@@ -255,11 +253,9 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
         }
       })
       .subscribe((status) => {
-        console.log('🔄 BracketAdmin: Subscription status:', status);
       });
 
     return () => {
-      console.log('🔄 BracketAdmin: Cleaning up real-time subscription');
       supabase.removeChannel(channel);
     };
   }, [selected, getTournamentData]);
@@ -509,7 +505,6 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
   const onPlayerClick = (matchId: string, participantId: string, participantName: string) => {
     // Player clicks should only be used for winner reporting, not for showing winner announcements
     // Winner announcements are handled properly in onReportClick with fresh data
-    console.log('Player clicked - winner announcements handled in onReportClick');
   };
 
   const handleRestart = async () => {

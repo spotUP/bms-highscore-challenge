@@ -14,7 +14,7 @@ export const useFullscreenPreference = () => {
   useEffect(() => {
     const loadFullscreenPreference = async () => {
       if (user) {
-        // Logged in user - load from database
+        // Logged in user - load from database (profile should auto-create via trigger)
         try {
           const { data: profile, error } = await supabase
             .from('profiles')
@@ -24,38 +24,13 @@ export const useFullscreenPreference = () => {
 
           if (error) {
             console.error('Error loading fullscreen preference:', error);
-            // Fallback to localStorage for logged in users if DB fails
-            try {
-              const fallbackPreference = localStorage.getItem(GUEST_FULLSCREEN_KEY);
-              const shouldEnableFullscreen = fallbackPreference !== null ? fallbackPreference === 'true' : false;
-              setFullscreenEnabled(shouldEnableFullscreen);
-
-              if (shouldEnableFullscreen && !document.fullscreenElement) {
-                try {
-                  await document.documentElement.requestFullscreen();
-                } catch (err) {
-                  console.warn('Could not enter fullscreen automatically (fallback):', err);
-                }
-              }
-            } catch (storageError) {
-              console.warn('Fallback localStorage also failed:', storageError);
-              setFullscreenEnabled(false);
-            }
-          } else if (profile) {
-            setFullscreenEnabled(profile.fullscreen_enabled || false);
-
-            // If user has fullscreen enabled, automatically enter fullscreen
-            if (profile.fullscreen_enabled && !document.fullscreenElement) {
-              try {
-                await document.documentElement.requestFullscreen();
-              } catch (err) {
-                console.warn('Could not enter fullscreen automatically:', err);
-              }
-            }
+            // Default to false if profile can't be loaded
+            setFullscreenEnabled(false);
+          } else {
+            setFullscreenEnabled(profile?.fullscreen_enabled || false);
           }
         } catch (error) {
           console.error('Error loading fullscreen preference:', error);
-          // Fallback for logged in users when DB completely fails
           setFullscreenEnabled(false);
         }
       } else {
@@ -66,29 +41,13 @@ export const useFullscreenPreference = () => {
 
           setFullscreenEnabled(shouldEnableFullscreen);
 
-          // Auto-enter fullscreen for guests if enabled (with longer delay for better reliability)
-          if (shouldEnableFullscreen && !document.fullscreenElement) {
-            setTimeout(async () => {
-              try {
-                await document.documentElement.requestFullscreen();
-              } catch (err) {
-                console.warn('Could not enter fullscreen automatically for guest:', err);
-              }
-            }, 2500); // 2.5 second delay for better reliability
-          }
+          // Skip auto-fullscreen for guests - requires user gesture
         } catch (error) {
           console.warn('Error accessing localStorage:', error);
           // Default to fullscreen enabled if localStorage is not available
           setFullscreenEnabled(true);
 
-          // Still try to go fullscreen even if localStorage fails (with delay)
-          setTimeout(async () => {
-            try {
-              await document.documentElement.requestFullscreen();
-            } catch (err) {
-              console.warn('Could not enter fullscreen automatically (localStorage failed):', err);
-            }
-          }, 2500); // 2.5 second delay
+          // Skip auto-fullscreen - requires user gesture
         }
       }
 
@@ -121,21 +80,9 @@ export const useFullscreenPreference = () => {
 
           if (error) {
             console.error('Error updating fullscreen preference:', error);
-            // Fallback to localStorage if database fails
-            try {
-              localStorage.setItem(GUEST_FULLSCREEN_KEY, enabled.toString());
-              console.warn('Saved fullscreen preference to localStorage as fallback');
-            } catch (storageError) {
-              console.warn('Both database and localStorage failed for fullscreen preference');
-            }
           }
-        } catch (dbError) {
-          console.error('Database completely failed, using localStorage:', dbError);
-          try {
-            localStorage.setItem(GUEST_FULLSCREEN_KEY, enabled.toString());
-          } catch (storageError) {
-            console.warn('Both database and localStorage failed for fullscreen preference');
-          }
+        } catch (error) {
+          console.error('Error updating fullscreen preference:', error);
         }
       } else {
         // Guest user - save to localStorage

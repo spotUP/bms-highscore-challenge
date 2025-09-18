@@ -3,8 +3,17 @@ import 'dotenv/config';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL!;
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Create service role client for cleanup operations
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
 
 async function runDeployTests() {
   console.log('🚀 DEPLOY-TIME TEST SUITE');
@@ -173,7 +182,7 @@ async function runDeployTests() {
         console.log(`Player management: ${!playersError ? '✅ OK' : '❌ Failed'}`);
 
         // Cleanup
-        await supabase.from('bracket_tournaments').delete().eq('id', tournament.id);
+        await supabaseAdmin.from('bracket_tournaments').delete().eq('id', tournament.id);
 
         if (!bracketsWorking) {
           failedTests.push({
@@ -207,11 +216,11 @@ async function runDeployTests() {
       });
     }
 
-    // Clean up all test data
+    // Clean up all test data using admin client
     console.log('\n🧹 CLEANUP');
     console.log('-'.repeat(30));
-    await supabase.from('scores').delete().eq('player_name', testPlayerName);
-    await supabase.from('player_achievements').delete().eq('player_name', testPlayerName);
+    await supabaseAdmin.from('scores').delete().eq('player_name', testPlayerName);
+    await supabaseAdmin.from('player_achievements').delete().eq('player_name', testPlayerName);
     console.log('✅ Test data cleaned up');
 
     // Test 6: Security System
@@ -277,7 +286,7 @@ async function runDeployTests() {
       console.log(`State Transitions: ${results.tournamentStates ? '✅ Working' : '❌ Failed'}`);
 
       // Cleanup
-      await supabase.from('tournaments').delete().eq('id', testTournament.id);
+      await supabaseAdmin.from('tournaments').delete().eq('id', testTournament.id);
     } else {
       results.tournamentStates = false;
       console.log('State Transitions: ❌ Skipped');
@@ -314,23 +323,36 @@ async function runDeployTests() {
     console.log('-'.repeat(30));
 
     try {
-      // Clean up all test scores
-      await supabase.from('scores').delete().like('player_name', 'DEPLOY%');
-      await supabase.from('scores').delete().like('player_name', 'SEC_DEPLOY_%');
-      await supabase.from('scores').delete().like('player_name', 'REALTIME_TEST_%');
+      // Use admin client for cleanup to ensure proper permissions
+      const cleanupOperations = [
+        // Clean up all test scores
+        supabaseAdmin.from('scores').delete().like('player_name', 'DEPLOY%'),
+        supabaseAdmin.from('scores').delete().like('player_name', 'SEC_DEPLOY_%'),
+        supabaseAdmin.from('scores').delete().like('player_name', 'REALTIME_TEST_%'),
 
-      // Clean up all test achievements
-      await supabase.from('player_achievements').delete().like('player_name', 'DEPLOY%');
-      await supabase.from('player_achievements').delete().like('player_name', 'SEC_DEPLOY_%');
-      await supabase.from('player_achievements').delete().like('player_name', 'REALTIME_TEST_%');
+        // Clean up all test achievements
+        supabaseAdmin.from('player_achievements').delete().like('player_name', 'DEPLOY%'),
+        supabaseAdmin.from('player_achievements').delete().like('player_name', 'SEC_DEPLOY_%'),
+        supabaseAdmin.from('player_achievements').delete().like('player_name', 'REALTIME_TEST_%'),
 
-      // Clean up all test tournaments
-      await supabase.from('tournaments').delete().like('name', 'DEPLOY_%');
-      await supabase.from('tournaments').delete().like('name', 'SECURITY_TEST_%');
+        // Clean up all test tournaments
+        supabaseAdmin.from('tournaments').delete().like('name', 'DEPLOY_%'),
+        supabaseAdmin.from('tournaments').delete().like('name', 'SECURITY_TEST_%'),
 
-      // Clean up all bracket test data
-      await supabase.from('bracket_tournaments').delete().like('name', 'DEPLOY_%');
-      await supabase.from('bracket_players').delete().like('name', 'DEPLOY_%');
+        // Clean up all bracket test data
+        supabaseAdmin.from('bracket_tournaments').delete().like('name', 'DEPLOY_%'),
+        supabaseAdmin.from('bracket_players').delete().like('name', 'DEPLOY_%')
+      ];
+
+      const cleanupResults = await Promise.allSettled(cleanupOperations);
+      const failures = cleanupResults.filter(result => result.status === 'rejected');
+
+      if (failures.length > 0) {
+        console.warn(`⚠️ ${failures.length} cleanup operations failed`);
+        failures.forEach((failure, index) => {
+          console.warn(`   Operation ${index + 1}:`, failure.reason);
+        });
+      }
 
       console.log('✅ Final comprehensive cleanup completed');
     } catch (cleanupError) {

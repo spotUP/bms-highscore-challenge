@@ -714,7 +714,6 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
     setLoading(true);
 
     try {
-      console.log(`🎮 Starting game suggestion fetch (${misterCompatibleOnly ? 'MiSTer FPGA' : 'Full MAME'})...`);
 
       // Try to fetch the CSV data with timeout
       const controller = new AbortController();
@@ -735,7 +734,6 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
       }
 
       const csvText = await response.text();
-      console.log(`✅ Fetched CSV successfully (${Math.round(csvText.length / 1024)}KB)`);
 
       if (!csvText || csvText.length < 100) {
         throw new Error('CSV appears to be empty or corrupted');
@@ -748,7 +746,6 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
         throw new Error('CSV has insufficient data');
       }
 
-      console.log(`📊 Processing ${lines.length} lines...`);
 
       // Get headers more safely
       const headerLine = lines[0];
@@ -758,7 +755,6 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
         throw new Error('CSV headers appear malformed');
       }
 
-      console.log(`🏷️ Found headers: ${headers.slice(0, 5).join(', ')}...`);
 
       // Process games with maximum safety
       const allGames = [];
@@ -804,11 +800,9 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
 
         // Progress indicator for large files
         if (processed % 1000 === 0) {
-          console.log(`⏳ Processed ${processed} rows, found ${allGames.length} games...`);
         }
       }
 
-      console.log(`🎯 Parsing complete: ${allGames.length} games found, ${skipped} rows skipped`);
 
       if (allGames.length === 0) {
         throw new Error('No valid games found in CSV data');
@@ -831,11 +825,9 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
           }
         });
 
-        console.log(`🔍 Filter ${key}="${value}": ${beforeCount} → ${filteredGames.length} games`);
       }
 
       if (filteredGames.length === 0) {
-        console.log('⚠️ No games match filters, using fallback data');
         filteredGames = misterCompatibleOnly ? misterFallbackGames : mameFallbackGames;
       }
 
@@ -849,9 +841,7 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
         selectedGames.push(availableGames.splice(randomIndex, 1)[0]);
       }
 
-      console.log(`🎲 Selected ${selectedGames.length} random games:`, selectedGames.map(g => g.name));
 
-      console.log(`🎯 Parsing complete: ${allGames.length} games found, ${skipped} rows skipped`);
 
       if (allGames.length === 0) {
         throw new Error('No valid games found in CSV data');
@@ -861,7 +851,6 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
       setGamesLoaded(true);
 
     } catch (error) {
-      console.warn('⚠️ CSV fetch failed, using fallback games:', error);
       setAllAvailableGames(misterCompatibleOnly ? misterFallbackGames : mameFallbackGames);
       setGamesLoaded(true);
     } finally {
@@ -904,7 +893,6 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
       selectedGames.push(availableGames.splice(randomIndex, 1)[0]);
     }
 
-    console.log(`🎲 Filtered from ${allAvailableGames.length} to ${filteredGames.length}, selected:`, selectedGames.map(g => g.name));
 
     setGames(selectedGames);
     setSelectedLogos({}); // Clear selected logos when games change
@@ -1328,7 +1316,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       }
       const tournamentIds = Array.from(tournamentIdsSet);
 
-      console.log('Admin.loadGames - tournamentIds:', tournamentIds);
 
       if (tournamentIds.length === 0) {
         setGamesLoading(false);
@@ -1358,7 +1345,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       (legacyGames || []).forEach(g => { if (g?.id) gamesCombinedMap[g.id] = g; });
       const gamesCombined = Object.values(gamesCombinedMap);
 
-      console.log('Admin.loadGames - fetched games:', gamesCombined.length);
       setGames(gamesCombined as any[]);
 
       // Load scores for all games from all tournaments
@@ -1898,7 +1884,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
 
   // Open edit tournament dialog
   const openEditTournamentDialog = (tournament: any) => {
-    console.log('Opening edit dialog for tournament:', tournament);
     setEditingTournament(tournament);
 
     // Format dates for datetime-local input (YYYY-MM-DDTHH:MM format)
@@ -1920,9 +1905,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       start_time: formatDateTimeForInput(tournament.start_time),
       end_time: formatDateTimeForInput(tournament.end_time)
     };
-    console.log('Setting form data:', formData);
     setTournamentFormData(formData);
-    console.log('Setting dialog open to true');
     setIsTournamentEditOpen(true);
   };
 
@@ -2154,7 +2137,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                 checked={tournament.scores_locked || false}
                                 onCheckedChange={async (checked) => {
                                   try {
-                                    console.log('Attempting to update scores_locked for tournament:', tournament.id, 'to:', checked);
                                     
                                     // First, try to add the column if it doesn't exist
                                     const { error: columnError } = await supabase.rpc('exec_sql', {
@@ -2162,7 +2144,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                     });
                                     
                                     if (columnError && !columnError.message.includes('already exists')) {
-                                      console.warn('Could not add scores_locked column:', columnError);
                                     }
                                     
                                     const { data, error } = await supabase
@@ -2182,7 +2163,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                       throw error;
                                     }
                                     
-                                    console.log('Update successful:', data);
                                     await refreshTournaments();
                                     toast({ 
                                       title: checked ? 'Scores Locked' : 'Scores Unlocked', 

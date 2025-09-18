@@ -32,8 +32,6 @@ class LaunchBoxService {
   private pendingRequests = new Map<string, Promise<string | null>>();
 
   constructor() {
-    console.log(`🌐 LaunchBox Service initialized in ${this.isDevelopment ? 'DEVELOPMENT' : 'PRODUCTION'} mode`);
-    console.log(`📡 API calls will be ${this.corsProxy ? 'PROXIED via ' + this.corsProxy.replace('https://api.allorigins.win/get?url=', 'AllOrigins CORS proxy') : 'DIRECT'}`);
   }
 
   // Priority-based rate limiting system
@@ -61,7 +59,6 @@ class LaunchBoxService {
     if (this.isCircuitBreakerOpen) {
       const now = Date.now();
       if (now - this.circuitBreakerOpenTime > this.circuitBreakerResetTime) {
-        console.log('LaunchBox circuit breaker reset - trying again');
         this.isCircuitBreakerOpen = false;
         this.circuitBreakerFailures = 0;
         return false;
@@ -78,13 +75,11 @@ class LaunchBoxService {
     if (success) {
       // Reset failure count on any success
       if (this.circuitBreakerFailures > 0) {
-        console.log('LaunchBox request succeeded, resetting failure count');
         this.circuitBreakerFailures = 0;
       }
     } else {
       this.circuitBreakerFailures++;
       if (this.circuitBreakerFailures >= this.circuitBreakerThreshold) {
-        console.log(`LaunchBox circuit breaker opened after ${this.circuitBreakerFailures} failures (${errorType}). Disabling for ${this.circuitBreakerResetTime / 60000} minutes.`);
         this.isCircuitBreakerOpen = true;
         this.circuitBreakerOpenTime = Date.now();
       }
@@ -249,7 +244,6 @@ class LaunchBoxService {
       const searchUrl = `${this.baseUrl}/games/results/${encodeURIComponent(gameName)}`;
       const finalUrl = this.corsProxy ? `${this.corsProxy}${encodeURIComponent(searchUrl)}` : searchUrl;
 
-      console.log('Searching LaunchBox for:', gameName, 'at', searchUrl, this.corsProxy ? '(via proxy)' : '(direct)');
 
       const response = await this.makeRequest(finalUrl, 1, priority);
       if (!response.ok) {
@@ -266,11 +260,9 @@ class LaunchBoxService {
         // Direct response or corsproxy.io - use HTML directly
         html = await response.text();
       }
-      console.log('LaunchBox search response length:', html.length);
 
       // Parse the search results page to extract game links
       const gameMatches = this.parseSearchResults(html);
-      console.log('Found game matches:', gameMatches.length);
 
       // Limit results and fetch clear logos for each game
       const limitedGames = gameMatches.slice(0, limit);
@@ -347,7 +339,6 @@ class LaunchBoxService {
 
       const response = await this.makeRequest(finalUrl, 1, priority);
       if (!response.ok) {
-        console.warn(`Failed to fetch game details for ${game.name}: ${response.status}`);
         return null;
       }
 
@@ -391,7 +382,6 @@ class LaunchBoxService {
       const afterClearLogo = html.substring(clearLogoIndex, clearLogoIndex + 2000);
       const imageMatch = afterClearLogo.match(/https:\/\/images\.launchbox-app\.com\/[^"'\s]+\.png/);
       if (imageMatch) {
-        console.log('Found clear logo via "Clear Logo" text:', imageMatch[0]);
         return imageMatch[0];
       }
     }
@@ -416,19 +406,16 @@ class LaunchBoxService {
         });
 
         if (clearLogos.length > 0) {
-          console.log('Found clear logo via pattern matching:', clearLogos[0]);
           return clearLogos[0];
         }
 
         // If no specific clear logos found, try the first PNG that might be a logo
         if (matches.length > 0) {
-          console.log('Found potential logo image:', matches[0]);
           return matches[0];
         }
       }
     }
 
-    console.log('No clear logo found in HTML');
     return undefined;
   }
 
@@ -482,7 +469,6 @@ class LaunchBoxService {
 
       // Skip problematic game names that are likely to cause timeouts
       if (this.isProblematicGameName(gameName)) {
-        console.log('Skipping problematic game name:', gameName);
         this.logoCache.set(cacheKey, null);
         return null;
       }

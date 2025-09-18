@@ -94,16 +94,19 @@ export const RAWGGameImage: React.FC<RAWGGameImageProps> = ({
           return;
         }
 
-        console.log(`🖼️ RAWGGameImage: Fetching image for "${gameName}"`);
 
         // Preprocess game name for better RAWG matching
         let processedName = gameName
           // Remove common arcade prefixes/suffixes
           .replace(/^(The\s+)?/i, '') // Remove "The " prefix
           .replace(/\s*\(.*?\)\s*/g, '') // Remove parenthetical info like "(Arcade)" or "(Japan)"
-          .replace(/\s*-\s*.*$/, '') // Remove everything after dash (often version info)
           .replace(/\s+/g, ' ') // Normalize spaces
           .trim();
+
+        // Don't remove dash content for R-Type games as the subtitle is important
+        if (!gameName.toLowerCase().startsWith('r-type')) {
+          processedName = processedName.replace(/\s*-\s*.*$/, ''); // Remove everything after dash (often version info)
+        }
 
         // Try multiple search strategies
         const searchQueries = [
@@ -116,7 +119,6 @@ export const RAWGGameImage: React.FC<RAWGGameImageProps> = ({
 
         // Try each search query until we find a good match
         for (const query of searchQueries) {
-          console.log(`🔍 RAWGGameImage: Trying search for "${query}"`);
           response = await fetch(
             `https://api.rawg.io/api/games?key=${apiKey}&search=${encodeURIComponent(query)}&page_size=3`
           );
@@ -149,10 +151,8 @@ export const RAWGGameImage: React.FC<RAWGGameImageProps> = ({
         }
 
         if (bestMatch && bestMatch.background_image) {
-          console.log(`✅ RAWGGameImage: Found image for "${gameName}" -> "${bestMatch.name}"`);
           setImageUrl(bestMatch.background_image);
         } else {
-          console.log(`❌ RAWGGameImage: No RAWG image found for "${gameName}", will try fallback`);
           setError(true);
         }
       } catch (err) {
@@ -211,19 +211,18 @@ export const RAWGGameImage: React.FC<RAWGGameImageProps> = ({
 
   // Try fallback image before colored placeholder (when RAWG fails or has no image)
   if (fallbackImageUrl && error && !imageUrl) {
-    console.log(`🔄 RAWGGameImage: Using fallback image for "${gameName}": ${fallbackImageUrl}`);
     return (
       <img
         src={fallbackImageUrl}
         alt={alt || `${gameName} logo`}
         className={`${className} object-contain bg-gray-900 p-2`}
         onError={() => {
-          console.log(`❌ RAWGGameImage: Fallback image also failed for "${gameName}"`);
           onError?.();
         }}
       />
     );
   }
+
 
   // Final fallback to colored placeholder
   return <ColoredPlaceholder gameName={gameName} className={className} />;

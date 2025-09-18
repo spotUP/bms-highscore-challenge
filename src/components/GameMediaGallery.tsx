@@ -349,7 +349,7 @@ export const GameMediaGallery: React.FC<GameMediaGalleryProps> = ({
             <img
               src={featuredScreenshots[currentSlideIndex].url}
               alt={`Featured screenshot ${currentSlideIndex + 1}`}
-              className="w-full h-64 md:h-80 object-cover group-hover:scale-105 transition-all duration-500"
+              className="w-full min-h-64 max-h-96 object-contain bg-gray-900 group-hover:scale-105 transition-all duration-500"
               loading="lazy"
               key={currentSlideIndex} // Force re-render for smooth transition
             />
