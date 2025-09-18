@@ -31,8 +31,10 @@ function captureLog(level: string, ...args: any[]) {
     consoleLogs.shift()
   }
 
-  // Call original console method
-  originalConsole[level as keyof typeof originalConsole](...args)
+  // Only call original console method for errors and warnings - suppress logs and info for cleaner console
+  if (level === 'error' || level === 'warn') {
+    originalConsole[level as keyof typeof originalConsole](...args)
+  }
 }
 
 // Override console methods

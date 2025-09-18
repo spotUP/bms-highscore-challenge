@@ -520,8 +520,6 @@ const AchievementManagerV2 = () => {
     if (!currentTournament || !user) return;
 
     try {
-      console.log('🗑️ Clearing achievements for tournament:', currentTournament.id);
-      console.log('User:', user.id, 'Role: admin');
 
       // Count records before
       const { data: beforeCount, error: beforeError } = await supabase
@@ -534,7 +532,6 @@ const AchievementManagerV2 = () => {
         throw beforeError;
       }
 
-      console.log(`📊 Records before delete: ${beforeCount?.length || 0}`);
 
       // Use the regular authenticated supabase client (user has admin privileges)
       const { error, count } = await supabase
@@ -547,7 +544,6 @@ const AchievementManagerV2 = () => {
         throw error;
       }
 
-      console.log('✅ Delete operation succeeded, count:', count);
 
       // Count records after to verify
       const { data: afterCount, error: afterError } = await supabase
@@ -555,7 +551,6 @@ const AchievementManagerV2 = () => {
         .select('id')
         .eq('tournament_id', currentTournament.id);
 
-      console.log(`📊 Records after delete: ${afterCount?.length || 0}`);
 
       const deletedCount = (beforeCount?.length || 0) - (afterCount?.length || 0);
 
@@ -665,7 +660,6 @@ const AchievementManagerV2 = () => {
     }
 
     try {
-      console.log('🗑️ Starting player achievement deletion:', playerAchievementId);
 
       // Use admin client with service role key for deletion
       const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
@@ -673,7 +667,6 @@ const AchievementManagerV2 = () => {
         throw new Error('Service role key not configured');
       }
 
-      console.log('🔑 Creating admin client for deletion...');
       const { createClient } = await import('@supabase/supabase-js');
       const adminSupabase = createClient(
         import.meta.env.VITE_SUPABASE_URL,
@@ -691,7 +684,6 @@ const AchievementManagerV2 = () => {
       );
 
       // Verify the record exists before deletion
-      console.log('🔍 Verifying record exists...');
       const { data: existingRecord, error: checkError } = await adminSupabase
         .from('player_achievements')
         .select('id, player_name, achievements(name)')
@@ -707,10 +699,8 @@ const AchievementManagerV2 = () => {
         throw new Error('Player achievement not found');
       }
 
-      console.log('✅ Found record to delete:', existingRecord);
 
       // Perform the deletion
-      console.log('🗑️ Executing deletion...');
       const { error, count } = await adminSupabase
         .from('player_achievements')
         .delete({ count: 'exact' })
@@ -721,14 +711,12 @@ const AchievementManagerV2 = () => {
         throw error;
       }
 
-      console.log('📊 Deletion count:', count);
 
       if (count === 0) {
         throw new Error('No records were deleted - this may indicate a permission issue');
       }
 
       // Verify deletion was successful
-      console.log('🔍 Verifying deletion...');
       const { data: verifyRecord, error: verifyError } = await adminSupabase
         .from('player_achievements')
         .select('id')
@@ -737,7 +725,6 @@ const AchievementManagerV2 = () => {
 
       if (!verifyError || verifyError.code === 'PGRST116') {
         // PGRST116 means no record found, which is what we want
-        console.log('✅ Deletion verified - record no longer exists');
       } else {
         console.error('⚠️ Verification error:', verifyError);
       }
@@ -747,7 +734,6 @@ const AchievementManagerV2 = () => {
         description: `Player achievement for "${existingRecord.player_name}" removed successfully`,
       });
 
-      console.log('🔄 Updating UI optimistically...');
       // Optimistically remove the achievement from state without refetching
       setPlayerAchievements(prev => prev.filter(pa => pa.id !== playerAchievementId));
 
@@ -899,20 +885,16 @@ const AchievementManagerV2 = () => {
                 <Button
                   variant="outline"
                   onClick={async () => {
-                    console.log('🔴 Clear button clicked');
 
                     if (!confirm('Are you sure you want to clear ALL PLAYERS\' achievement progress? This action cannot be undone.')) {
                       return;
                     }
 
-                    console.log('✅ User confirmed, proceeding with clear');
 
                     try {
-                      console.log('🗑️ Clearing achievements for tournament:', currentTournament?.id);
 
                       // Use service role key for ALL operations to ensure consistency
                       const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-                      console.log('🔑 Using service role key for ALL operations');
 
                       const { createClient } = await import('@supabase/supabase-js');
                       const adminSupabase = createClient(
@@ -933,13 +915,10 @@ const AchievementManagerV2 = () => {
                         throw beforeError;
                       }
 
-                      console.log(`📊 Records before delete: ${beforeCount?.length || 0}`);
-
+                
                       // Try to delete using raw SQL function call to bypass RLS
-                      console.log('🔧 Executing direct SQL delete to bypass RLS policies...');
 
                       const deleteSQL = `DELETE FROM player_achievements WHERE tournament_id = '${currentTournament?.id}'`;
-                      console.log('🗑️ SQL:', deleteSQL);
 
                       // Try using the execute_sql function if it exists
                       let actualDeleted = 0;
@@ -949,7 +928,6 @@ const AchievementManagerV2 = () => {
                           .rpc('execute_sql', { query: deleteSQL });
 
                         if (sqlError) {
-                          console.log('⚠️ SQL function error:', sqlError.message);
                           // Fallback to regular delete
                           const { error, count } = await adminSupabase
                             .from('player_achievements')
@@ -962,13 +940,10 @@ const AchievementManagerV2 = () => {
                           }
 
                           actualDeleted = count || 0;
-                          console.log('✅ Fallback delete succeeded, count:', actualDeleted);
                         } else {
-                          console.log('✅ SQL delete succeeded');
                           actualDeleted = beforeCount?.length || 0; // Assume all were deleted
                         }
                       } catch (e) {
-                        console.log('⚠️ SQL function not available, using fallback delete');
                         // Final fallback - regular delete
                         const { error, count } = await adminSupabase
                           .from('player_achievements')
@@ -981,7 +956,6 @@ const AchievementManagerV2 = () => {
                         }
 
                         actualDeleted = count || 0;
-                        console.log('✅ Final fallback delete succeeded, count:', actualDeleted);
                       }
 
                       // Verify deletion
@@ -991,13 +965,11 @@ const AchievementManagerV2 = () => {
                         .eq('tournament_id', currentTournament?.id);
 
                       const remainingRecords = afterCount?.length || 0;
-                      console.log(`📊 Records remaining: ${remainingRecords}`);
 
                       // Calculate actual deleted records
                       const verifiedDeleted = (beforeCount?.length || 0) - remainingRecords;
                       actualDeleted = Math.max(actualDeleted, verifiedDeleted);
 
-                      console.log(`📊 Actually deleted: ${actualDeleted} records`);
 
                       toast({
                         title: "Success",

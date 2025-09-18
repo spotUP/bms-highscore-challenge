@@ -95,11 +95,7 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
                   second: '2-digit'
                 })}
               </div>
-              {user ? (
-                <>
-                  {!hideTournamentSelector && <TournamentDropdown />}
-                </>
-              ) : null}
+              {!hideTournamentSelector && <TournamentDropdown />}
               <SmartMenu
                 animatedNavigate={finalAnimatedNavigate}
                 onShowRules={onShowRules}
@@ -142,11 +138,7 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
                   second: '2-digit'
                 })}
               </div>
-              {user ? (
-                <>
-                  <TournamentDropdown />
-                </>
-              ) : null}
+              <TournamentDropdown />
               <SmartMenu
                 animatedNavigate={finalAnimatedNavigate}
                 onShowRules={onShowRules}

@@ -67,6 +67,46 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   const isMobile = useIsMobile();
   const { activeGames: games, gameScores, loading: gamesLoading, refetch } = useTournamentGameData();
 
+  // State for cached database logos
+  const [databaseLogos, setDatabaseLogos] = useState<Record<string, string>>({});
+
+  // Function to fetch logos from games_database
+  const fetchDatabaseLogos = useCallback(async () => {
+    if (!games || games.length === 0) return;
+
+    try {
+      const gameNames = games.map(game => game.name);
+
+      const { data: dbGames, error } = await supabase
+        .from('games_database')
+        .select('name, logo_url')
+        .in('name', gameNames)
+        .not('logo_url', 'is', null);
+
+      if (error) {
+        console.error('Error fetching database logos:', error);
+        return;
+      }
+
+      const logoMap: Record<string, string> = {};
+      dbGames?.forEach(dbGame => {
+        if (dbGame.logo_url) {
+          logoMap[dbGame.name] = dbGame.logo_url;
+        }
+      });
+
+      setDatabaseLogos(logoMap);
+      console.log('📸 Loaded database logos for:', Object.keys(logoMap));
+    } catch (error) {
+      console.error('Failed to fetch database logos:', error);
+    }
+  }, [games]);
+
+  // Fetch database logos when games change
+  useEffect(() => {
+    fetchDatabaseLogos();
+  }, [fetchDatabaseLogos]);
+
   // Temporarily allow overflow during animations
   useEffect(() => {
     if (!isExiting && !gamesLoading && !suppressAnimations) {
@@ -268,8 +308,10 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
               gridTemplateColumns: isMobile ? 'none' : `repeat(${games?.length || 1}, 1fr)`
             }}>
               {games.map((game) => {
-                // Get logo URL - convert local paths to Supabase Storage URLs
-                const logoUrl = getGameLogoUrl(game.logo_url) || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
+                // Get logo URL with priority: database > tournament game logo > fallback map
+                const databaseLogo = databaseLogos[game.name];
+                const fallbackLogo = getGameLogoUrl(game.logo_url) || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
+                const logoUrl = databaseLogo || fallbackLogo;
                 const storageRef = logoUrl && logoUrl.includes('supabase.co/storage/') ? parseStorageObjectUrl(logoUrl) : null;
                 const isPublicObject = !!(logoUrl && logoUrl.includes('/storage/v1/object/public/'));
 

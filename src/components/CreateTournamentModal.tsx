@@ -214,6 +214,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
       // Add games to the newly created tournament
       for (const game of games) {
         try {
+          // Insert into tournament games table
           const { error } = await supabase
             .from('games')
             .insert({
@@ -232,6 +233,24 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
               description: `Failed to add game "${game.name}" to tournament`,
               variant: "destructive",
             });
+          } else {
+            // If we have a logo URL, also save it to the games_database table for future use
+            if (game.logo_url && game.id) {
+              try {
+                const { error: logoError } = await supabase
+                  .from('games_database')
+                  .update({ logo_url: game.logo_url })
+                  .eq('database_id', game.id);
+
+                if (logoError) {
+                  console.log('Could not update logo in games_database for game ID', game.id, ':', logoError);
+                } else {
+                  console.log('Successfully saved logo to games_database for game:', game.name);
+                }
+              } catch (logoSaveError) {
+                console.log('Error saving logo to games_database:', logoSaveError);
+              }
+            }
           }
         } catch (error) {
           console.error('Error adding game:', error);

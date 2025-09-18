@@ -1261,7 +1261,6 @@ const FunctionTests: React.FC = () => {
     } finally {
       // Comprehensive cleanup for brackets tests
       try {
-        console.log('🧹 Brackets test cleanup...');
 
         // Clean up test tournaments and related data
         await supabase.from('bracket_tournaments').delete().like('name', 'BRACKETS_TEST_%');
@@ -1280,9 +1279,7 @@ const FunctionTests: React.FC = () => {
           }
         }
 
-        console.log('✅ Brackets test cleanup completed');
       } catch (cleanupError) {
-        console.warn('⚠️ Brackets test cleanup warning:', cleanupError);
       }
 
       setBracketsTestRunning(false);
@@ -1309,7 +1306,6 @@ const FunctionTests: React.FC = () => {
       const testResults: any = {};
 
       // Test 1: RLS Policy Testing - Attempt unauthorized data access
-      console.log('Testing RLS policies...');
       try {
         // Test accessing scores from different tournament without proper access
         const unauthorizedTournamentId = 'unauthorized-tournament-id';
@@ -1325,7 +1321,6 @@ const FunctionTests: React.FC = () => {
       }
 
       // Test 2: Admin Privilege Testing
-      console.log('Testing admin privilege validation...');
       try {
         // Test user management function access
         const { error: adminError } = await supabase.functions.invoke('manage-users', {
@@ -1338,7 +1333,6 @@ const FunctionTests: React.FC = () => {
       }
 
       // Test 3: Tournament Access Control
-      console.log('Testing tournament access controls...');
       try {
         const testTournamentName = 'SECURITY_TEST_' + Date.now().toString().slice(-6);
 
@@ -1372,7 +1366,6 @@ const FunctionTests: React.FC = () => {
       }
 
       // Test 4: Score Submission Validation
-      console.log('Testing score submission security...');
       try {
         const testPlayerName = 'SEC_TEST_' + Date.now().toString().slice(-6);
 
@@ -1408,7 +1401,6 @@ const FunctionTests: React.FC = () => {
       }
 
       // Test 5: Player Name Security
-      console.log('Testing player name constraints...');
       try {
         const longName = 'A'.repeat(17); // Exceeds 16 char limit
         const sqlInjectionName = "'; DROP TABLE scores; --";
@@ -1443,7 +1435,6 @@ const FunctionTests: React.FC = () => {
       }
 
       // Test 6: Session Management
-      console.log('Testing session management...');
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         testResults.sessionManagement = !!sessionData.session;
@@ -1484,7 +1475,6 @@ const FunctionTests: React.FC = () => {
     } finally {
       // Comprehensive cleanup for security tests
       try {
-        console.log('🧹 Security test cleanup...');
         const testPlayerName = 'SEC_TEST_' + Date.now().toString().slice(-6);
         const longName = 'A'.repeat(17);
         const sqlInjectionName = "'; DROP TABLE scores; --";
@@ -1499,9 +1489,7 @@ const FunctionTests: React.FC = () => {
         // Clean up any test tournaments
         await supabase.from('tournaments').delete().like('name', 'SECURITY_TEST_%');
 
-        console.log('✅ Security test cleanup completed');
       } catch (cleanupError) {
-        console.warn('⚠️ Security test cleanup warning:', cleanupError);
       }
 
       setSecurityTestRunning(false);
@@ -1520,7 +1508,6 @@ const FunctionTests: React.FC = () => {
       const testResults: any = {};
 
       // Test 1: Tournament Creation and State Management
-      console.log('Testing tournament creation and states...');
       const testTournamentName = 'MGMT_TEST_' + Date.now().toString().slice(-6);
 
       const { data: tournament, error: createError } = await supabase
@@ -1538,7 +1525,6 @@ const FunctionTests: React.FC = () => {
 
       if (tournament) {
         // Test 2: Tournament State Transitions
-        console.log('Testing tournament state transitions...');
         const { error: stateError } = await supabase
           .from('tournaments')
           .update({ status: 'active' })
@@ -1547,7 +1533,6 @@ const FunctionTests: React.FC = () => {
         testResults.stateTransitions = !stateError;
 
         // Test 3: Tournament Member Management
-        console.log('Testing tournament member management...');
         if (user) {
           const { error: memberError } = await supabase
             .from('tournament_members')
@@ -1563,7 +1548,6 @@ const FunctionTests: React.FC = () => {
         }
 
         // Test 4: Tournament Lock Mechanism
-        console.log('Testing tournament lock mechanism...');
         const { error: lockError } = await supabase
           .from('tournaments')
           .update({ scores_locked: true })
@@ -1572,7 +1556,6 @@ const FunctionTests: React.FC = () => {
         testResults.lockMechanism = !lockError;
 
         // Test 5: Tournament Data Isolation
-        console.log('Testing tournament data isolation...');
         const { data: scores, error: isolationError } = await supabase
           .from('scores')
           .select('*')
@@ -1623,7 +1606,6 @@ const FunctionTests: React.FC = () => {
     } finally {
       // Comprehensive cleanup for tournament tests
       try {
-        console.log('🧹 Tournament test cleanup...');
 
         // Clean up any test tournaments
         await supabase.from('tournaments').delete().like('name', 'MGMT_TEST_%');
@@ -1640,9 +1622,7 @@ const FunctionTests: React.FC = () => {
           }
         }
 
-        console.log('✅ Tournament test cleanup completed');
       } catch (cleanupError) {
-        console.warn('⚠️ Tournament test cleanup warning:', cleanupError);
       }
 
       setTournamentTestRunning(false);
@@ -1660,7 +1640,6 @@ const FunctionTests: React.FC = () => {
       const testResults: any = {};
 
       // Test 1: Real-time Connection
-      console.log('Testing real-time connection...');
       const channel = supabase.channel('test-channel-' + Date.now());
 
       let connectionEstablished = false;
@@ -1678,7 +1657,6 @@ const FunctionTests: React.FC = () => {
       testResults.realtimeConnection = connectionEstablished;
 
       // Test 2: Real-time Score Notifications
-      console.log('Testing real-time score notifications...');
       const { data: games } = await supabase.from('games').select('*').limit(1);
 
       if (games && games.length > 0) {
@@ -1721,11 +1699,9 @@ const FunctionTests: React.FC = () => {
       }
 
       // Test 3: WebSocket Health
-      console.log('Testing WebSocket health...');
       testResults.websocketHealth = supabase.realtime.isConnected();
 
       // Test 4: Subscription Cleanup
-      console.log('Testing subscription cleanup...');
       const tempChannel = supabase.channel('temp-test-' + Date.now());
       tempChannel.subscribe();
       const unsubscribeResult = await tempChannel.unsubscribe();
@@ -1767,14 +1743,11 @@ const FunctionTests: React.FC = () => {
     } finally {
       // Comprehensive cleanup for real-time tests
       try {
-        console.log('🧹 Real-time test cleanup...');
 
         // Clean up any test scores created during real-time testing
         await supabase.from('scores').delete().like('player_name', 'REALTIME_TEST_%');
 
-        console.log('✅ Real-time test cleanup completed');
       } catch (cleanupError) {
-        console.warn('⚠️ Real-time test cleanup warning:', cleanupError);
       }
 
       setRealtimeTestRunning(false);
@@ -1859,7 +1832,6 @@ const FunctionTests: React.FC = () => {
     } finally {
       // Comprehensive cleanup after all tests
       try {
-        console.log('🧹 Final test cleanup...');
 
         // Clean up any remaining test data patterns
         await supabase.from('scores').delete().like('player_name', 'TEST_%');
@@ -1884,9 +1856,7 @@ const FunctionTests: React.FC = () => {
         await supabase.from('bracket_tournaments').delete().like('name', 'TEST_%');
         await supabase.from('bracket_tournaments').delete().like('name', 'BRACKETS_TEST_%');
 
-        console.log('✅ Final test cleanup completed');
       } catch (cleanupError) {
-        console.warn('⚠️ Final test cleanup warning:', cleanupError);
       }
 
       // Clear animation suppression flag
@@ -1925,7 +1895,6 @@ const FunctionTests: React.FC = () => {
         }
       });
 
-      console.log('Test failure report sent to spotup@gmail.com');
     } catch (error) {
       console.error('Failed to send test failure report:', error);
     }
@@ -1983,8 +1952,7 @@ const FunctionTests: React.FC = () => {
     const checkScheduledTests = () => {
       const nextRun = localStorage.getItem('nextScheduledTestRun');
       if (nextRun && new Date() >= new Date(nextRun)) {
-        console.log('Running scheduled tests...');
-        runAllScoreTests(true);
+          runAllScoreTests(true);
       }
     };
 

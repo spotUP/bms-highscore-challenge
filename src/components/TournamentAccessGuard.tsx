@@ -33,7 +33,6 @@ const TournamentAccessGuard: React.FC<TournamentAccessGuardProps> = ({ children 
           .single();
 
         if (tournamentError || !tournamentData) {
-          console.log('Tournament not found:', slug);
           setIsChecking(false);
           setHasAccess(false);
           return;
@@ -71,7 +70,6 @@ const TournamentAccessGuard: React.FC<TournamentAccessGuardProps> = ({ children 
 
         // If tournament is private, check access
         if (!user) {
-          console.log('Private tournament requires authentication');
           setIsChecking(false);
           setHasAccess(false);
           return;
@@ -121,7 +119,6 @@ const TournamentAccessGuard: React.FC<TournamentAccessGuardProps> = ({ children 
             }
           }
         } else {
-          console.log('User is not a member of private tournament');
           setHasAccess(false);
         }
 

@@ -58,11 +58,9 @@ export const ScoreNotificationsListener: React.FC = () => {
   useEffect(() => {
     // Only set up the listener if we have a tournament context
     if (!currentTournament) {
-      console.log('ScoreNotificationsListener: No current tournament, skipping setup');
       return;
     }
 
-    console.log('ScoreNotificationsListener: Setting up realtime subscriptions for tournament:', currentTournament.id);
 
     // Subscribe to score submissions with unique channel name
     const channelName = `score_submissions_${currentTournament.id}_${Date.now()}`;
@@ -78,7 +76,6 @@ export const ScoreNotificationsListener: React.FC = () => {
           filter: `tournament_id=eq.${currentTournament.id}`,
         },
         async (payload) => {
-          console.log('ScoreNotificationsListener: Received score submission event:', payload);
           const submission = payload.new as {
             player_name: string;
             score: number;
@@ -103,25 +100,19 @@ export const ScoreNotificationsListener: React.FC = () => {
             return;
           }
 
-          console.log('ScoreNotificationsListener: Found game:', game);
 
           // Toast notification removed - only celebration modal is shown
-          console.log('ScoreNotificationsListener: Skipping toast notification (disabled)');
 
           // Trigger global celebration modal + confetti
-          console.log('ScoreNotificationsListener: Triggering celebration modal for:', submission.player_name);
           try {
             setInsultPlayerName(submission.player_name);
             setShowPlayerInsult(true);
-            console.log('ScoreNotificationsListener: Modal state updated successfully');
           } catch (modalError) {
             console.error('ScoreNotificationsListener: Modal error:', modalError);
           }
         }
       )
-      .subscribe((status) => {
-        console.log('ScoreNotificationsListener: Score subscription status:', status);
-      });
+      .subscribe();
 
     // Subscribe to achievement unlocks (global) with unique channel name
     const achievementChannelName = `player_achievements_${Date.now()}`;
@@ -135,9 +126,7 @@ export const ScoreNotificationsListener: React.FC = () => {
           table: 'player_achievements',
         },
         async (payload) => {
-          console.log('ScoreNotificationsListener: Achievement event received:', payload);
           const pa = payload.new as { achievement_id: string; player_name: string };
-          console.log('ScoreNotificationsListener: Fetching achievement data for:', pa.achievement_id);
 
           const { data: achievement, error } = await supabase
             .from('achievements')
@@ -150,10 +139,8 @@ export const ScoreNotificationsListener: React.FC = () => {
             return;
           }
 
-          console.log('ScoreNotificationsListener: Achievement data:', achievement);
 
           if (achievement && showAchievementNotification) {
-            console.log('ScoreNotificationsListener: Showing achievement notification for:', achievement.name);
             showAchievementNotification({
               id: achievement.id,
               name: achievement.name,
@@ -162,20 +149,12 @@ export const ScoreNotificationsListener: React.FC = () => {
               badge_color: achievement.badge_color,
               points: achievement.points,
             });
-          } else {
-            console.log('ScoreNotificationsListener: Cannot show achievement notification:', {
-              hasAchievement: !!achievement,
-              hasShowFunction: !!showAchievementNotification
-            });
           }
         }
       )
-      .subscribe((status) => {
-        console.log('ScoreNotificationsListener: Achievement subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
-      console.log('ScoreNotificationsListener: Cleaning up subscriptions');
       if (scoreChannelRef.current) supabase.removeChannel(scoreChannelRef.current);
       if (achievementChannelRef.current) supabase.removeChannel(achievementChannelRef.current);
     };

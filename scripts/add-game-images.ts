@@ -15,6 +15,7 @@ interface GameToProcess {
   id: number;
   name: string;
   platform_name: string;
+  database_id?: number;
   logo_url?: string;
   screenshot_url?: string;
   cover_url?: string;
@@ -26,7 +27,7 @@ async function addGameImages() {
   // Get games that don't have logos yet (limit to avoid overwhelming LaunchBox)
   const { data: games, error } = await supabase
     .from('games_database')
-    .select('id, name, platform_name, logo_url, screenshot_url, cover_url')
+    .select('id, name, platform_name, database_id, logo_url, screenshot_url, cover_url')
     .is('logo_url', null)
     .limit(100); // Start with 100 games
 
@@ -50,8 +51,29 @@ async function addGameImages() {
     try {
       console.log(`🔍 Processing: ${game.name} (${game.platform_name})`);
 
-      // Search for clear logo on LaunchBox
-      const logoUrl = await launchBoxService.getClearLogo(game.name);
+      let logoUrl: string | null = null;
+
+      // Method 1: Try direct LaunchBox URL using database_id (faster and more reliable)
+      if (game.database_id) {
+        const directUrl = `https://images.launchbox-app.com/clearlogo/${game.database_id}-01.png`;
+        try {
+          const response = await fetch(directUrl, { method: 'HEAD' });
+          if (response.ok) {
+            logoUrl = directUrl;
+            console.log(`   ✅ Found direct clear logo for ${game.name}`);
+          }
+        } catch (e) {
+          // Continue to next method
+        }
+      }
+
+      // Method 2: If direct URL doesn't work, try LaunchBox API search
+      if (!logoUrl) {
+        logoUrl = await launchBoxService.getClearLogo(game.name);
+        if (logoUrl) {
+          console.log(`   ✅ Found API clear logo for ${game.name}`);
+        }
+      }
 
       if (logoUrl) {
         // Update the game with the clear logo
@@ -76,8 +98,8 @@ async function addGameImages() {
 
       processed++;
 
-      // Add delay to be respectful to LaunchBox
-      await new Promise(resolve => setTimeout(resolve, 1000)); // 1 second delay
+      // Add delay to be respectful to LaunchBox (shorter delay for direct URL checks)
+      await new Promise(resolve => setTimeout(resolve, logoUrl && logoUrl.includes('clearlogo') ? 500 : 1000));
 
     } catch (error) {
       console.error(`❌ Error processing ${game.name}:`, error);

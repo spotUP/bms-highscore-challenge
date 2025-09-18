@@ -287,11 +287,9 @@ class GameMediaService {
     }
   ): Promise<GameMedia> {
     const cacheKey = `${gameName}-${platform || 'unknown'}`;
-    console.log(`🎮 GameMediaService: Fetching media for "${gameName}" (${platform})`);
 
     // Check cache first
     if (this.mediaCache.has(cacheKey)) {
-      console.log(`📦 GameMediaService: Cache hit for "${gameName}"`);
       return this.mediaCache.get(cacheKey)!;
     }
 
@@ -300,11 +298,7 @@ class GameMediaService {
     const logos: string[] = [];
     const backgroundImages: string[] = [];
 
-    // Only use LaunchBox for logos, skip screenshots and videos (use RAWG instead)
-    console.log(`🎯 GameMediaService: Skipping LaunchBox media, prioritizing RAWG for screenshots and videos`);
-
     if (existingMedia?.logo_url) {
-      console.log(`🏷️ GameMediaService: Adding logo from LaunchBox - ${existingMedia.logo_url}`);
       logos.push(existingMedia.logo_url);
     }
 
@@ -313,19 +307,16 @@ class GameMediaService {
 
     // Fetch from RAWG (primary source for screenshots and videos)
     if (identifiers.rawgSlug) {
-      console.log(`🎮 GameMediaService: Fetching primary content from RAWG for "${gameName}"`);
       const [rawgScreenshots, rawgVideos] = await Promise.allSettled([
         this.fetchRAWGScreenshots(identifiers.rawgSlug),
         this.fetchRAWGVideos(identifiers.rawgSlug)
       ]);
 
       if (rawgScreenshots.status === 'fulfilled') {
-        console.log(`📸 GameMediaService: Added ${rawgScreenshots.value.length} screenshots from RAWG`);
         screenshots.push(...rawgScreenshots.value);
       }
 
       if (rawgVideos.status === 'fulfilled') {
-        console.log(`🎥 GameMediaService: Added ${rawgVideos.value.length} videos from RAWG`);
         videos.push(...rawgVideos.value);
       }
     }
@@ -364,11 +355,6 @@ class GameMediaService {
     // Cache the result
     this.mediaCache.set(cacheKey, gameMedia);
 
-    console.log(`✅ GameMediaService: Returning media for "${gameName}":`, {
-      screenshots: gameMedia.screenshots.length,
-      videos: gameMedia.videos.length,
-      total: gameMedia.totalMediaCount
-    });
 
     return gameMedia;
   }
