@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Image } from 'lucide-react';
 
 interface RAWGGameImageProps {
   gameName: string;
@@ -47,13 +49,15 @@ export const RAWGGameImage: React.FC<RAWGGameImageProps> = ({
   className = '',
   alt,
   onError,
-  enableLazyLoading = true,
+  enableLazyLoading = false,
   fallbackImageUrl
 }) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [minDelayPassed, setMinDelayPassed] = useState(false);
   const elementRef = useRef<HTMLDivElement>(null);
 
   // Intersection Observer for lazy loading
@@ -80,12 +84,28 @@ export const RAWGGameImage: React.FC<RAWGGameImageProps> = ({
     return () => observer.disconnect();
   }, [enableLazyLoading]);
 
+  // Add minimum delay for skeleton visibility
+  useEffect(() => {
+    if (isVisible) {
+      setMinDelayPassed(false);
+      const timer = setTimeout(() => {
+        setMinDelayPassed(true);
+      }, 100); // Show skeleton for at least 100ms
+      return () => clearTimeout(timer);
+    }
+  }, [isVisible, gameName]);
+
   useEffect(() => {
     const fetchRAWGImage = async () => {
       if (!gameName || !isVisible) return;
 
       setIsLoading(true);
       setError(false);
+      setImageLoaded(false);
+
+      // Add minimal delay to respect API rate limits
+      const delay = Math.random() * 200 + 100; // 100-300ms delay
+      await new Promise(resolve => setTimeout(resolve, delay));
 
       try {
         const apiKey = import.meta.env.VITE_RAWG_API_KEY;
@@ -156,7 +176,6 @@ export const RAWGGameImage: React.FC<RAWGGameImageProps> = ({
           setError(true);
         }
       } catch (err) {
-        console.error('Error fetching RAWG image for', gameName, ':', err);
         setError(true);
       } finally {
         setIsLoading(false);
@@ -169,22 +188,19 @@ export const RAWGGameImage: React.FC<RAWGGameImageProps> = ({
     }
   }, [gameName, isVisible]);
 
-  // Show progressive loading state with game name
-  if (isLoading || !isVisible) {
+  // Show skeleton loading state or image
+  if (isLoading || !isVisible || !minDelayPassed) {
     return (
-      <div ref={elementRef} className={`${className} flex items-center justify-center bg-gray-200 text-gray-500`}>
-        <div className="text-center p-2 max-w-full overflow-hidden">
-          {isVisible ? (
-            <>
-              <div className="w-3 h-3 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin mx-auto mb-2"></div>
-              <div className="text-xs font-medium mb-1 truncate px-1" title={gameName}>
-                {gameName.length > 15 ? `${gameName.substring(0, 15)}...` : gameName}
-              </div>
-              <div className="text-xs opacity-60">Loading...</div>
-            </>
-          ) : (
-            <div className="text-xs opacity-50">•••</div>
-          )}
+      <div
+        ref={elementRef}
+        className={`${className} rounded-md relative overflow-hidden bg-gradient-to-r from-card via-muted to-card animate-pulse`}
+        style={{
+          backgroundSize: '200% 100%',
+          animation: 'shimmer 2.0s ease-in-out infinite'
+        }}
+      >
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Image className="w-8 h-8 text-gray-500" />
         </div>
       </div>
     );
@@ -193,19 +209,37 @@ export const RAWGGameImage: React.FC<RAWGGameImageProps> = ({
   // Show actual RAWG image if available
   if (imageUrl && !error) {
     return (
-      <img
-        src={imageUrl}
-        alt={alt || `${gameName} screenshot`}
-        className={`${className} object-cover`}
-        onError={() => {
-          setError(true);
-          onError?.();
-        }}
-        style={{
-          maxHeight: '100%',
-          maxWidth: '100%'
-        }}
-      />
+      <div className={`${className} relative`}>
+        {!imageLoaded && (
+          <div
+            className={`${className} absolute inset-0 rounded-md overflow-hidden bg-gradient-to-r from-card via-muted to-card animate-pulse z-10`}
+            style={{
+              backgroundSize: '200% 100%',
+              animation: 'shimmer 2.0s ease-in-out infinite'
+            }}
+          >
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Image className="w-8 h-8 text-gray-500" />
+            </div>
+          </div>
+        )}
+        <img
+          src={imageUrl}
+          alt={alt || `${gameName} screenshot`}
+          className={`${className} object-cover transition-all duration-1000 ease-out transform ${imageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
+          onError={() => {
+            setError(true);
+            onError?.();
+          }}
+          onLoad={() => {
+            setImageLoaded(true);
+          }}
+          style={{
+            maxHeight: '100%',
+            maxWidth: '100%'
+          }}
+        />
+      </div>
     );
   }
 
