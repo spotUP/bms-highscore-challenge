@@ -4,6 +4,7 @@ import { useTournament } from '@/contexts/TournamentContext';
 import PlayerInsult from '@/components/PlayerInsult';
 import { useAchievement } from '@/contexts/AchievementContext';
 import { getGameLogoUrl } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface ScoreNotificationProps {
   playerName: string;
@@ -56,14 +57,8 @@ export const ScoreNotificationsListener: React.FC = () => {
   const [insultPlayerName, setInsultPlayerName] = useState('');
 
   useEffect(() => {
-    // Only set up the listener if we have a tournament context
-    if (!currentTournament) {
-      return;
-    }
-
-
-    // Subscribe to score submissions with unique channel name
-    const channelName = `score_submissions_${currentTournament.id}_${Date.now()}`;
+    // Set up global score submissions listener (works regardless of tournament context)
+    const channelName = `global_score_submissions_${Date.now()}`;
 
     scoreChannelRef.current = supabase
       .channel(channelName)
@@ -73,7 +68,7 @@ export const ScoreNotificationsListener: React.FC = () => {
           event: 'INSERT',
           schema: 'public',
           table: 'score_submissions',
-          filter: `tournament_id=eq.${currentTournament.id}`,
+          // Remove tournament filter to make it global
         },
         async (payload) => {
           const submission = payload.new as {
@@ -101,14 +96,34 @@ export const ScoreNotificationsListener: React.FC = () => {
           }
 
 
-          // Toast notification removed - only celebration modal is shown
+          // Show toast notification for all score submissions
+          const scoreDiff = submission.previous_high_score
+            ? submission.score - submission.previous_high_score
+            : null;
 
-          // Trigger global celebration modal + confetti
-          try {
-            setInsultPlayerName(submission.player_name);
-            setShowPlayerInsult(true);
-          } catch (modalError) {
-            console.error('ScoreNotificationsListener: Modal error:', modalError);
+          toast(
+            <ScoreNotification
+              playerName={submission.player_name}
+              score={submission.score}
+              gameName={game.name}
+              gameLogoUrl={game.logo_url}
+              isHighScore={submission.is_high_score}
+              scoreDiff={scoreDiff}
+            />,
+            {
+              duration: submission.is_high_score ? 8000 : 5000, // Longer for high scores
+              className: submission.is_high_score ? 'border-yellow-400 border-2' : undefined,
+            }
+          );
+
+          // Trigger global celebration modal + confetti for high scores
+          if (submission.is_high_score) {
+            try {
+              setInsultPlayerName(submission.player_name);
+              setShowPlayerInsult(true);
+            } catch (modalError) {
+              console.error('ScoreNotificationsListener: Modal error:', modalError);
+            }
           }
         }
       )
@@ -141,6 +156,7 @@ export const ScoreNotificationsListener: React.FC = () => {
 
 
           if (achievement && showAchievementNotification) {
+            // Show achievement modal
             showAchievementNotification({
               id: achievement.id,
               name: achievement.name,
@@ -149,6 +165,23 @@ export const ScoreNotificationsListener: React.FC = () => {
               badge_color: achievement.badge_color,
               points: achievement.points,
             });
+
+            // Also show toast notification for achievements
+            toast(
+              <div className="flex items-center gap-3">
+                <div className="text-2xl">{achievement.badge_icon}</div>
+                <div>
+                  <p className="font-bold text-yellow-400">🏆 Achievement Unlocked!</p>
+                  <p className="font-semibold">{achievement.name}</p>
+                  <p className="text-sm text-gray-300">{achievement.description}</p>
+                  <p className="text-sm text-blue-400">+{achievement.points} points</p>
+                </div>
+              </div>,
+              {
+                duration: 6000,
+                className: 'border-yellow-400 border-2 bg-gradient-to-r from-yellow-900/20 to-blue-900/20',
+              }
+            );
           }
         }
       )
@@ -158,7 +191,7 @@ export const ScoreNotificationsListener: React.FC = () => {
       if (scoreChannelRef.current) supabase.removeChannel(scoreChannelRef.current);
       if (achievementChannelRef.current) supabase.removeChannel(achievementChannelRef.current);
     };
-  }, [currentTournament?.id, showAchievementNotification]); // Depend on tournament ID and showAchievementNotification
+  }, [showAchievementNotification]); // Global notifications work regardless of tournament context
 
   return (
     <>
