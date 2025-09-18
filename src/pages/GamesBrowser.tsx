@@ -583,7 +583,7 @@ const GamesBrowser: React.FC = () => {
 
       {/* Games Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {displayedGames.map(game => (
+        {displayedGames.map((game, index) => (
           <Card
             key={game.id}
             className={`cursor-pointer transition-all hover:shadow-lg overflow-hidden flex flex-col h-full ${
@@ -605,6 +605,7 @@ const GamesBrowser: React.FC = () => {
                   gameName={game.name}
                   className="w-full h-full"
                   onError={() => handleImageError(game.id)}
+                  enableLazyLoading={index >= 8} // First 8 games load immediately for faster UX
                 />
               )}
 
@@ -780,7 +781,7 @@ const GamesBrowser: React.FC = () => {
 
               {/* Favorites Games Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {displayedGames.map(game => (
+                {displayedGames.map((game, index) => (
                   <Card
                     key={game.id}
                     className={`cursor-pointer transition-all hover:shadow-lg overflow-hidden flex flex-col h-full ${
@@ -802,6 +803,7 @@ const GamesBrowser: React.FC = () => {
                           gameName={game.name}
                           className="w-full h-full"
                           onError={() => handleImageError(game.id)}
+                          enableLazyLoading={index >= 8} // First 8 games load immediately for faster UX
                         />
                       )}
 
