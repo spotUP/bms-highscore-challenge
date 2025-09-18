@@ -87,7 +87,6 @@ export const GameLogo: React.FC<GameLogoProps> = ({
       try {
         // Use high priority for immediately visible games, low priority for lazy-loaded ones
         const priority = !enableLazyLoading ? 'high' : 'low'; // Immediate loads get high priority
-        console.log(`🚀 GameLogo: Requesting ${priority} priority logo for "${gameName}" (lazy: ${enableLazyLoading})`);
         const url = await launchBoxService.getClearLogo(gameName, priority);
         setLogoUrl(url);
 

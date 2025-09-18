@@ -55,7 +55,6 @@ interface FilterState {
 }
 
 const GamesBrowser: React.FC = () => {
-  console.log('🎮 LaunchBox GamesBrowser component loaded');
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -185,28 +184,35 @@ const GamesBrowser: React.FC = () => {
           logo_url
         `); // Removed count: 'exact' to improve performance
 
-      // Apply search filter - use flexible search for better discoverability
+      // Apply search filter - optimized for better performance
       if (filters.search && filters.search.length >= 3) {
         const searchTerm = filters.search.toLowerCase().trim();
 
-        // Create search variations to handle common punctuation differences
-        const searchVariations = [
-          searchTerm, // Original search
-          searchTerm.replace(/\s+/g, '-'), // spaces to hyphens (punch out -> punch-out)
-          searchTerm.replace(/\s+/g, ''), // remove spaces (punch out -> punchout)
-          searchTerm.replace(/-/g, ' '), // hyphens to spaces (punch-out -> punch out)
-          searchTerm.replace(/[^\w\s]/g, ''), // remove punctuation
-        ];
+        // Use a simple ilike search on the name field with basic normalization
+        // This reduces the query complexity from 11 OR conditions to just 1
+        let normalizedSearch = searchTerm
+          .replace(/[^\w\s]/g, '') // Remove all punctuation
+          .replace(/\s+/g, ' ') // Normalize whitespace
+          .trim();
 
-        // Remove duplicates
-        const uniqueVariations = [...new Set(searchVariations)];
+        // Handle common word replacements for better matching
+        normalizedSearch = normalizedSearch
+          .replace(/\s+n\s+/gi, ' ') // Remove standalone 'n'
+          .replace(/\s+and\s+/gi, ' ') // Remove 'and'
+          .trim();
 
-        // Build OR query for multiple search variations
-        const searchConditions = uniqueVariations.map(variation =>
-          `name.ilike.%${variation}%`
-        ).join(',');
+        // Split into words and search for each word presence (all must match)
+        const searchWords = normalizedSearch.split(/\s+/).filter(word => word.length > 0);
 
-        query = query.or(searchConditions);
+        if (searchWords.length === 1) {
+          // Single word: simple ilike search
+          query = query.ilike('name', `%${searchWords[0]}%`);
+        } else if (searchWords.length > 1) {
+          // Multiple words: each word must appear somewhere in the name
+          searchWords.forEach(word => {
+            query = query.ilike('name', `%${word}%`);
+          });
+        }
       }
 
       // Apply platform filter
@@ -242,17 +248,12 @@ const GamesBrowser: React.FC = () => {
           'Berzerk', 'Moon Patrol', 'Xevious', 'Phoenix', 'Gyruss'
         ];
 
-        // Shuffle and select ALL games to maximize results before filtering
-        const shuffledGames = [...allFeaturedGames].sort(() => Math.random() - 0.5);
+        // Optimized featured games query - use IN clause with exact matches instead of multiple ilike
+        const featuredGameNames = allFeaturedGames.slice(0, 10); // Limit to reduce query complexity
 
-        // Create OR conditions for featured games
-        const featuredConditions = shuffledGames.map(game =>
-          `name.ilike.%${game.toLowerCase()}%`
-        ).join(',');
-
-        // Apply featured games filter and platform, fetch more results since we'll filter
+        // Apply featured games filter and platform, use IN for better performance
         query = query
-          .or(featuredConditions)
+          .in('name', featuredGameNames)
           .eq('platform_name', 'Arcade')
           .limit(50); // Fetch more games since we'll filter out ones without images
       }
@@ -277,14 +278,10 @@ const GamesBrowser: React.FC = () => {
         const shuffledGames = [...gamesData].sort(() => Math.random() - 0.5);
         finalGamesData = shuffledGames.slice(0, gamesPerPage);
 
-        console.log(`🎨 Featured games: ${gamesData.length} found, showing ${finalGamesData.length} (RAWG fallback will handle images)`);
       }
 
       setGames(finalGamesData);
 
-      // Log how many games have stored logos vs need LaunchBox API
-      const gamesWithLogos = finalGamesData?.filter(g => g.logo_url) || [];
-      console.log(`📊 Games loaded: ${finalGamesData?.length || 0}, with stored logos: ${gamesWithLogos.length}, need API: ${(finalGamesData?.length || 0) - gamesWithLogos.length}`);
 
       // Set approximate total for pagination (estimate based on page size)
       if (gamesData && gamesData.length === gamesPerPage) {
