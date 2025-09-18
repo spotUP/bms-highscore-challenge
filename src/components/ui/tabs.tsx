@@ -97,16 +97,7 @@ const TabsList = React.forwardRef<
           transform: 'translateZ(0)' // Force hardware acceleration
         }}
       />
-      {/* Animated background indicator */}
-      <div
-        className="absolute top-1 bottom-1 rounded-md bg-white/10 transition-all duration-300 ease-out pointer-events-none"
-        style={{
-          left: `${indicatorStyle.left}px`,
-          width: `${indicatorStyle.width}px`,
-          opacity: indicatorStyle.opacity,
-          transform: 'translateZ(0)' // Force hardware acceleration
-        }}
-      />
+{/* Animated background indicator - removed for no background effect */}
       {props.children}
     </TabsPrimitive.List>
   );
