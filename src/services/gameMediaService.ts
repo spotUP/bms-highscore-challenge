@@ -300,64 +300,32 @@ class GameMediaService {
     const logos: string[] = [];
     const backgroundImages: string[] = [];
 
-    // Add existing LaunchBox media
-    if (existingMedia?.screenshot_url) {
-      console.log(`📸 GameMediaService: Adding screenshot from LaunchBox - ${existingMedia.screenshot_url}`);
-      screenshots.push({
-        id: 'launchbox-screenshot',
-        url: existingMedia.screenshot_url,
-        source: 'launchbox'
-      });
-    }
-
-    if (existingMedia?.video_url) {
-      console.log(`🎥 GameMediaService: Adding video from LaunchBox - ${existingMedia.video_url}`);
-      const youtubeId = this.extractYouTubeId(existingMedia.video_url);
-      console.log(`🔗 GameMediaService: YouTube ID extracted for "${gameName}": ${youtubeId} from ${existingMedia.video_url}`);
-
-      if (youtubeId) {
-        // It's a YouTube video
-        console.log(`▶️ GameMediaService: Adding YouTube video for "${gameName}"`);
-        videos.push({
-          id: 'launchbox-video',
-          url: `https://www.youtube.com/watch?v=${youtubeId}`,
-          thumbnailUrl: `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`,
-          source: 'launchbox',
-          type: 'trailer',
-          title: 'Official Video',
-          embedId: youtubeId
-        });
-      } else {
-        // It's a direct video file
-        videos.push({
-          id: 'launchbox-video',
-          url: existingMedia.video_url,
-          source: 'launchbox',
-          type: 'other',
-          title: 'Official Video'
-        });
-      }
-    }
+    // Only use LaunchBox for logos, skip screenshots and videos (use RAWG instead)
+    console.log(`🎯 GameMediaService: Skipping LaunchBox media, prioritizing RAWG for screenshots and videos`);
 
     if (existingMedia?.logo_url) {
+      console.log(`🏷️ GameMediaService: Adding logo from LaunchBox - ${existingMedia.logo_url}`);
       logos.push(existingMedia.logo_url);
     }
 
     // Get identifiers for external APIs
     const identifiers = await this.getGameIdentifiers(gameName);
 
-    // Fetch from RAWG
+    // Fetch from RAWG (primary source for screenshots and videos)
     if (identifiers.rawgSlug) {
+      console.log(`🎮 GameMediaService: Fetching primary content from RAWG for "${gameName}"`);
       const [rawgScreenshots, rawgVideos] = await Promise.allSettled([
         this.fetchRAWGScreenshots(identifiers.rawgSlug),
         this.fetchRAWGVideos(identifiers.rawgSlug)
       ]);
 
       if (rawgScreenshots.status === 'fulfilled') {
+        console.log(`📸 GameMediaService: Added ${rawgScreenshots.value.length} screenshots from RAWG`);
         screenshots.push(...rawgScreenshots.value);
       }
 
       if (rawgVideos.status === 'fulfilled') {
+        console.log(`🎥 GameMediaService: Added ${rawgVideos.value.length} videos from RAWG`);
         videos.push(...rawgVideos.value);
       }
     }

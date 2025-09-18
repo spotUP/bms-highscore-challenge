@@ -115,82 +115,10 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                 </div>
               )}
 
-              {/* Screenshot */}
-              {game.screenshot_url && (
-                <div className="aspect-video w-full overflow-hidden rounded-lg border relative">
-                  <img
-                    src={game.screenshot_url}
-                    alt={`${game.name} screenshot`}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute top-2 left-2">
-                    <Badge variant="secondary" className="text-xs">Screenshot</Badge>
-                  </div>
-                </div>
-              )}
+              {/* Screenshot section removed - now using RAWG via GameMediaGallery */}
             </div>
 
-            {/* Video Section */}
-            {game.video_url && (
-              <div>
-                <h3 className="font-semibold text-lg mb-4">Video</h3>
-                <div className="max-w-2xl">
-                  <div className="aspect-video w-full overflow-hidden rounded-lg border">
-                    {(() => {
-                      // Extract YouTube ID from URL
-                      const extractYouTubeId = (url: string): string | null => {
-                        if (!url || typeof url !== 'string') return null;
-
-                        const cleanUrl = url.trim();
-                        const patterns = [
-                          /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/,
-                          /(?:https?:\/\/)?(?:www\.)?youtu\.be\/([a-zA-Z0-9_-]{11})/,
-                          /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
-                          /(?:https?:\/\/)?(?:www\.)?youtube\.com\/v\/([a-zA-Z0-9_-]{11})/,
-                          /(?:https?:\/\/)?(?:m\.)?youtube\.com\/watch\?.*v=([a-zA-Z0-9_-]{11})/,
-                          /[?&]v=([a-zA-Z0-9_-]{11})/
-                        ];
-
-                        for (const pattern of patterns) {
-                          const match = cleanUrl.match(pattern);
-                          if (match && match[1] && match[1].length === 11) {
-                            return match[1];
-                          }
-                        }
-                        return null;
-                      };
-
-                      const youtubeId = extractYouTubeId(game.video_url);
-                      console.log(`🎬 GameDetailsModal: YouTube ID for "${game.name}": ${youtubeId} from ${game.video_url}`);
-
-                      if (youtubeId) {
-                        const embedUrl = `https://www.youtube.com/embed/${youtubeId}`;
-                        console.log(`📺 GameDetailsModal: Creating iframe with URL: ${embedUrl}`);
-                        return (
-                          <iframe
-                            src={embedUrl}
-                            className="w-full h-full"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                            title={`${game.name} Video`}
-                          />
-                        );
-                      } else {
-                        // Fallback for non-YouTube videos
-                        return (
-                          <video
-                            src={game.video_url}
-                            controls
-                            className="w-full h-full object-contain"
-                            title={`${game.name} Video`}
-                          />
-                        );
-                      }
-                    })()}
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Video section removed - now using RAWG via GameMediaGallery */}
           </div>
 
           {/* Game Details Section */}
