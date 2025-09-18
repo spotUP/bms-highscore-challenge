@@ -70,7 +70,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[76vw] max-h-[95vh] w-full h-full overflow-y-auto">
+      <DialogContent className="max-w-[60vw] max-h-[95vh] w-full h-full overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold pr-8">{game.name}</DialogTitle>
         </DialogHeader>
@@ -293,9 +293,9 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
               </div>
             </div>
 
-            {/* Right Column - YouTube Video */}
+            {/* Right Column - Video or Media Gallery */}
             <div className="lg:col-span-3">
-              {game.video_url && (
+              {game.video_url ? (
                 <div>
                   <h3 className="font-semibold text-xl mb-4">Video</h3>
                   <div className="aspect-[4/3] w-full overflow-hidden rounded-lg border relative">
@@ -313,6 +313,20 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                       <Badge variant="secondary" className="text-xs">Video</Badge>
                     </div>
                   </div>
+                </div>
+              ) : (
+                <div>
+                  <h3 className="font-semibold text-xl mb-4">Media Gallery</h3>
+                  <GameMediaGallery
+                    gameName={game.name}
+                    platform={game.platform_name}
+                    existingMedia={{
+                      screenshot_url: game.screenshot_url,
+                      cover_url: game.cover_url,
+                      logo_url: game.logo_url,
+                      video_url: game.video_url
+                    }}
+                  />
                 </div>
               )}
             </div>
@@ -334,19 +348,22 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
             )}
 
 
-            {/* Enhanced Media Gallery */}
-            <Separator />
-
-            <GameMediaGallery
-              gameName={game.name}
-              platform={game.platform_name}
-              existingMedia={{
-                screenshot_url: game.screenshot_url,
-                cover_url: game.cover_url,
-                logo_url: game.logo_url,
-                video_url: game.video_url
-              }}
-            />
+            {/* Enhanced Media Gallery - only show if there's a video (otherwise it's in the right column) */}
+            {game.video_url && (
+              <>
+                <Separator />
+                <GameMediaGallery
+                  gameName={game.name}
+                  platform={game.platform_name}
+                  existingMedia={{
+                    screenshot_url: game.screenshot_url,
+                    cover_url: game.cover_url,
+                    logo_url: game.logo_url,
+                    video_url: game.video_url
+                  }}
+                />
+              </>
+            )}
 
           </div>
         </div>
