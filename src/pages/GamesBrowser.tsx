@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Search, Filter, Star, Users, Calendar, Gamepad2, Shuffle, Plus, Info, Heart } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { GameLogo } from "@/components/GameLogo";
+import { RAWGGameImage } from "@/components/RAWGGameImage";
 import { GameDetailsModal } from "@/components/GameDetailsModal";
 import { GameRatingDisplay } from "@/components/GameRatingDisplay";
 import { CreateTournamentModal } from "@/components/CreateTournamentModal";
@@ -184,12 +185,28 @@ const GamesBrowser: React.FC = () => {
           logo_url
         `); // Removed count: 'exact' to improve performance
 
-      // Apply search filter - use prefix search for better performance on large datasets
+      // Apply search filter - use flexible search for better discoverability
       if (filters.search && filters.search.length >= 3) {
-        const searchTerm = filters.search.toLowerCase();
-        // Use prefix search (starts with) for better performance with trigram index
-        // Minimum 3 characters - trigram index makes this fast now
-        query = query.ilike('name', `${searchTerm}%`);
+        const searchTerm = filters.search.toLowerCase().trim();
+
+        // Create search variations to handle common punctuation differences
+        const searchVariations = [
+          searchTerm, // Original search
+          searchTerm.replace(/\s+/g, '-'), // spaces to hyphens (punch out -> punch-out)
+          searchTerm.replace(/\s+/g, ''), // remove spaces (punch out -> punchout)
+          searchTerm.replace(/-/g, ' '), // hyphens to spaces (punch-out -> punch out)
+          searchTerm.replace(/[^\w\s]/g, ''), // remove punctuation
+        ];
+
+        // Remove duplicates
+        const uniqueVariations = [...new Set(searchVariations)];
+
+        // Build OR query for multiple search variations
+        const searchConditions = uniqueVariations.map(variation =>
+          `name.ilike.%${variation}%`
+        ).join(',');
+
+        query = query.or(searchConditions);
       }
 
       // Apply platform filter
@@ -202,19 +219,72 @@ const GamesBrowser: React.FC = () => {
         query = query.gte('release_year', filters.yearRange[0]).lte('release_year', filters.yearRange[1]);
       }
 
-      // Apply pagination
-      const startIndex = (currentPage - 1) * gamesPerPage;
-      query = query.range(startIndex, startIndex + gamesPerPage - 1).order('name');
+      // Special case: Show interesting arcade games when no filters are applied
+      const hasActiveFilters = filters.search ||
+                              filters.platform !== 'all' ||
+                              filters.yearRange[0] > 1970 ||
+                              filters.yearRange[1] < 2024 ||
+                              filters.genre !== 'all' ||
+                              filters.minRating > 0 ||
+                              filters.esrbRating !== 'all' ||
+                              filters.cooperative !== 'all';
+
+      if (!hasActiveFilters) {
+        // Show a randomized mix of interesting arcade games
+        const allFeaturedGames = [
+          'Street Fighter', 'Pac-Man', 'Donkey Kong', 'Mortal Kombat', 'Final Fight',
+          'Galaga', 'Centipede', 'Asteroids', 'Space Invaders', 'Frogger',
+          'Ms. Pac-Man', 'Dig Dug', 'Joust', 'Defender', 'Robotron',
+          'Tempest', 'Q*bert', 'Pole Position', 'Tron', 'Zaxxon',
+          'Bubble Bobble', 'Gradius', 'R-Type', 'Contra', 'Metal Slug',
+          'King of Fighters', 'Tekken', 'Double Dragon', 'Golden Axe', 'Gauntlet',
+          'Rampage', 'Paperboy', 'Marble Madness', 'APB', 'Wizard of Wor',
+          'Berzerk', 'Moon Patrol', 'Xevious', 'Phoenix', 'Gyruss'
+        ];
+
+        // Shuffle and select ALL games to maximize results before filtering
+        const shuffledGames = [...allFeaturedGames].sort(() => Math.random() - 0.5);
+
+        // Create OR conditions for featured games
+        const featuredConditions = shuffledGames.map(game =>
+          `name.ilike.%${game.toLowerCase()}%`
+        ).join(',');
+
+        // Apply featured games filter and platform, fetch more results since we'll filter
+        query = query
+          .or(featuredConditions)
+          .eq('platform_name', 'Arcade')
+          .limit(50); // Fetch more games since we'll filter out ones without images
+      }
+
+      // Apply pagination (skip for featured games since we filter afterwards)
+      if (hasActiveFilters) {
+        const startIndex = (currentPage - 1) * gamesPerPage;
+        query = query.range(startIndex, startIndex + gamesPerPage - 1);
+      }
+
+      query = query.order('name');
 
       const { data: gamesData, error: gamesError } = await query;
 
       if (gamesError) throw gamesError;
 
-      setGames(gamesData || []);
+      // For featured games (no active filters), randomize and limit results
+      let finalGamesData = gamesData || [];
+      if (!hasActiveFilters && gamesData) {
+        // Shuffle the results and take only what we need for the page
+        // Note: RAWG fallback will handle images for games without stored images
+        const shuffledGames = [...gamesData].sort(() => Math.random() - 0.5);
+        finalGamesData = shuffledGames.slice(0, gamesPerPage);
+
+        console.log(`🎨 Featured games: ${gamesData.length} found, showing ${finalGamesData.length} (RAWG fallback will handle images)`);
+      }
+
+      setGames(finalGamesData);
 
       // Log how many games have stored logos vs need LaunchBox API
-      const gamesWithLogos = gamesData?.filter(g => g.logo_url) || [];
-      console.log(`📊 Games loaded: ${gamesData?.length || 0}, with stored logos: ${gamesWithLogos.length}, need API: ${(gamesData?.length || 0) - gamesWithLogos.length}`);
+      const gamesWithLogos = finalGamesData?.filter(g => g.logo_url) || [];
+      console.log(`📊 Games loaded: ${finalGamesData?.length || 0}, with stored logos: ${gamesWithLogos.length}, need API: ${(finalGamesData?.length || 0) - gamesWithLogos.length}`);
 
       // Set approximate total for pagination (estimate based on page size)
       if (gamesData && gamesData.length === gamesPerPage) {
@@ -591,21 +661,29 @@ const GamesBrowser: React.FC = () => {
             }`}
             onClick={() => toggleGameSelection(game.id)}
           >
-            {/* Game Logo - Use stored URL or fallback to LaunchBox */}
+            {/* Game Image - Priority: cover_url > screenshot_url > RAWG > logo_url */}
             <div className="relative aspect-video w-full overflow-hidden">
-              {game.logo_url ? (
+              {game.cover_url ? (
                 <img
-                  src={game.logo_url}
-                  alt={`${game.name} logo`}
-                  className="w-full h-full object-contain bg-gray-900 p-2"
+                  src={game.cover_url}
+                  alt={`${game.name} cover`}
+                  className="w-full h-full object-cover"
+                  onError={() => handleImageError(game.id)}
+                />
+              ) : game.screenshot_url ? (
+                <img
+                  src={game.screenshot_url}
+                  alt={`${game.name} screenshot`}
+                  className="w-full h-full object-cover"
                   onError={() => handleImageError(game.id)}
                 />
               ) : (
-                <GameLogo
+                <RAWGGameImage
                   gameName={game.name}
                   className="w-full h-full"
                   onError={() => handleImageError(game.id)}
-                  enableLazyLoading={index >= 8} // First 8 games load immediately for faster UX
+                  enableLazyLoading={index >= 8}
+                  fallbackImageUrl={game.logo_url}
                 />
               )}
 
@@ -789,21 +867,29 @@ const GamesBrowser: React.FC = () => {
                     }`}
                     onClick={() => toggleGameSelection(game.id)}
                   >
-                    {/* Game Logo - Use stored URL or fallback to LaunchBox */}
+                    {/* Game Image - Priority: cover_url > screenshot_url > RAWG > logo_url */}
                     <div className="relative aspect-video w-full overflow-hidden">
-                      {game.logo_url ? (
+                      {game.cover_url ? (
                         <img
-                          src={game.logo_url}
-                          alt={`${game.name} logo`}
-                          className="w-full h-full object-contain bg-gray-900 p-2"
+                          src={game.cover_url}
+                          alt={`${game.name} cover`}
+                          className="w-full h-full object-cover"
+                          onError={() => handleImageError(game.id)}
+                        />
+                      ) : game.screenshot_url ? (
+                        <img
+                          src={game.screenshot_url}
+                          alt={`${game.name} screenshot`}
+                          className="w-full h-full object-cover"
                           onError={() => handleImageError(game.id)}
                         />
                       ) : (
-                        <GameLogo
+                        <RAWGGameImage
                           gameName={game.name}
                           className="w-full h-full"
                           onError={() => handleImageError(game.id)}
-                          enableLazyLoading={index >= 8} // First 8 games load immediately for faster UX
+                          enableLazyLoading={index >= 8}
+                          fallbackImageUrl={game.logo_url}
                         />
                       )}
 
