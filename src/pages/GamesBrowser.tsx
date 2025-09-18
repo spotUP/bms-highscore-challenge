@@ -323,26 +323,23 @@ const GamesBrowser: React.FC = () => {
                               filters.cooperative !== 'all';
 
       if (!hasActualFilters) {
-        // Show a curated mix of interesting arcade games, but allow sorting them
-        const allFeaturedGames = [
-          'Street Fighter', 'Pac-Man', 'Donkey Kong', 'Mortal Kombat', 'Final Fight',
-          'Galaga', 'Centipede', 'Asteroids', 'Space Invaders', 'Frogger',
-          'Ms. Pac-Man', 'Dig Dug', 'Joust', 'Defender', 'Robotron',
-          'Tempest', 'Q*bert', 'Pole Position', 'Tron', 'Zaxxon',
-          'Bubble Bobble', 'Gradius', 'R-Type', 'Contra', 'Metal Slug',
-          'King of Fighters', 'Tekken', 'Double Dragon', 'Golden Axe', 'Gauntlet',
-          'Rampage', 'Paperboy', 'Marble Madness', 'APB', 'Wizard of Wor',
-          'Berzerk', 'Moon Patrol', 'Xevious', 'Phoenix', 'Gyruss'
-        ];
+        // Get truly random games from entire database
+        try {
+          const { data: randomGameIds, error: randomError } = await supabase.rpc('get_random_games', {
+            game_count: gamesPerPage
+          });
 
-        // Use more featured games to get better variety after sorting
-        const featuredGameNames = allFeaturedGames.slice(0, 20);
-
-        // Apply featured games filter and platform, use IN for better performance
-        query = query
-          .in('name', featuredGameNames)
-          .eq('platform_name', 'Arcade')
-          .limit(100); // Fetch more games to have good selection after sorting
+          if (!randomError && randomGameIds && randomGameIds.length > 0) {
+            // Use the random IDs to filter the query - no platform restriction
+            query = query.in('id', randomGameIds.map(g => g.id));
+          } else {
+            // Fallback to all games with limited results
+            query = query.limit(gamesPerPage);
+          }
+        } catch (error) {
+          // Fallback to all games with limited results
+          query = query.limit(gamesPerPage);
+        }
       }
 
       // Apply pagination (skip for featured games since we filter afterwards)
@@ -390,17 +387,8 @@ const GamesBrowser: React.FC = () => {
 
       if (gamesError) throw gamesError;
 
-      // For featured games (no actual filters), randomize and limit results
+      // Use the games data directly since randomization is now handled at query level
       let finalGamesData = gamesData || [];
-      if (!hasActualFilters && gamesData) {
-        // Randomize featured games using Fisher-Yates shuffle for variety on each page load
-        const shuffled = [...gamesData];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-        }
-        finalGamesData = shuffled.slice(0, gamesPerPage);
-      }
 
       // Handle client-side rating sorting with external API data
       if (filters.sortBy === 'rating' && finalGamesData.length > 0) {

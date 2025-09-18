@@ -17,6 +17,8 @@ interface ColoredPlaceholderProps {
 }
 
 const ColoredPlaceholder: React.FC<ColoredPlaceholderProps> = ({ gameName, className }) => {
+  const [isLoaded, setIsLoaded] = React.useState(false);
+
   // Generate a consistent color for each game
   const colors = [
     'bg-indigo-500', // indigo
@@ -32,8 +34,23 @@ const ColoredPlaceholder: React.FC<ColoredPlaceholderProps> = ({ gameName, class
   const colorIndex = gameName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % colors.length;
   const bgColor = colors[colorIndex];
 
+  // Trigger animation after a short delay to match other images
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoaded(true);
+    }, 350); // Slightly longer delay to match skeleton + animation timing
+    return () => clearTimeout(timer);
+  }, [gameName]);
+
   return (
-    <div className={`${className} flex items-center justify-center ${bgColor} text-white`}>
+    <div
+      className={`${className} flex items-center justify-center ${bgColor} text-white`}
+      style={{
+        opacity: isLoaded ? 1 : 0,
+        transform: isLoaded ? 'scale(1)' : 'scale(1.05)',
+        transition: 'opacity 2s ease-out, transform 2s ease-out'
+      }}
+    >
       <div className="text-center p-4">
         <div className="text-lg font-bold mb-1">
           {gameName.length > 20 ? `${gameName.substring(0, 20)}...` : gameName}
@@ -84,13 +101,13 @@ export const RAWGGameImage: React.FC<RAWGGameImageProps> = ({
     return () => observer.disconnect();
   }, [enableLazyLoading]);
 
-  // Add minimum delay for skeleton visibility
+  // Add minimum delay for skeleton visibility - ensures consistent timing for all cards
   useEffect(() => {
     if (isVisible) {
       setMinDelayPassed(false);
       const timer = setTimeout(() => {
         setMinDelayPassed(true);
-      }, 100); // Show skeleton for at least 100ms
+      }, 300); // Show skeleton for at least 300ms for consistent experience
       return () => clearTimeout(timer);
     }
   }, [isVisible, gameName]);
@@ -226,17 +243,23 @@ export const RAWGGameImage: React.FC<RAWGGameImageProps> = ({
         <img
           src={imageUrl}
           alt={alt || `${gameName} screenshot`}
-          className={`${className} object-cover transition-all duration-1000 ease-out transform ${imageLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-105'}`}
+          className={`${className} object-cover`}
           onError={() => {
             setError(true);
             onError?.();
           }}
           onLoad={() => {
-            setImageLoaded(true);
+            // Force a small delay to ensure animation always runs, even for cached images
+            setTimeout(() => {
+              setImageLoaded(true);
+            }, 50);
           }}
           style={{
             maxHeight: '100%',
-            maxWidth: '100%'
+            maxWidth: '100%',
+            opacity: imageLoaded ? 1 : 0,
+            transform: imageLoaded ? 'scale(1)' : 'scale(1.05)',
+            transition: 'opacity 2s ease-out, transform 2s ease-out'
           }}
         />
       </div>
