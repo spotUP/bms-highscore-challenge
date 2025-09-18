@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Search, Filter, Star, Users, Calendar, Gamepad2, Shuffle, Plus, Info, Heart, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
@@ -79,6 +80,7 @@ const GamesBrowser: React.FC = () => {
   const [searchInput, setSearchInput] = useState(''); // Separate state for input field
   const [favoritesSortBy, setFavoritesSortBy] = useState('name');
   const [favoritesSortDirection, setFavoritesSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [pulsingHearts, setPulsingHearts] = useState<Set<string>>(new Set());
 
   const [filters, setFilters] = useState<FilterState>({
     search: '',
@@ -373,7 +375,11 @@ const GamesBrowser: React.FC = () => {
       }
 
       // Apply sorting - skip database sorting for ratings (we'll do client-side)
-      if (filters.sortBy !== 'rating') {
+      // For featured games (no filters), use random ordering for variety on each page load
+      if (!hasActualFilters) {
+        // Use random ordering for featured games to show different games each time
+        query = query.order('id'); // Use stable ordering first
+      } else if (filters.sortBy !== 'rating') {
         query = query.order(orderColumn, { ascending });
       } else {
         // For rating sort, just filter out null ratings for better performance
@@ -384,11 +390,16 @@ const GamesBrowser: React.FC = () => {
 
       if (gamesError) throw gamesError;
 
-      // For featured games (no actual filters), limit results but keep sorting applied
+      // For featured games (no actual filters), randomize and limit results
       let finalGamesData = gamesData || [];
       if (!hasActualFilters && gamesData) {
-        // Take first games from the sorted results (no shuffling, let database sorting work)
-        finalGamesData = gamesData.slice(0, gamesPerPage);
+        // Randomize featured games using Fisher-Yates shuffle for variety on each page load
+        const shuffled = [...gamesData];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        finalGamesData = shuffled.slice(0, gamesPerPage);
       }
 
       // Handle client-side rating sorting with external API data
@@ -499,14 +510,41 @@ const GamesBrowser: React.FC = () => {
 
   const getRandomGames = async (count: number = 10) => {
     try {
-      // Get random games from database
-      const { data: randomGames, error } = await supabase
-        .from('games_database')
-        .select('id')
-        .limit(count)
-        .order('name', { ascending: false }); // This is a simple way to get different results
+      // Use PostgreSQL's RANDOM() function for true randomness from entire database
+      const { data: randomGames, error } = await supabase.rpc('get_random_games', {
+        game_count: count
+      });
 
-      if (error) throw error;
+      if (error) {
+        // Fallback to manual approach if function doesn't exist
+        console.warn('RPC function not available, using fallback method');
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('games_database')
+          .select('id')
+          .order('id') // Use a stable order first
+          .limit(50000); // Get a very large pool from entire database
+
+        if (fallbackError) throw fallbackError;
+
+        if (fallbackData && fallbackData.length > 0) {
+          // Use Fisher-Yates shuffle for true randomness
+          const shuffled = [...fallbackData];
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+          }
+
+          const selected = shuffled.slice(0, count);
+          const gameIds = new Set(selected.map(g => g.id));
+          setSelectedGames(gameIds);
+
+          toast({
+            title: "Random Selection",
+            description: `Selected ${selected.length} random games from ${fallbackData.length} total games`,
+          });
+        }
+        return;
+      }
 
       if (randomGames) {
         const gameIds = new Set(randomGames.map(g => g.id));
@@ -514,7 +552,7 @@ const GamesBrowser: React.FC = () => {
 
         toast({
           title: "Random Selection",
-          description: `Selected ${randomGames.length} random games`,
+          description: `Selected ${randomGames.length} truly random games`,
         });
       }
     } catch (error) {
@@ -540,6 +578,18 @@ const GamesBrowser: React.FC = () => {
   }, []);
 
   const toggleFavorite = useCallback(async (gameId: string) => {
+    // Trigger pulse animation
+    setPulsingHearts(prev => new Set([...prev, gameId]));
+
+    // Remove from pulse set after animation completes
+    setTimeout(() => {
+      setPulsingHearts(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(gameId);
+        return newSet;
+      });
+    }, 600);
+
     // Look for the game in either the main games list or favorites details
     const game = games.find(g => g.id === gameId) || favoriteGamesDetails.find(g => g.id === gameId);
     if (game) {
@@ -704,23 +754,11 @@ const GamesBrowser: React.FC = () => {
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Games Database</h1>
-          <p className="text-muted-foreground">
-            Browse {totalGames.toLocaleString()} games from the LaunchBox database
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={clearFilters} variant="outline">
-            <Filter className="w-4 h-4 mr-2" />
-            Clear Filters
-          </Button>
-          <Button onClick={() => getRandomGames(10)} variant="outline">
-            <Shuffle className="w-4 h-4 mr-2" />
-            Random 10
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold">Games Database</h1>
+        <p className="text-muted-foreground">
+          Browse {totalGames.toLocaleString()} games from the LaunchBox database
+        </p>
       </div>
 
       {/* Main Tabs */}
@@ -740,7 +778,19 @@ const GamesBrowser: React.FC = () => {
           {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Filters</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg">Filters</CardTitle>
+            <div className="flex gap-2">
+              <Button onClick={clearFilters} variant="outline" size="sm">
+                <Filter className="w-4 h-4 mr-2" />
+                Clear Filters
+              </Button>
+              <Button onClick={() => getRandomGames(10)} variant="outline" size="sm">
+                <Shuffle className="w-4 h-4 mr-2" />
+                Random 10
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="basic" className="w-full">
@@ -935,7 +985,7 @@ const GamesBrowser: React.FC = () => {
       </Card>
 
       {/* Results Summary */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mt-6">
         <div className="text-sm text-muted-foreground">
           Showing {((currentPage - 1) * gamesPerPage) + 1}-{Math.min(currentPage * gamesPerPage, totalGames)} of {totalGames.toLocaleString()} games
           {totalPages > 1 && (
@@ -1022,13 +1072,20 @@ const GamesBrowser: React.FC = () => {
                   toggleFavorite(game.id);
                 }}
               >
-                <Heart
-                  className={`w-5 h-5 ${
-                    favoriteGameIds.has(game.id)
-                      ? 'text-red-500 fill-red-500'
-                      : 'text-white'
-                  }`}
-                />
+                <div className="relative">
+                  <Heart
+                    className={`w-5 h-5 ${
+                      favoriteGameIds.has(game.id)
+                        ? 'text-red-500 fill-red-500'
+                        : 'text-white'
+                    }`}
+                  />
+                  {pulsingHearts.has(game.id) && (
+                    <Heart
+                      className="absolute top-0 left-0 w-5 h-5 text-red-500 fill-red-500 heart-pulse pointer-events-none"
+                    />
+                  )}
+                </div>
               </button>
 
               {selectedGames.has(game.id) && (
@@ -1289,13 +1346,20 @@ const GamesBrowser: React.FC = () => {
                           toggleFavorite(game.id);
                         }}
                       >
-                        <Heart
-                          className={`w-5 h-5 ${
-                            favoriteGameIds.has(game.id)
-                              ? 'text-red-500 fill-red-500'
-                              : 'text-white'
-                          }`}
-                        />
+                        <div className="relative">
+                          <Heart
+                            className={`w-5 h-5 ${
+                              favoriteGameIds.has(game.id)
+                                ? 'text-red-500 fill-red-500'
+                                : 'text-white'
+                            }`}
+                          />
+                          {pulsingHearts.has(game.id) && (
+                            <Heart
+                              className="absolute top-0 left-0 w-5 h-5 text-red-500 fill-red-500 heart-pulse pointer-events-none"
+                            />
+                          )}
+                        </div>
                       </button>
 
                       {selectedGames.has(game.id) && (

@@ -124,16 +124,12 @@ export const GameRatingDisplay: React.FC<GameRatingDisplayProps> = ({
         </div>
 
         {/* Confidence Badge */}
-        <Badge
-          variant={aggregated.confidence === 'high' ? 'default' :
-                  aggregated.confidence === 'medium' ? 'secondary' : 'outline'}
-          className="text-xs"
-        >
-          {aggregated.confidence === 'high' && <Award className="w-3 h-3 mr-1" />}
-          {aggregated.confidence === 'medium' && <TrendingUp className="w-3 h-3 mr-1" />}
-          {aggregated.confidence === 'low' && <Users className="w-3 h-3 mr-1" />}
-          {aggregated.confidence} confidence
-        </Badge>
+        {aggregated.confidence === 'low' && (
+          <Badge variant="outline" className="text-xs">
+            <Users className="w-3 h-3 mr-1" />
+            low confidence
+          </Badge>
+        )}
 
         {/* Source Count */}
         <span className="text-sm text-muted-foreground">
