@@ -85,7 +85,10 @@ export const GameLogo: React.FC<GameLogoProps> = ({
       setError(false);
 
       try {
-        const url = await launchBoxService.getClearLogo(gameName);
+        // Use high priority for immediately visible games, low priority for lazy-loaded ones
+        const priority = !enableLazyLoading ? 'high' : 'low'; // Immediate loads get high priority
+        console.log(`🚀 GameLogo: Requesting ${priority} priority logo for "${gameName}" (lazy: ${enableLazyLoading})`);
+        const url = await launchBoxService.getClearLogo(gameName, priority);
         setLogoUrl(url);
 
         if (!url) {
@@ -110,15 +113,18 @@ export const GameLogo: React.FC<GameLogoProps> = ({
     }
   }, [gameName, isVisible]);
 
-  // Show loading state while fetching logo or waiting for visibility
+  // Show progressive loading state with game name
   if (isLoading || !isVisible) {
     return (
       <div ref={elementRef} className={`${className} flex items-center justify-center bg-gray-200 text-gray-500`}>
-        <div className="text-center p-2">
+        <div className="text-center p-2 max-w-full overflow-hidden">
           {isVisible ? (
             <>
-              <div className="w-3 h-3 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin mx-auto mb-1"></div>
-              <div className="text-xs opacity-75">Loading logo...</div>
+              <div className="w-3 h-3 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin mx-auto mb-2"></div>
+              <div className="text-xs font-medium mb-1 truncate px-1" title={gameName}>
+                {gameName.length > 15 ? `${gameName.substring(0, 15)}...` : gameName}
+              </div>
+              <div className="text-xs opacity-60">Loading logo...</div>
             </>
           ) : (
             <div className="text-xs opacity-50">•••</div>

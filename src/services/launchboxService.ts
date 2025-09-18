@@ -36,11 +36,16 @@ class LaunchBoxService {
     console.log(`📡 API calls will be ${this.corsProxy ? 'PROXIED via ' + this.corsProxy.replace('https://api.allorigins.win/get?url=', 'AllOrigins CORS proxy') : 'DIRECT'}`);
   }
 
-  // Rate limiting
-  private requestQueue: Array<() => Promise<void>> = [];
-  private isProcessingQueue = false;
+  // Priority-based rate limiting system
+  private priorityQueue: Array<{ fn: () => Promise<void>; priority: 'high' | 'low' }> = [];
+  private lowPriorityQueue: Array<() => Promise<void>> = [];
+  private isProcessingPriorityQueue = false;
+  private isProcessingLowPriorityQueue = false;
   private lastRequestTime = 0;
-  private minRequestInterval = 100; // Further reduced to 100ms for faster loading
+  private priorityRequestInterval = 25; // Very fast for visible games
+  private lowPriorityRequestInterval = 100; // Normal speed for off-screen games
+  private maxConcurrentPriorityRequests = 4; // Allow parallel processing
+  private activePriorityRequests = 0;
 
   // Circuit breaker to stop making requests when API is overloaded
   private circuitBreakerFailures = 0;
@@ -87,54 +92,98 @@ class LaunchBoxService {
   }
 
   /**
-   * Add a request to the queue and process it with rate limiting
+   * Add a request to the priority queue with parallel processing for high priority
    */
-  private async queueRequest<T>(requestFn: () => Promise<T>): Promise<T> {
+  private async queueRequest<T>(requestFn: () => Promise<T>, priority: 'high' | 'low' = 'low'): Promise<T> {
     return new Promise((resolve, reject) => {
-      this.requestQueue.push(async () => {
+      const wrappedFn = async () => {
+        if (priority === 'high') {
+          this.activePriorityRequests++;
+        }
         try {
           const result = await requestFn();
           resolve(result);
         } catch (error) {
           reject(error);
+        } finally {
+          if (priority === 'high') {
+            this.activePriorityRequests--;
+            this.processPriorityQueue(); // Try to process next high priority item
+          }
         }
-      });
-      this.processQueue();
+      };
+
+      if (priority === 'high') {
+        this.priorityQueue.push({ fn: wrappedFn, priority });
+        this.processPriorityQueue();
+      } else {
+        this.lowPriorityQueue.push(wrappedFn);
+        this.processLowPriorityQueue();
+      }
     });
   }
 
   /**
-   * Process the request queue with rate limiting
+   * Process high priority requests with parallel processing
    */
-  private async processQueue(): Promise<void> {
-    if (this.isProcessingQueue || this.requestQueue.length === 0) {
+  private async processPriorityQueue(): Promise<void> {
+    // Allow multiple concurrent high priority requests
+    while (this.priorityQueue.length > 0 && this.activePriorityRequests < this.maxConcurrentPriorityRequests) {
+      const item = this.priorityQueue.shift();
+      if (item) {
+        // Minimal delay for priority requests
+        const now = Date.now();
+        const timeSinceLastRequest = now - this.lastRequestTime;
+
+        if (timeSinceLastRequest < this.priorityRequestInterval) {
+          await new Promise(resolve => setTimeout(resolve, this.priorityRequestInterval - timeSinceLastRequest));
+        }
+
+        this.lastRequestTime = Date.now();
+        // Execute without awaiting to allow parallel processing
+        item.fn();
+      }
+    }
+  }
+
+  /**
+   * Process low priority requests sequentially
+   */
+  private async processLowPriorityQueue(): Promise<void> {
+    if (this.isProcessingLowPriorityQueue || this.lowPriorityQueue.length === 0) {
       return;
     }
 
-    this.isProcessingQueue = true;
+    this.isProcessingLowPriorityQueue = true;
 
-    while (this.requestQueue.length > 0) {
+    while (this.lowPriorityQueue.length > 0) {
+      // Give priority to high priority requests
+      if (this.priorityQueue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 50)); // Brief pause to let priority requests process
+        continue;
+      }
+
       const now = Date.now();
       const timeSinceLastRequest = now - this.lastRequestTime;
 
-      if (timeSinceLastRequest < this.minRequestInterval) {
-        await new Promise(resolve => setTimeout(resolve, this.minRequestInterval - timeSinceLastRequest));
+      if (timeSinceLastRequest < this.lowPriorityRequestInterval) {
+        await new Promise(resolve => setTimeout(resolve, this.lowPriorityRequestInterval - timeSinceLastRequest));
       }
 
-      const request = this.requestQueue.shift();
+      const request = this.lowPriorityQueue.shift();
       if (request) {
         this.lastRequestTime = Date.now();
         await request();
       }
     }
 
-    this.isProcessingQueue = false;
+    this.isProcessingLowPriorityQueue = false;
   }
 
   /**
    * Make a rate-limited fetch request with retry logic
    */
-  private async makeRequest(url: string, retries = 1): Promise<Response> { // Reduced retries from 2 to 1
+  private async makeRequest(url: string, retries = 1, priority: 'high' | 'low' = 'low'): Promise<Response> { // Added priority parameter
     // Check circuit breaker first
     if (this.checkCircuitBreaker()) {
       throw new Error('Circuit breaker is open - API temporarily unavailable');
@@ -188,13 +237,13 @@ class LaunchBoxService {
                        'Network Error';
       this.recordResult(false, errorType);
       throw lastError || new Error('Max retries exceeded');
-    });
+    }, priority);
   }
 
   /**
    * Search for games on LaunchBox and extract clear logos
    */
-  async searchGames(gameName: string, limit: number = 10): Promise<LaunchBoxSearchResult> {
+  async searchGames(gameName: string, limit: number = 10, priority: 'high' | 'low' = 'low'): Promise<LaunchBoxSearchResult> {
     try {
       // Search for the game using the correct URL structure
       const searchUrl = `${this.baseUrl}/games/results/${encodeURIComponent(gameName)}`;
@@ -202,7 +251,7 @@ class LaunchBoxService {
 
       console.log('Searching LaunchBox for:', gameName, 'at', searchUrl, this.corsProxy ? '(via proxy)' : '(direct)');
 
-      const response = await this.makeRequest(finalUrl);
+      const response = await this.makeRequest(finalUrl, 1, priority);
       if (!response.ok) {
         throw new Error(`LaunchBox search failed: ${response.status}`);
       }
@@ -233,7 +282,7 @@ class LaunchBoxService {
       for (let i = 0; i < limitedGames.length; i += batchSize) {
         const batch = limitedGames.slice(i, i + batchSize);
         const batchResults = await Promise.allSettled(
-          batch.map(game => this.fetchGameClearLogo(game))
+          batch.map(game => this.fetchGameClearLogo(game, priority))
         );
         gamesWithLogos.push(...batchResults);
       }
@@ -289,14 +338,14 @@ class LaunchBoxService {
   /**
    * Fetch clear logo for a specific game
    */
-  private async fetchGameClearLogo(game: Partial<LaunchBoxGame>): Promise<LaunchBoxGame | null> {
+  private async fetchGameClearLogo(game: Partial<LaunchBoxGame>, priority: 'high' | 'low' = 'low'): Promise<LaunchBoxGame | null> {
     if (!game.id || !game.name) return null;
 
     try {
       const gameUrl = `${this.baseUrl}/games/details/${game.id}`;
       const finalUrl = this.corsProxy ? `${this.corsProxy}${encodeURIComponent(gameUrl)}` : gameUrl;
 
-      const response = await this.makeRequest(finalUrl);
+      const response = await this.makeRequest(finalUrl, 1, priority);
       if (!response.ok) {
         console.warn(`Failed to fetch game details for ${game.name}: ${response.status}`);
         return null;
@@ -418,7 +467,7 @@ class LaunchBoxService {
   /**
    * Get clear logo for a specific game by name (simplified interface)
    */
-  async getClearLogo(gameName: string): Promise<string | null> {
+  async getClearLogo(gameName: string, priority: 'high' | 'low' = 'low'): Promise<string | null> {
     try {
       // Check cache first
       const cacheKey = gameName.toLowerCase();
@@ -439,7 +488,7 @@ class LaunchBoxService {
       }
 
       // Create and store the pending request
-      const requestPromise = this.fetchLogoFromAPI(gameName, cacheKey);
+      const requestPromise = this.fetchLogoFromAPI(gameName, cacheKey, priority);
       this.pendingRequests.set(cacheKey, requestPromise);
 
       const logoUrl = await requestPromise;
@@ -457,8 +506,8 @@ class LaunchBoxService {
   /**
    * Internal method to fetch logo from API
    */
-  private async fetchLogoFromAPI(gameName: string, cacheKey: string): Promise<string | null> {
-    const results = await this.searchGames(gameName, 1);
+  private async fetchLogoFromAPI(gameName: string, cacheKey: string, priority: 'high' | 'low' = 'low'): Promise<string | null> {
+    const results = await this.searchGames(gameName, 1, priority);
     const logoUrl = results.games[0]?.clearLogoUrl || null;
 
     // Cache the result
