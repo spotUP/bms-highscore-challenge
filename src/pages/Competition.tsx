@@ -32,59 +32,42 @@ const checkTournamentComplete = (matches: TournamentMatch[], bracketType: 'singl
     }
 
     if (!grandFinal.winner_participant_id) {
-      console.log('Single elimination - Grand Final not completed yet');
       return false;
     }
 
     // CRITICAL FIX: Ensure Grand Final has both participants before considering it complete
     if (!grandFinal.participant1_id || !grandFinal.participant2_id) {
-      console.log('Single elimination - Grand Final missing participants:', {
-        participant1_id: grandFinal.participant1_id,
-        participant2_id: grandFinal.participant2_id
-      });
       return false;
     }
 
-    console.log('Single elimination - Tournament is COMPLETE!');
     return true;
   } else {
     // Double elimination: more complex logic
     const grandFinal = matches.find(m => m.round === 1000);
     const bracketReset = matches.find(m => m.round === 1001);
 
-    console.log('Double elimination - Grand Final:', grandFinal);
-    console.log('Double elimination - Bracket Reset:', bracketReset);
 
     if (!grandFinal) {
-      console.log('Double elimination - No Grand Final exists yet');
       return false;
     }
 
     if (!grandFinal.winner_participant_id) {
-      console.log('Double elimination - Grand Final not completed yet');
       return false;
     }
 
     // CRITICAL FIX: Ensure Grand Final has both participants before considering it complete
     if (!grandFinal.participant1_id || !grandFinal.participant2_id) {
-      console.log('Double elimination - Grand Final missing participants:', {
-        participant1_id: grandFinal.participant1_id,
-        participant2_id: grandFinal.participant2_id
-      });
       return false;
     }
 
     if (!bracketReset) {
-      console.log('Double elimination - No bracket reset, Grand Final winner is champion!');
       return true;
     }
 
     if (bracketReset.winner_participant_id) {
-      console.log('Double elimination - Bracket reset completed, tournament is COMPLETE!');
       return true;
     }
 
-    console.log('Double elimination - Bracket reset exists but not completed yet');
     return false;
   }
 };
@@ -141,7 +124,6 @@ const Competition: React.FC = () => {
           setSelected(tournament);
         } else {
           // Tournament not found in list, create a placeholder to load it directly
-          console.log('Tournament not found in list, creating placeholder for ID:', tournamentId);
           setSelected({
             id: tournamentId,
             name: 'Loading Tournament...',
@@ -155,7 +137,6 @@ const Competition: React.FC = () => {
         }
       } else {
         // No tournaments loaded yet, create placeholder
-        console.log('No tournaments loaded, creating placeholder for ID:', tournamentId);
         setSelected({
           id: tournamentId,
           name: 'Loading Tournament...',
@@ -183,7 +164,6 @@ const Competition: React.FC = () => {
 
         // Auto-generate bracket if there are players but no matches
         if (data.players.length >= 2 && data.matches.length === 0) {
-          console.log('Auto-generating bracket for tournament with players but no matches');
           toast({
             title: 'Generating Bracket',
             description: 'Creating tournament bracket structure...',
@@ -223,19 +203,15 @@ const Competition: React.FC = () => {
   // Real-time subscriptions + polling backup for live updates
   useEffect(() => {
     if (!selected) {
-      console.log('No selected tournament, skipping subscriptions');
       return;
     }
 
-    console.log('Setting up real-time subscriptions + polling for tournament:', selected.id);
-    console.log('Supabase client available:', !!supabase);
 
     // Backup polling mechanism in case real-time subscriptions don't work
     let pollInterval: NodeJS.Timeout | null = null;
     let lastKnownMatchCount = matches.length;
 
     const startPolling = () => {
-      console.log('Starting polling backup (every 3 seconds)');
       pollInterval = setInterval(async () => {
         try {
           const data = await getTournamentData(selected.id);
@@ -245,7 +221,6 @@ const Competition: React.FC = () => {
                             JSON.stringify(data.players) !== JSON.stringify(participants);
 
           if (hasChanges) {
-            console.log('Polling detected changes, updating...');
             setMatches(data.matches);
             setParticipants(data.players);
           }
@@ -261,7 +236,6 @@ const Competition: React.FC = () => {
     // Subscribe to bracket matches changes
     // Try without tournament filter first to see if filtering is the issue
     const channelName = `bracket_matches_global_${selected.id}`;
-    console.log('Creating subscription channel:', channelName);
 
     let matchesSubscription;
     try {
@@ -276,11 +250,9 @@ const Competition: React.FC = () => {
             // Remove filter to test if that's the issue
           },
           async (payload) => {
-          console.log('Bracket match updated:', payload);
 
           // Filter to only handle changes for our tournament
           if (payload.new && payload.new.tournament_id !== selected.id) {
-            console.log('Ignoring match update for different tournament:', payload.new.tournament_id);
             return;
           }
 
@@ -300,7 +272,6 @@ const Competition: React.FC = () => {
             if (isTournamentComplete) {
               const winner = getTournamentWinner(data.matches, data.players);
               if (winner) {
-                console.log('Tournament completed via subscription! Winner:', winner.name);
                 // Center on final match first, then start zoom animation
                 bracketViewRef.current?.centerOnFinal();
 
@@ -322,7 +293,6 @@ const Competition: React.FC = () => {
         }
       )
         .subscribe((status) => {
-          console.log('Matches subscription status:', status);
         });
     } catch (error) {
       console.error('🔴 Competition: Failed to create matches subscription:', error);
@@ -340,7 +310,6 @@ const Competition: React.FC = () => {
           filter: `tournament_id=eq.${selected.id}`,
         },
         async (payload) => {
-          console.log('Bracket player updated:', payload);
           // Reload tournament data when players change
           try {
             const data = await getTournamentData(selected.id);
@@ -364,7 +333,6 @@ const Competition: React.FC = () => {
           filter: `id=eq.${selected.id}`,
         },
         async (payload) => {
-          console.log('Tournament updated:', payload);
           // Update tournament status in local state
           if (payload.new && payload.new.status) {
             setSelected(prev => prev ? { ...prev, status: payload.new.status } : prev);
@@ -374,7 +342,6 @@ const Competition: React.FC = () => {
       .subscribe();
 
     return () => {
-      console.log('Cleaning up subscriptions and polling');
       if (pollInterval) clearInterval(pollInterval);
       if (matchesSubscription) matchesSubscription.unsubscribe();
       playersSubscription.unsubscribe();
@@ -383,7 +350,6 @@ const Competition: React.FC = () => {
   }, [selected, getTournamentData, matches, participants]);
 
   const handleReportWinner = async (matchId: string, winnerId: string) => {
-    console.log('Reporting winner (optimistic):', { matchId, winnerId });
 
     // Store original matches for potential rollback
     const originalMatches = [...matches];
@@ -391,7 +357,6 @@ const Competition: React.FC = () => {
     // Optimistic update: immediately update the match in local state
     const optimisticMatches = matches.map(match => {
       if (match.id === matchId) {
-        console.log('Optimistically updating match:', matchId, 'winner:', winnerId);
         return {
           ...match,
           winner_participant_id: winnerId,
@@ -407,11 +372,9 @@ const Competition: React.FC = () => {
     try {
       // Now perform the actual database update in background
       const success = await reportWinner(matchId, winnerId);
-      console.log('Background report winner result:', success);
 
       if (!success) {
         // Rollback optimistic update on failure
-        console.log('Rolling back optimistic update');
         setMatches(originalMatches);
         toast({
           title: "Error",
@@ -423,7 +386,6 @@ const Competition: React.FC = () => {
 
       if (selected) {
         // Get fresh data to ensure we have all updates (like auto-advancement)
-        console.log('Getting fresh data after successful report...');
         try {
           const data = await getTournamentData(selected.id);
           setMatches(data.matches);
@@ -434,7 +396,6 @@ const Competition: React.FC = () => {
           if (isTournamentComplete) {
             const winner = getTournamentWinner(data.matches, data.players);
             if (winner) {
-              console.log('Tournament completed! Winner:', winner.name);
               // Center on final match first, then start zoom animation
               bracketViewRef.current?.centerOnFinal();
 
