@@ -2,12 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Gamepad2, Trophy, Users, Zap } from "lucide-react";
+import { Gamepad2, Trophy, Users, Zap, Play, BookOpen, HelpCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useHelpGuide } from "@/hooks/useHelpGuide";
 
 export const WelcomeModal: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const { user } = useAuth();
+  const { startTour, tours } = useHelpGuide();
+
+  console.log('🎪 WelcomeModal render - tours available:', tours.length, 'startTour function:', typeof startTour);
 
   useEffect(() => {
     if (user) {
@@ -26,6 +30,37 @@ export const WelcomeModal: React.FC = () => {
       localStorage.setItem(`welcome_seen_${user.id}`, 'true');
     }
     setIsOpen(false);
+  };
+
+  const handleStartTour = () => {
+    try {
+      console.log('🎯 WelcomeModal: Starting tour...');
+      console.log('Step 1: About to check tours.length');
+      console.log('Available tours count:', tours.length);
+
+      console.log('Step 2: About to find welcome tour');
+      const welcomeTour = tours.find(tour => tour.id === 'welcome');
+
+      console.log('Step 3: Found tour:', !!welcomeTour);
+      console.log('Found welcome tour:', !!welcomeTour);
+
+      if (welcomeTour) {
+        console.log('Step 4: About to call startTour');
+        console.log('🚀 Starting welcome tour with', welcomeTour.steps.length, 'steps');
+        startTour(welcomeTour);
+        console.log('✅ Called startTour, closing modal');
+        handleClose();
+      } else {
+        console.error('❌ Welcome tour not found!');
+        console.log('Available tour names:', tours.map(t => `${t.name} (${t.id})`).join(', '));
+      }
+    } catch (error) {
+      console.error('❌ Error in handleStartTour:', error);
+    }
+  };
+
+  const handleSkipTour = () => {
+    handleClose();
   };
 
   const features = [
@@ -91,19 +126,37 @@ export const WelcomeModal: React.FC = () => {
 
           <div className="text-center space-y-4">
             <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-              <h3 className="font-semibold text-white mb-2">Getting Started</h3>
+              <h3 className="font-semibold text-white mb-2">Ready to Get Started?</h3>
               <p className="text-sm text-gray-400">
-                Explore the tournaments available, pick your favorite games, and start submitting your high scores.
-                The more you play, the more achievements you'll unlock!
+                Take our interactive tour to learn the platform, or jump right in and start competing!
               </p>
             </div>
 
-            <Button
-              onClick={handleClose}
-              className="bg-arcade-neonCyan hover:bg-arcade-neonCyan/80 text-black font-semibold px-8 py-2"
-            >
-              Let's Get Started!
-            </Button>
+            <div className="flex gap-3 justify-center">
+              <Button
+                onClick={() => {
+                  console.log('🔥 BUTTON CLICKED - Take the Tour');
+                  handleStartTour();
+                }}
+                className="bg-arcade-neonCyan hover:bg-arcade-neonCyan/80 text-black font-semibold px-6 py-2 flex items-center gap-2"
+              >
+                <Play size={16} />
+                Take the Tour
+              </Button>
+
+              <Button
+                onClick={handleSkipTour}
+                variant="outline"
+                className="border-gray-600 text-gray-300 hover:bg-gray-800 px-6 py-2 flex items-center gap-2"
+              >
+                <BookOpen size={16} />
+                Skip Tour
+              </Button>
+            </div>
+
+            <div className="text-xs text-gray-500">
+              You can always access help later through the menu
+            </div>
           </div>
         </div>
       </DialogContent>

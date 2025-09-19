@@ -19,9 +19,20 @@ const originalConsole = {
 
 function captureLog(level: string, ...args: any[]) {
   const timestamp = new Date().toISOString()
-  const message = args.map(arg =>
-    typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-  ).join(' ')
+  const message = args.map(arg => {
+    if (typeof arg === 'object' && arg !== null) {
+      try {
+        return JSON.stringify(arg, null, 2)
+      } catch (error) {
+        // Handle circular references and other JSON.stringify errors
+        if (arg.constructor && arg.constructor.name) {
+          return `[${arg.constructor.name} object]`
+        }
+        return '[Object]'
+      }
+    }
+    return String(arg)
+  }).join(' ')
 
   const logEntry = `[${timestamp}] ${level.toUpperCase()}: ${message}`
   consoleLogs.push(logEntry)
@@ -31,10 +42,8 @@ function captureLog(level: string, ...args: any[]) {
     consoleLogs.shift()
   }
 
-  // Only call original console method for errors and warnings - suppress logs and info for cleaner console
-  if (level === 'error' || level === 'warn') {
-    originalConsole[level as keyof typeof originalConsole](...args)
-  }
+  // Temporarily show all console output for debugging
+  originalConsole[level as keyof typeof originalConsole](...args)
 }
 
 // Override console methods

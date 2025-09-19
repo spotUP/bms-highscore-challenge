@@ -8,8 +8,11 @@ const corsHeaders = {
 };
 
 interface ManageUsersRequest {
-  action: 'health' | 'list' | 'delete';
+  action: 'health' | 'list' | 'delete' | 'create-test';
   user_id?: string;
+  email?: string;
+  password?: string;
+  role?: string;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -22,6 +25,9 @@ const handler = async (req: Request): Promise<Response> => {
     // Accept health via GET or POST
     let action: ManageUsersRequest["action"] | undefined = undefined;
     let user_id: string | undefined = undefined;
+    let email: string | undefined = undefined;
+    let password: string | undefined = undefined;
+    let role: string | undefined = undefined;
 
     if (req.method === 'GET') {
       const url = new URL(req.url);
@@ -32,6 +38,9 @@ const handler = async (req: Request): Promise<Response> => {
         const body = await req.json();
         action = body?.action;
         user_id = body?.user_id;
+        email = body?.email;
+        password = body?.password;
+        role = body?.role;
       } catch (e) {
         // If JSON parse fails, fall back to health
         action = 'health';
@@ -122,6 +131,51 @@ const handler = async (req: Request): Promise<Response> => {
       return new Response(JSON.stringify({ 
         success: true,
         message: "User deleted successfully"
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          ...corsHeaders,
+        },
+      });
+
+    } else if (action === 'create-test') {
+      // Generate test user credentials
+      const testEmail = email || `test-user-${Date.now()}@example.com`;
+      const testPassword = password || 'TestPassword123!';
+      const userRole = role || 'user';
+
+      // Create the user with admin API (this bypasses email confirmation)
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: testEmail,
+        password: testPassword,
+        email_confirm: true, // Auto-confirm the email
+        user_metadata: {
+          created_for_testing: true
+        }
+      });
+
+      if (authError) {
+        throw new Error(`Failed to create test user: ${authError.message}`);
+      }
+
+      // Add role to user_roles table
+      await supabase
+        .from('user_roles')
+        .insert({
+          user_id: authData.user.id,
+          role: userRole
+        });
+
+      return new Response(JSON.stringify({
+        success: true,
+        user: {
+          id: authData.user.id,
+          email: authData.user.email,
+          password: testPassword, // Include password in response for testing
+          role: userRole
+        },
+        message: `Test user created successfully with email: ${testEmail} and password: ${testPassword}`
       }), {
         status: 200,
         headers: {

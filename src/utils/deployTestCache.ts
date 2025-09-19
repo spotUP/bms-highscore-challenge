@@ -9,7 +9,7 @@ export const storeDeployTestResults = async () => {
       // Check if this is old format data (boolean values instead of objects)
       const hasOldFormat = cachedData.results &&
         Object.values(cachedData.results).some((result: any) =>
-          typeof result === 'boolean' || !result.hasOwnProperty('success')
+          typeof result === 'boolean' || !Object.prototype.hasOwnProperty.call(result, 'success')
         );
 
       // If old format detected, clear cache and force refresh

@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { Menu, X, Home, BarChart3, Trophy, Brackets, Settings, LogOut } from "lucide-react";
+import { Menu, X, Home, BarChart3, Trophy, Brackets, Settings, LogOut, HelpCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLocation } from "react-router-dom";
 import PublicTournamentBrowser from "@/components/PublicTournamentBrowser";
+import HelpMenu from "@/components/HelpMenu";
+import { useHelpGuide } from "@/hooks/useHelpGuide";
 
 interface DesktopHamburgerMenuProps {
   animatedNavigate: (path: string) => void;
@@ -21,6 +23,7 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut, isAdmin } = useAuth();
   const location = useLocation();
+  const { startTour, tours } = useHelpGuide();
 
   const isCurrentPage = (path: string) => location.pathname === path;
 
@@ -44,12 +47,24 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
     }, 150);
   };
 
+  const handleTakeTour = () => {
+    console.log('🎭 Admin hamburger menu: Take the Tour clicked');
+    const welcomeTour = tours.find(tour => tour.id === 'welcome');
+    if (welcomeTour) {
+      console.log('🎭 Found welcome tour, starting...');
+      startTour(welcomeTour);
+      setIsOpen(false); // Close the menu
+    } else {
+      console.error('❌ Welcome tour not found in hamburger menu');
+    }
+  };
+
   // Close menu when location changes (prevents flickering during navigation)
   useEffect(() => {
     setIsOpen(false);
   }, [location.pathname]);
 
-  console.log('DesktopHamburgerMenu render, isOpen:', isOpen, 'user:', !!user);
+  console.log('DesktopHamburgerMenu render, isOpen:', isOpen, 'user:', !!user, 'isAdmin:', isAdmin, 'adminPages:', adminPages.length);
 
   const renderMenuItem = (path: string, label: string, index: number = 0) => {
     if (isCurrentPage(path)) return null;
@@ -100,6 +115,14 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
     const mainPages = pages.filter(p => p.category === 'main');
     const adminPages = pages.filter(p => p.category === 'admin');
 
+    console.log('🎭 DesktopHamburgerMenu renderSmartMenu:', {
+      isAdmin,
+      mainPagesCount: mainPages.length,
+      adminPagesCount: adminPages.length,
+      adminPagesOrIsAdmin: adminPages.length > 0 || isAdmin,
+      tours: tours.length
+    });
+
     return (
       <>
         <div className={`text-gray-300 text-sm mb-3 border-b border-white/20 pb-2 transition-all duration-300 ${
@@ -133,7 +156,7 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
         })}
 
         {/* Admin Section */}
-        {adminPages.length > 0 && (
+        {(adminPages.length > 0 || isAdmin) && (
           <>
             <div className="border-t border-white/20 my-3 pt-3">
               <div className="text-xs text-gray-400 mb-3 px-2">Administration</div>
@@ -155,6 +178,26 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
                 </Button>
               );
             })}
+
+            {/* Take the Tour button for admins */}
+            {isAdmin ? (
+              <Button
+                variant="ghost"
+                onClick={handleTakeTour}
+                className="w-full justify-start text-left transition-all duration-200 hover:scale-105 hover:bg-cyan-500/10 hover:shadow-sm hover:translate-x-1"
+                style={{ animationDelay: `${itemIndex++ * 50}ms` }}
+              >
+                <div className={`flex items-center gap-3 transition-all duration-200 ${isOpen ? 'animate-fade-in-up' : ''} text-cyan-200`}>
+                  <HelpCircle size={16} className="text-cyan-300" />
+                  <span>Take the Tour</span>
+                </div>
+              </Button>
+            ) : (
+              <>
+                {console.log('🎭 Take the Tour button NOT rendered - isAdmin is false:', isAdmin)}
+                {null}
+              </>
+            )}
           </>
         )}
 
@@ -201,6 +244,7 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
         variant="outline"
         size="sm"
         onClick={handleMenuToggle}
+        data-testid="desktop-menu-button"
         className={`theme-button transition-all duration-300 hover:scale-105 hover:shadow-md ${
           isOpen ? 'bg-white/10 border-white/40 shadow-lg scale-105' : ''
         }`}
@@ -222,6 +266,13 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
           <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent rounded-xl pointer-events-none" />
 
           {user ? renderAuthenticatedMenu() : renderUnauthenticatedMenu()}
+
+          {/* Help Menu for authenticated users */}
+          {user && (
+            <div className="border-t border-white/20 my-3 pt-3">
+              <HelpMenu onClose={() => setIsOpen(false)} />
+            </div>
+          )}
 
           {rightActions && (
             <div className="pt-2 border-t border-white/20 mt-2 animate-fade-in">

@@ -176,6 +176,44 @@ const UserManagement: React.FC = () => {
     }
   };
 
+  const createTestUser = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('manage-users', {
+        body: {
+          action: 'create-test'
+        }
+      });
+
+      if (error) throw error;
+
+      if (data && data.user) {
+        toast({
+          title: "✅ Test User Created",
+          description: (
+            <div className="space-y-1">
+              <div><strong>Email:</strong> {data.user.email}</div>
+              <div><strong>Password:</strong> {data.user.password}</div>
+              <div className="text-xs text-gray-400 mt-2">
+                User is ready to login immediately (no email confirmation needed)
+              </div>
+            </div>
+          ),
+          duration: 10000, // Show for 10 seconds so user can copy credentials
+        });
+        loadUsers();
+      } else {
+        throw new Error('Test user creation failed - no user data returned');
+      }
+    } catch (error: any) {
+      console.error('Error creating test user:', error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to create test user",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleAnimatedDelete = async (user: User) => {
     // Start the fade-out animation
     setDeletingIds(prev => new Set([...prev, user.id]));
@@ -278,13 +316,18 @@ const UserManagement: React.FC = () => {
               <Users className="w-5 h-5 mr-2 inline" />
               User Management
             </span>
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <UserPlus className="w-4 h-4 mr-2" />
-                  Invite User
-                </Button>
-              </DialogTrigger>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={createTestUser} className="bg-green-50 hover:bg-green-100 text-green-700 border-green-300">
+                <Users className="w-4 h-4 mr-2" />
+                Create Test User (Ready to Login)
+              </Button>
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <UserPlus className="w-4 h-4 mr-2" />
+                    Invite User
+                  </Button>
+                </DialogTrigger>
               <DialogContent className="bg-gray-900 text-white border-white/20">
                 <DialogHeader>
                   <DialogTitle>Invite New User</DialogTitle>
@@ -326,7 +369,8 @@ const UserManagement: React.FC = () => {
                   </Button>
                 </div>
               </DialogContent>
-            </Dialog>
+              </Dialog>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
