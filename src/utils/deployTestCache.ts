@@ -5,9 +5,21 @@ export const storeDeployTestResults = async () => {
     const cached = localStorage.getItem('deployTestResults');
     if (cached) {
       const cachedData = JSON.parse(cached);
-      const testAge = Date.now() - new Date(cachedData.timestamp).getTime();
-      if (testAge < 30 * 60 * 1000) { // Don't run tests more than every 30 minutes
-        return;
+
+      // Check if this is old format data (boolean values instead of objects)
+      const hasOldFormat = cachedData.results &&
+        Object.values(cachedData.results).some((result: any) =>
+          typeof result === 'boolean' || !result.hasOwnProperty('success')
+        );
+
+      // If old format detected, clear cache and force refresh
+      if (hasOldFormat) {
+        localStorage.removeItem('deployTestResults');
+      } else {
+        const testAge = Date.now() - new Date(cachedData.timestamp).getTime();
+        if (testAge < 30 * 60 * 1000) { // Don't run tests more than every 30 minutes
+          return;
+        }
       }
     }
 
