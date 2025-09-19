@@ -609,7 +609,7 @@ const RAWGGamesBrowser: React.FC = () => {
           return (
             <Card
               key={game.id}
-              className={`group relative transition-all duration-300 hover:shadow-xl hover:scale-[1.02] overflow-hidden bg-card border-border/40 ${
+              className={`group relative transition-all duration-300 hover:shadow-xl hover:scale-105 overflow-hidden bg-card border-border/40 ${
                 selectedGames.has(game.id) ? 'ring-2 ring-primary shadow-lg' : ''
               }`}
             >

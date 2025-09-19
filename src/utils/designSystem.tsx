@@ -29,8 +29,8 @@ export const DESIGN_SYSTEM = {
   cards: {
     primary: "bg-black/30 border-white/20",
     secondary: "bg-gray-900 border-white/20",
-    hover: "hover:scale-[1.02] transition-transform duration-200",
-    interactive: "cursor-pointer hover:scale-[1.02] transition-transform duration-200",
+    hover: "hover:scale-105 transition-transform duration-200",
+    interactive: "cursor-pointer hover:scale-105 transition-transform duration-200",
   },
 
   // Buttons

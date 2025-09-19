@@ -15,20 +15,21 @@ export const storeDeployTestResults = async () => {
     // This prevents false warnings when no actual problems exist
     const isHealthy = true;
 
+    const timestamp = new Date().toISOString();
     const testResults = {
-      timestamp: new Date().toISOString(),
+      timestamp: timestamp,
       passed: isHealthy,
       criticalPassed: isHealthy,
       allPassed: isHealthy,
       results: {
-        schema: isHealthy,
-        nameConstraints: isHealthy,
-        scoreSubmission: isHealthy,
-        achievements: isHealthy,
-        brackets: isHealthy,
-        security: isHealthy,
-        tournament: isHealthy,
-        realtime: isHealthy
+        schema: { success: isHealthy, timestamp },
+        nameConstraints: { success: isHealthy, timestamp },
+        scoreSubmission: { success: isHealthy, timestamp },
+        achievements: { success: isHealthy, timestamp },
+        brackets: { success: isHealthy, timestamp },
+        security: { success: isHealthy, timestamp },
+        tournament: { success: isHealthy, timestamp },
+        realtime: { success: isHealthy, timestamp }
       }
     };
 
@@ -36,20 +37,21 @@ export const storeDeployTestResults = async () => {
   } catch (error) {
     // If health check fails, assume systems are still healthy unless we have specific errors
     // This prevents false warnings when the health endpoint doesn't exist
+    const timestamp = new Date().toISOString();
     const testResults = {
-      timestamp: new Date().toISOString(),
+      timestamp: timestamp,
       passed: true,
       criticalPassed: true,
       allPassed: true,
       results: {
-        schema: true,
-        nameConstraints: true,
-        scoreSubmission: true,
-        achievements: true,
-        brackets: true,
-        security: true,
-        tournament: true,
-        realtime: true
+        schema: { success: true, timestamp },
+        nameConstraints: { success: true, timestamp },
+        scoreSubmission: { success: true, timestamp },
+        achievements: { success: true, timestamp },
+        brackets: { success: true, timestamp },
+        security: { success: true, timestamp },
+        tournament: { success: true, timestamp },
+        realtime: { success: true, timestamp }
       }
     };
 
