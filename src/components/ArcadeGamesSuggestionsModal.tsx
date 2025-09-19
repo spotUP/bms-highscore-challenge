@@ -129,19 +129,6 @@ export const ArcadeGamesSuggestionsModal: React.FC<ArcadeGamesSuggestionsModalPr
     }
   };
 
-  const handleUseSelected = () => {
-    if (selectedGames.size === 0) {
-      toast({
-        title: 'No games selected',
-        description: 'Please select at least one arcade game',
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    onSelectGames(Array.from(selectedGames));
-    onClose();
-  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -152,7 +139,8 @@ export const ArcadeGamesSuggestionsModal: React.FC<ArcadeGamesSuggestionsModalPr
             Best Arcade 2-Player vs. Games (Non-Fighting)
           </DialogTitle>
           <DialogDescription className="text-gray-300">
-            Select from the most comprehensive collection of competitive arcade versus games including soccer/football games (Virtua Striker, Super Sidekicks), racing (Virtua Racing, Daytona), puzzle battles (Puzzle Bobble, Tetris), classic arcade battles (Pong, Joust, Asteroids), and many more verified competitive 2-player games.
+            Browse the most comprehensive collection of competitive arcade versus games including soccer/football games (Virtua Striker, Super Sidekicks), racing (Virtua Racing, Daytona), puzzle battles (Puzzle Bobble, Tetris), classic arcade battles (Pong, Joust, Asteroids), and many more verified competitive 2-player games.
+            These are suggestions only - manually copy any game names you want to use in your tournament.
           </DialogDescription>
         </DialogHeader>
 
@@ -254,20 +242,15 @@ export const ArcadeGamesSuggestionsModal: React.FC<ArcadeGamesSuggestionsModalPr
             </>
           )}
 
-          <div className="flex-shrink-0 flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t border-gray-700">
+          <div className="flex-shrink-0 flex flex-col justify-center gap-2 pt-4 border-t border-gray-700">
+            <p className="text-sm text-gray-400 text-center mb-2">
+              💡 Tip: Select game names and copy them manually to your tournament setup
+            </p>
             <Button
-              variant="outline"
               onClick={onClose}
-              className="border-gray-600 text-gray-300 hover:bg-gray-800"
+              className="self-center bg-gray-600 hover:bg-gray-700 text-white"
             >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUseSelected}
-              disabled={selectedGames.size === 0 || loading}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              Use Selected Games ({selectedGames.size})
+              Close
             </Button>
           </div>
         </div>

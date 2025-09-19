@@ -1173,10 +1173,9 @@ Player D
       <FightingGamesSuggestionsModal
         isOpen={showFightingGamesModal}
         onClose={() => setShowFightingGamesModal(false)}
-        onSelectGames={(gameNames) => {
-          const currentNames = quickBlock.split(/[\r\n;,]+/).map(s => s.trim()).filter(Boolean);
-          const uniqueNames = [...new Set([...currentNames, ...gameNames])];
-          setQuickBlock(uniqueNames.join('\n'));
+        onSelectGames={() => {
+          // These are just suggestions - no auto-insertion
+          // Users should manually copy the game names they want
         }}
       />
 
@@ -1184,10 +1183,9 @@ Player D
       <ArcadeGamesSuggestionsModal
         isOpen={showArcadeGamesModal}
         onClose={() => setShowArcadeGamesModal(false)}
-        onSelectGames={(gameNames) => {
-          const currentNames = quickBlock.split(/[\r\n;,]+/).map(s => s.trim()).filter(Boolean);
-          const uniqueNames = [...new Set([...currentNames, ...gameNames])];
-          setQuickBlock(uniqueNames.join('\n'));
+        onSelectGames={() => {
+          // These are just suggestions - no auto-insertion
+          // Users should manually copy the game names they want
         }}
       />
     </div>
