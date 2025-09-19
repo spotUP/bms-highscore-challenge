@@ -566,18 +566,10 @@ const Statistics: React.FC<StatisticsProps> = ({ isExiting = false }) => {
     <div {...pageLayout} className={`${pageLayout.className || ''}`}>
       <PageContainer className="max-w-6xl mx-auto">
         <div className={`${isExiting ? 'animate-slide-out-bottom' : hasAnimated ? 'animate-slide-in-bottom' : 'opacity-0'}`}>
-        <PageHeader 
+        <PageHeader
           title="Competition Statistics"
           subtitle="Detailed analytics and performance metrics"
-        >
-          <Button
-            onClick={() => navigate('/')}
-            variant="outline"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Main
-          </Button>
-        </PageHeader>
+        />
 
         {/* Tournament Selector (replaces Competition Selector) */}
         <Card className={getCardStyle('primary')}>

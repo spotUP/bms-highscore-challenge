@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { ChevronLeft, ChevronRight, Calendar, Plus, Trash2, Lock, Globe } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Plus, Trash2, Lock, Globe, Play, Pause, Shield } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useTournament } from "@/contexts/TournamentContext";
 import { searchArcadeGameLogo, isArcadeGame } from "@/utils/arcadeLogoSearch";
 import { launchBoxService } from "@/services/launchboxService";
@@ -47,6 +48,10 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
       is_public: false,
       start_time: now.toISOString().slice(0, 16), // Format for datetime-local
       end_time: oneMonthLater.toISOString().slice(0, 16), // Format for datetime-local
+      status: 'draft' as const,
+      is_active: true,
+      is_locked: false,
+      scores_locked: false,
     };
   });
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
@@ -208,6 +213,10 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
       is_public: createForm.is_public,
       start_time: formatDateTimeForDatabase(createForm.start_time),
       end_time: formatDateTimeForDatabase(createForm.end_time),
+      status: createForm.status,
+      is_active: createForm.is_active,
+      is_locked: createForm.is_locked,
+      scores_locked: createForm.scores_locked,
     });
 
     if (tournament) {
@@ -269,6 +278,10 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
         is_public: false,
         start_time: now.toISOString().slice(0, 16),
         end_time: oneMonthLater.toISOString().slice(0, 16),
+        status: 'draft' as const,
+        is_active: true,
+        is_locked: false,
+        scores_locked: false,
       });
       setGames([]);
       setSlugAvailable(null);
@@ -283,17 +296,17 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[95vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create New Tournament</DialogTitle>
         </DialogHeader>
-        <Tabs defaultValue="tournament" className="w-full h-[600px] flex flex-col">
+        <Tabs defaultValue="tournament" className="w-full flex flex-col flex-1">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="tournament">Tournament Details</TabsTrigger>
             <TabsTrigger value="games">Games ({games.length})</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="tournament" className="space-y-4 mt-4 flex-1 overflow-y-auto px-1">
+          <TabsContent value="tournament" className="space-y-4 mt-4 px-1">
             <div>
               <Label htmlFor="name" className="text-white">Tournament Name</Label>
               <Input
@@ -348,6 +361,70 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="status" className="text-white">Tournament Status</Label>
+              <Select
+                value={createForm.status}
+                onValueChange={(value: 'draft' | 'active' | 'completed') => setCreateForm(prev => ({ ...prev, status: value }))}
+              >
+                <SelectTrigger className="bg-black/50 border-gray-700 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">
+                    <div className="flex items-center gap-2">
+                      <Pause className="w-4 h-4" />
+                      Draft (Not Started)
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="active">
+                    <div className="flex items-center gap-2">
+                      <Play className="w-4 h-4" />
+                      Active (Running)
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="completed">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-4 h-4" />
+                      Completed (Finished)
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="is_active" className="text-white">Tournament Active</Label>
+                <Switch
+                  id="is_active"
+                  checked={createForm.is_active}
+                  onCheckedChange={(checked) => setCreateForm(prev => ({ ...prev, is_active: checked }))}
+                />
+              </div>
+
+              <div className="flex items-center justify-between">
+                <Label htmlFor="is_locked" className="text-white">Tournament Locked</Label>
+                <Switch
+                  id="is_locked"
+                  checked={createForm.is_locked}
+                  onCheckedChange={(checked) => setCreateForm(prev => ({ ...prev, is_locked: checked }))}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="scores_locked" className="text-white">Score Submissions Locked</Label>
+                <p className="text-xs text-gray-400">Prevent new score submissions</p>
+              </div>
+              <Switch
+                id="scores_locked"
+                checked={createForm.scores_locked}
+                onCheckedChange={(checked) => setCreateForm(prev => ({ ...prev, scores_locked: checked }))}
+              />
             </div>
 
             <div className="space-y-4">

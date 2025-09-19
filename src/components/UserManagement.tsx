@@ -331,9 +331,9 @@ const UserManagement: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <div className="border rounded-md">
+            <div className="border rounded-md overflow-x-auto">
               {/* Header */}
-              <div className="grid grid-cols-6 gap-2 p-3 border-b bg-muted/50 font-medium text-sm">
+              <div className="grid gap-2 p-3 border-b bg-muted/50 font-medium text-sm min-w-[800px]" style={{ gridTemplateColumns: '2fr 140px 100px 120px 120px 140px' }}>
                 <div>Email</div>
                 <div>Role</div>
                 <div>Status</div>
@@ -351,20 +351,21 @@ const UserManagement: React.FC = () => {
                   return (
                     <div
                       key={user.id}
-                      className={`grid grid-cols-6 gap-2 p-3 transition-all duration-300 ease-in-out overflow-hidden ${
+                      className={`grid gap-2 p-3 transition-all duration-300 ease-in-out overflow-hidden min-w-[800px] ${
                         deletingIds.has(user.id)
                           ? 'opacity-0 max-h-0 py-0 scale-y-0'
                           : 'opacity-100 max-h-20 scale-y-100'
                       }`}
                       style={{
+                        gridTemplateColumns: '2fr 140px 100px 120px 120px 140px',
                         transformOrigin: 'top',
                         transition: 'all 300ms ease-in-out'
                       }}
                     >
-                      <div className="font-medium">
+                      <div className="font-medium min-w-0">
                         <div className="flex items-center gap-2">
-                          <Mail className="w-4 h-4 text-gray-400" />
-                          {user.email}
+                          <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="truncate" title={user.email}>{user.email}</span>
                         </div>
                       </div>
                       <div>
@@ -420,7 +421,10 @@ const UserManagement: React.FC = () => {
                             variant="outline"
                             size="sm"
                             className="border-red-500 hover:border-red-400 hover:bg-red-500/10"
-                            onClick={() => handleAnimatedDelete(user)}
+                            onClick={() => {
+                              setUserToDelete(user);
+                              setDeleteDialogOpen(true);
+                            }}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -457,7 +461,12 @@ const UserManagement: React.FC = () => {
             <Button
               variant="outline"
               className="border-red-500 hover:border-red-400 hover:bg-red-500/10"
-              onClick={() => userToDelete && deleteUser(userToDelete.id)}
+              onClick={() => {
+                if (userToDelete) {
+                  setDeleteDialogOpen(false);
+                  handleAnimatedDelete(userToDelete);
+                }
+              }}
             >
               Delete
             </Button>

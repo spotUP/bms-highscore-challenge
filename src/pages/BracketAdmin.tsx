@@ -26,10 +26,12 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import AdvancedConfetti from '@/components/AdvancedConfetti';
 import { createPortal } from 'react-dom';
-import { Check, Plus, BarChart3 } from 'lucide-react';
+import { Check, Plus, BarChart3, Gamepad2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import BracketAnalytics from '@/components/BracketAnalytics';
 import BracketDebugger from '@/components/BracketDebugger';
+import { FightingGamesSuggestionsModal } from '@/components/FightingGamesSuggestionsModal';
+import { ArcadeGamesSuggestionsModal } from '@/components/ArcadeGamesSuggestionsModal';
 
 interface BracketAdminProps {
   isExiting?: boolean;
@@ -150,6 +152,8 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
   const tournamentNameInputRef = useRef<HTMLInputElement>(null);
   const [showShareLinkDialog, setShowShareLinkDialog] = useState(false);
   const [shareUrl, setShareUrl] = useState('');
+  const [showFightingGamesModal, setShowFightingGamesModal] = useState(false);
+  const [showArcadeGamesModal, setShowArcadeGamesModal] = useState(false);
 
   const ownedTournaments = useMemo(() => tournaments.filter(t => t.created_by === user?.id), [tournaments, user?.id]);
 
@@ -817,14 +821,38 @@ Player D
 ...`}
                     className="bg-black/50 border-gray-700 text-white"
                   />
-                  <Button
-                    onClick={handleRandomizeNames}
-                    disabled={!quickBlock.trim()}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    Randomize Order
-                  </Button>
+                  <div className="space-y-2">
+                    <Button
+                      onClick={handleRandomizeNames}
+                      disabled={!quickBlock.trim()}
+                      variant="outline"
+                      className="w-full"
+                    >
+                      Randomize Order
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => setShowFightingGamesModal(true)}
+                        variant="outline"
+                        className="flex-1"
+                        disabled={matches.length > 0}
+                        title={matches.length > 0 ? 'Cannot suggest games after tournament has started' : 'Suggest 10 best arcade fighting games'}
+                      >
+                        <Gamepad2 className="w-4 h-4 mr-1" />
+                        Fighting
+                      </Button>
+                      <Button
+                        onClick={() => setShowArcadeGamesModal(true)}
+                        variant="outline"
+                        className="flex-1"
+                        disabled={matches.length > 0}
+                        title={matches.length > 0 ? 'Cannot suggest games after tournament has started' : 'Suggest 10 best arcade 2-player games (non-fighting)'}
+                      >
+                        <Gamepad2 className="w-4 h-4 mr-1" />
+                        Arcade
+                      </Button>
+                    </div>
+                  </div>
                   <Button onClick={handleQuickStart} disabled={!quickBlock.trim() || quickRunning} className="w-full" variant="outline">
                     {quickRunning ? 'Creating…' : 'Start'}
                   </Button>
@@ -1140,6 +1168,28 @@ Player D
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Fighting Games Suggestions Modal */}
+      <FightingGamesSuggestionsModal
+        isOpen={showFightingGamesModal}
+        onClose={() => setShowFightingGamesModal(false)}
+        onSelectGames={(gameNames) => {
+          const currentNames = quickBlock.split(/[\r\n;,]+/).map(s => s.trim()).filter(Boolean);
+          const uniqueNames = [...new Set([...currentNames, ...gameNames])];
+          setQuickBlock(uniqueNames.join('\n'));
+        }}
+      />
+
+      {/* Arcade Games Suggestions Modal */}
+      <ArcadeGamesSuggestionsModal
+        isOpen={showArcadeGamesModal}
+        onClose={() => setShowArcadeGamesModal(false)}
+        onSelectGames={(gameNames) => {
+          const currentNames = quickBlock.split(/[\r\n;,]+/).map(s => s.trim()).filter(Boolean);
+          const uniqueNames = [...new Set([...currentNames, ...gameNames])];
+          setQuickBlock(uniqueNames.join('\n'));
+        }}
+      />
     </div>
   );
 }

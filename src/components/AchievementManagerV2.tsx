@@ -17,6 +17,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useUserRoles } from "@/hooks/useUserRoles";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { AchievementsTable } from "@/components/AchievementsTable";
+import { PlayerAchievementsTable } from "@/components/PlayerAchievementsTable";
+import { SuggestAchievementDialog } from "@/components/SuggestAchievementDialog";
 
 type AchievementType = 
   | 'first_score' 
@@ -59,16 +62,76 @@ interface Achievement {
 // Using HighScoreTable from TournamentContext
 
 const ACHIEVEMENT_TYPES = [
-  { value: 'first_score', label: 'First Score', icon: '🎯' },
-  { value: 'first_place', label: 'First Place', icon: '👑' },
-  { value: 'score_milestone', label: 'Score Milestone', icon: '🏆' },
-  { value: 'game_master', label: 'Game Master', icon: '🕹️' },
-  { value: 'high_scorer', label: 'High Scorer', icon: '⭐' },
-  { value: 'consistent_player', label: 'Consistent Player', icon: '🔥' },
-  { value: 'perfectionist', label: 'Perfectionist', icon: '💎' },
-  { value: 'streak_master', label: 'Streak Master', icon: '⚡' },
-  { value: 'competition_winner', label: 'Competition Winner', icon: '🥇' },
-  { value: 'speed_demon', label: 'Speed Demon', icon: '💨' },
+  {
+    value: 'first_score',
+    label: 'First Score',
+    icon: '🎯',
+    description: 'Awarded when a player submits their very first score',
+    example: 'Welcome! - Submit your first score to any game'
+  },
+  {
+    value: 'first_place',
+    label: 'First Place',
+    icon: '👑',
+    description: 'Awarded for achieving the top score on any leaderboard',
+    example: 'Champion - Reach #1 on any game leaderboard'
+  },
+  {
+    value: 'score_milestone',
+    label: 'Score Milestone',
+    icon: '🏆',
+    description: 'Awarded for reaching a specific score threshold',
+    example: '50,000 Club - Score 50,000 or more points in any game'
+  },
+  {
+    value: 'game_master',
+    label: 'Game Master',
+    icon: '🕹️',
+    description: 'Awarded for playing a certain number of different games',
+    example: '5-Game Expert - Submit scores to 5 different games'
+  },
+  {
+    value: 'high_scorer',
+    label: 'High Scorer',
+    icon: '⭐',
+    description: 'Awarded for being in the top rankings across games',
+    example: 'Top 3 Player - Finish in the top 3 of any leaderboard'
+  },
+  {
+    value: 'consistent_player',
+    label: 'Consistent Player',
+    icon: '🔥',
+    description: 'Awarded for submitting many scores over time',
+    example: '25-Score Veteran - Submit 25 total scores'
+  },
+  {
+    value: 'perfectionist',
+    label: 'Perfectionist',
+    icon: '💎',
+    description: 'Awarded for hitting exact score targets',
+    example: '100,000 Perfect - Score exactly 100,000 points'
+  },
+  {
+    value: 'streak_master',
+    label: 'Streak Master',
+    icon: '⚡',
+    description: 'Awarded for playing consistently over multiple days',
+    example: '7-Day Streak - Submit scores on 7 consecutive days'
+  },
+  {
+    value: 'competition_winner',
+    label: 'Competition Winner',
+    icon: '🥇',
+    description: 'Awarded for winning competitions or tournaments',
+    example: 'Tournament Victor - Win a tournament competition'
+  },
+  {
+    value: 'speed_demon',
+    label: 'Speed Demon',
+    icon: '💨',
+    description: 'Awarded for rapid gaming sessions',
+    example: 'Lightning Fast - Submit 5 scores within 1 hour'
+  },
 ];
 
 const DEFAULT_ICONS = ['🏆', '🥇', '🎯', '⭐', '💎', '🔥', '⚡', '🎮', '👑', '🏅', '🌟', '💫'];
@@ -850,10 +913,10 @@ const AchievementManagerV2 = () => {
   const isSaveDisabled = isSaving || !trimmedNameForUI || isDuplicateNameForUI;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col space-y-4">
-        <div className="flex justify-between items-center gap-3">
-          <div className="flex flex-col gap-2">
+    <div className="flex flex-col space-y-6 w-full max-w-full overflow-hidden">
+      <div className="flex flex-col space-y-4 w-full max-w-full">
+        <div className="flex flex-col gap-3 w-full max-w-full">
+          <div className="flex flex-col gap-2 min-w-0 flex-1">
             <h2 className="text-2xl font-bold">Achievement Manager</h2>
             {/* Compact tournament selector (defaults to active) - stacked under title */}
             <div className="hidden md:block">
@@ -868,7 +931,7 @@ const AchievementManagerV2 = () => {
                   }
                 }}
               >
-                <SelectTrigger id="tournament-select" className="min-w-[240px] bg-secondary/40 border-white/20 text-white">
+                <SelectTrigger id="tournament-select" className="w-full max-w-xs bg-secondary/40 border-white/20 text-white">
                   <SelectValue placeholder="Select Tournament" />
                 </SelectTrigger>
                 <SelectContent className="bg-gray-900 border-white/20">
@@ -879,7 +942,7 @@ const AchievementManagerV2 = () => {
               </Select>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-shrink-0">
             {isTournamentCreator && (
               <>
                 <Button
@@ -1003,252 +1066,376 @@ const AchievementManagerV2 = () => {
                 </Button>
               </>
             )}
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={openCreateDialog} variant="outline">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Achievement
-                </Button>
-              </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingAchievement ? 'Edit Achievement' : 'Create New Achievement'}
-                </DialogTitle>
-                <DialogDescription>
-                  Fill out the fields below to {editingAchievement ? 'update' : 'create'} an achievement.
-                </DialogDescription>
-              </DialogHeader>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    placeholder="Achievement Name"
-                  />
-                  {!trimmedNameForUI && (
-                    <p className="text-xs text-red-500">Name is required.</p>
-                  )}
-                  {trimmedNameForUI && isDuplicateNameForUI && (
-                    <p className="text-xs text-red-500">An achievement with this name already exists in this tournament.</p>
-                  )}
-                </div>
+            <div className="flex gap-2">
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button onClick={openCreateDialog} variant="outline">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Achievement
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="text-xl font-bold">
+                      {editingAchievement ? 'Edit Achievement' : 'Create New Achievement'}
+                    </DialogTitle>
+                    <DialogDescription>
+                      Create meaningful achievements that will motivate and reward your players.
+                    </DialogDescription>
+                  </DialogHeader>
 
-      <ConfirmationDialog
-        open={deleteDialog.open}
-        onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
-        title="Delete Achievement"
-        description="Are you sure you want to delete this achievement? This action cannot be undone."
-        confirmText="Delete Achievement"
-        cancelText="Cancel"
-        variant="outline"
-        onConfirm={confirmDeleteAchievement}
-      />
+                  <div className="space-y-6 py-4">
+                    {/* Step 1: Achievement Type Selection */}
+                    <Card className="border-l-4 border-l-blue-500">
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center">
+                          <span className="mr-2 text-xl">🎯</span>
+                          Step 1: Choose Achievement Type
+                        </CardTitle>
+                        <CardDescription>
+                          Select what type of achievement you want to create. Each type has different requirements and motivates different player behaviors.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <Select
+                          value={formData.type}
+                          onValueChange={(value: AchievementType) => {
+                            const typeInfo = ACHIEVEMENT_TYPES.find(t => t.value === value);
+                            setFormData(prev => ({
+                              ...prev,
+                              type: value,
+                              badge_icon: typeInfo?.icon || '🏆'
+                            }));
+                          }}
+                        >
+                          <SelectTrigger className="h-12">
+                            <SelectValue placeholder="Select achievement type..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {ACHIEVEMENT_TYPES.map(type => (
+                              <SelectItem key={type.value} value={type.value} className="p-3">
+                                <div className="flex items-start space-x-3">
+                                  <span className="text-lg mt-0.5">{type.icon}</span>
+                                  <div>
+                                    <div className="font-medium">{type.label}</div>
+                                    <div className="text-sm text-muted-foreground">{type.description}</div>
+                                  </div>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
 
-      <ConfirmationDialog
-        open={clearAllDialog.open}
-        onOpenChange={(open) => setClearAllDialog({ open })}
-        title="Clear All Achievement Progress"
-        description={`Are you sure you want to clear ALL PLAYERS' achievement progress for "${currentTournament?.name}"? This will reset everyone's achievement unlocks but keep the achievements themselves. This action cannot be undone.`}
-        confirmText="Clear All Progress"
-        cancelText="Cancel"
-        variant="outline"
-        onConfirm={confirmClearAllAchievements}
-      />
+                        {formData.type && (
+                          <div className="mt-4 p-4 bg-muted rounded-lg">
+                            <h4 className="font-medium mb-2">Example:</h4>
+                            <p className="text-sm text-muted-foreground">
+                              {ACHIEVEMENT_TYPES.find(t => t.value === formData.type)?.example}
+                            </p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
 
-      <ConfirmationDialog
-        open={clearAllAchievementsDialog.open}
-        onOpenChange={(open) => setClearAllAchievementsDialog({ open })}
-        title="Clear All Achievement Definitions"
-        description={`Are you sure you want to delete ALL ACHIEVEMENT DEFINITIONS for "${currentTournament?.name}"? This will permanently remove all achievements and their progress. This action cannot be undone.`}
-        confirmText="Delete All Achievements"
-        cancelText="Cancel"
-        variant="outline"
-        onConfirm={confirmClearAllAchievementDefinitions}
-      />
+                    {/* Step 2: Basic Information */}
+                    <Card className="border-l-4 border-l-green-500">
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center">
+                          <span className="mr-2 text-xl">✏️</span>
+                          Step 2: Basic Information
+                        </CardTitle>
+                        <CardDescription>
+                          Give your achievement a memorable name and clear description.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="name" className="text-sm font-medium">Achievement Name *</Label>
+                            <Input
+                              id="name"
+                              name="name"
+                              value={formData.name}
+                              onChange={handleInputChange}
+                              placeholder="e.g., High Scorer"
+                              className="h-11"
+                            />
+                            {!trimmedNameForUI && (
+                              <p className="text-xs text-red-500">Name is required.</p>
+                            )}
+                            {trimmedNameForUI && isDuplicateNameForUI && (
+                              <p className="text-xs text-red-500">An achievement with this name already exists in this tournament.</p>
+                            )}
+                          </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    placeholder="What does the user need to do?"
-                    rows={3}
-                  />
-                </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="points" className="text-sm font-medium">Points Awarded</Label>
+                            <Input
+                              id="points"
+                              name="points"
+                              type="number"
+                              min="1"
+                              value={formData.points}
+                              onChange={handleInputChange}
+                              placeholder="e.g., 100"
+                              className="h-11"
+                            />
+                            <p className="text-xs text-muted-foreground">How many points players earn for this achievement</p>
+                          </div>
+                        </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="type">Type</Label>
-                  <Select
-                    value={formData.type}
-                    onValueChange={(value: AchievementType) => {
-                      const typeInfo = ACHIEVEMENT_TYPES.find(t => t.value === value);
-                      setFormData(prev => ({
-                        ...prev,
-                        type: value,
-                        badge_icon: typeInfo?.icon || '🏆'
-                      }));
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select achievement type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ACHIEVEMENT_TYPES.map(type => (
-                        <SelectItem key={type.value} value={type.value}>
-                          {type.icon} {type.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="description" className="text-sm font-medium">Description</Label>
+                          <Textarea
+                            id="description"
+                            name="description"
+                            value={formData.description}
+                            onChange={handleInputChange}
+                            placeholder="e.g., Reach the top of any game leaderboard"
+                            rows={3}
+                          />
+                          <p className="text-xs text-muted-foreground">Tell players exactly what they need to do to earn this achievement</p>
+                        </div>
+                      </CardContent>
+                    </Card>
 
-                <div className="space-y-2">
-                  <Label htmlFor="points">Points</Label>
-                  <Input
-                    id="points"
-                    name="points"
-                    type="number"
-                    min="1"
-                    value={formData.points}
-                    onChange={handleInputChange}
-                    placeholder="Points awarded"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="game_id">Game</Label>
-                  <Select
-                    value={formData.criteria?.game_id ?? 'general'}
-                    onValueChange={(value) => handleCriteriaChange('game_id', value === 'general' ? null : value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a game (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="general">General (not game-specific)</SelectItem>
-                      {games.map(game => (
-                        <SelectItem key={game.id} value={game.id}>
-                          {game.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Badge</Label>
-                  <div className="flex space-x-2">
-                    <div className="flex items-center space-x-2">
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-lg"
-                        style={{ backgroundColor: formData.badge_color }}
-                      >
-                        <span className="font-emoji">
-                          {formData.type ? getTypeIcon(formData.type) : '🏆'}
-                        </span>
-                      </div>
-                      <span className="text-sm text-gray-500">Auto-set from type</span>
-                    </div>
-                    <Select
-                      value={formData.badge_color}
-                      onValueChange={(value) => setFormData(prev => ({ ...prev, badge_color: value }))}
-                    >
-                      <SelectTrigger className="w-32">
-                        <div className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: formData.badge_color }} />
-                        <SelectValue placeholder="Color" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {DEFAULT_COLORS.map(color => (
-                          <SelectItem key={color} value={color}>
-                            <div className="flex items-center">
-                              <div className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: color }} />
-                              {color}
+                    {/* Step 3: Requirements */}
+                    {formData.type && (
+                      <Card className="border-l-4 border-l-orange-500">
+                        <CardHeader>
+                          <CardTitle className="text-lg flex items-center">
+                            <span className="mr-2 text-xl">⚙️</span>
+                            Step 3: Requirements
+                          </CardTitle>
+                          <CardDescription>
+                            Set the specific requirements for earning this achievement.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="game_id" className="text-sm font-medium">Target Game</Label>
+                              <Select
+                                value={formData.criteria?.game_id ?? 'general'}
+                                onValueChange={(value) => handleCriteriaChange('game_id', value === 'general' ? null : value)}
+                              >
+                                <SelectTrigger className="h-11">
+                                  <SelectValue placeholder="Select a game (optional)" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="general">Any Game (General Achievement)</SelectItem>
+                                  {games.map(game => (
+                                    <SelectItem key={game.id} value={game.id}>
+                                      {game.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <p className="text-xs text-muted-foreground">Choose a specific game or make it apply to any game</p>
                             </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+
+                            {formData.type === 'score_milestone' && (
+                              <div className="space-y-2">
+                                <Label htmlFor="threshold" className="text-sm font-medium">Target Score</Label>
+                                <Input
+                                  id="threshold"
+                                  type="number"
+                                  min="1"
+                                  value={formData.criteria?.threshold || ''}
+                                  onChange={(e) => handleCriteriaChange('threshold', parseInt(e.target.value))}
+                                  placeholder="e.g., 50000"
+                                  className="h-11"
+                                />
+                                <p className="text-xs text-muted-foreground">Players must score this many points or more</p>
+                              </div>
+                            )}
+
+                            {formData.type === 'game_master' && (
+                              <div className="space-y-2">
+                                <Label htmlFor="game_count" className="text-sm font-medium">Number of Games</Label>
+                                <Input
+                                  id="game_count"
+                                  type="number"
+                                  min="1"
+                                  value={formData.criteria?.count || ''}
+                                  onChange={(e) => handleCriteriaChange('count', parseInt(e.target.value))}
+                                  placeholder="e.g., 5"
+                                  className="h-11"
+                                />
+                                <p className="text-xs text-muted-foreground">Players must submit scores to this many different games</p>
+                              </div>
+                            )}
+
+                            {formData.type === 'high_scorer' && (
+                              <div className="space-y-2">
+                                <Label htmlFor="rank" className="text-sm font-medium">Required Ranking</Label>
+                                <Input
+                                  id="rank"
+                                  type="number"
+                                  min="1"
+                                  value={formData.criteria?.rank || ''}
+                                  onChange={(e) => handleCriteriaChange('rank', parseInt(e.target.value))}
+                                  placeholder="e.g., 3"
+                                  className="h-11"
+                                />
+                                <p className="text-xs text-muted-foreground">Players must finish in the top X positions (e.g., 3 for top 3)</p>
+                              </div>
+                            )}
+
+                            {formData.type === 'consistent_player' && (
+                              <div className="space-y-2">
+                                <Label htmlFor="score_count" className="text-sm font-medium">Total Scores</Label>
+                                <Input
+                                  id="score_count"
+                                  type="number"
+                                  min="1"
+                                  value={formData.criteria?.count || ''}
+                                  onChange={(e) => handleCriteriaChange('count', parseInt(e.target.value))}
+                                  placeholder="e.g., 25"
+                                  className="h-11"
+                                />
+                                <p className="text-xs text-muted-foreground">Players must submit this many total scores</p>
+                              </div>
+                            )}
+
+                            {formData.type === 'perfectionist' && (
+                              <div className="space-y-2">
+                                <Label htmlFor="exact_score" className="text-sm font-medium">Exact Score</Label>
+                                <Input
+                                  id="exact_score"
+                                  type="number"
+                                  min="1"
+                                  value={formData.criteria?.threshold || ''}
+                                  onChange={(e) => handleCriteriaChange('threshold', parseInt(e.target.value))}
+                                  placeholder="e.g., 100000"
+                                  className="h-11"
+                                />
+                                <p className="text-xs text-muted-foreground">Players must score exactly this amount</p>
+                              </div>
+                            )}
+
+                            {formData.type === 'streak_master' && (
+                              <div className="space-y-2">
+                                <Label htmlFor="streak_days" className="text-sm font-medium">Consecutive Days</Label>
+                                <Input
+                                  id="streak_days"
+                                  type="number"
+                                  min="1"
+                                  value={formData.criteria?.days || ''}
+                                  onChange={(e) => handleCriteriaChange('days', parseInt(e.target.value))}
+                                  placeholder="e.g., 7"
+                                  className="h-11"
+                                />
+                                <p className="text-xs text-muted-foreground">Players must submit scores for this many days in a row</p>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+
+                    {/* Step 4: Appearance & Settings */}
+                    <Card className="border-l-4 border-l-purple-500">
+                      <CardHeader>
+                        <CardTitle className="text-lg flex items-center">
+                          <span className="mr-2 text-xl">🎨</span>
+                          Step 4: Appearance & Settings
+                        </CardTitle>
+                        <CardDescription>
+                          Customize how your achievement looks and whether it's active.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Badge Color</Label>
+                              <Select
+                                value={formData.badge_color}
+                                onValueChange={(value) => setFormData(prev => ({ ...prev, badge_color: value }))}
+                              >
+                                <SelectTrigger className="h-11">
+                                  <div className="flex items-center">
+                                    <div className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: formData.badge_color }} />
+                                    <SelectValue placeholder="Choose color" />
+                                  </div>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {DEFAULT_COLORS.map(color => (
+                                    <SelectItem key={color} value={color}>
+                                      <div className="flex items-center">
+                                        <div className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: color }} />
+                                        {color}
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Status</Label>
+                              <div className="flex items-center space-x-3">
+                                <Switch
+                                  id="is_active"
+                                  checked={formData.is_active}
+                                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
+                                />
+                                <Label htmlFor="is_active" className="text-sm">
+                                  {formData.is_active ? 'Active (players can earn this achievement)' : 'Inactive (temporarily disabled)'}
+                                </Label>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label className="text-sm font-medium">Preview</Label>
+                            <div className="border rounded-lg p-4 bg-muted/30">
+                              <div className="flex items-center space-x-3">
+                                <div
+                                  className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-emoji shadow-lg"
+                                  style={{ backgroundColor: formData.badge_color }}
+                                >
+                                  {formData.type ? getTypeIcon(formData.type) : '🏆'}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-medium text-sm truncate">
+                                    {formData.name || 'Achievement Name'}
+                                  </h3>
+                                  <p className="text-xs text-muted-foreground line-clamp-2">
+                                    {formData.description || 'Achievement description goes here...'}
+                                  </p>
+                                  <div className="flex items-center space-x-2 mt-1">
+                                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
+                                      {formData.points || 0} points
+                                    </span>
+                                    {!formData.is_active && (
+                                      <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">
+                                        Inactive
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
                   </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="is_active"
-                      checked={formData.is_active}
-                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
-                    />
-                    <Label htmlFor="is_active">
-                      {formData.is_active ? 'Active' : 'Inactive'}
-                    </Label>
+
+                  <div className="flex justify-end space-x-2 pt-4">
+                    <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>
+                      Cancel
+                    </Button>
+                    <Button onClick={saveAchievement} disabled={isSaveDisabled} variant="outline">
+                      {isSaving ? 'Saving...' : (editingAchievement ? 'Update Achievement' : 'Create Achievement')}
+                    </Button>
                   </div>
-                </div>
-                
-                {formData.type === 'score_milestone' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="threshold">Score Threshold</Label>
-                    <Input
-                      id="threshold"
-                      type="number"
-                      min="1"
-                      value={formData.criteria?.threshold || ''}
-                      onChange={(e) => handleCriteriaChange('threshold', parseInt(e.target.value))}
-                      placeholder="Minimum score required"
-                    />
-                  </div>
-                )}
-                
-                {formData.type === 'game_master' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="game_count">Minimum Games Played</Label>
-                    <Input
-                      id="game_count"
-                      type="number"
-                      min="1"
-                      value={formData.criteria?.count || ''}
-                      onChange={(e) => handleCriteriaChange('count', parseInt(e.target.value))}
-                      placeholder="Number of games played"
-                    />
-                  </div>
-                )}
-                
-                {formData.type === 'high_scorer' && (
-                  <div className="space-y-2">
-                    <Label htmlFor="rank">Top Rank</Label>
-                    <Input
-                      id="rank"
-                      type="number"
-                      min="1"
-                      value={formData.criteria?.rank || ''}
-                      onChange={(e) => handleCriteriaChange('rank', parseInt(e.target.value))}
-                      placeholder="Top X players (e.g., 3 for top 3)"
-                    />
-                  </div>
-                )}
-              </div>
-              
-              <div className="flex justify-end space-x-2 pt-4">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>
-                  Cancel
-                </Button>
-                <Button onClick={saveAchievement} disabled={isSaveDisabled} variant="outline">
-                  {isSaving ? 'Saving...' : (editingAchievement ? 'Update Achievement' : 'Create Achievement')}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-          </div>
-        </div>
-        
-        {/* Tournament-scoped view only; game filter removed */}
+                </DialogContent>
+              </Dialog>
+              <SuggestAchievementDialog onAchievementAdded={loadAchievements} />
+            </div>
       </div>
 
       <Card>
@@ -1315,281 +1502,43 @@ const AchievementManagerV2 = () => {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmationDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog(prev => ({ ...prev, open }))}
+        title="Delete Achievement"
+        description="Are you sure you want to delete this achievement? This action cannot be undone."
+        confirmText="Delete Achievement"
+        cancelText="Cancel"
+        variant="outline"
+        onConfirm={confirmDeleteAchievement}
+      />
+
+      <ConfirmationDialog
+        open={clearAllDialog.open}
+        onOpenChange={(open) => setClearAllDialog({ open })}
+        title="Clear All Achievement Progress"
+        description={`Are you sure you want to clear ALL PLAYERS' achievement progress for "${currentTournament?.name}"? This will reset everyone's achievement unlocks but keep the achievements themselves. This action cannot be undone.`}
+        confirmText="Clear All Progress"
+        cancelText="Cancel"
+        variant="outline"
+        onConfirm={confirmClearAllAchievements}
+      />
+
+      <ConfirmationDialog
+        open={clearAllAchievementsDialog.open}
+        onOpenChange={(open) => setClearAllAchievementsDialog({ open })}
+        title="Clear All Achievement Definitions"
+        description={`Are you sure you want to delete ALL ACHIEVEMENT DEFINITIONS for "${currentTournament?.name}"? This will permanently remove all achievements and their progress. This action cannot be undone.`}
+        confirmText="Delete All Achievements"
+        cancelText="Cancel"
+        variant="outline"
+        onConfirm={confirmClearAllAchievementDefinitions}
+      />
+      </div>
+    </div>
     </div>
   );
-};
+}
 
-// Export the component
 export default AchievementManagerV2;
-
-// Achievement Table Component
-const AchievementsTable = ({
-  achievements,
-  onEdit,
-  onDelete,
-  onToggleStatus,
-  getTypeIcon,
-  getCriteriaDisplay,
-  isTournamentCreator,
-  currentUserId
-}: {
-  achievements: any[];
-  onEdit: (achievement: any) => void;
-  onDelete: (achievement: any) => void;
-  onToggleStatus: (achievement: any) => void;
-  getTypeIcon: (type: string) => string;
-  getCriteriaDisplay: (criteria: any, type: string) => string;
-  isTournamentCreator: boolean;
-  currentUserId: string | null;
-}) => {
-  const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set());
-  const [localAchievements, setLocalAchievements] = React.useState(achievements);
-
-  // Update local state when props change
-  React.useEffect(() => {
-    setLocalAchievements(achievements);
-  }, [achievements]);
-
-  const handleDelete = async (achievement: any) => {
-    // Start the fade-out animation
-    setDeletingIds(prev => new Set([...prev, achievement.id]));
-
-    // Wait for animation, then remove from state (this will trigger the slide-up)
-    setTimeout(() => {
-      setLocalAchievements(prev => prev.filter(a => a.id !== achievement.id));
-      onDelete(achievement);
-
-      // Clean up animation state after a brief delay to let the slide-up complete
-      setTimeout(() => {
-        setDeletingIds(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(achievement.id);
-          return newSet;
-        });
-      }, 50);
-    }, 280); // Slightly before animation completes
-  };
-
-  const columnCount = isTournamentCreator ? 10 : 9;
-
-  return (
-    <div className="border rounded-md">
-      {/* Header */}
-      <div className={`grid ${isTournamentCreator ? 'grid-cols-10' : 'grid-cols-9'} gap-2 p-3 border-b bg-muted/50 font-medium text-sm`}>
-        <div>Icon</div>
-        <div>Name</div>
-        <div>Description</div>
-        <div>Type</div>
-        <div>Criteria</div>
-        <div>Points</div>
-        <div>Status</div>
-        <div>Unlocks</div>
-        {isTournamentCreator && <div>Created By</div>}
-        <div>Actions</div>
-      </div>
-
-      {/* Body */}
-      <div className="divide-y">
-      {localAchievements.map((achievement) => (
-        <div
-          key={achievement.id}
-          className={`grid ${isTournamentCreator ? 'grid-cols-10' : 'grid-cols-9'} gap-2 p-3 transition-all duration-300 ease-in-out overflow-hidden ${
-            deletingIds.has(achievement.id)
-              ? 'opacity-0 max-h-0 py-0 scale-y-0'
-              : 'opacity-100 max-h-20 scale-y-100'
-          }`}
-          style={{
-            transformOrigin: 'top',
-            transition: 'all 300ms ease-in-out'
-          }}
-        >
-          <div>
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
-              style={{ backgroundColor: achievement.badge_color }}
-            >
-              <span className="font-emoji">
-                {getTypeIcon(achievement.type)}
-              </span>
-            </div>
-          </div>
-
-          <div className="font-medium">{achievement.name}</div>
-
-          <div>{achievement.description}</div>
-
-          <div>
-            <div className="flex items-center space-x-2">
-              <span className="font-emoji text-base">{getTypeIcon(achievement.type)}</span>
-              <span className="text-xs text-gray-500">
-                {ACHIEVEMENT_TYPES.find(t => t.value === achievement.type)?.label || achievement.type}
-              </span>
-            </div>
-          </div>
-
-          <div className="text-xs">
-            {getCriteriaDisplay(achievement.criteria, achievement.type)}
-          </div>
-
-          <div>{achievement.points}</div>
-          <div>
-            <div className="flex items-center space-x-2">
-              {(() => {
-                const canEdit = isTournamentCreator || achievement.created_by === currentUserId;
-                return (
-                  <>
-                    <Switch
-                      checked={achievement.is_active}
-                      onCheckedChange={() => onToggleStatus(achievement)}
-                      disabled={!canEdit}
-                      className="data-[state=checked]:bg-arcade-neonCyan"
-                      title={canEdit ? "Toggle achievement status" : "You can only modify achievements you created or achievements in tournaments you own"}
-                    />
-                    <span className={achievement.is_active ? 'text-green-500' : 'text-gray-500'}>
-                      {achievement.is_active ? 'Active' : 'Inactive'}
-                    </span>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-
-          <div>{achievement.unlock_count || 0}</div>
-
-          {isTournamentCreator && (
-            <div className="text-xs text-gray-500">
-              {achievement.created_by === currentUserId ? 'You' : 'User'}
-            </div>
-          )}
-          <div>
-            <div className="flex space-x-2">
-              {(() => {
-                const canEdit = isTournamentCreator || achievement.created_by === currentUserId;
-                return (
-                  <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onEdit(achievement)}
-                      disabled={!canEdit}
-                      className={canEdit ? "text-blue-500 hover:text-blue-600" : "text-gray-400 cursor-not-allowed"}
-                      title={canEdit ? "Edit achievement" : "You can only edit achievements you created or achievements in tournaments you own"}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(achievement)}
-                      disabled={!canEdit}
-                      className={canEdit ? "text-red-500 hover:text-red-600" : "text-gray-400 cursor-not-allowed"}
-                      title={canEdit ? "Delete achievement" : "You can only delete achievements you created or achievements in tournaments you own"}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </>
-                );
-              })()}
-            </div>
-          </div>
-        </div>
-      ))}
-      </div>
-    </div>
-  );
-};
-
-// Player Achievements Table Component
-const PlayerAchievementsTable = ({
-  playerAchievements,
-  onDelete
-}: {
-  playerAchievements: any[];
-  onDelete: (id: string) => void;
-}) => {
-  const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set());
-  const [localAchievements, setLocalAchievements] = React.useState(playerAchievements);
-
-  // Update local state when props change
-  React.useEffect(() => {
-    setLocalAchievements(playerAchievements);
-  }, [playerAchievements]);
-
-  const handleDelete = async (id: string) => {
-    // Start the fade-out animation
-    setDeletingIds(prev => new Set([...prev, id]));
-
-    // Wait for animation, then remove from state (this will trigger the slide-up)
-    setTimeout(() => {
-      setLocalAchievements(prev => prev.filter(pa => pa.id !== id));
-      onDelete(id);
-
-      // Clean up animation state after a brief delay to let the slide-up complete
-      setTimeout(() => {
-        setDeletingIds(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(id);
-          return newSet;
-        });
-      }, 50);
-    }, 280); // Slightly before animation completes
-  };
-
-  return (
-    <div className="border rounded-md">
-      {/* Header */}
-      <div className="grid grid-cols-4 gap-4 p-3 border-b bg-muted/50 font-medium text-sm">
-        <div>Achievement</div>
-        <div>Player</div>
-        <div>Earned Date</div>
-        <div>Actions</div>
-      </div>
-
-      {/* Body */}
-      <div className="divide-y">
-      {localAchievements.map((playerAchievement, index) => (
-        <div
-          key={playerAchievement.id}
-          className={`grid grid-cols-4 gap-4 p-3 transition-all duration-300 ease-in-out overflow-hidden ${
-            deletingIds.has(playerAchievement.id)
-              ? 'opacity-0 max-h-0 py-0 scale-y-0'
-              : 'opacity-100 max-h-20 scale-y-100'
-          }`}
-          style={{
-            transformOrigin: 'top',
-            transition: 'all 300ms ease-in-out'
-          }}
-        >
-          <div className="flex items-center gap-3">
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-lg"
-              style={{ backgroundColor: playerAchievement.achievements.badge_color }}
-            >
-              {playerAchievement.achievements.badge_icon}
-            </div>
-            <span className="font-medium">{playerAchievement.achievements.name}</span>
-          </div>
-
-          <div className="font-medium">{playerAchievement.player_name}</div>
-
-          <div className="text-sm text-gray-500">
-            {new Date(playerAchievement.earned_at).toLocaleDateString()}
-          </div>
-
-          <div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleDelete(playerAchievement.id)}
-              className="text-red-500 hover:text-red-600"
-              title="Remove this achievement from player"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      ))}
-      </div>
-    </div>
-  );
-};

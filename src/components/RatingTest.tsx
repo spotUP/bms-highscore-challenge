@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GameRatingDisplay } from "./GameRatingDisplay";
 import { GameMediaGallery } from "./GameMediaGallery";
 
@@ -17,11 +16,7 @@ export const RatingTest: React.FC = () => {
   const rawgApiKey = import.meta.env.VITE_RAWG_API_KEY;
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle>🎯 Enhanced Rating System Test</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="space-y-4">
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">
             RAWG API Status: {rawgApiKey ? '✅ Connected' : '❌ Not configured'}
@@ -73,7 +68,6 @@ export const RatingTest: React.FC = () => {
           <p>• System automatically aggregates multiple sources</p>
           <p>• Shows confidence levels and source attribution</p>
         </div>
-      </CardContent>
-    </Card>
+    </div>
   );
 };
