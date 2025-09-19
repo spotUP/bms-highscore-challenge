@@ -23,6 +23,7 @@ export interface Tournament {
   updated_at: string | null;
   is_locked?: boolean; // New: lock/unlock tournaments (default false)
   scores_locked: boolean; // New: lock/unlock score submissions (default false)
+  status: 'draft' | 'active' | 'completed'; // Tournament status
   start_time?: string | null;
   end_time?: string | null;
 }
@@ -64,6 +65,10 @@ interface CreateTournamentData {
   is_public?: boolean;
   start_time?: string | null;
   end_time?: string | null;
+  status?: 'draft' | 'active' | 'completed';
+  is_active?: boolean;
+  is_locked?: boolean;
+  scores_locked?: boolean;
 }
 
 const TournamentContext = createContext<TournamentContextType | undefined>(undefined);
@@ -95,6 +100,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           .select('*')
           .eq('slug', 'default-arcade')
           .eq('is_public', true)
+          .eq('is_active', true)
           .limit(1)
           .maybeSingle();
         if (bySlug) {
@@ -105,6 +111,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             .select('*')
             .eq('name', 'Default Arcade Tournament')
             .eq('is_public', true)
+            .eq('is_active', true)
             .limit(1)
             .maybeSingle();
           defaultTournament = byName;
@@ -126,7 +133,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           const { data: allTournaments } = await supabase
             .from('tournaments')
             .select('id, name, slug, is_public')
-            .eq('is_public', true);
+            .eq('is_public', true)
+            .eq('is_active', true);
           dlog('All tournaments:', allTournaments);
           // Show all public tournaments in the selector for anonymous users
           setUserTournaments(allTournaments || []);
@@ -187,7 +195,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         const { data: tList, error: tErr } = await supabase
           .from('tournaments')
           .select('*')
-          .in('id', tournamentIds);
+          .in('id', tournamentIds)
+          .eq('is_active', true);
         if (tErr) throw tErr;
         tournaments = tList || [];
       }

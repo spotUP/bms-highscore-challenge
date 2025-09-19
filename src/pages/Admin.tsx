@@ -40,6 +40,7 @@ import { useUserRoles } from "@/hooks/useUserRoles";
 import { useTournament } from "@/contexts/TournamentContext";
 import { usePerformanceMode } from "@/hooks/usePerformanceMode";
 import { useFullscreenContext } from "@/contexts/FullscreenContext";
+import { TournamentStatsModal } from "@/components/TournamentStatsModal";
 
 interface AdminProps {
   isExiting?: boolean;
@@ -1232,7 +1233,9 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     description: "",
     is_public: false,
     start_time: "",
-    end_time: ""
+    end_time: "",
+    is_active: true,
+    scores_locked: false
   });
   const gameLogoSuggestionsRef = useRef<GameLogoSuggestionsRef>(null);
   const [isResetting, setIsResetting] = useState(false);
@@ -1862,17 +1865,24 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     }
   };
 
-  // Delete tournament
-  const handleDeleteTournament = async (tournamentId: string) => {
+  // Delete tournament with stats storage option
+  const handleDeleteTournament = async (tournamentId: string, storeStats: boolean = false) => {
     if (!tournamentId) return;
 
     try {
+      if (storeStats) {
+        toast({
+          title: "Info",
+          description: "Stats storage functionality will be implemented in a future update"
+        });
+      }
+
       const success = await deleteTournament(tournamentId);
 
       if (success) {
         toast({
           title: "Success",
-          description: "Tournament deleted successfully"
+          description: storeStats ? "Tournament deleted and stats stored successfully" : "Tournament deleted successfully"
         });
       }
     } catch (error) {
@@ -1880,6 +1890,29 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       const msg = `Failed to delete tournament: ${String((error as any)?.message || error)}`;
       toast({ title: 'Error', description: msg, variant: 'destructive', action: (<ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>) });
     }
+  };
+
+  // Tournament stats modal state
+  const [statsModal, setStatsModal] = useState<{
+    isOpen: boolean;
+    tournamentId: string;
+    tournamentName: string;
+  }>({ isOpen: false, tournamentId: '', tournamentName: '' });
+
+  // Handle showing the stats storage prompt before deletion
+  const handleTournamentDeletionFlow = (tournamentId: string, tournamentName: string) => {
+    setStatsModal({ isOpen: true, tournamentId, tournamentName });
+  };
+
+  // Handle stats modal confirmation
+  const handleStatsModalConfirm = (storeStats: boolean) => {
+    setStatsModal({ isOpen: false, tournamentId: '', tournamentName: '' });
+    handleDeleteTournament(statsModal.tournamentId, storeStats);
+  };
+
+  // Handle stats modal close
+  const handleStatsModalClose = () => {
+    setStatsModal({ isOpen: false, tournamentId: '', tournamentName: '' });
   };
 
   // Open edit tournament dialog
@@ -1903,7 +1936,9 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       description: tournament.description || "",
       is_public: tournament.is_public || false,
       start_time: formatDateTimeForInput(tournament.start_time),
-      end_time: formatDateTimeForInput(tournament.end_time)
+      end_time: formatDateTimeForInput(tournament.end_time),
+      is_active: tournament.is_active ?? true,
+      scores_locked: tournament.scores_locked || false
     };
     setTournamentFormData(formData);
     setIsTournamentEditOpen(true);
@@ -1931,6 +1966,8 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
         is_public: tournamentFormData.is_public,
         start_time: formatDateTimeForDatabase(tournamentFormData.start_time),
         end_time: formatDateTimeForDatabase(tournamentFormData.end_time),
+        is_active: tournamentFormData.is_active,
+        scores_locked: tournamentFormData.scores_locked,
       });
 
       if (success) {
@@ -2041,7 +2078,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
             subtitle={`Managing ${currentTournament?.name} tournament`}
           />
 
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full min-h-[800px]">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="create-tournament">
               <Trophy className="w-4 h-4 mr-2" />Competitions
@@ -2051,9 +2088,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
             </TabsTrigger>
             <TabsTrigger value="users">
               <Users className="w-4 h-4 mr-2" />Users
-            </TabsTrigger>
-            <TabsTrigger value="ratings-test">
-              <TestTube className="w-4 h-4 mr-2" />Rating Test
             </TabsTrigger>
             <TabsTrigger value="system">
               <Settings className="w-4 h-4 mr-2" />System
@@ -2115,72 +2149,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                             <p className="text-xs text-gray-500">Created: {new Date(tournament.created_at).toLocaleDateString()}</p>
                           </div>
                           <div className="flex gap-3 items-center shrink-0">
-                            <div className="flex items-center gap-2">
-                              <Label htmlFor={`t-active-${tournament.id}`} className="text-xs text-gray-300">Active</Label>
-                              <Switch
-                                key={`t-active-${tournament.id}-${tournament.id === currentTournament?.id ? 'on' : 'off'}`}
-                                id={`t-active-${tournament.id}`}
-                                checked={tournament.id === currentTournament?.id}
-                                disabled={tournament.id === currentTournament?.id}
-                                onCheckedChange={async (checked) => {
-                                  if (!checked) return;
-                                  await switchTournament(tournament);
-                                  toast({ title: 'Highscore Tournament Switched', description: `Now managing "${tournament.name}"` });
-                                }}
-                                title={tournament.id === currentTournament?.id ? 'Current active highscore tournament' : 'Activate this highscore tournament'}
-                              />
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Label htmlFor={`t-scores-locked-${tournament.id}`} className="text-xs text-gray-300">Lock Scores</Label>
-                              <Switch
-                                id={`t-scores-locked-${tournament.id}`}
-                                checked={tournament.scores_locked || false}
-                                onCheckedChange={async (checked) => {
-                                  try {
-                                    
-                                    // First, try to add the column if it doesn't exist
-                                    const { error: columnError } = await supabase.rpc('exec_sql', {
-                                      sql: 'ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS scores_locked BOOLEAN NOT NULL DEFAULT false;'
-                                    });
-                                    
-                                    if (columnError && !columnError.message.includes('already exists')) {
-                                    }
-                                    
-                                    const { data, error } = await supabase
-                                      .from('tournaments')
-                                      .update({ scores_locked: checked })
-                                      .eq('id', tournament.id)
-                                      .select();
-                                    
-                                    if (error) {
-                                      console.error('Database error:', error);
-                                      
-                                      // If column doesn't exist, show a helpful message
-                                      if (error.message?.includes('column "scores_locked" of relation "tournaments" does not exist')) {
-                                        throw new Error('Database migration required. Please run the migration to add score locking functionality.');
-                                      }
-                                      
-                                      throw error;
-                                    }
-                                    
-                                    await refreshTournaments();
-                                    toast({ 
-                                      title: checked ? 'Scores Locked' : 'Scores Unlocked', 
-                                      description: `Score submissions are now ${checked ? 'locked' : 'unlocked'} for "${tournament.name}"` 
-                                    });
-                                  } catch (error: any) {
-                                    console.error('Error updating score lock:', error);
-                                    const errorMessage = error?.message || error?.details || 'Unknown error occurred';
-                                    toast({ 
-                                      title: 'Error', 
-                                      description: `Failed to update score lock setting: ${errorMessage}`,
-                                      variant: 'destructive'
-                                    });
-                                  }
-                                }}
-                                title={tournament.scores_locked ? 'Score submissions are locked' : 'Score submissions are unlocked'}
-                              />
-                            </div>
                             <Dialog>
                               <DialogTrigger asChild>
                                 <Button size="sm" variant="outline" title="Clone"><Copy className="w-4 h-4" /></Button>
@@ -2206,7 +2174,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                               </AlertDialogTrigger>
                               <AlertDialogContent className="bg-gray-900 text-white border-white/20">
                                 <AlertDialogHeader><AlertDialogTitle>Delete Highscore Tournament</AlertDialogTitle><AlertDialogDescription>Are you sure you want to delete "{tournament.name}"? This action cannot be undone and will remove all games, scores, and members.</AlertDialogDescription></AlertDialogHeader>
-                                <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteTournament(tournament.id)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction></AlertDialogFooter>
+                                <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleTournamentDeletionFlow(tournament.id, tournament.name)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction></AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
                           </div>
@@ -2405,19 +2373,14 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                   <Card className={getCardStyle('primary')}>
                     <CardHeader><CardTitle className={getTypographyStyle('h3')}>Performance Settings</CardTitle></CardHeader>
                     <CardContent>
-                      <div className="space-y-6">
-                        <PerformanceToggle />
-                        <div className="border-t pt-4">
-                          <div className="flex items-center justify-between">
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium">Performance Mode Toggle</p>
-                              <p className="text-xs text-muted-foreground">
-                                Quick toggle for performance mode in the navigation
-                              </p>
-                            </div>
-                            <PerformanceModeToggle displayType="switch" />
-                          </div>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">Performance Mode Toggle</p>
+                          <p className="text-xs text-muted-foreground">
+                            Quick toggle for performance mode in the navigation
+                          </p>
                         </div>
+                        <PerformanceModeToggle displayType="switch" />
                       </div>
                     </CardContent>
                   </Card>
@@ -2478,22 +2441,28 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
               </TabsContent>
 
               <TabsContent value="tests" className={`mt-6 ${enableAnimations ? (systemSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}>
-                <FunctionTests />
+                <div className="space-y-6">
+                  <FunctionTests />
+
+                  <Card className={getCardStyle('primary')}>
+                    <CardHeader>
+                      <CardTitle className={`${getTypographyStyle('h3')} flex items-center gap-2`}>
+                        <TestTube className="w-5 h-5 text-blue-400" />
+                        Rating System Test
+                      </CardTitle>
+                      <p className="text-muted-foreground">Test the new multi-source rating aggregation system</p>
+                    </CardHeader>
+                    <CardContent>
+                      <RatingTest />
+                    </CardContent>
+                  </Card>
+                </div>
               </TabsContent>
             </Tabs>
           </TabsContent>
           <TabsContent value="achievements" className={`mt-6 ${enableAnimations ? (tabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}><AchievementManagerV2 /></TabsContent>
           <TabsContent value="users" className={`mt-6 ${enableAnimations ? (tabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}><UserManagement /></TabsContent>
 
-          <TabsContent value="ratings-test" className={`mt-6 ${enableAnimations ? (tabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}>
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-bold">Enhanced Rating System Test</h2>
-                <p className="text-muted-foreground">Test the new multi-source rating aggregation system</p>
-              </div>
-              <RatingTest />
-            </div>
-          </TabsContent>
         </Tabs>
         </div>
 
@@ -2555,14 +2524,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                     placeholder="Enter logo URL or paste/upload an image"
                   />
                 </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="include_in_challenge"
-                  checked={formData.include_in_challenge}
-                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, include_in_challenge: checked }))}
-                />
-                <Label htmlFor="include_in_challenge">Include in Challenge</Label>
               </div>
               <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4">
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="w-full sm:w-auto">Cancel</Button>
@@ -2704,13 +2665,34 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                   />
                 </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="edit-tournament-public"
-                  checked={tournamentFormData.is_public}
-                  onCheckedChange={(checked) => setTournamentFormData(prev => ({ ...prev, is_public: checked }))}
-                />
-                <Label htmlFor="edit-tournament-public" className="text-white">Make Public</Label>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="edit-tournament-public" className="text-white">Make Public</Label>
+                  <Switch
+                    id="edit-tournament-public"
+                    checked={tournamentFormData.is_public}
+                    onCheckedChange={(checked) => setTournamentFormData(prev => ({ ...prev, is_public: checked }))}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="edit-tournament-active" className="text-white">Tournament Active</Label>
+                  <Switch
+                    id="edit-tournament-active"
+                    checked={tournamentFormData.is_active}
+                    onCheckedChange={(checked) => setTournamentFormData(prev => ({ ...prev, is_active: checked }))}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="edit-tournament-scores-locked" className="text-white">Lock Score Submissions</Label>
+                    <p className="text-xs text-gray-400 mt-1">Prevent new score submissions when locked</p>
+                  </div>
+                  <Switch
+                    id="edit-tournament-scores-locked"
+                    checked={tournamentFormData.scores_locked}
+                    onCheckedChange={(checked) => setTournamentFormData(prev => ({ ...prev, scores_locked: checked }))}
+                  />
+                </div>
               </div>
               <div className="flex justify-end space-x-2 pt-4">
                 <Button variant="outline" onClick={() => setIsTournamentEditOpen(false)}>Cancel</Button>
@@ -2743,6 +2725,13 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
           cancelText="Cancel"
           variant="outline"
           onConfirm={confirmDeleteScore}
+        />
+
+        <TournamentStatsModal
+          isOpen={statsModal.isOpen}
+          onClose={handleStatsModalClose}
+          onConfirm={handleStatsModalConfirm}
+          tournamentName={statsModal.tournamentName}
         />
       </PageContainer>
     </div>

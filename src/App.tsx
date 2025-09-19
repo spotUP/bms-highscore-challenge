@@ -20,6 +20,7 @@ import Layout from "@/components/Layout";
 import Index from "./pages/Index";
 import CompetitionRulesModal from "@/components/CompetitionRulesModal";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
+import { WelcomeModal } from "@/components/WelcomeModal";
 import "./styles/performance.css";
 import { BracketProvider } from "@/contexts/BracketContext";
 
@@ -123,6 +124,8 @@ const App = () => (
                     <Sonner />
                     {/* Add Score Notifications Listener */}
                     <ScoreNotificationsListener />
+                    {/* Welcome Modal for new users */}
+                    <WelcomeModal />
                     {/* Performance Monitor (Ctrl+Shift+P to toggle) */}
                     <PerformanceMonitor />
                     <BrowserRouter

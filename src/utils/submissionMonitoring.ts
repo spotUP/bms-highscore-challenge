@@ -11,9 +11,41 @@ interface SubmissionFailure {
 }
 
 // Track recent failures to prevent spam
-let recentFailures: SubmissionFailure[] = [];
 const FAILURE_WINDOW = 5 * 60 * 1000; // 5 minutes
 const MAX_FAILURES_PER_WINDOW = 3;
+const STORAGE_KEY = 'submissionFailures';
+
+// Get recent failures from localStorage, filtering out old ones
+function getRecentFailures(): SubmissionFailure[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (!stored) return [];
+
+    const failures: SubmissionFailure[] = JSON.parse(stored);
+    const cutoff = Date.now() - FAILURE_WINDOW;
+
+    // Filter out old failures
+    const recentFailures = failures.filter(f => new Date(f.timestamp).getTime() > cutoff);
+
+    // Update localStorage with cleaned list
+    if (recentFailures.length !== failures.length) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(recentFailures));
+    }
+
+    return recentFailures;
+  } catch (e) {
+    return [];
+  }
+}
+
+// Store failures to localStorage
+function storeFailures(failures: SubmissionFailure[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(failures));
+  } catch (e) {
+    // localStorage might be full or unavailable
+  }
+}
 
 export async function reportSubmissionFailure(failure: Omit<SubmissionFailure, 'timestamp'>) {
   const timestamp = new Date().toISOString();
@@ -22,12 +54,12 @@ export async function reportSubmissionFailure(failure: Omit<SubmissionFailure, '
     timestamp
   };
 
-  // Add to recent failures
+  // Get current failures and add new one
+  const recentFailures = getRecentFailures();
   recentFailures.push(fullFailure);
 
-  // Clean old failures
-  const cutoff = Date.now() - FAILURE_WINDOW;
-  recentFailures = recentFailures.filter(f => new Date(f.timestamp).getTime() > cutoff);
+  // Store updated failures
+  storeFailures(recentFailures);
 
   // Check if we should send an alert
   const shouldSendAlert = recentFailures.length >= MAX_FAILURES_PER_WINDOW;
@@ -35,7 +67,7 @@ export async function reportSubmissionFailure(failure: Omit<SubmissionFailure, '
   if (shouldSendAlert) {
     await sendFailureAlert(recentFailures);
     // Clear failures after sending to prevent duplicate alerts
-    recentFailures = [];
+    storeFailures([]);
   }
 
   // Log locally for debugging
@@ -87,8 +119,8 @@ async function sendFailureAlert(failures: SubmissionFailure[]) {
 
 // Function to get current failure rate for status indicator
 export function getSubmissionHealthStatus() {
-  const cutoff = Date.now() - FAILURE_WINDOW;
-  const recentFailureCount = recentFailures.filter(f => new Date(f.timestamp).getTime() > cutoff).length;
+  const recentFailures = getRecentFailures();
+  const recentFailureCount = recentFailures.length;
 
   if (recentFailureCount === 0) {
     return { status: 'healthy', message: 'All submissions working normally' };
