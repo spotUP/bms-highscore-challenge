@@ -640,20 +640,8 @@ const AchievementManagerV2 = () => {
     if (!currentTournament || !user) return;
 
     try {
-      // Use service role key for admin operations
-      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-      if (!serviceRoleKey) {
-        throw new Error('Service role key not available');
-      }
-
-      const { createClient } = await import('@supabase/supabase-js');
-      const adminSupabase = createClient(
-        import.meta.env.VITE_SUPABASE_URL,
-        serviceRoleKey
-      );
-
-      // Clear all achievement definitions for current tournament
-      const { error } = await adminSupabase
+      // Use regular authenticated client - RLS should allow tournament creators to delete their achievements
+      const { error } = await supabase
         .from('achievements')
         .delete()
         .eq('tournament_id', currentTournament.id);
@@ -723,89 +711,34 @@ const AchievementManagerV2 = () => {
     }
 
     try {
-
-      // Use admin client with service role key for deletion
-      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-      if (!serviceRoleKey) {
-        throw new Error('Service role key not configured');
-      }
-
-      const { createClient } = await import('@supabase/supabase-js');
-      const adminSupabase = createClient(
-        import.meta.env.VITE_SUPABASE_URL,
-        serviceRoleKey,
-        {
-          auth: {
-            persistSession: false,
-            storage: {
-              getItem: () => null,
-              setItem: () => {},
-              removeItem: () => {}
-            }
-          }
+      // Use Edge Function for secure deletion
+      const { data, error } = await supabase.functions.invoke('manage-player-achievements', {
+        body: {
+          action: 'delete',
+          player_achievement_id: playerAchievementId
         }
-      );
-
-      // Verify the record exists before deletion
-      const { data: existingRecord, error: checkError } = await adminSupabase
-        .from('player_achievements')
-        .select('id, player_name, achievements(name)')
-        .eq('id', playerAchievementId)
-        .single();
-
-      if (checkError) {
-        console.error('❌ Error checking record:', checkError);
-        throw new Error(`Failed to verify record: ${checkError.message}`);
-      }
-
-      if (!existingRecord) {
-        throw new Error('Player achievement not found');
-      }
-
-
-      // Perform the deletion
-      const { error, count } = await adminSupabase
-        .from('player_achievements')
-        .delete({ count: 'exact' })
-        .eq('id', playerAchievementId);
-
-      if (error) {
-        console.error('❌ Deletion error:', error);
-        throw error;
-      }
-
-
-      if (count === 0) {
-        throw new Error('No records were deleted - this may indicate a permission issue');
-      }
-
-      // Verify deletion was successful
-      const { data: verifyRecord, error: verifyError } = await adminSupabase
-        .from('player_achievements')
-        .select('id')
-        .eq('id', playerAchievementId)
-        .single();
-
-      if (!verifyError || verifyError.code === 'PGRST116') {
-        // PGRST116 means no record found, which is what we want
-      } else {
-        console.error('⚠️ Verification error:', verifyError);
-      }
-
-      toast({
-        title: "Success",
-        description: `Player achievement for "${existingRecord.player_name}" removed successfully`,
       });
 
-      // Optimistically remove the achievement from state without refetching
-      setPlayerAchievements(prev => prev.filter(pa => pa.id !== playerAchievementId));
+      if (error) throw error;
 
-      // Only invalidate queries without forcing immediate refetch
-      // This updates cache but doesn't trigger loading state
-      await queryClient.invalidateQueries({
-        queryKey: ['achievements'],
-        refetchType: 'none'
-      });
+      if (data && data.success) {
+        console.log('✅ Successfully deleted player achievement');
+
+        toast({
+          title: "Success",
+          description: data.message,
+        });
+
+        // Optimistically remove the achievement from state without refetching
+        setPlayerAchievements(prev => prev.filter(pa => pa.id !== playerAchievementId));
+
+        // Only invalidate queries without forcing immediate refetch
+        // This updates cache but doesn't trigger loading state
+        await queryClient.invalidateQueries({
+          queryKey: ['achievements'],
+          refetchType: 'none'
+        });
+      }
 
     } catch (error: any) {
       console.error('❌ Error deleting player achievement:', error);
@@ -947,110 +880,7 @@ const AchievementManagerV2 = () => {
               <>
                 <Button
                   variant="outline"
-                  onClick={async () => {
-
-                    if (!confirm('Are you sure you want to clear ALL PLAYERS\' achievement progress? This action cannot be undone.')) {
-                      return;
-                    }
-
-
-                    try {
-
-                      // Use service role key for ALL operations to ensure consistency
-                      const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-
-                      const { createClient } = await import('@supabase/supabase-js');
-                      const adminSupabase = createClient(
-                        import.meta.env.VITE_SUPABASE_URL,
-                        serviceRoleKey,
-                        {
-                          auth: { persistSession: false }
-                        }
-                      );
-
-                      // Count records before using the SAME admin client
-                      const { data: beforeCount, error: beforeError } = await adminSupabase
-                        .from('player_achievements')
-                        .select('id')
-                        .eq('tournament_id', currentTournament?.id);
-
-                      if (beforeError) {
-                        throw beforeError;
-                      }
-
-                
-                      // Try to delete using raw SQL function call to bypass RLS
-
-                      const deleteSQL = `DELETE FROM player_achievements WHERE tournament_id = '${currentTournament?.id}'`;
-
-                      // Try using the execute_sql function if it exists
-                      let actualDeleted = 0;
-
-                      try {
-                        const { data: sqlResult, error: sqlError } = await adminSupabase
-                          .rpc('execute_sql', { query: deleteSQL });
-
-                        if (sqlError) {
-                          // Fallback to regular delete
-                          const { error, count } = await adminSupabase
-                            .from('player_achievements')
-                            .delete({ count: 'exact' })
-                            .eq('tournament_id', currentTournament?.id);
-
-                          if (error) {
-                            console.error('❌ Fallback delete failed:', error);
-                            throw error;
-                          }
-
-                          actualDeleted = count || 0;
-                        } else {
-                          actualDeleted = beforeCount?.length || 0; // Assume all were deleted
-                        }
-                      } catch (e) {
-                        // Final fallback - regular delete
-                        const { error, count } = await adminSupabase
-                          .from('player_achievements')
-                          .delete({ count: 'exact' })
-                          .eq('tournament_id', currentTournament?.id);
-
-                        if (error) {
-                          console.error('❌ Final fallback delete failed:', error);
-                          throw error;
-                        }
-
-                        actualDeleted = count || 0;
-                      }
-
-                      // Verify deletion
-                      const { data: afterCount } = await adminSupabase
-                        .from('player_achievements')
-                        .select('id')
-                        .eq('tournament_id', currentTournament?.id);
-
-                      const remainingRecords = afterCount?.length || 0;
-
-                      // Calculate actual deleted records
-                      const verifiedDeleted = (beforeCount?.length || 0) - remainingRecords;
-                      actualDeleted = Math.max(actualDeleted, verifiedDeleted);
-
-
-                      toast({
-                        title: "Success",
-                        description: `Cleared ${actualDeleted} player achievement records`,
-                      });
-
-                      // Refresh the UI
-                      await invalidateQueries();
-
-                    } catch (error) {
-                      console.error('❌ Error:', error);
-                      toast({
-                        title: "Error",
-                        description: `Failed to clear achievements: ${error.message}`,
-                        variant: "destructive",
-                      });
-                    }
-                  }}
+                  onClick={() => setClearAllDialog({ open: true })}
                   className="bg-red-600 hover:bg-red-700"
                 >
                   <Trash2 className="w-4 h-4 mr-2" />
