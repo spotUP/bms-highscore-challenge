@@ -332,7 +332,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                 <section key={game.id} data-game-id={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? `${(games.length - 1 - games.findIndex(g => g.id === game.id)) * 50}ms` : `${games.findIndex(g => g.id === game.id) * 200}ms`)}}>
                   {/* Card containing logo, scores and QR code */}
                   <Card
-                    className="bg-black/30 border-white/20 theme-card flex-1 flex flex-col cursor-pointer hover:scale-[1.02] transition-transform duration-200"
+                    className="bg-black/30 border-white/20 theme-card flex-1 flex flex-col cursor-pointer hover:scale-105 transition-transform duration-200"
                     style={getRunnerStyle(game.id)}
                     onClick={() => handleGameLogoClick(game)}
                     title={`Click to submit score for ${game.name}`}

@@ -59,7 +59,7 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
         key={path}
         variant="ghost"
         onClick={() => handleAnimatedNavigation(path)}
-        className="w-full justify-start text-left transition-all duration-200 hover:scale-[1.02] hover:bg-white/10 hover:shadow-sm hover:translate-x-1"
+        className="w-full justify-start text-left transition-all duration-200 hover:scale-105 hover:bg-white/10 hover:shadow-sm hover:translate-x-1"
         style={{ animationDelay: `${index * 50}ms` }}
       >
         <span className={`transition-all duration-200 ${isOpen ? 'animate-fade-in-up' : ''}`}>
@@ -121,7 +121,7 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
               key={page.path}
               variant="ghost"
               onClick={() => handleAnimatedNavigation(page.path)}
-              className="w-full justify-start text-left transition-all duration-200 hover:scale-[1.02] hover:bg-white/10 hover:shadow-sm hover:translate-x-1"
+              className="w-full justify-start text-left transition-all duration-200 hover:scale-105 hover:bg-white/10 hover:shadow-sm hover:translate-x-1"
               style={{ animationDelay: `${itemIndex++ * 50}ms` }}
             >
               <div className={`flex items-center gap-3 transition-all duration-200 ${isOpen ? 'animate-fade-in-up' : ''}`}>
@@ -145,7 +145,7 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
                   key={page.path}
                   variant="ghost"
                   onClick={() => handleAnimatedNavigation(page.path)}
-                  className="w-full justify-start text-left transition-all duration-200 hover:scale-[1.02] hover:bg-amber-500/10 hover:shadow-sm hover:translate-x-1"
+                  className="w-full justify-start text-left transition-all duration-200 hover:scale-105 hover:bg-amber-500/10 hover:shadow-sm hover:translate-x-1"
                   style={{ animationDelay: `${itemIndex++ * 50}ms` }}
                 >
                   <div className={`flex items-center gap-3 transition-all duration-200 ${isOpen ? 'animate-fade-in-up' : ''} text-amber-200`}>
@@ -163,7 +163,7 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
           <Button
             variant="ghost"
             onClick={() => handleNavigation(signOut)}
-            className={`w-full justify-start text-left transition-all duration-200 hover:scale-[1.02] hover:bg-red-500/20 hover:text-red-400 hover:translate-x-1 ${
+            className={`w-full justify-start text-left transition-all duration-200 hover:scale-105 hover:bg-red-500/20 hover:text-red-400 hover:translate-x-1 ${
               isOpen ? 'animate-fade-in-up' : ''
             }`}
             style={{ animationDelay: `${itemIndex * 50}ms` }}
