@@ -127,19 +127,6 @@ export const FightingGamesSuggestionsModal: React.FC<FightingGamesSuggestionsMod
     }
   };
 
-  const handleUseSelected = () => {
-    if (selectedGames.size === 0) {
-      toast({
-        title: 'No games selected',
-        description: 'Please select at least one fighting game',
-        variant: 'destructive'
-      });
-      return;
-    }
-
-    onSelectGames(Array.from(selectedGames));
-    onClose();
-  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -150,7 +137,8 @@ export const FightingGamesSuggestionsModal: React.FC<FightingGamesSuggestionsMod
             Best Arcade 2-Player Fighting Games
           </DialogTitle>
           <DialogDescription className="text-gray-300">
-            Select from 30 of the greatest arcade 2-player versus fighting games ever made, curated from our game database.
+            Browse 30 of the greatest arcade 2-player versus fighting games ever made, curated from our game database.
+            These are suggestions only - manually copy any game names you want to use in your tournament.
           </DialogDescription>
         </DialogHeader>
 
@@ -253,20 +241,15 @@ export const FightingGamesSuggestionsModal: React.FC<FightingGamesSuggestionsMod
             </>
           )}
 
-          <div className="flex-shrink-0 flex flex-col sm:flex-row justify-end gap-2 pt-4 border-t border-gray-700">
+          <div className="flex-shrink-0 flex flex-col justify-center gap-2 pt-4 border-t border-gray-700">
+            <p className="text-sm text-gray-400 text-center mb-2">
+              💡 Tip: Select game names and copy them manually to your tournament setup
+            </p>
             <Button
-              variant="outline"
               onClick={onClose}
-              className="border-gray-600 text-gray-300 hover:bg-gray-800"
+              className="self-center bg-gray-600 hover:bg-gray-700 text-white"
             >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUseSelected}
-              disabled={selectedGames.size === 0 || loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              Use Selected Games ({selectedGames.size})
+              Close
             </Button>
           </div>
         </div>
