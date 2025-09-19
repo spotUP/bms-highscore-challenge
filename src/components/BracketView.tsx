@@ -66,109 +66,37 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
 
     const positions = new Map<string, { x: number; y: number; centerY: number }>();
 
-    const layoutSection = (roundsArr: [number, BracketMatch[]][], sectionOffsetX: number, isReversed: boolean = false) => {
-      roundsArr.forEach(([round, matchList], colIdx) => {
-        const sortedMatches = matchList.slice().sort((a, b) => a.position - b.position);
-        const baseSpacing = Math.max(120, matchTotalHeight + 40);
+    // Define consistent spacing values with better scaling for large tournaments
+    const firstRoundMatchCount = Math.max(
+      winners.length > 0 ? winners[0][1].length : 0,
+      losers.length > 0 ? losers[0][1].length : 0
+    );
 
-        // For mirrored losers bracket, reverse column index
-        const actualColIdx = isReversed ? (roundsArr.length - 1 - colIdx) : colIdx;
+    // Scale spacing based on tournament size - more matches need more space
+    const scaleFactor = Math.max(1, Math.min(2.5, firstRoundMatchCount / 8));
+    const baseSpacing = Math.max(140, (matchTotalHeight + 50) * scaleFactor);
+    const minSectionGap = Math.max(200, 120 * scaleFactor); // Much larger gap for big tournaments
 
-        if (colIdx === 0) {
-          // First round: use regular spacing
-          const roundSpacing = baseSpacing;
-          sortedMatches.forEach((match, index) => {
-            const x = sectionOffsetX + actualColIdx * colWidth;
-            const y = index * roundSpacing + 200; // Add vertical offset
-            const centerY = y + (matchHeight / 2);
-            positions.set(match.id, { x, y, centerY });
-          });
-        } else {
-          // Subsequent rounds: center between parent matches
-          const prevRound = roundsArr[colIdx - 1];
-          if (prevRound) {
-            const [, prevMatches] = prevRound;
-            sortedMatches.forEach((match, index) => {
-              const x = sectionOffsetX + actualColIdx * colWidth;
-
-              // Find the two parent matches that feed into this match
-              const parentMatch1Position = (match.position - 1) * 2 + 1;
-              const parentMatch2Position = (match.position - 1) * 2 + 2;
-
-              const parent1 = prevMatches.find(m => m.position === parentMatch1Position);
-              const parent2 = prevMatches.find(m => m.position === parentMatch2Position);
-
-              let y: number;
-              if (parent1 && parent2) {
-                // Center between the two parent matches
-                const parent1Pos = positions.get(parent1.id);
-                const parent2Pos = positions.get(parent2.id);
-                if (parent1Pos && parent2Pos) {
-                  y = (parent1Pos.centerY + parent2Pos.centerY) / 2 - (matchHeight / 2);
-                } else {
-                  // Fallback to exponential spacing
-                  const roundSpacing = baseSpacing * Math.pow(2, Math.max(0, (round % 100) - 1));
-                  y = index * roundSpacing + 200;
-                }
-              } else if (parent1) {
-                // Only one parent (odd number of matches in previous round)
-                const parent1Pos = positions.get(parent1.id);
-                if (parent1Pos) {
-                  y = parent1Pos.centerY - (matchHeight / 2);
-                } else {
-                  const roundSpacing = baseSpacing * Math.pow(2, Math.max(0, (round % 100) - 1));
-                  y = index * roundSpacing + 200;
-                }
-              } else {
-                // No parents found, use exponential spacing as fallback
-                const roundSpacing = baseSpacing * Math.pow(2, Math.max(0, (round % 100) - 1));
-                y = index * roundSpacing + 200;
-              }
-
-              const centerY = y + (matchHeight / 2);
-              positions.set(match.id, { x, y, centerY });
-            });
-          } else {
-            // Fallback to exponential spacing
-            const roundSpacing = baseSpacing * Math.pow(2, Math.max(0, (round % 100) - 1));
-            sortedMatches.forEach((match, index) => {
-              const x = sectionOffsetX + actualColIdx * colWidth;
-              const y = index * roundSpacing + 200;
-              const centerY = y + (matchHeight / 2);
-              positions.set(match.id, { x, y, centerY });
-            });
-          }
-        }
-      });
-    };
-
-    // Traditional layout: Winners on top, losers on bottom, finals on right
-    const winnersCols = winners.length;
-    const losersCols = losers.length;
-    const maxCols = Math.max(winnersCols, losersCols);
-
-    // Define baseSpacing for use throughout the layout
-    const baseSpacing = Math.max(120, matchTotalHeight + 40);
-
-    // Winners bracket on the top
+    // Winners bracket layout
     const winnersOffsetX = 40;
     const winnersOffsetY = 40;
 
-    // Layout winners section with custom positioning for traditional layout
+    // Calculate winners bracket positions first
+    let winnersMaxY = winnersOffsetY;
     winners.forEach(([round, list], colIdx) => {
       const sortedMatches = list.slice().sort((a, b) => a.position - b.position);
 
       if (colIdx === 0) {
-        // First round: evenly spaced
-        const roundSpacing = baseSpacing;
+        // First round: use the scaled base spacing for large tournaments
         sortedMatches.forEach((match, index) => {
           const x = winnersOffsetX + colIdx * colWidth;
-          const y = winnersOffsetY + index * roundSpacing;
+          const y = winnersOffsetY + index * baseSpacing;
           const centerY = y + (matchHeight / 2);
           positions.set(match.id, { x, y, centerY });
+          winnersMaxY = Math.max(winnersMaxY, y + matchTotalHeight);
         });
       } else {
-        // Subsequent rounds: center between parent matches
+        // Subsequent rounds: center between parent matches with better fallback spacing
         const prevRound = winners[colIdx - 1];
         if (prevRound) {
           const [, prevMatches] = prevRound;
@@ -189,58 +117,88 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
               if (parent1Pos && parent2Pos) {
                 y = (parent1Pos.centerY + parent2Pos.centerY) / 2 - (matchHeight / 2);
               } else {
-                y = winnersOffsetY + index * baseSpacing * Math.pow(2, colIdx);
+                // Better fallback: use adaptive spacing instead of exponential
+                const adaptiveSpacing = baseSpacing * Math.min(4, Math.pow(1.8, colIdx));
+                y = winnersOffsetY + index * adaptiveSpacing;
               }
             } else if (parent1) {
               const parent1Pos = positions.get(parent1.id);
-              y = parent1Pos ? parent1Pos.centerY - (matchHeight / 2) : winnersOffsetY + index * baseSpacing * Math.pow(2, colIdx);
+              if (parent1Pos) {
+                y = parent1Pos.centerY - (matchHeight / 2);
+              } else {
+                const adaptiveSpacing = baseSpacing * Math.min(4, Math.pow(1.8, colIdx));
+                y = winnersOffsetY + index * adaptiveSpacing;
+              }
             } else {
-              y = winnersOffsetY + index * baseSpacing * Math.pow(2, colIdx);
+              // Better fallback: use adaptive spacing instead of exponential
+              const adaptiveSpacing = baseSpacing * Math.min(4, Math.pow(1.8, colIdx));
+              y = winnersOffsetY + index * adaptiveSpacing;
             }
 
             const centerY = y + (matchHeight / 2);
             positions.set(match.id, { x, y, centerY });
+            winnersMaxY = Math.max(winnersMaxY, y + matchTotalHeight);
           });
         }
       }
     });
 
-    // Losers bracket on the bottom
+    // Calculate dynamic losers bracket position based on winners bracket height
     const losersOffsetX = 40;
-    const losersOffsetY = winnersOffsetY + 600; // Below winners bracket
+    const losersOffsetY = winnersMaxY + minSectionGap; // Dynamic positioning based on actual winners height
 
-    // Layout losers section
+    // Layout losers section with improved positioning
     losers.forEach(([round, list], colIdx) => {
       const sortedMatches = list.slice().sort((a, b) => a.position - b.position);
 
-      // Losers bracket has more complex positioning
-      const x = losersOffsetX + colIdx * colWidth;
-
       if (colIdx === 0) {
-        // First losers round: evenly spaced
-        const roundSpacing = baseSpacing;
+        // First losers round: use the scaled base spacing for large tournaments
         sortedMatches.forEach((match, index) => {
-          const y = losersOffsetY + index * roundSpacing;
+          const x = losersOffsetX + colIdx * colWidth;
+          const y = losersOffsetY + index * baseSpacing;
           const centerY = y + (matchHeight / 2);
           positions.set(match.id, { x, y, centerY });
         });
       } else {
-        // Subsequent losers rounds: center between previous matches
+        // Subsequent losers rounds: center between previous matches with better spacing
         const prevRound = losers[colIdx - 1];
         if (prevRound) {
           const [, prevMatches] = prevRound;
           sortedMatches.forEach((match, index) => {
-            // For losers bracket, positioning can be more complex
+            const x = losersOffsetX + colIdx * colWidth;
+
+            // Losers bracket has more complex positioning due to mixed flow
+            // Try to center between parent matches when possible
             let y: number;
-            if (prevMatches.length >= 2) {
-              // Try to center between previous round matches
-              const spacing = baseSpacing * Math.pow(2, colIdx);
-              y = losersOffsetY + index * spacing;
+
+            // For losers bracket, the parent finding logic is more complex
+            // due to the mixed flow of losers from winners bracket and advancement
+            if (prevMatches.length >= 2 && index * 2 + 1 < prevMatches.length) {
+              const parent1 = prevMatches[index * 2];
+              const parent2 = prevMatches[index * 2 + 1];
+
+              if (parent1 && parent2) {
+                const parent1Pos = positions.get(parent1.id);
+                const parent2Pos = positions.get(parent2.id);
+                if (parent1Pos && parent2Pos) {
+                  y = (parent1Pos.centerY + parent2Pos.centerY) / 2 - (matchHeight / 2);
+                } else {
+                  // Better fallback: use adaptive spacing for losers bracket
+                  const adaptiveSpacing = baseSpacing * Math.min(3, Math.pow(1.6, colIdx));
+                  y = losersOffsetY + index * adaptiveSpacing;
+                }
+              } else {
+                const adaptiveSpacing = baseSpacing * Math.min(3, Math.pow(1.6, colIdx));
+                y = losersOffsetY + index * adaptiveSpacing;
+              }
+            } else if (prevMatches.length === 1) {
+              // Single parent case
+              const parentPos = positions.get(prevMatches[0].id);
+              y = parentPos ? parentPos.centerY - (matchHeight / 2) : losersOffsetY + index * baseSpacing;
             } else {
-              // Single match case
-              const prevMatch = prevMatches[0];
-              const prevPos = positions.get(prevMatch?.id);
-              y = prevPos ? prevPos.centerY - (matchHeight / 2) : losersOffsetY + index * baseSpacing;
+              // Fallback to adaptive spacing
+              const adaptiveSpacing = baseSpacing * Math.min(3, Math.pow(1.6, colIdx));
+              y = losersOffsetY + index * adaptiveSpacing;
             }
 
             const centerY = y + (matchHeight / 2);
@@ -250,13 +208,15 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
       }
     });
 
-    // Grand finals on the right side
+    // Grand finals positioning - center between winners and losers final positions
     if (grand.length > 0) {
+      const maxCols = Math.max(winners.length, losers.length);
       const finalX = winnersOffsetX + maxCols * colWidth + 100;
+
       grand.forEach(([round, matchList]) => {
         matchList.forEach((match, index) => {
-          // Position finals roughly in the middle vertically
-          const finalY = winnersOffsetY + 300;
+          // Position finals roughly in the middle vertically between winners and losers
+          const finalY = winnersOffsetY + (winnersMaxY - winnersOffsetY) / 2;
           const centerY = finalY + (matchHeight / 2);
           positions.set(match.id, { x: finalX, y: finalY, centerY });
         });
@@ -264,7 +224,7 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
     }
 
     return { winnersRounds: winners, losersRounds: losers, grandRounds: grand, matchPositions: positions };
-  }, [matches, matchHeight]);
+  }, [matches, matchHeight, matchTotalHeight]);
 
   // Zoom controls (component scope)
   const zoomIn = () => smoothZoomTo(Math.min(3, scale * 1.1));
@@ -469,7 +429,27 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
   const winnersOffsetX = 40;
   const winnersOffsetY = 40;
   const losersOffsetX = 40;
-  const losersOffsetY = winnersOffsetY + 600;
+
+  // Calculate dynamic losers offset based on actual winners bracket height
+  let winnersMaxY = winnersOffsetY;
+  winnersRounds.forEach(([round, list]) => {
+    list.forEach(match => {
+      const pos = matchPositions.get(match.id);
+      if (pos) {
+        winnersMaxY = Math.max(winnersMaxY, pos.y + matchTotalHeight);
+      }
+    });
+  });
+
+  // Recalculate scale factor for proper gap sizing
+  const firstRoundMatchCountForGap = Math.max(
+    winnersRounds.length > 0 ? winnersRounds[0][1].length : 0,
+    losersRounds.length > 0 ? losersRounds[0][1].length : 0
+  );
+  const scaleFactorForGap = Math.max(1, Math.min(2.5, firstRoundMatchCountForGap / 8));
+  const minSectionGap = Math.max(200, 120 * scaleFactorForGap);
+  const losersOffsetY = winnersMaxY + minSectionGap;
+
   const maxCols = Math.max(winnersRounds.length, losersRounds.length);
   const finalX = winnersOffsetX + maxCols * colWidth + 100;
 
@@ -489,8 +469,19 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
   const losersHeight = computeSectionHeight(losersRounds);
   const grandHeight = computeSectionHeight(grandRounds);
 
-  // Traditional layout: total height is winners + losers vertically, width includes final column
-  const contentHeight = winnersHeight + losersHeight + 200; // Space between winners and losers
+  // Calculate actual content dimensions based on dynamic positioning
+  let losersMaxY = losersOffsetY;
+  losersRounds.forEach(([round, list]) => {
+    list.forEach(match => {
+      const pos = matchPositions.get(match.id);
+      if (pos) {
+        losersMaxY = Math.max(losersMaxY, pos.y + matchTotalHeight);
+      }
+    });
+  });
+
+  // Traditional layout: total height includes both sections with actual spacing
+  const contentHeight = Math.max(losersMaxY - winnersOffsetY + 100, winnersHeight + losersHeight + minSectionGap);
   const contentWidth = finalX + colWidth + 100; // Includes final column width
 
   const zoomToFit = () => {
