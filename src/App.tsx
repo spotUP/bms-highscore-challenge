@@ -21,6 +21,8 @@ import Index from "./pages/Index";
 import CompetitionRulesModal from "@/components/CompetitionRulesModal";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import { WelcomeModal } from "@/components/WelcomeModal";
+import InteractiveHelpGuide from "@/components/InteractiveHelpGuide";
+import { useHelpGuide, HelpGuideProvider } from "@/hooks/useHelpGuide";
 import "./styles/performance.css";
 import { BracketProvider } from "@/contexts/BracketContext";
 
@@ -108,6 +110,49 @@ function RoutePersistence() {
   return null;
 }
 
+// Global UI Components (no router dependency)
+const GlobalUIComponents = () => {
+  return (
+    <>
+      <HyperspaceEffect />
+      <VHSOverlay />
+      <Toaster />
+      <Sonner />
+      {/* Add Score Notifications Listener */}
+      <ScoreNotificationsListener />
+      {/* Welcome Modal for new users */}
+      <WelcomeModal />
+      {/* Performance Monitor (Ctrl+Shift+P to toggle) */}
+      <PerformanceMonitor />
+    </>
+  );
+};
+
+// Help Guide Integration Component (inside router context)
+const HelpGuideRenderer = () => {
+  console.log('🎪🎪🎪 HelpGuideRenderer component is mounting/rendering!');
+
+  const { isOpen, currentTour, currentStepIndex, closeTour } = useHelpGuide();
+
+  console.log('🎪 HelpGuideRenderer render - Help Guide State:', {
+    isOpen,
+    currentTourId: currentTour?.id,
+    stepsCount: currentTour?.steps?.length,
+    currentStepIndex
+  });
+
+  // Always render but log the state
+  console.log('🎪 HelpGuideRenderer: About to render InteractiveHelpGuide with isOpen:', isOpen);
+
+  return (
+    <InteractiveHelpGuide
+      isOpen={isOpen}
+      onClose={closeTour}
+      steps={currentTour?.steps || []}
+    />
+  );
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -118,24 +163,18 @@ const App = () => (
               <FullscreenProvider>
                 <PerformanceWrapper>
                   <TooltipProvider>
-                    <HyperspaceEffect />
-                    <VHSOverlay />
-                    <Toaster />
-                    <Sonner />
-                    {/* Add Score Notifications Listener */}
-                    <ScoreNotificationsListener />
-                    {/* Welcome Modal for new users */}
-                    <WelcomeModal />
-                    {/* Performance Monitor (Ctrl+Shift+P to toggle) */}
-                    <PerformanceMonitor />
-                    <BrowserRouter
-                      future={{
-                        v7_startTransition: true,
-                        v7_relativeSplatPath: true,
-                      }}
-                    >
-                      {/* Persist and restore last visited route so reload returns to Admin if that was the last page */}
-                      <RoutePersistence />
+                    <HelpGuideProvider>
+                      <GlobalUIComponents />
+                      <BrowserRouter
+                        future={{
+                          v7_startTransition: true,
+                          v7_relativeSplatPath: true,
+                        }}
+                      >
+                        {/* Help Guide Renderer - inside router context */}
+                        <HelpGuideRenderer />
+                        {/* Persist and restore last visited route so reload returns to Admin if that was the last page */}
+                        <RoutePersistence />
                       <Suspense fallback={<LoadingSpinner />}>
                         <Routes>
                           <Route path="/" element={<IndexWithRules />} />
@@ -165,6 +204,7 @@ const App = () => (
                         </Routes>
                       </Suspense>
                     </BrowserRouter>
+                    </HelpGuideProvider>
                   </TooltipProvider>
                 </PerformanceWrapper>
               </FullscreenProvider>

@@ -6,6 +6,7 @@ import { getGameLogoUrl } from "@/lib/utils";
 import StorageImage from "@/components/StorageImage";
 import { parseStorageObjectUrl } from "@/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import LeaderboardEntry from "@/components/LeaderboardEntry";
 import QRCodeDisplay from "@/components/QRCodeDisplay";
 import DynamicOverallLeaderboard from "@/components/DynamicOverallLeaderboard";
@@ -16,6 +17,8 @@ import { useTournament } from "@/contexts/TournamentContext";
 import { usePerformanceMode } from "@/hooks/usePerformanceMode";
 import { dlog } from "@/lib/debug";
 import CompetitionStatus from "@/components/CompetitionStatus";
+import { useHelpGuide } from "@/hooks/useHelpGuide";
+import { HelpCircle } from "lucide-react";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -57,7 +60,19 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   // Clean index page with single navigation via Layout component
   const { currentTournament, loading: tournamentLoading } = useTournament();
   const { isPerformanceMode } = usePerformanceMode();
+  const { startTour, tours } = useHelpGuide();
 
+  // Handler for Take the Tour button
+  const handleTakeTour = () => {
+    console.log('🎯 Index Page: Take the Tour clicked');
+    const welcomeTour = tours.find(tour => tour.id === 'welcome');
+    if (welcomeTour) {
+      console.log('🎯 Index Page: Starting welcome tour with', welcomeTour.steps.length, 'steps');
+      startTour(welcomeTour);
+    } else {
+      console.error('❌ Index Page: Welcome tour not found');
+    }
+  };
 
   // Check if animations should be suppressed (during tests)
   const [suppressAnimations, setSuppressAnimations] = useState(
@@ -149,7 +164,13 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   }, []);
 
   const handleScoreSubmitted = useCallback(() => {
+    console.log('🚀 Score submitted! Dispatching scoreSubmitted event');
     refetch(); // Reload all data after submission
+
+    // Check if we're in the help guide tour and advance to congratulations step
+    const helpGuideEvent = new CustomEvent('scoreSubmitted');
+    window.dispatchEvent(helpGuideEvent);
+    console.log('🚀 scoreSubmitted event dispatched');
   }, [refetch]);
 
 
@@ -281,7 +302,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
       <div className="w-full space-y-4 overflow-visible">
         <div className={`grid gap-4 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-12rem)] grid-cols-1 lg:grid-cols-5'} overflow-visible`}>
           {/* Left column - Overall Leaderboard (smaller) */}
-          <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-1'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-left' : 'animate-slide-in-left animation-delay-200')}`}>
+          <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-1'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-left' : 'animate-slide-in-left animation-delay-200')}`} data-testid="overall-leaderboard">
             <DynamicOverallLeaderboard />
           </div>
 
@@ -290,12 +311,22 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
             {/* Competition Status and Controls */}
             <div className={`mb-4 ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? '0ms' : '100ms')}}>
               {/* Competition Status */}
-              <div className="status-bar-stable mb-2">
+              <div className="status-bar-stable mb-2" data-testid="competition-status">
                 <CompetitionStatus />
               </div>
 
               {/* Controls Bar */}
               <div className="flex items-center justify-end gap-2">
+                {/* Take the Tour Button for Testing */}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTakeTour}
+                  className="flex items-center gap-2 bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/50 text-cyan-300 hover:text-cyan-200"
+                >
+                  <HelpCircle size={16} />
+                  Take the Tour
+                </Button>
                 {!isPerformanceMode && (
                   <ManualRefreshButton onRefresh={refetch} />
                 )}
