@@ -98,7 +98,7 @@ const SystemProblemsModal: React.FC<SystemProblemsModalProps> = ({ isOpen, onClo
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-gray-900/95 border border-white/20 text-white">
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto bg-gray-900/95 border border-white/20 text-white fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-3 text-xl">
             {getStatusIcon(healthStatus.overall)}
