@@ -375,9 +375,15 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
     }
     setQuickRunning(true);
     try {
-      const ok = await addPlayers(selected.id, names);
-      if (!ok) throw new Error('Failed to add players');
-      
+      // Check if players already exist (from tournament reset)
+      const existingPlayerNames = players.map(p => p.name);
+      const needsNewPlayers = !names.every(name => existingPlayerNames.includes(name)) || players.length === 0;
+
+      if (needsNewPlayers) {
+        const ok = await addPlayers(selected.id, names);
+        if (!ok) throw new Error('Failed to add players');
+      }
+
       const okGen = await generateBracket(selected.id);
       if (!okGen) throw new Error('Failed to generate bracket');
       
@@ -515,15 +521,24 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
     if (!selected) return;
     setRestartLoading(true);
     try {
+      // Delete only matches, keep players for restart
       await supabase.from('bracket_matches').delete().eq('tournament_id', selected.id);
       await supabase.from('bracket_tournaments').update({ status: 'draft' }).eq('id', selected.id);
-      
+
       const data = await getTournamentData(selected.id);
       setPlayers(data.players);
       setMatches(data.matches);
+
+      // Update quickBlock with preserved player names
+      if (data.players.length > 0) {
+        const playerNames = data.players.map(p => p.name).join('\n');
+        setQuickBlock(playerNames);
+      } else {
+        setQuickBlock('');
+      }
       await refresh();
-      
-      toast({ title: 'Bracket Tournament restarted', description: 'All matches cleared. Generate a new bracket when ready.' });
+
+      toast({ title: 'Tournament reset', description: 'All matches cleared. Players preserved. Generate a new bracket to restart.' });
     } catch (e) {
       toast({ title: 'Failed to restart', description: 'Please try again', variant: 'destructive' });
     } finally {
@@ -919,7 +934,7 @@ Player D
                          Competition View
                        </Button>
                      )}
-                     <Button variant="outline" size="sm" onClick={() => setRestartOpen(true)}>Restart</Button>
+                     <Button variant="outline" size="sm" onClick={() => setRestartOpen(true)}>Reset</Button>
                    </>
                  )}
                </div>
@@ -1102,14 +1117,14 @@ Player D
       <AlertDialog open={restartOpen} onOpenChange={setRestartOpen}>
         <AlertDialogContent className="bg-gray-900 text-white border-white/20">
           <AlertDialogHeader>
-            <AlertDialogTitle>Restart tournament?</AlertDialogTitle>
+            <AlertDialogTitle>Reset tournament?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will delete all matches and reset the tournament to draft. Players and seeds remain.
+              This will delete all matches but keep your players, resetting the tournament to draft status. You can immediately generate a new bracket with the same players.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={restartLoading}>Cancel</AlertDialogCancel>
-            <AlertDialogAction disabled={restartLoading} onClick={handleRestart}>{restartLoading ? 'Restarting…' : 'Confirm Restart'}</AlertDialogAction>
+            <AlertDialogAction disabled={restartLoading} onClick={handleRestart}>{restartLoading ? 'Resetting…' : 'Confirm Reset'}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

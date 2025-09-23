@@ -40,6 +40,8 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [showLegend, setShowLegend] = useState(true);
   const [isAnimating, setIsAnimating] = useState(false);
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [selectedPlayerIndex, setSelectedPlayerIndex] = useState<0 | 1>(0);
   const restoredRef = useRef(false);
   const initialFitDoneRef = useRef(false);
   const dragging = useRef(false);
@@ -49,6 +51,17 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
   const matchHeight = 78;
   const matchTotalHeight = matchHeight + 30; // Add space for choose winner badge
   const colWidth = 300; // horizontal distance between rounds
+
+  // Build ordered match list for navigation
+  const orderedMatches = useMemo(() => {
+    const allMatches = matches.slice();
+    // Sort by round (ascending) then by position within round
+    allMatches.sort((a, b) => {
+      if (a.round !== b.round) return a.round - b.round;
+      return a.position - b.position;
+    });
+    return allMatches;
+  }, [matches]);
 
   // Build rounds and create position-based layout, split winners/losers/grand final
   const { winnersRounds, losersRounds, grandRounds, matchPositions } = useMemo(() => {
@@ -75,7 +88,7 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
     // Scale spacing based on tournament size - more matches need more space
     const scaleFactor = Math.max(1, Math.min(2.5, firstRoundMatchCount / 8));
     const baseSpacing = Math.max(140, (matchTotalHeight + 50) * scaleFactor);
-    const minSectionGap = Math.max(200, 120 * scaleFactor); // Much larger gap for big tournaments
+    const minSectionGap = Math.max(100, 60 * scaleFactor); // Reduced gap between brackets
 
     // Winners bracket layout
     const winnersOffsetX = 40;
@@ -306,8 +319,9 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
   };
 
   // Keyboard shortcuts: arrows to pan, +/- to zoom, 0 to fit, L to toggle legend
+  // Disabled when bracket navigation is active
   useEffect(() => {
-    if (disableKeyboardNavigation) return;
+    if (disableKeyboardNavigation || (adminMode && selectedMatchId)) return;
 
     const handler = (e: KeyboardEvent) => {
       const step = e.shiftKey ? 60 : 30;
@@ -322,7 +336,93 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [disableKeyboardNavigation, smoothPanBy, smoothZoomTo, scale]);
+  }, [disableKeyboardNavigation, adminMode, selectedMatchId, smoothPanBy, smoothZoomTo, scale]);
+
+  // Center view on selected match
+  const centerOnMatch = (matchId: string) => {
+    const pos = matchPositions.get(matchId);
+    if (!pos || !svgRef.current) return;
+
+    const svg = svgRef.current;
+    const rect = svg.getBoundingClientRect();
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    // Calculate target offset to center the match
+    const targetX = centerX - (pos.x + 100) * scale; // 100 is half match width
+    const targetY = centerY - (pos.centerY + 40) * scale; // 40 is round offset
+
+    smoothPanTo(targetX, targetY, 300);
+  };
+
+  // Navigate between matches with arrow keys and enter to select winner
+  useEffect(() => {
+    if (disableKeyboardNavigation || !adminMode) return;
+
+    const handler = (e: KeyboardEvent) => {
+      // Don't interfere with existing pan/zoom controls
+      if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.key)) {
+        const currentIndex = selectedMatchId ? orderedMatches.findIndex(m => m.id === selectedMatchId) : -1;
+
+        if (e.key === 'ArrowRight') {
+          e.preventDefault();
+          // Move to next match in order
+          const nextIndex = currentIndex < orderedMatches.length - 1 ? currentIndex + 1 : 0;
+          const nextMatch = orderedMatches[nextIndex];
+          if (nextMatch) {
+            setSelectedMatchId(nextMatch.id);
+            setSelectedPlayerIndex(0);
+            centerOnMatch(nextMatch.id);
+          }
+        } else if (e.key === 'ArrowLeft') {
+          e.preventDefault();
+          // Move to previous match in order
+          const prevIndex = currentIndex > 0 ? currentIndex - 1 : orderedMatches.length - 1;
+          const prevMatch = orderedMatches[prevIndex];
+          if (prevMatch) {
+            setSelectedMatchId(prevMatch.id);
+            setSelectedPlayerIndex(0);
+            centerOnMatch(prevMatch.id);
+          }
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          // Toggle between player 1 and player 2 in current match
+          if (selectedMatchId) {
+            setSelectedPlayerIndex(prev => prev === 0 ? 1 : 0);
+          }
+        } else if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          // Toggle between player 1 and player 2 in current match
+          if (selectedMatchId) {
+            setSelectedPlayerIndex(prev => prev === 0 ? 1 : 0);
+          }
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          // Select winner for current match and selected player
+          if (selectedMatchId && onReport) {
+            const match = orderedMatches.find(m => m.id === selectedMatchId);
+            if (match) {
+              const participantId = selectedPlayerIndex === 0 ? match.participant1_id : match.participant2_id;
+              if (participantId) {
+                onReport(selectedMatchId, participantId);
+              }
+            }
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [disableKeyboardNavigation, adminMode, selectedMatchId, selectedPlayerIndex, orderedMatches, onReport, centerOnMatch]);
+
+  // Auto-select first match if none selected
+  useEffect(() => {
+    if (adminMode && !selectedMatchId && orderedMatches.length > 0) {
+      setSelectedMatchId(orderedMatches[0].id);
+      setSelectedPlayerIndex(0);
+    }
+  }, [adminMode, selectedMatchId, orderedMatches]);
 
   // Cleanup animation on unmount
   useEffect(() => {
@@ -662,6 +762,15 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
           </select>
         </div>
       )}
+      {/* Keyboard navigation help */}
+      {adminMode && selectedMatchId && (
+        <div className="absolute top-4 right-4 z-10 bg-black/80 border border-green-400 text-green-400 rounded px-3 py-2 text-sm">
+          <div className="text-xs opacity-75 mb-1">Keyboard Navigation</div>
+          <div className="text-xs">
+            ← → Navigate matches | ↑ ↓ Select player | Enter: Choose winner
+          </div>
+        </div>
+      )}
       <svg
         ref={svgRef}
         className="w-full h-full bg-black/25 rounded-md border border-white/10 cursor-grab"
@@ -712,34 +821,54 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
                   const lineHeight = 30; // vertical distance between name baselines for extra bottom padding
 
                   const isHighlighted = !!highlightTarget && highlightTarget.round === m.round && highlightTarget.position === m.position;
+                  const isSelected = adminMode && selectedMatchId === m.id;
                   const isNewMatch = !m.participant1_id && !m.participant2_id; // Empty match is "new"
                   const isWalkover = m.participant1_id && !m.participant2_id || !m.participant1_id && m.participant2_id;
                   const hasParticipants = m.participant1_id && m.participant2_id;
                   const needsWinner = hasParticipants && !m.winner_participant_id && adminMode;
+                  const isPlayer1Selected = isSelected && selectedPlayerIndex === 0;
+                  const isPlayer2Selected = isSelected && selectedPlayerIndex === 1;
                   return (
                     <g key={m.id} transform={`translate(${pos.x}, ${pos.y + 40})`}>
                       <g>
                         {/* Filled card */}
-                        <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6} fill="rgba(0,0,0,0.7)" className={isHighlighted ? 'boing' : ''} />
+                        <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6} fill={isSelected ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.7)"} className={isHighlighted ? 'boing' : ''} />
                         {/* Outline draw animation */}
                         <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6}
-                          fill="none" stroke={needsWinner ? "#ff6b35" : "#60a5fa"} strokeWidth={needsWinner ? "3" : "2"}
+                          fill="none" stroke={isSelected ? "#00ff99" : needsWinner ? "#ff6b35" : "#60a5fa"} strokeWidth={isSelected ? "4" : needsWinner ? "3" : "2"}
                           strokeDasharray="100" strokeDashoffset="100" pathLength={100}>
                           <animate attributeName="stroke-dashoffset" from="100" to="0" dur="1.2s" begin={`${colIdx * 0.2}s`} fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1" keyTimes="0;1" />
-                          {needsWinner && (
+                          {needsWinner && !isSelected && (
                             <animate attributeName="stroke" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
                           )}
+                          {isSelected && (
+                            <animate attributeName="stroke" values="#00ff99;#ffffff;#00ff99" dur="1.2s" repeatCount="indefinite" />
+                          )}
                         </rect>
-                        <text x={padX} y={padY + nameFontSize - 2} fill={p1Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
+                        {/* Player selection indicators */}
+                        {isSelected && (
+                          <g>
+                            <rect x={-8} y={isPlayer1Selected ? padY - 8 : padY - 8 + lineHeight} width={4} height={lineHeight} fill="#00ff99" rx={2}>
+                              <animate attributeName="fill" values="#00ff99;#ffffff;#00ff99" dur="1.2s" repeatCount="indefinite" />
+                            </rect>
+                          </g>
+                        )}
+                        <text x={padX} y={padY + nameFontSize - 2} fill={isPlayer1Selected ? "#00ff99" : p1Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
                           {p1 ? p1.display_name : '—'}
-                          {needsWinner && p1 && (
+                          {needsWinner && p1 && !isSelected && (
                             <animate attributeName="fill" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
                           )}
+                          {isPlayer1Selected && (
+                            <animate attributeName="fill" values="#00ff99;#ffffff;#00ff99" dur="1.2s" repeatCount="indefinite" />
+                          )}
                         </text>
-                        <text x={padX} y={padY + nameFontSize - 2 + lineHeight} fill={p2Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
+                        <text x={padX} y={padY + nameFontSize - 2 + lineHeight} fill={isPlayer2Selected ? "#00ff99" : p2Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
                           {p2 ? p2.display_name : '—'}
-                          {needsWinner && p2 && (
+                          {needsWinner && p2 && !isSelected && (
                             <animate attributeName="fill" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
+                          )}
+                          {isPlayer2Selected && (
+                            <animate attributeName="fill" values="#00ff99;#ffffff;#00ff99" dur="1.2s" repeatCount="indefinite" />
                           )}
                         </text>
                         {winner && (
@@ -815,33 +944,53 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
                   const nameFontSize = 20;
                   const lineHeight = 30;
                   const isHighlighted = !!highlightTarget && highlightTarget.round === m.round && highlightTarget.position === m.position;
+                  const isSelected = adminMode && selectedMatchId === m.id;
                   const isWalkover = m.participant1_id && !m.participant2_id || !m.participant1_id && m.participant2_id;
                   const hasParticipants = m.participant1_id && m.participant2_id;
                   const needsWinner = hasParticipants && !m.winner_participant_id && adminMode;
+                  const isPlayer1Selected = isSelected && selectedPlayerIndex === 0;
+                  const isPlayer2Selected = isSelected && selectedPlayerIndex === 1;
                   return (
                     <g key={m.id} transform={`translate(${pos.x}, ${pos.y + 40})`}>
                       <g>
                         {/* Filled card */}
-                        <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6} fill="rgba(0,0,0,0.7)" className={isHighlighted ? 'boing' : ''} />
+                        <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6} fill={isSelected ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.7)"} className={isHighlighted ? 'boing' : ''} />
                         {/* Outline draw animation */}
                         <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6}
-                          fill="none" stroke={needsWinner ? "#ff6b35" : "#e879f9"} strokeWidth={needsWinner ? "3" : "2"}
+                          fill="none" stroke={isSelected ? "#00ff99" : needsWinner ? "#ff6b35" : "#e879f9"} strokeWidth={isSelected ? "4" : needsWinner ? "3" : "2"}
                           strokeDasharray="100" strokeDashoffset="100" pathLength={100}>
                           <animate attributeName="stroke-dashoffset" from="100" to="0" dur="1.2s" begin={`${colIdx * 0.2}s`} fill="freeze" calcMode="spline" keySplines="0.25 0.1 0.25 1" keyTimes="0;1" />
-                          {needsWinner && (
+                          {needsWinner && !isSelected && (
                             <animate attributeName="stroke" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
                           )}
+                          {isSelected && (
+                            <animate attributeName="stroke" values="#00ff99;#ffffff;#00ff99" dur="1.2s" repeatCount="indefinite" />
+                          )}
                         </rect>
-                        <text x={padX} y={padY + nameFontSize - 2} fill={p1Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
+                        {/* Player selection indicators */}
+                        {isSelected && (
+                          <g>
+                            <rect x={-8} y={isPlayer1Selected ? padY - 8 : padY - 8 + lineHeight} width={4} height={lineHeight} fill="#00ff99" rx={2}>
+                              <animate attributeName="fill" values="#00ff99;#ffffff;#00ff99" dur="1.2s" repeatCount="indefinite" />
+                            </rect>
+                          </g>
+                        )}
+                        <text x={padX} y={padY + nameFontSize - 2} fill={isPlayer1Selected ? "#00ff99" : p1Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
                           {p1 ? p1.display_name : '—'}
-                          {needsWinner && p1 && (
+                          {needsWinner && p1 && !isSelected && (
                             <animate attributeName="fill" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
                           )}
+                          {isPlayer1Selected && (
+                            <animate attributeName="fill" values="#00ff99;#ffffff;#00ff99" dur="1.2s" repeatCount="indefinite" />
+                          )}
                         </text>
-                        <text x={padX} y={padY + nameFontSize - 2 + lineHeight} fill={p2Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
+                        <text x={padX} y={padY + nameFontSize - 2 + lineHeight} fill={isPlayer2Selected ? "#00ff99" : p2Color} fontSize={nameFontSize} style={{ pointerEvents: 'none' }}>
                           {p2 ? p2.display_name : '—'}
-                          {needsWinner && p2 && (
+                          {needsWinner && p2 && !isSelected && (
                             <animate attributeName="fill" values="#ff6b35;#ffffff;#ff6b35" dur="0.8s" repeatCount="indefinite" />
+                          )}
+                          {isPlayer2Selected && (
+                            <animate attributeName="fill" values="#00ff99;#ffffff;#00ff99" dur="1.2s" repeatCount="indefinite" />
                           )}
                         </text>
                         {winner && (
