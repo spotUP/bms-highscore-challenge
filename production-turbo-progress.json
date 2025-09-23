@@ -1,0 +1,49 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 16513,
+    "successfulLogos": 14211,
+    "failedLogos": 2,
+    "currentGameId": 86038,
+    "currentGameName": "MX Unleashed",
+    "currentPlatform": "Sony Playstation 2",
+    "lastUpdate": "2025-09-23T13:27:15.974Z",
+    "status": "running",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": 86038,
+        "gameName": "MX Unleashed",
+        "platform": "Sony Playstation 2",
+        "timestamp": "2025-09-23T13:27:16.731Z"
+      },
+      {
+        "gameId": 86037,
+        "gameName": "Monster Jam: Urban Assault",
+        "platform": "Sony Playstation 2",
+        "timestamp": "2025-09-23T13:27:15.974Z"
+      },
+      {
+        "gameId": 86036,
+        "gameName": "Chicken Little: Ace in Action",
+        "platform": "Sony Playstation 2",
+        "timestamp": "2025-09-23T13:27:15.160Z"
+      },
+      {
+        "gameId": 86035,
+        "gameName": "CART Fury Championship Racing",
+        "platform": "Sony Playstation 2",
+        "timestamp": "2025-09-23T13:27:14.166Z"
+      },
+      {
+        "gameId": 86034,
+        "gameName": "Deadly Racer",
+        "platform": "MS-DOS",
+        "timestamp": "2025-09-23T13:27:13.273Z"
+      }
+    ],
+    "startTime": "2025-09-23T08:21:04.656Z",
+    "gamesPerSecond": 0.9
+  }
+}

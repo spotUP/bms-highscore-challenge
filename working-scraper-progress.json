@@ -1,0 +1,14 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 0,
+    "processedGames": 3,
+    "successfulLogos": 3,
+    "failedLogos": 0,
+    "currentGameId": 40315,
+    "currentGameName": "Adventureland",
+    "lastUpdate": "2025-09-22T22:41:24.816Z",
+    "status": "completed",
+    "errors": []
+  }
+}
