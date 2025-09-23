@@ -1,0 +1,50 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 0,
+    "processedGames": 493,
+    "successfulLogos": 0,
+    "failedLogos": 493,
+    "currentGameId": 410234,
+    "currentGameName": "atri",
+    "lastUpdate": "2025-09-22T22:29:45.556Z",
+    "status": "running",
+    "errors": []
+  },
+  "1": {
+    "instanceId": 1,
+    "totalGames": 0,
+    "processedGames": 74,
+    "successfulLogos": 0,
+    "failedLogos": 74,
+    "currentGameId": 142458,
+    "currentGameName": "Official U.S. PlayStation Magazine Demo Disc 29",
+    "lastUpdate": "2025-09-22T22:29:44.014Z",
+    "status": "running",
+    "errors": []
+  },
+  "2": {
+    "instanceId": 2,
+    "totalGames": 0,
+    "processedGames": 329,
+    "successfulLogos": 0,
+    "failedLogos": 329,
+    "currentGameId": 403076,
+    "currentGameName": "Women's War",
+    "lastUpdate": "2025-09-22T22:29:43.065Z",
+    "status": "running",
+    "errors": []
+  },
+  "3": {
+    "instanceId": 3,
+    "totalGames": 0,
+    "processedGames": 52,
+    "successfulLogos": 0,
+    "failedLogos": 52,
+    "currentGameId": 141773,
+    "currentGameName": "Shoukou Shindan Training DS",
+    "lastUpdate": "2025-09-22T22:29:46.271Z",
+    "status": "running",
+    "errors": []
+  }
+}

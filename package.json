@@ -8,7 +8,16 @@
     "type": "git",
     "url": "https://github.com/spotUP/bms-highscore-challenge"
   },
-  "keywords": ["arcade", "games", "highscore", "tournament", "retro", "gaming", "leaderboard", "competition"],
+  "keywords": [
+    "arcade",
+    "games",
+    "highscore",
+    "tournament",
+    "retro",
+    "gaming",
+    "leaderboard",
+    "competition"
+  ],
   "author": "RetroRanks Team",
   "license": "MIT",
   "type": "module",
@@ -85,6 +94,7 @@
     "react-router-dom": "^6.26.2",
     "recharts": "^2.15.4",
     "sonner": "^1.5.0",
+    "sqlite3": "^5.1.7",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.180.0",

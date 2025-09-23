@@ -17,8 +17,6 @@ import { useTournament } from "@/contexts/TournamentContext";
 import { usePerformanceMode } from "@/hooks/usePerformanceMode";
 import { dlog } from "@/lib/debug";
 import CompetitionStatus from "@/components/CompetitionStatus";
-import { useHelpGuide } from "@/hooks/useHelpGuide";
-import { HelpCircle } from "lucide-react";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -60,19 +58,6 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   // Clean index page with single navigation via Layout component
   const { currentTournament, loading: tournamentLoading } = useTournament();
   const { isPerformanceMode } = usePerformanceMode();
-  const { startTour, tours } = useHelpGuide();
-
-  // Handler for Take the Tour button
-  const handleTakeTour = () => {
-    console.log('🎯 Index Page: Take the Tour clicked');
-    const welcomeTour = tours.find(tour => tour.id === 'welcome');
-    if (welcomeTour) {
-      console.log('🎯 Index Page: Starting welcome tour with', welcomeTour.steps.length, 'steps');
-      startTour(welcomeTour);
-    } else {
-      console.error('❌ Index Page: Welcome tour not found');
-    }
-  };
 
   // Check if animations should be suppressed (during tests)
   const [suppressAnimations, setSuppressAnimations] = useState(
@@ -172,6 +157,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
     window.dispatchEvent(helpGuideEvent);
     console.log('🚀 scoreSubmitted event dispatched');
   }, [refetch]);
+
 
 
   // Enhanced realtime with fallback polling for Raspberry Pi/Firefox
@@ -307,9 +293,9 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
           </div>
 
           {/* Right column - Game content (4 games instead of 5) */}
-          <div className={`${isMobile ? 'order-1' : 'h-full lg:col-span-4'} overflow-visible`}>
+          <div className={`${isMobile ? 'order-1' : 'h-full lg:col-span-4 flex flex-col'} overflow-visible`}>
             {/* Competition Status and Controls */}
-            <div className={`mb-4 ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? '0ms' : '100ms')}}>
+            <div className={`mb-4 flex-shrink-0 ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? '0ms' : '100ms')}}>
               {/* Competition Status */}
               <div className="status-bar-stable mb-2" data-testid="competition-status">
                 <CompetitionStatus />
@@ -317,23 +303,13 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
 
               {/* Controls Bar */}
               <div className="flex items-center justify-end gap-2">
-                {/* Take the Tour Button for Testing */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleTakeTour}
-                  className="flex items-center gap-2 bg-cyan-500/10 hover:bg-cyan-500/20 border-cyan-500/50 text-cyan-300 hover:text-cyan-200"
-                >
-                  <HelpCircle size={16} />
-                  Take the Tour
-                </Button>
                 {!isPerformanceMode && (
                   <ManualRefreshButton onRefresh={refetch} />
                 )}
               </div>
             </div>
 
-            <div className={`${isMobile ? 'flex flex-col space-y-6' : 'grid gap-4 h-full'}`} style={{
+            <div className={`${isMobile ? 'flex flex-col space-y-6' : 'grid gap-4 flex-1 min-h-0'}`} style={{
               overflow: 'visible',
               position: 'relative',
               gridTemplateColumns: isMobile ? 'none' : `repeat(${games?.length || 1}, 1fr)`
@@ -360,10 +336,10 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                 }
 
                 return (
-                <section key={game.id} data-game-id={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? `${(games.length - 1 - games.findIndex(g => g.id === game.id)) * 50}ms` : `${games.findIndex(g => g.id === game.id) * 200}ms`)}}>
+                <section key={game.id} data-game-id={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full min-h-0'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? `${(games.length - 1 - games.findIndex(g => g.id === game.id)) * 50}ms` : `${games.findIndex(g => g.id === game.id) * 200}ms`)}}>
                   {/* Card containing logo, scores and QR code */}
                   <Card
-                    className="bg-black/30 border-white/20 theme-card flex-1 flex flex-col cursor-pointer hover:scale-105 transition-transform duration-200"
+                    className="bg-black/30 border-white/20 theme-card flex-1 flex flex-col cursor-pointer hover:scale-105 transition-transform duration-200 min-h-0"
                     style={getRunnerStyle(game.id)}
                     onClick={() => handleGameLogoClick(game)}
                     title={`Click to submit score for ${game.name}`}
@@ -396,9 +372,9 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="flex-1 flex flex-col pt-1">
-                        {/* Scores section - scrollable if needed */}
-                        <div className="flex-1 overflow-y-auto mb-4">
+                      <CardContent className="flex-1 flex flex-col pt-1 min-h-0">
+                        {/* Scores section - scrollable with constrained height */}
+                        <div className="flex-1 overflow-y-auto min-h-0">
                           <div className="space-y-2 leaderboard-gradient-scope">
                             {filtered.map((score, index) => (
                               <LeaderboardEntry
@@ -417,7 +393,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                           </div>
                         </div>
 
-                        {/* QR Code - inside card at bottom - hidden on mobile */}
+                        {/* QR Code - pinned to bottom - hidden on mobile */}
                         <div className="mt-auto hidden md:block">
                           <QRCodeDisplay gameId={game.id} gameName={game.name} />
                         </div>

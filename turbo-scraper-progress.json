@@ -1,0 +1,37 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 60,
+    "processedGames": 60,
+    "successfulLogos": 56,
+    "failedLogos": 4,
+    "currentGameId": 5000,
+    "currentGameName": "Test Game 5000",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-23T06:49:27.981Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": 5000,
+        "gameName": "Test Game 5000",
+        "platform": "Windows",
+        "timestamp": "2025-09-23T06:49:27.878Z"
+      },
+      {
+        "gameId": 4500,
+        "gameName": "Test Game 4500",
+        "platform": "MS-DOS",
+        "timestamp": "2025-09-23T06:49:27.418Z"
+      },
+      {
+        "gameId": 4000,
+        "gameName": "Test Game 4000",
+        "platform": "Amstrad CPC",
+        "timestamp": "2025-09-23T06:49:26.945Z"
+      }
+    ],
+    "startTime": "2025-09-23T06:48:59.407Z",
+    "endTime": "2025-09-23T06:49:27.980Z"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 0,
+    "processedGames": 5,
+    "successfulLogos": 0,
+    "failedLogos": 5,
+    "currentGameId": -49962,
+    "currentGameName": "The Last Remnant",
+    "lastUpdate": "2025-09-22T22:39:55.556Z",
+    "status": "completed",
+    "errors": []
+  }
+}
