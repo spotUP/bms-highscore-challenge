@@ -31,12 +31,40 @@ class ClearLogoService {
       if (!this.SQL) {
         console.log('🔧 Initializing SQL.js...');
         try {
+          // Test paths to find where WASM files are accessible
+          const testPaths = [
+            '/sql.js/sql-wasm.wasm',      // Our custom path
+            '/assets/sql-wasm.wasm',      // Vite assets path
+            '/sql-wasm.wasm',             // Root path
+            './sql.js/sql-wasm.wasm'      // Relative path
+          ];
+
+          let basePath = '/sql.js'; // Default
+
+          // Test which path works for the main WASM file
+          for (let i = 0; i < testPaths.length; i++) {
+            try {
+              console.log(`🔍 Testing WASM path: ${testPaths[i]}`);
+              const testResponse = await fetch(testPaths[i]);
+              if (testResponse.ok) {
+                // Extract base path
+                if (i === 0) basePath = '/sql.js';
+                else if (i === 1) basePath = '/assets';
+                else if (i === 2) basePath = '';
+                else if (i === 3) basePath = './sql.js';
+                console.log(`✅ Found WASM files at base path: ${basePath}`);
+                break;
+              }
+            } catch (e) {
+              console.log(`❌ Path ${testPaths[i]} failed: ${e.message}`);
+            }
+          }
+
           this.SQL = await initSqlJs({
-            // Specify the location of the wasm file
             locateFile: (file: string) => {
-              const path = `/sql.js/${file}`;
-              console.log(`🔍 SQL.js requesting file: ${file} -> ${path}`);
-              return path;
+              const fullPath = basePath ? `${basePath}/${file}` : file;
+              console.log(`🔍 SQL.js requesting file: ${file} -> ${fullPath}`);
+              return fullPath;
             }
           });
           console.log('✅ SQL.js initialized successfully');
