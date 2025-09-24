@@ -137,3 +137,4 @@ Deployment test with updated git author: Fri Sep 12 19:52:17 CEST 2025
 
 Final deployment trigger with correct author email: Fri Sep 12 19:54:18 CEST 2025
 # Redeploy trigger for RAWG API key
+# SQL.js WASM fix deployed
