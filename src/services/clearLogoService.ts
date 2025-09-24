@@ -3,6 +3,9 @@
 // optimized for browser loading and Vercel deployment
 
 import initSqlJs from 'sql.js';
+// Import WASM files as assets to get proper Vite URLs
+import wasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
+import wasmDebugUrl from 'sql.js/dist/sql-wasm-debug.wasm?url';
 
 export interface ClearLogoData {
   id: number;
@@ -31,40 +34,23 @@ class ClearLogoService {
       if (!this.SQL) {
         console.log('🔧 Initializing SQL.js...');
         try {
-          // Test paths to find where WASM files are accessible
-          const testPaths = [
-            '/sql.js/sql-wasm.wasm',      // Our custom path
-            '/assets/sql-wasm.wasm',      // Vite assets path
-            '/sql-wasm.wasm',             // Root path
-            './sql.js/sql-wasm.wasm'      // Relative path
-          ];
-
-          let basePath = '/sql.js'; // Default
-
-          // Test which path works for the main WASM file
-          for (let i = 0; i < testPaths.length; i++) {
-            try {
-              console.log(`🔍 Testing WASM path: ${testPaths[i]}`);
-              const testResponse = await fetch(testPaths[i]);
-              if (testResponse.ok) {
-                // Extract base path
-                if (i === 0) basePath = '/sql.js';
-                else if (i === 1) basePath = '/assets';
-                else if (i === 2) basePath = '';
-                else if (i === 3) basePath = './sql.js';
-                console.log(`✅ Found WASM files at base path: ${basePath}`);
-                break;
-              }
-            } catch (e) {
-              console.log(`❌ Path ${testPaths[i]} failed: ${e.message}`);
-            }
-          }
+          console.log('🔧 Using Vite asset URLs for WASM files');
+          console.log(`📁 WASM URL: ${wasmUrl}`);
+          console.log(`📁 WASM Debug URL: ${wasmDebugUrl}`);
 
           this.SQL = await initSqlJs({
             locateFile: (file: string) => {
-              const fullPath = basePath ? `${basePath}/${file}` : file;
-              console.log(`🔍 SQL.js requesting file: ${file} -> ${fullPath}`);
-              return fullPath;
+              // Use the imported asset URLs based on the filename
+              if (file === 'sql-wasm.wasm') {
+                console.log(`🔍 SQL.js requesting: ${file} -> ${wasmUrl}`);
+                return wasmUrl;
+              } else if (file === 'sql-wasm-debug.wasm') {
+                console.log(`🔍 SQL.js requesting: ${file} -> ${wasmDebugUrl}`);
+                return wasmDebugUrl;
+              } else {
+                console.log(`🔍 SQL.js requesting unknown file: ${file}`);
+                return file; // Fallback
+              }
             }
           });
           console.log('✅ SQL.js initialized successfully');
