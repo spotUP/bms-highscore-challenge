@@ -27,38 +27,61 @@ class ClearLogoService {
     }
 
     try {
-      // Initialize SQL.js
+      // Initialize SQL.js first - this is critical
       if (!this.SQL) {
         console.log('🔧 Initializing SQL.js...');
-        this.SQL = await initSqlJs({
-          // Specify the location of the wasm file
-          locateFile: (file: string) => `/sql.js/${file}`
-        });
-        console.log('✅ SQL.js initialized successfully');
+        try {
+          this.SQL = await initSqlJs({
+            // Specify the location of the wasm file
+            locateFile: (file: string) => {
+              const path = `/sql.js/${file}`;
+              console.log(`🔍 SQL.js requesting file: ${file} -> ${path}`);
+              return path;
+            }
+          });
+          console.log('✅ SQL.js initialized successfully');
+        } catch (sqlError) {
+          console.error('❌ SQL.js initialization failed:', sqlError);
+          throw sqlError;
+        }
       }
 
-      // Load chunk info to understand the structure
-      const response = await fetch('/clear-logo-chunks/chunk-info.json');
-      if (response.ok) {
-        this.chunkInfo = await response.json();
-        console.log(`📦 Clear Logo chunks available: ${this.chunkInfo.totalChunks} chunks, ${this.chunkInfo.totalLogos} logos`);
+      // Load chunk info to understand the structure (optional)
+      try {
+        const response = await fetch('/clear-logo-chunks/chunk-info.json');
+        if (response.ok) {
+          this.chunkInfo = await response.json();
+          console.log(`📦 Clear Logo chunks available: ${this.chunkInfo.totalChunks} chunks, ${this.chunkInfo.totalLogos} logos`);
+        } else {
+          console.log('📦 Chunk info not available, proceeding without it');
+        }
+      } catch (chunkError) {
+        console.log('📦 Chunk info not available, proceeding without it');
+      }
+
+      // Only mark as initialized if SQL.js is ready
+      if (this.SQL) {
         this.isInitialized = true;
         return true;
+      } else {
+        console.error('❌ SQL.js failed to initialize');
+        return false;
       }
     } catch (error) {
       console.warn('❌ Failed to initialize Clear Logo service:', error);
+      return false;
     }
-
-    // Fallback - assume chunks exist
-    this.isInitialized = true;
-    return true;
   }
 
   /**
    * Get Clear Logos for multiple games by name
    */
   async getClearLogosForGames(gameNames: string[]): Promise<Record<string, string>> {
-    await this.initializeDatabase();
+    const initialized = await this.initializeDatabase();
+    if (!initialized) {
+      console.error('❌ Cannot get Clear Logos - service not initialized');
+      return {};
+    }
 
     return this.getClearLogosFromChunks(gameNames);
   }
