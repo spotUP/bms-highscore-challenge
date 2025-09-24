@@ -1,6 +1,8 @@
-// Clear Logo service using SQLite database
-// This service provides Clear Logo images from the locally stored database
-// instead of web scraping LaunchBox
+// Clear Logo service using chunked SQLite databases
+// This service provides Clear Logo images from chunked SQLite files
+// optimized for browser loading and Vercel deployment
+
+import initSqlJs from 'sql.js';
 
 export interface ClearLogoData {
   id: number;
@@ -14,149 +16,157 @@ export interface ClearLogoData {
 }
 
 class ClearLogoService {
-  private clearLogosDb: any = null;
   private isInitialized = false;
-
-  private isProduction(): boolean {
-    return import.meta.env.PROD;
-  }
+  private chunkInfo: any = null;
+  private loadedChunks: Record<string, any> = {};
+  private SQL: any = null;
 
   private async initializeDatabase(): Promise<boolean> {
-    if (this.isInitialized) return this.clearLogosDb !== null;
-
-    if (typeof window === 'undefined') {
-      // Server-side rendering - not available
-      this.isInitialized = true;
-      return false;
+    if (this.isInitialized) {
+      return true;
     }
 
     try {
-      console.log('🔄 Loading Clear Logo SQLite database...');
-
-      // Load sql.js for client-side SQLite access
-      const sqljs = await import('sql.js');
-      const SQL = await sqljs.default({
-        locateFile: (file: string) => `https://sql.js.org/dist/${file}`
-      });
-
-      console.log('📦 SQL.js loaded, fetching Clear Logo database...');
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-      const response = await fetch('/clear-logos.db', {
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch Clear Logo database: ${response.status}`);
+      // Initialize SQL.js
+      if (!this.SQL) {
+        console.log('🔧 Initializing SQL.js...');
+        this.SQL = await initSqlJs({
+          // Specify the location of the wasm file
+          locateFile: (file: string) => `/sql.js/${file}`
+        });
+        console.log('✅ SQL.js initialized successfully');
       }
 
-      console.log('📇 Clear Logo database fetched, loading into SQL.js...');
-      const arrayBuffer = await response.arrayBuffer();
-      const sizeMB = (arrayBuffer.byteLength / 1024 / 1024).toFixed(2);
-      console.log(`📊 Clear Logo database size: ${sizeMB}MB`);
-
-      this.clearLogosDb = new SQL.Database(new Uint8Array(arrayBuffer));
-      console.log('✅ Clear Logo database loaded successfully');
-
-      // Test query to ensure database is working
-      const testQuery = 'SELECT COUNT(*) as count FROM clear_logos';
-      const testStmt = this.clearLogosDb.prepare(testQuery);
-      testStmt.step();
-      const result = testStmt.getAsObject();
-      testStmt.free();
-
-      console.log(`🎯 Clear Logo database contains ${result.count} logos`);
-      this.isInitialized = true;
-      return true;
+      // Load chunk info to understand the structure
+      const response = await fetch('/clear-logo-chunks/chunk-info.json');
+      if (response.ok) {
+        this.chunkInfo = await response.json();
+        console.log(`📦 Clear Logo chunks available: ${this.chunkInfo.totalChunks} chunks, ${this.chunkInfo.totalLogos} logos`);
+        this.isInitialized = true;
+        return true;
+      }
     } catch (error) {
-      if (error.name === 'AbortError') {
-        console.warn('Clear Logo database fetch timed out after 30 seconds');
-      } else {
-        console.warn('Failed to load Clear Logo database:', error);
-      }
-      this.isInitialized = true;
-      return false;
+      console.warn('❌ Failed to initialize Clear Logo service:', error);
     }
+
+    // Fallback - assume chunks exist
+    this.isInitialized = true;
+    return true;
   }
 
   /**
    * Get Clear Logos for multiple games by name
    */
   async getClearLogosForGames(gameNames: string[]): Promise<Record<string, string>> {
-    const initialized = await this.initializeDatabase();
-    if (!initialized || !this.clearLogosDb) {
-      console.log('Clear Logo database not initialized or not available');
-      return {};
-    }
+    await this.initializeDatabase();
 
+    return this.getClearLogosFromChunks(gameNames);
+  }
+
+  private async getClearLogosFromChunks(gameNames: string[]): Promise<Record<string, string>> {
     try {
-      console.log('🔍 Clear Logo Search');
+      console.log('🔍 Clear Logo Chunk Search');
       console.log(`Searching for ${gameNames.length} games:`, gameNames);
 
       const logoMap: Record<string, string> = {};
 
-      for (const gameName of gameNames) {
+      // Search chunks efficiently - stop when we find all games
+      const maxChunksToSearch = Math.min(10, this.chunkInfo?.totalChunks || 10);
+
+      for (let chunkIndex = 0; chunkIndex < maxChunksToSearch; chunkIndex++) {
+        const chunkFile = `chunk-${chunkIndex.toString().padStart(3, '0')}.db`;
+
         try {
-          // Search by exact game name match
-          const query = `
-            SELECT logo_base64, region, platform_name
-            FROM clear_logos
-            WHERE game_name = ?
-            ORDER BY
-              CASE WHEN region IS NULL THEN 0 ELSE 1 END,
-              region
-            LIMIT 1
-          `;
+          await this.loadAndSearchChunk(chunkFile, gameNames, logoMap);
 
-          const stmt = this.clearLogosDb.prepare(query);
-          stmt.bind([gameName]);
-
-          const results = [];
-          while (stmt.step()) {
-            results.push(stmt.getAsObject());
-          }
-          stmt.free();
-
-          if (results.length > 0 && results[0].logo_base64) {
-            console.log(`🖼️ Found Clear Logo for "${gameName}" (${results[0].platform_name}) [${results[0].region || 'Global'}]`);
-            logoMap[gameName] = results[0].logo_base64;
-          } else {
-            console.log(`❌ No Clear Logo found for "${gameName}"`);
-
-            // Try partial match for debug
-            const partialQuery = `
-              SELECT game_name, platform_name
-              FROM clear_logos
-              WHERE game_name LIKE ?
-              LIMIT 3
-            `;
-            const partialStmt = this.clearLogosDb.prepare(partialQuery);
-            partialStmt.bind([`%${gameName.split(' ')[0]}%`]);
-
-            const partialResults = [];
-            while (partialStmt.step()) {
-              partialResults.push(partialStmt.getAsObject());
-            }
-            partialStmt.free();
-
-            if (partialResults.length > 0) {
-              console.log(`🔍 Similar names found:`, partialResults.map(r => `${r.game_name} (${r.platform_name})`));
-            }
+          // If we've found all games, we can stop
+          if (Object.keys(logoMap).length >= gameNames.length) {
+            break;
           }
         } catch (error) {
-          console.warn(`Error searching Clear Logo for "${gameName}":`, error);
+          console.warn(`❌ Failed to search chunk ${chunkFile}:`, error);
         }
       }
 
       console.log(`✅ Found Clear Logos for ${Object.keys(logoMap).length} out of ${gameNames.length} games`);
+
+      // Debug: Check what we're returning
+      for (const [gameName, base64] of Object.entries(logoMap)) {
+        console.log(`📋 Returning logo for ${gameName}: ${base64.substring(0, 50)}... (${base64.length} chars)`);
+      }
+
       return logoMap;
     } catch (error) {
-      console.warn('Error in Clear Logo search:', error);
+      console.warn('Error in Clear Logo chunk search:', error);
       return {};
+    }
+  }
+
+  private async loadAndSearchChunk(chunkFile: string, gameNames: string[], logoMap: Record<string, string>): Promise<void> {
+    // Check if chunk is already loaded
+    if (this.loadedChunks[chunkFile]) {
+      this.searchLoadedChunk(this.loadedChunks[chunkFile], gameNames, logoMap);
+      return;
+    }
+
+    if (!this.SQL) {
+      console.warn('❌ SQL.js not initialized');
+      return;
+    }
+
+    try {
+      console.log(`📦 Loading chunk: ${chunkFile}`);
+
+      // Fetch the SQLite chunk file
+      const response = await fetch(`/clear-logo-chunks/${chunkFile}`);
+      if (!response.ok) {
+        throw new Error(`Failed to load chunk: ${response.status}`);
+      }
+
+      // Get the binary data
+      const arrayBuffer = await response.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+
+      // Create SQL.js database from the binary data
+      const db = new this.SQL.Database(uint8Array);
+
+      // Query all games in this chunk
+      const stmt = db.prepare('SELECT game_name, logo_base64 FROM clear_logos');
+      const chunkData: Record<string, string> = {};
+
+      while (stmt.step()) {
+        const row = stmt.getAsObject();
+        chunkData[row.game_name as string] = row.logo_base64 as string;
+      }
+
+      stmt.free();
+      db.close();
+
+      // Cache the loaded chunk data
+      this.loadedChunks[chunkFile] = chunkData;
+
+      console.log(`✅ Loaded chunk ${chunkFile}: ${Object.keys(chunkData).length} logos`);
+
+      // Search this chunk for our games
+      this.searchLoadedChunk(chunkData, gameNames, logoMap);
+    } catch (error) {
+      console.warn(`❌ Failed to load chunk ${chunkFile}:`, error);
+      this.loadedChunks[chunkFile] = {}; // Cache empty result to avoid retry
+    }
+  }
+
+  private searchLoadedChunk(chunkData: any, gameNames: string[], logoMap: Record<string, string>): void {
+    // Search through loaded chunk data for matching game names
+    for (const gameName of gameNames) {
+      if (logoMap[gameName]) continue; // Already found
+
+      // Look for exact match first, then fuzzy match
+      if (chunkData[gameName]) {
+        // Convert base64 to data URL format
+        const dataUrl = `data:image/png;base64,${chunkData[gameName]}`;
+        logoMap[gameName] = dataUrl;
+        console.log(`🎯 Found Clear Logo for: ${gameName}`);
+      }
     }
   }
 

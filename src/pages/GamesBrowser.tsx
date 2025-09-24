@@ -18,6 +18,8 @@ import { GameRatingDisplay } from "@/components/GameRatingDisplay";
 import { ratingAggregationService } from "@/services/ratingAggregationService";
 import { CreateTournamentModal } from "@/components/CreateTournamentModal";
 import { useGameDatabaseFavorites } from "@/hooks/useGameDatabaseFavorites";
+import { sqliteService } from "@/services/sqliteService";
+import { clearLogoService } from "@/services/clearLogoService";
 
 interface Game {
   id: number;
@@ -70,6 +72,7 @@ const GamesBrowser: React.FC = () => {
   const [favoritesSortBy, setFavoritesSortBy] = useState('name');
   const [favoritesSortDirection, setFavoritesSortDirection] = useState<'asc' | 'desc'>('asc');
   const [pulsingHearts, setPulsingHearts] = useState<Set<string>>(new Set());
+  const [sqliteLogos, setSqliteLogos] = useState<Record<string, string>>({});
 
   const [filters, setFilters] = useState<FilterState>({
     search: '',
@@ -149,6 +152,26 @@ const GamesBrowser: React.FC = () => {
   useEffect(() => {
     loadGames();
   }, [filters, currentPage]);
+
+  // Load SQLite logos when games change
+  useEffect(() => {
+    const loadSQLiteLogos = async () => {
+      if (games.length === 0) return;
+
+      console.log('Loading SQLite logos for games:', games.map(game => game.name));
+
+      try {
+        const gameNames = games.map(game => game.name);
+        const logoMap = await clearLogoService.getClearLogosForGames(gameNames);
+        console.log('Clear Logo logos loaded:', Object.keys(logoMap));
+        setSqliteLogos(logoMap);
+      } catch (error) {
+        console.warn('Failed to load Clear Logo logos:', error);
+      }
+    };
+
+    loadSQLiteLogos();
+  }, [games]);
 
   // Handle search on Enter key
   const handleSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -344,6 +367,11 @@ const GamesBrowser: React.FC = () => {
           break;
         case 'platform':
           orderColumn = 'platform_name';
+          break;
+        case 'newest':
+          orderColumn = 'created_at';
+          // For newest, reverse the logic: asc = newest first (desc), desc = oldest first (asc)
+          ascending = filters.sortDirection === 'asc' ? false : true;
           break;
         default: // name
           orderColumn = 'name';
@@ -635,6 +663,23 @@ const GamesBrowser: React.FC = () => {
   const [favoritesWithRatings, setFavoritesWithRatings] = useState<Game[]>([]);
   const [favoritesRatingLoading, setFavoritesRatingLoading] = useState(false);
 
+  // Load SQLite logos for favorites when they change
+  useEffect(() => {
+    const loadFavoritesLogos = async () => {
+      if (activeMainTab === 'favorites' && favoriteGamesDetails.length > 0) {
+        try {
+          const gameNames = favoriteGamesDetails.map(game => game.name);
+          const logoMap = await sqliteService.getLogosForGames(gameNames);
+          setSqliteLogos(prev => ({ ...prev, ...logoMap }));
+        } catch (error) {
+          console.warn('Failed to load SQLite logos for favorites:', error);
+        }
+      }
+    };
+
+    loadFavoritesLogos();
+  }, [activeMainTab, favoriteGamesDetails]);
+
   // Fetch aggregated ratings for favorites when sorting by rating
   useEffect(() => {
     const fetchFavoritesRatings = async () => {
@@ -892,6 +937,7 @@ const GamesBrowser: React.FC = () => {
                         <SelectItem value="year">Release Year</SelectItem>
                         <SelectItem value="players">Max Players</SelectItem>
                         <SelectItem value="platform">Platform</SelectItem>
+                        <SelectItem value="newest">Newest Added</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -1029,9 +1075,25 @@ const GamesBrowser: React.FC = () => {
             }`}
             onClick={() => toggleGameSelection(game.id)}
           >
-            {/* Game Image - Priority: cover_url > screenshot_url > RAWG > logo_url */}
+            {/* Game Image - Priority: SQLite logos > Database logo_base64 > cover_url > screenshot_url > RAWG */}
             <div className="relative aspect-video w-full overflow-hidden">
-              {game.cover_url ? (
+              {(() => {
+                console.log(`[${game.name}] Has logo_base64:`, !!game.logo_base64, `Has SQLite logo:`, !!sqliteLogos[game.name], `Cover URL: ${!!game.cover_url}, Screenshot URL: ${!!game.screenshot_url}`);
+                return sqliteLogos[game.name] ? (
+                  <img
+                    src={sqliteLogos[game.name]}
+                    alt={`${game.name} clear logo`}
+                    className="w-full h-full object-contain bg-gradient-to-br from-gray-900 to-gray-700"
+                    onError={() => handleImageError(game.id)}
+                  />
+                ) : game.logo_base64 ? (
+                  <img
+                    src={game.logo_base64}
+                    alt={`${game.name} clear logo`}
+                    className="w-full h-full object-contain bg-gradient-to-br from-gray-900 to-gray-700"
+                    onError={() => handleImageError(game.id)}
+                  />
+                ) : game.cover_url ? (
                 <img
                   src={game.cover_url}
                   alt={`${game.name} cover`}
@@ -1053,7 +1115,8 @@ const GamesBrowser: React.FC = () => {
                   enableLazyLoading={index >= 8}
                   fallbackImageUrl={game.logo_url}
                 />
-              )}
+              );
+              })()}
 
               {/* Heart icon for favorites */}
               <button
@@ -1303,9 +1366,25 @@ const GamesBrowser: React.FC = () => {
                     }`}
                     onClick={() => toggleGameSelection(game.id)}
                   >
-                    {/* Game Image - Priority: cover_url > screenshot_url > RAWG > logo_url */}
+                    {/* Game Image - Priority: SQLite logos > Database logo_base64 > cover_url > screenshot_url > RAWG */}
                     <div className="relative aspect-video w-full overflow-hidden">
-                      {game.cover_url ? (
+                      {(() => {
+                        console.log(`[FAVORITES] [${game.name}] Has logo_base64:`, !!game.logo_base64, `Has SQLite logo:`, !!sqliteLogos[game.name], `Cover URL: ${!!game.cover_url}, Screenshot URL: ${!!game.screenshot_url}`);
+                        return sqliteLogos[game.name] ? (
+                          <img
+                            src={sqliteLogos[game.name]}
+                            alt={`${game.name} clear logo`}
+                            className="w-full h-full object-contain bg-gradient-to-br from-gray-900 to-gray-700"
+                            onError={() => handleImageError(game.id)}
+                          />
+                        ) : game.logo_base64 ? (
+                          <img
+                            src={game.logo_base64}
+                            alt={`${game.name} clear logo`}
+                            className="w-full h-full object-contain bg-gradient-to-br from-gray-900 to-gray-700"
+                            onError={() => handleImageError(game.id)}
+                          />
+                        ) : game.cover_url ? (
                         <img
                           src={game.cover_url}
                           alt={`${game.name} cover`}
@@ -1327,7 +1406,8 @@ const GamesBrowser: React.FC = () => {
                           enableLazyLoading={index >= 8}
                           fallbackImageUrl={game.logo_url}
                         />
-                      )}
+                      );
+                      })()}
 
                       {/* Heart icon for favorites */}
                       <button

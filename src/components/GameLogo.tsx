@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { launchBoxService } from '@/services/launchboxService';
+import { clearLogoService } from '@/services/clearLogoService';
 
 interface GameLogoProps {
   gameName: string;
@@ -85,21 +85,18 @@ export const GameLogo: React.FC<GameLogoProps> = ({
       setError(false);
 
       try {
-        // Use high priority for immediately visible games, low priority for lazy-loaded ones
-        const priority = !enableLazyLoading ? 'high' : 'low'; // Immediate loads get high priority
-        const url = await launchBoxService.getClearLogo(gameName, priority);
-        setLogoUrl(url);
+        // Get Clear Logo from local SQLite database
+        const logoMap = await clearLogoService.getClearLogosForGames([gameName]);
+        const base64Logo = logoMap[gameName];
 
-        if (!url) {
+        if (base64Logo) {
+          const dataUrl = `data:image/png;base64,${base64Logo}`;
+          setLogoUrl(dataUrl);
+        } else {
           setError(true);
         }
       } catch (err) {
-        // Check if it's a circuit breaker error (API temporarily down)
-        if (err instanceof Error && err.message.includes('Circuit breaker is open')) {
-          console.log('LaunchBox API temporarily unavailable for', gameName);
-        } else {
-          console.error('Error fetching clear logo for', gameName, ':', err);
-        }
+        console.error('Error fetching clear logo for', gameName, ':', err);
         setError(true);
       } finally {
         setIsLoading(false);
