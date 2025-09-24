@@ -40,7 +40,7 @@ async function createClearLogoChunks() {
   const totalResult = mainDb.prepare('SELECT COUNT(*) as count FROM clear_logos').get() as { count: number };
   console.log(`📊 Processing ${totalResult.count.toLocaleString()} Clear Logos`);
 
-  const CHUNK_SIZE = 25; // 25 logos per chunk (~10-30MB each, within Vercel limits)
+  const CHUNK_SIZE = 5; // 5 logos per chunk (~2-8MB each, well within Vercel limits)
   const totalChunks = Math.ceil(totalResult.count / CHUNK_SIZE);
 
   console.log(`📦 Creating ${totalChunks} chunks of ${CHUNK_SIZE} logos each`);
