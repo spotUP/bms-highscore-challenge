@@ -86,7 +86,11 @@ export default defineConfig(({ mode }) => ({
       '@supabase/supabase-js',
       '@tanstack/react-query',
       'recharts', // Pre-bundle recharts to prevent initialization issues
+      'sql.js', // Include SQL.js for Clear Logo functionality
     ],
     exclude: ['@huggingface/transformers'], // Exclude heavy ML library from pre-bundling
   },
+
+  // Handle SQL.js WASM files
+  assetsInclude: ['**/*.wasm'],
 }));
