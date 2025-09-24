@@ -2,45 +2,45 @@
   "0": {
     "instanceId": 0,
     "totalGames": 169556,
-    "processedGames": 52928,
-    "successfulLogos": 52623,
-    "failedLogos": 44086,
-    "currentGameId": -32422,
-    "currentGameName": "Dungeons &amp; Dragons: Daggerdale",
+    "processedGames": 53236,
+    "successfulLogos": 52899,
+    "failedLogos": 44118,
+    "currentGameId": -31263,
+    "currentGameName": "Starpoint Gemini 2",
     "currentPlatform": "Windows",
-    "lastUpdate": "2025-09-24T07:12:24.890Z",
+    "lastUpdate": "2025-09-24T07:16:18.371Z",
     "status": "completed",
     "errors": [],
     "recentSuccesses": [
       {
-        "gameId": -32422,
-        "gameName": "Dungeons &amp; Dragons: Daggerdale",
+        "gameId": -31263,
+        "gameName": "Starpoint Gemini 2",
         "platform": "Windows",
-        "timestamp": "2025-09-24T07:12:25.483Z"
+        "timestamp": "2025-09-24T07:16:18.765Z"
       },
       {
-        "gameId": -32428,
-        "gameName": "Guacamelee! Gold Edition",
+        "gameId": -31264,
+        "gameName": "FIFA: Road to World Cup 98",
         "platform": "Windows",
-        "timestamp": "2025-09-24T07:12:23.134Z"
+        "timestamp": "2025-09-24T07:16:18.220Z"
       },
       {
-        "gameId": -32436,
-        "gameName": "Immortal Defense",
+        "gameId": -31265,
+        "gameName": "Euro Truck Simulator",
         "platform": "Windows",
-        "timestamp": "2025-09-24T07:12:22.596Z"
+        "timestamp": "2025-09-24T07:16:17.668Z"
       },
       {
-        "gameId": -32451,
-        "gameName": "Jagged Alliance 2: Wildfire",
+        "gameId": -31267,
+        "gameName": "Pulsar: Lost Colony",
         "platform": "Windows",
-        "timestamp": "2025-09-24T07:12:22.137Z"
+        "timestamp": "2025-09-24T07:16:16.133Z"
       },
       {
-        "gameId": -32452,
-        "gameName": "Weird Worlds: Return to Infinite Space",
+        "gameId": -31268,
+        "gameName": "Hexodius",
         "platform": "Windows",
-        "timestamp": "2025-09-24T07:12:21.494Z"
+        "timestamp": "2025-09-24T07:16:15.586Z"
       }
     ],
     "startTime": "2025-09-23T21:45:00.000Z",
