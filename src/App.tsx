@@ -40,6 +40,7 @@ const BracketAdmin = lazy(() => import("./pages/BracketAdmin"));
 const Competition = lazy(() => import("./pages/Competition"));
 const RAWGGamesBrowser = lazy(() => import("./pages/RAWGGamesBrowser"));
 const GamesBrowser = lazy(() => import("./pages/GamesBrowser"));
+const ClearLogoTest = lazy(() => import("./components/ClearLogoTest"));
 
 const queryClient = new QueryClient();
 
@@ -190,6 +191,7 @@ const App = () => (
                           <Route path="/competition" element={<Layout><Competition /></Layout>} />
                           <Route path="/brackets" element={<Layout><Brackets /></Layout>} />
                           <Route path="/games" element={<Layout><GamesBrowser /></Layout>} />
+                          <Route path="/clear-logos" element={<Layout><ClearLogoTest /></Layout>} />
                           {/* Tournament-scoped routes with access control */}
                           <Route path="/t/:slug" element={<Layout topNavProps={{
                             onShowRules: () => {
