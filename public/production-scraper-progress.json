@@ -2,48 +2,48 @@
   "0": {
     "instanceId": 0,
     "totalGames": 169556,
-    "processedGames": 53236,
-    "successfulLogos": 52899,
-    "failedLogos": 44118,
-    "currentGameId": -31263,
-    "currentGameName": "Starpoint Gemini 2",
+    "processedGames": 50723,
+    "successfulLogos": 50718,
+    "failedLogos": 43786,
+    "currentGameId": -49837,
+    "currentGameName": "Paradise",
     "currentPlatform": "Windows",
-    "lastUpdate": "2025-09-24T07:16:18.371Z",
+    "lastUpdate": "2025-09-24T11:00:24.286Z",
     "status": "completed",
     "errors": [],
     "recentSuccesses": [
       {
-        "gameId": -31263,
-        "gameName": "Starpoint Gemini 2",
+        "gameId": -49837,
+        "gameName": "Paradise",
         "platform": "Windows",
-        "timestamp": "2025-09-24T07:16:18.765Z"
+        "timestamp": "2025-09-24T11:00:24.783Z"
       },
       {
-        "gameId": -31264,
-        "gameName": "FIFA: Road to World Cup 98",
+        "gameId": -49841,
+        "gameName": "Battlefield: Bad Company 2",
         "platform": "Windows",
-        "timestamp": "2025-09-24T07:16:18.220Z"
+        "timestamp": "2025-09-24T11:00:24.134Z"
       },
       {
-        "gameId": -31265,
-        "gameName": "Euro Truck Simulator",
+        "gameId": -49842,
+        "gameName": "Portal",
         "platform": "Windows",
-        "timestamp": "2025-09-24T07:16:17.668Z"
+        "timestamp": "2025-09-24T11:00:23.492Z"
       },
       {
-        "gameId": -31267,
-        "gameName": "Pulsar: Lost Colony",
+        "gameId": -49844,
+        "gameName": "Tom Clancy's H.A.W.X",
         "platform": "Windows",
-        "timestamp": "2025-09-24T07:16:16.133Z"
+        "timestamp": "2025-09-24T11:00:22.864Z"
       },
       {
-        "gameId": -31268,
-        "gameName": "Hexodius",
+        "gameId": -49846,
+        "gameName": "Borderlands",
         "platform": "Windows",
-        "timestamp": "2025-09-24T07:16:15.586Z"
+        "timestamp": "2025-09-24T11:00:22.321Z"
       }
     ],
     "startTime": "2025-09-23T21:45:00.000Z",
-    "gamesPerSecond": 1.55
+    "gamesPerSecond": 1.06
   }
 }
