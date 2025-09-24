@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { GameRatingDisplay } from "./GameRatingDisplay";
 import { GameMediaGallery } from "./GameMediaGallery";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Star,
   Calendar,
@@ -21,7 +22,9 @@ import {
   BookOpen,
   Monitor,
   Palette,
-  Tag
+  Tag,
+  Loader2,
+  Heart
 } from "lucide-react";
 
 interface Game {
@@ -59,20 +62,94 @@ interface GameDetailsModalProps {
   game: Game | null;
   isOpen: boolean;
   onClose: () => void;
+  favoriteGameIds?: Set<string>;
+  toggleFavorite?: (gameId: string) => void;
+  pulsingHearts?: Set<string>;
 }
 
 export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
   game,
   isOpen,
-  onClose
+  onClose,
+  favoriteGameIds,
+  toggleFavorite,
+  pulsingHearts
 }) => {
+  const [enrichedGame, setEnrichedGame] = useState<Game | null>(game);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (!game || !isOpen) return;
+
+    // Start with the basic game data
+    setEnrichedGame(game);
+    setIsLoading(true);
+
+    // Fetch additional metadata from Supabase
+    const fetchEnrichedData = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('games_database')
+          .select('*')
+          .eq('id', game.id)
+          .single();
+
+        if (!error && data) {
+          // Merge the fetched data with existing game data
+          setEnrichedGame({
+            ...game,
+            ...data,
+            // Keep existing fields that might not be in Supabase
+            name: data.name || game.name,
+            platform_name: data.platform_name || game.platform_name
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to fetch enriched game data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchEnrichedData();
+  }, [game, isOpen]);
+
   if (!game) return null;
+
+  // Use enriched data if available, otherwise fall back to original
+  const displayGame = enrichedGame || game;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-[60vw] max-h-[95vh] w-full h-full overflow-y-auto">
+      <DialogContent className="w-[60vw] max-w-[60vw] min-w-[60vw] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold pr-8">{game.name}</DialogTitle>
+          <DialogTitle className="text-2xl font-bold pr-8 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {displayGame.name}
+              {isLoading && <Loader2 className="w-5 h-5 animate-spin" />}
+            </div>
+            {favoriteGameIds && toggleFavorite && (
+              <button
+                className="p-2 transition-colors hover:bg-gray-100 rounded-full"
+                onClick={() => toggleFavorite(displayGame.id.toString())}
+              >
+                <div className="relative">
+                  <Heart
+                    className={`w-6 h-6 ${
+                      favoriteGameIds.has(displayGame.id.toString())
+                        ? 'text-red-500 fill-red-500'
+                        : 'text-gray-400 hover:text-red-400'
+                    }`}
+                  />
+                  {pulsingHearts?.has(displayGame.id.toString()) && (
+                    <Heart
+                      className="absolute top-0 left-0 w-6 h-6 text-red-500 fill-red-500 heart-pulse pointer-events-none"
+                    />
+                  )}
+                </div>
+              </button>
+            )}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-8">
@@ -83,11 +160,11 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
               <h3 className="font-semibold text-xl">Game Information</h3>
 
               {/* Cover Art */}
-              {game.cover_url && (
+              {displayGame.cover_url && (
                 <div className="aspect-[3/4] w-full max-w-sm mx-auto overflow-hidden rounded-lg border relative">
                   <img
-                    src={game.cover_url}
-                    alt={`${game.name} cover`}
+                    src={displayGame.cover_url}
+                    alt={`${displayGame.name} cover`}
                     className="w-full h-full object-cover"
                   />
                   <div className="absolute top-2 left-2">
@@ -102,53 +179,53 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                   <h4 className="font-semibold text-sm text-muted-foreground">Platform</h4>
                   <Badge variant="secondary" className="text-sm w-fit">
                     <Gamepad2 className="w-4 h-4 mr-1" />
-                    {game.platform_name}
+                    {displayGame.platform_name}
                   </Badge>
                 </div>
 
-                {(game.release_date || game.release_year) && (
+                {(displayGame.release_date || displayGame.release_year) && (
                   <div className="space-y-2">
                     <h4 className="font-semibold text-sm text-muted-foreground">Release Date</h4>
                     <Badge variant="outline" className="text-sm w-fit">
                       <Calendar className="w-4 h-4 mr-1" />
-                      {game.release_date || game.release_year}
+                      {displayGame.release_date || displayGame.release_year}
                     </Badge>
                   </div>
                 )}
 
-                {game.release_type && (
+                {displayGame.release_type && (
                   <div className="space-y-2">
                     <h4 className="font-semibold text-sm text-muted-foreground">Game Type</h4>
                     <Badge variant="outline" className="text-sm w-fit">
-                      {game.release_type}
+                      {displayGame.release_type}
                     </Badge>
                   </div>
                 )}
 
-                {game.max_players && (
+                {displayGame.max_players && (
                   <div className="space-y-2">
                     <h4 className="font-semibold text-sm text-muted-foreground">Max Players</h4>
                     <Badge variant="outline" className="text-sm w-fit">
                       <Users className="w-4 h-4 mr-1" />
-                      {game.max_players}
+                      {displayGame.max_players}
                     </Badge>
                   </div>
                 )}
 
-                {game.cooperative !== null && (
+                {displayGame.cooperative !== null && (
                   <div className="space-y-2">
                     <h4 className="font-semibold text-sm text-muted-foreground">Cooperative</h4>
-                    <Badge variant={game.cooperative ? "secondary" : "outline"} className="text-sm w-fit">
-                      {game.cooperative ? "Yes" : "No"}
+                    <Badge variant={displayGame.cooperative ? "secondary" : "outline"} className="text-sm w-fit">
+                      {displayGame.cooperative ? "Yes" : "No"}
                     </Badge>
                   </div>
                 )}
 
-                {game.esrb_rating && (
+                {displayGame.esrb_rating && (
                   <div className="space-y-2">
                     <h4 className="font-semibold text-sm text-muted-foreground">ESRB Rating</h4>
                     <Badge variant="outline" className="text-sm w-fit">
-                      {game.esrb_rating}
+                      {displayGame.esrb_rating}
                     </Badge>
                   </div>
                 )}
@@ -156,31 +233,31 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
 
               {/* Developer & Publisher */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {game.developer && (
+                {displayGame.developer && (
                   <div className="space-y-2">
                     <h4 className="font-semibold text-sm text-muted-foreground">Developer</h4>
                     <Badge variant="outline" className="text-sm w-fit">
-                      {game.developer}
+                      {displayGame.developer}
                     </Badge>
                   </div>
                 )}
 
-                {game.publisher && (
+                {displayGame.publisher && (
                   <div className="space-y-2">
                     <h4 className="font-semibold text-sm text-muted-foreground">Publisher</h4>
                     <Badge variant="outline" className="text-sm w-fit">
-                      {game.publisher}
+                      {displayGame.publisher}
                     </Badge>
                   </div>
                 )}
               </div>
 
               {/* Genres */}
-              {game.genres && game.genres.length > 0 && (
+              {displayGame.genres && displayGame.genres.length > 0 && (
                 <div>
                   <h4 className="font-semibold text-sm text-muted-foreground mb-3">Genres</h4>
                   <div className="flex flex-wrap gap-2">
-                    {game.genres.map(genre => (
+                    {displayGame.genres.map(genre => (
                       <Badge key={genre} variant="secondary" className="text-sm">
                         {genre}
                       </Badge>
@@ -191,38 +268,38 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
 
 
               {/* Series */}
-              {game.series && (
+              {displayGame.series && (
                 <div>
                   <h4 className="font-semibold text-sm text-muted-foreground mb-2 flex items-center gap-1">
                     <Tag className="w-4 h-4" />
                     Series
                   </h4>
-                  <p className="text-sm bg-muted bg-opacity-20 p-2 rounded">{game.series}</p>
+                  <p className="text-sm bg-muted bg-opacity-20 p-2 rounded">{displayGame.series}</p>
                 </div>
               )}
 
               {/* Region */}
-              {game.region && (
+              {displayGame.region && (
                 <div>
                   <h4 className="font-semibold text-sm text-muted-foreground mb-2 flex items-center gap-1">
                     <Globe className="w-4 h-4" />
                     Region
                   </h4>
                   <Badge variant="outline" className="text-sm">
-                    {game.region}
+                    {displayGame.region}
                   </Badge>
                 </div>
               )}
 
               {/* Play Modes */}
-              {game.play_modes && game.play_modes.length > 0 && (
+              {displayGame.play_modes && displayGame.play_modes.length > 0 && (
                 <div>
                   <h4 className="font-semibold text-sm text-muted-foreground mb-3 flex items-center gap-1">
                     <Monitor className="w-4 h-4" />
                     Play Modes
                   </h4>
                   <div className="flex flex-wrap gap-2">
-                    {game.play_modes.map(mode => (
+                    {displayGame.play_modes.map(mode => (
                       <Badge key={mode} variant="secondary" className="text-sm">
                         {mode}
                       </Badge>
@@ -232,14 +309,14 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
               )}
 
               {/* Themes */}
-              {game.themes && game.themes.length > 0 && (
+              {displayGame.themes && displayGame.themes.length > 0 && (
                 <div>
                   <h4 className="font-semibold text-sm text-muted-foreground mb-3 flex items-center gap-1">
                     <Palette className="w-4 h-4" />
                     Themes
                   </h4>
                   <div className="flex flex-wrap gap-2">
-                    {game.themes.map(theme => (
+                    {displayGame.themes.map(theme => (
                       <Badge key={theme} variant="outline" className="text-sm">
                         {theme}
                       </Badge>
@@ -249,11 +326,11 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
               )}
 
               {/* Alternative Names */}
-              {game.alternative_names && game.alternative_names.length > 0 && (
+              {displayGame.alternative_names && displayGame.alternative_names.length > 0 && (
                 <div>
                   <h4 className="font-semibold text-sm text-muted-foreground mb-3">Alternate Names</h4>
                   <div className="space-y-2 max-h-32 overflow-y-auto">
-                    {game.alternative_names.map((name, index) => (
+                    {displayGame.alternative_names.map((name, index) => (
                       <div key={index} className="text-sm bg-muted bg-opacity-20 p-2 rounded">
                         {name}
                       </div>
@@ -263,7 +340,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
               )}
 
               {/* External Links */}
-              {game.wikipedia_url && (
+              {displayGame.wikipedia_url && (
                 <div>
                   <h4 className="font-semibold text-sm text-muted-foreground mb-3 flex items-center gap-1">
                     <BookOpen className="w-4 h-4" />
@@ -271,7 +348,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
                   </h4>
                   <div className="space-y-2">
                     <Button variant="outline" size="sm" asChild className="w-full justify-start">
-                      <a href={game.wikipedia_url} target="_blank" rel="noopener noreferrer">
+                      <a href={displayGame.wikipedia_url} target="_blank" rel="noopener noreferrer">
                         <Globe className="w-4 h-4 mr-2" />
                         Wikipedia Page
                       </a>
@@ -284,51 +361,30 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
               <div>
                 <h4 className="font-semibold text-sm text-muted-foreground mb-3">Community Rating</h4>
                 <GameRatingDisplay
-                  gameName={game.name}
-                  platform={game.platform_name}
-                  launchboxRating={game.community_rating}
-                  launchboxRatingCount={game.community_rating_count}
+                  gameName={displayGame.name}
+                  platform={displayGame.platform_name}
+                  launchboxRating={displayGame.community_rating}
+                  launchboxRatingCount={displayGame.community_rating_count}
                   showSources={true}
                 />
               </div>
             </div>
 
-            {/* Right Column - Video or Media Gallery */}
+            {/* Right Column - Media Gallery */}
             <div className="lg:col-span-3">
-              {game.video_url ? (
-                <div>
-                  <h3 className="font-semibold text-xl mb-4">Video</h3>
-                  <div className="aspect-[4/3] w-full overflow-hidden rounded-lg border relative">
-                    <iframe
-                      src={game.video_url.includes('youtube.com') || game.video_url.includes('youtu.be')
-                        ? `https://www.youtube.com/embed/${game.video_url.split('/').pop()?.split('=').pop()?.split('&')[0]}`
-                        : game.video_url
-                      }
-                      title={`${game.name} video`}
-                      className="w-full h-full"
-                      allowFullScreen
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                    />
-                    <div className="absolute top-2 left-2">
-                      <Badge variant="secondary" className="text-xs">Video</Badge>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <h3 className="font-semibold text-xl mb-4">Media Gallery</h3>
-                  <GameMediaGallery
-                    gameName={game.name}
-                    platform={game.platform_name}
-                    existingMedia={{
-                      screenshot_url: game.screenshot_url,
-                      cover_url: game.cover_url,
-                      logo_url: game.logo_url,
-                      video_url: game.video_url
-                    }}
-                  />
-                </div>
-              )}
+              <div>
+                <h3 className="font-semibold text-xl mb-4">Media Gallery</h3>
+                <GameMediaGallery
+                  gameName={displayGame.name}
+                  platform={displayGame.platform_name}
+                  existingMedia={{
+                    screenshot_url: displayGame.screenshot_url,
+                    cover_url: displayGame.cover_url,
+                    logo_url: displayGame.logo_url,
+                    video_url: displayGame.video_url
+                  }}
+                />
+              </div>
             </div>
           </div>
 
@@ -338,32 +394,16 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
             <Separator />
 
             {/* Overview Section */}
-            {game.overview && (
+            {displayGame.overview && (
               <div className="space-y-4">
                 <h4 className="font-semibold text-sm text-muted-foreground">Overview</h4>
                 <div className="bg-muted bg-opacity-20 p-3 rounded">
-                  <p className="text-sm leading-relaxed">{game.overview}</p>
+                  <p className="text-sm leading-relaxed">{displayGame.overview}</p>
                 </div>
               </div>
             )}
 
 
-            {/* Enhanced Media Gallery - only show if there's a video (otherwise it's in the right column) */}
-            {game.video_url && (
-              <>
-                <Separator />
-                <GameMediaGallery
-                  gameName={game.name}
-                  platform={game.platform_name}
-                  existingMedia={{
-                    screenshot_url: game.screenshot_url,
-                    cover_url: game.cover_url,
-                    logo_url: game.logo_url,
-                    video_url: game.video_url
-                  }}
-                />
-              </>
-            )}
 
           </div>
         </div>

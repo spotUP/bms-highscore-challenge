@@ -67,67 +67,108 @@ function initializeDatabase(): Promise<sqlite3.Database> {
   });
 }
 
-// Fetch logo from LaunchBox (using working method from production-logo-scraper.ts)
+// Fetch logo from LaunchBox with optimized timeout handling and retry logic
 async function fetchClearLogoByGameId(gameId: number, gameName: string): Promise<string | null> {
-  try {
-    await new Promise(resolve => setTimeout(resolve, 150)); // Rate limiting
+  const maxRetries = 2; // Reduced from 3 to 2
 
-    const gamePageUrl = `https://gamesdb.launchbox-app.com/games/details/${gameId}`;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      // Exponential backoff: 150ms, 300ms
+      if (attempt > 1) {
+        await new Promise(resolve => setTimeout(resolve, attempt * 150));
+      }
 
-    const gamePageResponse = await fetch(gamePageUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      signal: AbortSignal.timeout(8000)
-    });
+      const gamePageUrl = `https://gamesdb.launchbox-app.com/games/details/${gameId}`;
 
-    if (!gamePageResponse.ok) {
-      return null;
+      const gamePageResponse = await fetch(gamePageUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none'
+        },
+        signal: AbortSignal.timeout(15000) // 15 second timeout for faster failures
+      });
+
+      if (!gamePageResponse.ok) {
+        if (gamePageResponse.status === 429) {
+          // Rate limited - wait longer before retry
+          console.log(`⏳ Rate limited (429), waiting 5 seconds before retry...`);
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+        if (attempt === maxRetries) {
+          console.log(`❌ Game page request failed after ${maxRetries} attempts: ${gamePageResponse.status}`);
+        }
+        continue;
+      }
+
+      const gamePageHtml = await gamePageResponse.text();
+
+      // Extract the "Clear Logo" section and find images within it
+      const clearLogoSectionMatch = gamePageHtml.match(/Clear Logo<\/h3>([\s\S]*?)(?=<h3|$)/i);
+
+      if (!clearLogoSectionMatch) {
+        if (attempt === maxRetries) {
+          console.log(`❌ No "Clear Logo" section found for ${gameName}`);
+        }
+        continue;
+      }
+
+      const clearLogoSection = clearLogoSectionMatch[1];
+      const imageMatches = [...clearLogoSection.matchAll(/<img[^>]*src="([^"]*\.(?:png|jpg|jpeg))"/gi)];
+
+      if (imageMatches.length === 0) {
+        if (attempt === maxRetries) {
+          console.log(`❌ No images found in Clear Logo section for ${gameName}`);
+        }
+        continue;
+      }
+
+      // Take the first image (typically the best quality)
+      let logoUrl = imageMatches[0][1];
+
+      // Ensure it's a full URL
+      if (logoUrl && !logoUrl.startsWith('http')) {
+        logoUrl = logoUrl.startsWith('//') ? `https:${logoUrl}` : `https://gamesdb.launchbox-app.com${logoUrl}`;
+      }
+
+      // Download and convert the logo to base64
+      const logoResponse = await fetch(logoUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        signal: AbortSignal.timeout(10000) // 10 second timeout for image download
+      });
+
+      if (!logoResponse.ok) {
+        if (attempt === maxRetries) {
+          console.log(`❌ Logo download failed for ${gameName}: ${logoResponse.status}`);
+        }
+        continue;
+      }
+
+      const logoBuffer = await logoResponse.arrayBuffer();
+      const mimeType = logoResponse.headers.get('content-type') || 'image/png';
+      const logoBase64 = Buffer.from(logoBuffer).toString('base64');
+
+      console.log(`✅ Successfully fetched logo for ${gameName} on attempt ${attempt}`);
+      return `data:${mimeType};base64,${logoBase64}`;
+
+    } catch (error) {
+      if (attempt === maxRetries) {
+        console.log(`❌ Error fetching logo for ${gameName} after ${maxRetries} attempts: ${error}`);
+      } else {
+        console.log(`⚠️  Attempt ${attempt} failed for ${gameName}: ${error.toString().substring(0, 100)}...`);
+      }
     }
-
-    const gamePageHtml = await gamePageResponse.text();
-
-    // Extract the "Clear Logo" section and find images within it
-    const clearLogoSectionMatch = gamePageHtml.match(/Clear Logo<\/h3>([\s\S]*?)(?=<h3|$)/i);
-
-    if (!clearLogoSectionMatch) {
-      return null;
-    }
-
-    const clearLogoSection = clearLogoSectionMatch[1];
-    const imageMatches = [...clearLogoSection.matchAll(/<img[^>]*src="([^"]*\.(?:png|jpg|jpeg))"/gi)];
-
-    if (imageMatches.length === 0) {
-      return null;
-    }
-
-    // Take the first image (typically the best quality)
-    let logoUrl = imageMatches[0][1];
-
-    // Ensure it's a full URL
-    if (logoUrl && !logoUrl.startsWith('http')) {
-      logoUrl = logoUrl.startsWith('//') ? `https:${logoUrl}` : `https://gamesdb.launchbox-app.com${logoUrl}`;
-    }
-
-    // Download and convert the logo to base64
-    const logoResponse = await fetch(logoUrl, {
-      signal: AbortSignal.timeout(6000)
-    });
-
-    if (!logoResponse.ok) {
-      return null;
-    }
-
-    const logoBuffer = await logoResponse.arrayBuffer();
-    const mimeType = logoResponse.headers.get('content-type') || 'image/png';
-    const logoBase64 = Buffer.from(logoBuffer).toString('base64');
-
-    return `data:${mimeType};base64,${logoBase64}`;
-
-  } catch (error) {
-    console.log(`⚠️  Error fetching logo for ${gameName}: ${error}`);
-    return null;
   }
+
+  return null; // All attempts failed
 }
 
 // Store logo in SQLite
@@ -295,6 +336,8 @@ function saveProgress(progress: ScraperProgress) {
   const data = { "0": progress };
   writeFileSync(PROGRESS_FILE, JSON.stringify(data, null, 2));
   writeFileSync('public/production-scraper-progress.json', JSON.stringify(data, null, 2));
+  // Also update the main production-scraper-progress.json that the frontend reads
+  writeFileSync('production-scraper-progress.json', JSON.stringify(data, null, 2));
 }
 
 // Save checkpoint every 100 games
@@ -336,9 +379,64 @@ async function runHybridScraper() {
 
   console.log(`📈 Current progress: ${progress.successfulLogos}/${progress.totalGames} logos`);
 
-  const BATCH_SIZE = 30;
-  const DELAY_BETWEEN_BATCHES = 250;
-  let lastProcessedId = progress.currentGameId || 0;
+  // Check if we've completed the high range and need to process the low range
+  const maxProcessedId = await new Promise<number>((resolve) => {
+    db.get('SELECT MAX(id) as maxId FROM games', (err, row: any) => {
+      if (err) {
+        console.error('Error getting max ID from SQLite:', err);
+        resolve(0);
+      } else {
+        resolve(row?.maxId || 0);
+      }
+    });
+  });
+
+  const minProcessedId = await new Promise<number>((resolve) => {
+    db.get('SELECT MIN(id) as minId FROM games', (err, row: any) => {
+      if (err) {
+        console.error('Error getting min ID from SQLite:', err);
+        resolve(0);
+      } else {
+        resolve(row?.minId || 0);
+      }
+    });
+  });
+
+  // Check if we have a gap between min processed and the start of the Supabase range
+  // If minProcessedId is 40291 but Supabase starts at -49999, we need to fill the gap
+  let startFromId = progress.currentGameId || 0;
+
+  // Check for large gaps in processing
+  console.log(`📊 SQLite range: ${minProcessedId} to ${maxProcessedId}`);
+
+  // Special case: If we have processed some games but not the majority, there's likely a gap in the middle
+  // We have 45,238 out of 169,556 total games, which means there's a big gap somewhere
+  const hasGap = stats.total > 0 && stats.total < 100000;
+
+  if (hasGap) {
+    console.log(`🔄 Found gap in processing: minProcessedId=${minProcessedId}, maxProcessedId=${maxProcessedId}, total=${stats.total}`);
+    console.log(`🎯 Forcing restart from beginning to process missing games`);
+
+    // Get the actual minimum ID from Supabase to start from the very beginning
+    const { data: minSupabaseGame, error: minError } = await supabase
+      .from('games_database')
+      .select('id')
+      .order('id', { ascending: true })
+      .limit(1);
+
+    if (!minError && minSupabaseGame && minSupabaseGame[0]) {
+      startFromId = minSupabaseGame[0].id - 1; // Start from before the lowest ID
+      console.log(`🎯 Starting from absolute beginning: ID ${startFromId + 1}`);
+    }
+  } else {
+    startFromId = Math.max(progress.currentGameId || 0, maxProcessedId);
+  }
+
+  const BATCH_SIZE = 20; // Increased batch size for faster processing
+  const DELAY_BETWEEN_BATCHES = 800; // 0.8 seconds between batches for better throughput
+  let lastProcessedId = startFromId;
+
+  console.log(`🔄 Resuming from ID: ${lastProcessedId} (SQLite has ${stats.total} games, ${stats.withLogos} with logos)`);
 
   while (true) {
     try {
@@ -352,69 +450,63 @@ async function runHybridScraper() {
         break;
       }
 
-      console.log(`\n🔄 Processing batch of ${games.length} games with 5 concurrent workers...`);
+      console.log(`\n🔄 Processing batch of ${games.length} games SEQUENTIALLY (no concurrency to avoid timeouts)...`);
 
-      // Process games in chunks of 5 concurrently
-      const CONCURRENCY = 5;
-      for (let i = 0; i < games.length; i += CONCURRENCY) {
-        const chunk = games.slice(i, i + CONCURRENCY);
+      // Process games ONE BY ONE (no concurrency) to avoid overwhelming the server
+      for (let i = 0; i < games.length; i++) {
+        const game = games[i];
 
-        const results = await Promise.allSettled(
-          chunk.map(async (game) => {
-            // Use launchbox_id if available, otherwise use our ID
-            const searchId = game.launchbox_id || game.id;
+        // Use launchbox_id if available, otherwise use our ID
+        const searchId = game.launchbox_id || game.id;
 
-            console.log(`Processing: ${game.name} (ID: ${game.id})`);
+        console.log(`\n[${i + 1}/${games.length}] Processing: ${game.name} (ID: ${game.id}, Search ID: ${searchId})`);
 
-            // Try to fetch logo
-            const logoData = await fetchClearLogoByGameId(searchId, game.name);
+        // Update current progress
+        progress.currentGameId = game.id;
+        progress.currentGameName = game.name;
+        progress.currentPlatform = game.platform_name;
+        progress.lastUpdate = new Date().toISOString();
 
-            if (logoData) {
-              // Store in SQLite
-              const stored = await storeLogoInSQLite(db, game.id, game.name, game.platform_name, logoData);
-              if (stored) {
-                console.log(`✅ Logo saved for ${game.name}`);
-                return { success: true, game, logoData };
-              } else {
-                return { success: false, game, error: 'Failed to store' };
-              }
+        try {
+          // Try to fetch logo
+          const logoData = await fetchClearLogoByGameId(searchId, game.name);
+
+          if (logoData) {
+            // Store in SQLite
+            const stored = await storeLogoInSQLite(db, game.id, game.name, game.platform_name, logoData);
+            if (stored) {
+              console.log(`✅ Logo saved for ${game.name}`);
+              progress.successfulLogos++;
+              progress.recentSuccesses.unshift({
+                gameId: game.id,
+                gameName: game.name,
+                platform: game.platform_name,
+                timestamp: new Date().toISOString()
+              });
+
+              // Keep only last 5 successes
+              progress.recentSuccesses = progress.recentSuccesses.slice(0, 5);
             } else {
-              console.log(`⚠️  No logo found for ${game.name}`);
-              // Still store the game record without logo
-              await storeLogoInSQLite(db, game.id, game.name, game.platform_name, '');
-              return { success: false, game, error: 'No logo found' };
+              console.log(`❌ Failed to store logo for ${game.name}`);
+              progress.failedLogos++;
             }
-          })
-        );
-
-        // Process results
-        for (let j = 0; j < results.length; j++) {
-          const result = results[j];
-          const game = chunk[j];
-
-          progress.currentGameId = game.id;
-          progress.currentGameName = game.name;
-          progress.currentPlatform = game.platform_name;
-          progress.lastUpdate = new Date().toISOString();
-
-          if (result.status === 'fulfilled' && result.value.success) {
-            progress.successfulLogos++;
-            progress.recentSuccesses.unshift({
-              gameId: game.id,
-              gameName: game.name,
-              platform: game.platform_name,
-              timestamp: new Date().toISOString()
-            });
-
-            // Keep only last 5 successes
-            progress.recentSuccesses = progress.recentSuccesses.slice(0, 5);
           } else {
+            console.log(`⚠️  No logo found for ${game.name}`);
+            // Still store the game record without logo
+            await storeLogoInSQLite(db, game.id, game.name, game.platform_name, '');
             progress.failedLogos++;
           }
 
-          progress.processedGames++;
-          lastProcessedId = game.id;
+        } catch (error) {
+          console.log(`❌ Error processing ${game.name}: ${error}`);
+          progress.failedLogos++;
         }
+
+        progress.processedGames++;
+        lastProcessedId = game.id;
+
+        // Small delay between games to be respectful to LaunchBox
+        await new Promise(resolve => setTimeout(resolve, 150));
       }
 
       // Calculate games per second
@@ -440,8 +532,8 @@ async function runHybridScraper() {
       progress.errors.push(String(error));
       saveProgress(progress);
 
-      // Wait longer on error
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Shorter wait on error for speed
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
 

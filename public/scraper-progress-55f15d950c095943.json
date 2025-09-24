@@ -1,0 +1,16 @@
+{
+  "instanceId": "55f15d950c095943",
+  "totalGames": 169625,
+  "processedGames": 413,
+  "successfulLogos": 0,
+  "failedLogos": 413,
+  "currentGameId": 52349,
+  "currentGameName": "Humanity Asset",
+  "currentPlatform": "Windows",
+  "lastUpdate": "2025-09-23T21:50:56.708Z",
+  "status": "running",
+  "errors": [],
+  "recentSuccesses": [],
+  "startTime": "2025-09-23T20:54:21.801Z",
+  "gamesPerSecond": 0.12
+}

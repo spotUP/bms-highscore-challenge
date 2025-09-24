@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 interface GameDatabaseFavorite {
   id: string;
   user_id: string;
-  game_id: string;
+  game_id: number; // Database stores as integer
   game_name: string;
   created_at: string;
 }
@@ -45,7 +45,7 @@ export const useGameDatabaseFavorites = () => {
       }
 
       setFavorites(data || []);
-      setFavoriteGameIds(new Set((data || []).map(f => f.game_id)));
+      setFavoriteGameIds(new Set((data || []).map(f => f.game_id.toString())));
 
       // Also load full game details for favorites
       if (data && data.length > 0) {
@@ -93,14 +93,14 @@ export const useGameDatabaseFavorites = () => {
       return false;
     }
 
-    if (favoriteGameIds.has(game.id)) {
+    if (favoriteGameIds.has(game.id.toString())) {
       return false; // Already favorited
     }
 
     try {
       const favoriteData = {
         user_id: user.id,
-        game_id: game.id,
+        game_id: parseInt(game.id.toString()), // Convert to integer to match database schema
         game_name: game.name,
       };
 
@@ -116,7 +116,7 @@ export const useGameDatabaseFavorites = () => {
       }
 
       setFavorites(prev => [data, ...prev]);
-      setFavoriteGameIds(prev => new Set([...prev, game.id]));
+      setFavoriteGameIds(prev => new Set([...prev, game.id.toString()]));
 
       // Also load the full game details for this new favorite
       const { data: gameData, error: gameError } = await supabase
@@ -164,20 +164,20 @@ export const useGameDatabaseFavorites = () => {
         .from('user_favorites')
         .delete()
         .eq('user_id', user.id)
-        .eq('game_id', gameId);
+        .eq('game_id', parseInt(gameId));
 
       if (error) {
         console.error('Error removing favorite:', error);
         return false;
       }
 
-      setFavorites(prev => prev.filter(f => f.game_id !== gameId));
+      setFavorites(prev => prev.filter(f => f.game_id !== parseInt(gameId)));
       setFavoriteGameIds(prev => {
         const newSet = new Set(prev);
         newSet.delete(gameId);
         return newSet;
       });
-      setFavoriteGamesDetails(prev => prev.filter(g => g.id !== gameId));
+      setFavoriteGamesDetails(prev => prev.filter(g => g.id.toString() !== gameId));
 
       return true;
     } catch (error) {
@@ -188,8 +188,8 @@ export const useGameDatabaseFavorites = () => {
 
   // Toggle favorite status
   const toggleFavorite = useCallback(async (game: Game) => {
-    if (favoriteGameIds.has(game.id)) {
-      return await removeFromFavorites(game.id);
+    if (favoriteGameIds.has(game.id.toString())) {
+      return await removeFromFavorites(game.id.toString());
     } else {
       return await addToFavorites(game);
     }
@@ -222,7 +222,7 @@ export const useGameDatabaseFavorites = () => {
           if (gamesData) {
             const migratedFavorites = gamesData.map(game => ({
               user_id: user.id,
-              game_id: game.id,
+              game_id: parseInt(game.id.toString()),
               game_name: game.name,
             }));
 

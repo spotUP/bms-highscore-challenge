@@ -126,14 +126,20 @@ class GameMediaService {
 
       const data = await response.json();
 
-      return data.results?.map((video: any, index: number) => ({
-        id: `rawg-video-${video.id || index}`,
-        url: video.data?.max || video.data?.['480'] || '',
-        thumbnailUrl: video.preview,
-        source: 'rawg' as const,
-        type: 'trailer' as const,
-        title: video.name
-      })).filter((video: GameVideo) => video.url) || [];
+      return data.results?.map((video: any, index: number) => {
+        const videoUrl = video.data?.max || video.data?.['480'] || '';
+        const embedId = this.extractYouTubeId(videoUrl);
+
+        return {
+          id: `rawg-video-${video.id || index}`,
+          url: videoUrl,
+          thumbnailUrl: video.preview || (embedId ? `https://img.youtube.com/vi/${embedId}/hqdefault.jpg` : undefined),
+          source: 'rawg' as const,
+          type: 'trailer' as const,
+          title: video.name,
+          embedId
+        };
+      }).filter((video: GameVideo) => video.url) || [];
 
     } catch (error) {
       console.error('RAWG videos error:', error);
@@ -201,7 +207,7 @@ class GameMediaService {
       return data.map((video: any, index: number) => ({
         id: `igdb-video-${video.video_id || index}`,
         url: `https://www.youtube.com/watch?v=${video.video_id}`,
-        thumbnailUrl: `https://img.youtube.com/vi/${video.video_id}/maxresdefault.jpg`,
+        thumbnailUrl: `https://img.youtube.com/vi/${video.video_id}/hqdefault.jpg`,
         source: 'igdb' as const,
         type: 'trailer' as const,
         title: video.name,
@@ -302,8 +308,24 @@ class GameMediaService {
       logos.push(existingMedia.logo_url);
     }
 
+    // Add existing video from Supabase if available (prioritize first)
+    if (existingMedia?.video_url) {
+      const embedId = this.extractYouTubeId(existingMedia.video_url);
+      videos.unshift({  // Use unshift to add at beginning
+        id: 'supabase-video',
+        url: existingMedia.video_url,
+        thumbnailUrl: embedId ? `https://img.youtube.com/vi/${embedId}/hqdefault.jpg` : undefined,
+        source: 'manual',
+        type: 'trailer',
+        title: `${gameName} Video`,
+        embedId
+      });
+      console.log(`🎬 Added Supabase video for "${gameName}" (prioritized):`, existingMedia.video_url);
+    }
+
     // Get identifiers for external APIs
     const identifiers = await this.getGameIdentifiers(gameName);
+    console.log(`🔍 Game identifiers for "${gameName}":`, identifiers);
 
     // Fetch from RAWG (primary source for screenshots and videos)
     if (identifiers.rawgSlug) {
@@ -318,6 +340,9 @@ class GameMediaService {
 
       if (rawgVideos.status === 'fulfilled') {
         videos.push(...rawgVideos.value);
+        console.log(`🎬 RAWG: Found ${rawgVideos.value.length} videos for "${gameName}"`);
+      } else {
+        console.log(`⚠️ RAWG videos failed for "${gameName}":`, rawgVideos.reason);
       }
     }
 
@@ -341,6 +366,8 @@ class GameMediaService {
     const uniqueScreenshots = this.deduplicateScreenshots(screenshots);
     const uniqueVideos = this.deduplicateVideos(videos);
 
+    console.log(`📊 Final media count for "${gameName}": ${uniqueScreenshots.length} screenshots, ${uniqueVideos.length} videos (${uniqueVideos.map(v => v.source).join(', ')})`);
+
     const gameMedia: GameMedia = {
       gameName,
       platform,
@@ -354,7 +381,6 @@ class GameMediaService {
 
     // Cache the result
     this.mediaCache.set(cacheKey, gameMedia);
-
 
     return gameMedia;
   }

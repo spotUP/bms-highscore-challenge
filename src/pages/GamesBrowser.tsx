@@ -20,24 +20,13 @@ import { CreateTournamentModal } from "@/components/CreateTournamentModal";
 import { useGameDatabaseFavorites } from "@/hooks/useGameDatabaseFavorites";
 
 interface Game {
-  id: string;
+  id: number;
   name: string;
   platform_name: string;
-  database_id: number | null;
-  release_year: number | null;
-  overview: string | null;
-  max_players: number | null;
-  cooperative: boolean | null;
-  community_rating: number | null;
-  community_rating_count: number | null;
-  esrb_rating: string | null;
-  genres: string[];
-  developer: string | null;
-  publisher: string | null;
-  video_url: string | null;
-  screenshot_url: string | null;
-  cover_url: string | null;
-  logo_url: string | null;
+  logo_base64: string | null;
+  launchbox_id: number | null;
+  created_at: string;
+  updated_at: string;
   aggregatedRating?: number; // For client-side sorting by external API ratings
 }
 
@@ -198,22 +187,11 @@ const GamesBrowser: React.FC = () => {
           id,
           name,
           platform_name,
-          database_id,
-          release_year,
-          overview,
-          max_players,
-          cooperative,
-          community_rating,
-          community_rating_count,
-          esrb_rating,
-          genres,
-          developer,
-          publisher,
-          video_url,
-          screenshot_url,
-          cover_url,
-          logo_url
-        `); // Removed count: 'exact' to improve performance
+          logo_base64,
+          launchbox_id,
+          created_at,
+          updated_at
+        `); // Only selecting fields that actually exist in games_database table
 
       // Apply search filter - improved fuzzy matching to handle punctuation, spaces, and variations
       if (filters.search && filters.search.length >= 3) {
@@ -566,6 +544,15 @@ const GamesBrowser: React.FC = () => {
   }, []);
 
   const toggleFavorite = useCallback(async (gameId: string) => {
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to add games to your favorites",
+        variant: "destructive"
+      });
+      return;
+    }
+
     // Trigger pulse animation
     setPulsingHearts(prev => new Set([...prev, gameId]));
 
@@ -579,11 +566,27 @@ const GamesBrowser: React.FC = () => {
     }, 600);
 
     // Look for the game in either the main games list or favorites details
-    const game = games.find(g => g.id === gameId) || favoriteGamesDetails.find(g => g.id === gameId);
+    const game = games.find(g => g.id.toString() === gameId) || favoriteGamesDetails.find(g => g.id.toString() === gameId);
+
     if (game) {
-      await toggleFavoriteInDB(game);
+      try {
+        const result = await toggleFavoriteInDB(game);
+        if (result) {
+          toast({
+            title: "Success",
+            description: `${game.name} ${isFavorited(gameId) ? 'removed from' : 'added to'} favorites`,
+          });
+        }
+      } catch (error) {
+        console.error('Error toggling favorite:', error);
+        toast({
+          title: "Error",
+          description: "Failed to update favorite. Please try again.",
+          variant: "destructive"
+        });
+      }
     }
-  }, [games, favoriteGamesDetails, toggleFavoriteInDB]);
+  }, [games, favoriteGamesDetails, toggleFavoriteInDB, user, toast, isFavorited]);
 
   const openGameModal = useCallback((game: Game, event: React.MouseEvent) => {
     event.stopPropagation(); // Prevent card selection
@@ -620,8 +623,8 @@ const GamesBrowser: React.FC = () => {
         id: parseInt(game.database_id?.toString() || '0'),
         name: game.name,
         description: game.overview,
-        // Use stored logo_url first (should contain clear logos), then fallback to other images
-        logo_url: game.logo_url || game.cover_url || game.screenshot_url,
+        // Use stored logo_base64 first (should contain clear logos), then fallback to other images
+        logo_url: game.logo_base64 || game.cover_url || game.screenshot_url,
         cover_url: game.cover_url,
         screenshot_url: game.screenshot_url,
         platform_name: game.platform_name
@@ -1057,18 +1060,18 @@ const GamesBrowser: React.FC = () => {
                 className="absolute top-2 left-2 z-10 p-1 transition-colors bg-black/20 rounded-full backdrop-blur-sm"
                 onClick={(e) => {
                   e.stopPropagation();
-                  toggleFavorite(game.id);
+                  toggleFavorite(game.id.toString());
                 }}
               >
                 <div className="relative">
                   <Heart
                     className={`w-5 h-5 ${
-                      favoriteGameIds.has(game.id)
+                      favoriteGameIds.has(game.id.toString())
                         ? 'text-red-500 fill-red-500'
                         : 'text-white'
                     }`}
                   />
-                  {pulsingHearts.has(game.id) && (
+                  {pulsingHearts.has(game.id.toString()) && (
                     <Heart
                       className="absolute top-0 left-0 w-5 h-5 text-red-500 fill-red-500 heart-pulse pointer-events-none"
                     />
@@ -1331,18 +1334,18 @@ const GamesBrowser: React.FC = () => {
                         className="absolute top-2 left-2 z-10 p-1 transition-colors bg-black/20 rounded-full backdrop-blur-sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleFavorite(game.id);
+                          toggleFavorite(game.id.toString());
                         }}
                       >
                         <div className="relative">
                           <Heart
                             className={`w-5 h-5 ${
-                              favoriteGameIds.has(game.id)
+                              favoriteGameIds.has(game.id.toString())
                                 ? 'text-red-500 fill-red-500'
                                 : 'text-white'
                             }`}
                           />
-                          {pulsingHearts.has(game.id) && (
+                          {pulsingHearts.has(game.id.toString()) && (
                             <Heart
                               className="absolute top-0 left-0 w-5 h-5 text-red-500 fill-red-500 heart-pulse pointer-events-none"
                             />
@@ -1465,6 +1468,9 @@ const GamesBrowser: React.FC = () => {
         game={selectedGameForModal}
         isOpen={isModalOpen}
         onClose={closeGameModal}
+        favoriteGameIds={favoriteGameIds}
+        toggleFavorite={toggleFavorite}
+        pulsingHearts={pulsingHearts}
       />
 
       {/* Tournament Creation Modal */}

@@ -24,7 +24,7 @@
   "scripts": {
     "predev": "tsx scripts/check-env.ts",
     "dev": "vite",
-    "prebuild": "tsx scripts/check-env.ts",
+    "prebuild": "tsx scripts/check-env.ts && tsx scripts/build-database-for-vercel.ts",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "postbuild": "tsx scripts/deploy-tests.ts",
@@ -35,7 +35,8 @@
     "apply-migration": "tsx scripts/apply-migration.ts",
     "check-env": "tsx scripts/check-env.ts",
     "verify-storage": "tsx scripts/verify-storage.ts",
-    "deploy-tests": "tsx scripts/deploy-tests.ts"
+    "deploy-tests": "tsx scripts/deploy-tests.ts",
+    "build-database": "tsx scripts/build-database-for-vercel.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -74,6 +75,7 @@
     "@types/react-datepicker": "^6.2.0",
     "@types/xml2js": "^0.4.14",
     "@zxing/library": "^0.21.3",
+    "better-sqlite3": "^12.4.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
@@ -94,12 +96,14 @@
     "react-router-dom": "^6.26.2",
     "recharts": "^2.15.4",
     "sonner": "^1.5.0",
+    "sql.js": "^1.13.0",
     "sqlite3": "^5.1.7",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.180.0",
     "vaul": "^0.9.3",
     "xml2js": "^0.6.2",
+    "xmldom": "^0.6.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

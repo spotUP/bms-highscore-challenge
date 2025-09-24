@@ -2,48 +2,48 @@
   "0": {
     "instanceId": 0,
     "totalGames": 169556,
-    "processedGames": 16513,
-    "successfulLogos": 14211,
-    "failedLogos": 2,
-    "currentGameId": 86038,
-    "currentGameName": "MX Unleashed",
-    "currentPlatform": "Sony Playstation 2",
-    "lastUpdate": "2025-09-23T13:27:15.974Z",
-    "status": "running",
+    "processedGames": 52928,
+    "successfulLogos": 52623,
+    "failedLogos": 44086,
+    "currentGameId": -32422,
+    "currentGameName": "Dungeons &amp; Dragons: Daggerdale",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-24T07:12:24.890Z",
+    "status": "completed",
     "errors": [],
     "recentSuccesses": [
       {
-        "gameId": 86038,
-        "gameName": "MX Unleashed",
-        "platform": "Sony Playstation 2",
-        "timestamp": "2025-09-23T13:27:16.731Z"
+        "gameId": -32422,
+        "gameName": "Dungeons &amp; Dragons: Daggerdale",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T07:12:25.483Z"
       },
       {
-        "gameId": 86037,
-        "gameName": "Monster Jam: Urban Assault",
-        "platform": "Sony Playstation 2",
-        "timestamp": "2025-09-23T13:27:15.974Z"
+        "gameId": -32428,
+        "gameName": "Guacamelee! Gold Edition",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T07:12:23.134Z"
       },
       {
-        "gameId": 86036,
-        "gameName": "Chicken Little: Ace in Action",
-        "platform": "Sony Playstation 2",
-        "timestamp": "2025-09-23T13:27:15.160Z"
+        "gameId": -32436,
+        "gameName": "Immortal Defense",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T07:12:22.596Z"
       },
       {
-        "gameId": 86035,
-        "gameName": "CART Fury Championship Racing",
-        "platform": "Sony Playstation 2",
-        "timestamp": "2025-09-23T13:27:14.166Z"
+        "gameId": -32451,
+        "gameName": "Jagged Alliance 2: Wildfire",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T07:12:22.137Z"
       },
       {
-        "gameId": 86034,
-        "gameName": "Deadly Racer",
-        "platform": "MS-DOS",
-        "timestamp": "2025-09-23T13:27:13.273Z"
+        "gameId": -32452,
+        "gameName": "Weird Worlds: Return to Infinite Space",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T07:12:21.494Z"
       }
     ],
-    "startTime": "2025-09-23T08:21:04.656Z",
-    "gamesPerSecond": 0.9
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 1.55
   }
 }

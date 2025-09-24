@@ -1,0 +1,2 @@
+- remember, never use emojis for buttons, use clean line art icons
+- remember to always prompt user to apply sql fixes in the supabase web ui, don't try yourself

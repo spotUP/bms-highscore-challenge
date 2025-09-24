@@ -9,7 +9,7 @@ async function checkDatabaseStatus() {
   try {
     const { count: total } = await supabase.from('games_database').select('*', { count: 'exact', head: true });
     const { count: withDbId } = await supabase.from('games_database').select('*', { count: 'exact', head: true }).not('database_id', 'is', null);
-    const { count: withLogos } = await supabase.from('games_database').select('*', { count: 'exact', head: true }).not('logo_url', 'is', null);
+    const { count: withLogos } = await supabase.from('games_database').select('*', { count: 'exact', head: true }).not('logo_base64', 'is', null);
 
     const dbIdCoverage = withDbId ? ((withDbId / total) * 100).toFixed(2) : '0.00';
     const logoCoverage = withLogos ? ((withLogos / total) * 100).toFixed(2) : '0.00';
@@ -22,7 +22,7 @@ async function checkDatabaseStatus() {
     // Sample games with database_id
     const { data: sampleWithIds } = await supabase
       .from('games_database')
-      .select('name, database_id, logo_url')
+      .select('name, database_id, logo_base64')
       .not('database_id', 'is', null)
       .limit(5);
 

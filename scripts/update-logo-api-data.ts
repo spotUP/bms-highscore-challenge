@@ -1,96 +1,101 @@
-#!/usr/bin/env tsx
+#!/usr/bin/env npx tsx
 
+import sqlite3 from 'sqlite3';
 import { writeFileSync } from 'fs';
-import { createClient } from '@supabase/supabase-js';
-import 'dotenv/config';
 
-const SQLITE_API_URL = 'http://localhost:3001';
-const OUTPUT_FILE = 'public/api/recent-logos.json';
+interface RecentLogo {
+  id: number;
+  name: string;
+  platform_name: string;
+  processed_at: string;
+}
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+interface Stats {
+  totalGames: number;
+  gamesWithLogos: number;
+  gamesWithoutLogos: number;
+  completionPercentage: string;
+}
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: { autoRefreshToken: false, persistSession: false }
-});
-
-async function fetchWithLogos() {
-  try {
-    // Get recent logos with the logo data
-    const recentResponse = await fetch(`${SQLITE_API_URL}/recent?limit=12`);
-    const recentLogos = await recentResponse.json();
-
-    // Get stats
-    const statsResponse = await fetch(`${SQLITE_API_URL}/stats`);
-    const statsData = await statsResponse.json();
-
-    // Get recent logos from the production turbo scraper database instead
-    // These are the freshly scraped logos that are being actively collected
-    const productionLogosResponse = await fetch(`${SQLITE_API_URL}/recent?limit=8`);
-    const productionLogos = await productionLogosResponse.json();
-
-    // Fetch actual logo data for each recent logo from production scraper
-    const logosWithData = await Promise.all(
-      productionLogos.slice(0, 8).map(async (logo: any) => {
-        try {
-          const logoResponse = await fetch(`${SQLITE_API_URL}/logo/${logo.id}`);
-          if (logoResponse.ok) {
-            const logoData = await logoResponse.json();
-            return {
-              id: logo.id,
-              name: logo.name,
-              platform_name: logo.platform_name,
-              logo_base64: logoData.logo,
-              processed_at: logo.processed_at
-            };
-          }
-        } catch (error) {
-          console.log(`Failed to fetch logo for ${logo.id}`);
-        }
-
-        // Return without logo_base64 if fetch failed
-        return {
-          id: logo.id,
-          name: logo.name,
-          platform_name: logo.platform_name,
-          logo_base64: null,
-          processed_at: logo.processed_at
-        };
-      })
-    );
-
-    // Get total games from Supabase games_database table (the real total)
-    const { count: supabaseTotalGames } = await supabase
-      .from('games_database')
-      .select('*', { count: 'exact', head: true });
-
-    // Create the structure expected by LogoScraper
-    // Use the actual Supabase database count for accurate completion percentage
-    const ACTUAL_TOTAL_GAMES = supabaseTotalGames || 169556;
-    const output = {
-      recentLogos: logosWithData,
-      stats: {
-        totalGames: ACTUAL_TOTAL_GAMES,
-        gamesWithLogos: statsData.with_logos,
-        gamesWithoutLogos: ACTUAL_TOTAL_GAMES - statsData.with_logos,
-        completionPercentage: Math.round((statsData.with_logos / ACTUAL_TOTAL_GAMES) * 100)
+// Function to get stats and recent logos from SQLite
+function getLogoData(): Promise<{ stats: Stats; recentLogos: RecentLogo[] }> {
+  return new Promise((resolve, reject) => {
+    const db = new sqlite3.Database('production-turbo-logos.db', (err) => {
+      if (err) {
+        console.error('Error opening database:', err);
+        reject(err);
+        return;
       }
+
+      // Get stats
+      db.get(
+        'SELECT COUNT(*) as total, COUNT(logo_base64) as withLogos FROM games WHERE logo_base64 IS NOT NULL AND logo_base64 != ""',
+        (err, statsRow: any) => {
+          if (err) {
+            console.error('Error getting stats:', err);
+            db.close();
+            reject(err);
+            return;
+          }
+
+          const stats: Stats = {
+            totalGames: 169556, // Total from Supabase
+            gamesWithLogos: statsRow.withLogos || 0,
+            gamesWithoutLogos: 169556 - (statsRow.withLogos || 0),
+            completionPercentage: ((statsRow.withLogos || 0) / 169556 * 100).toFixed(1)
+          };
+
+          // Get recent logos with valid base64 data (excluding logo_base64 for smaller file size)
+          db.all(
+            `SELECT id, name, platform_name, processed_at
+             FROM games
+             WHERE logo_base64 IS NOT NULL AND logo_base64 != "" AND logo_base64 LIKE "data:image/%"
+             ORDER BY processed_at DESC
+             LIMIT 20`,
+            (err, rows: any[]) => {
+              db.close();
+
+              if (err) {
+                console.error('Error getting recent logos:', err);
+                reject(err);
+                return;
+              }
+
+              const recentLogos: RecentLogo[] = rows || [];
+              resolve({ stats, recentLogos });
+            }
+          );
+        }
+      );
+    });
+  });
+}
+
+async function updateLogoAPIData() {
+  try {
+    console.log('🔄 Updating logo API data...');
+
+    const { stats, recentLogos } = await getLogoData();
+
+    const apiData = {
+      stats,
+      recentLogos,
+      lastUpdate: new Date().toISOString()
     };
 
-    writeFileSync(OUTPUT_FILE, JSON.stringify(output, null, 2));
-    console.log(`✅ Updated ${OUTPUT_FILE} with ${logosWithData.length} logos and stats`);
+    // Write to public directory for frontend access
+    writeFileSync('public/api/recent-logos.json', JSON.stringify(apiData, null, 2));
+
+    console.log(`✅ Logo API data updated:`);
+    console.log(`   📊 Total games: ${stats.totalGames.toLocaleString()}`);
+    console.log(`   🎨 Games with logos: ${stats.gamesWithLogos.toLocaleString()}`);
+    console.log(`   📈 Completion: ${stats.completionPercentage}%`);
+    console.log(`   🖼️  Recent logos: ${recentLogos.length}`);
 
   } catch (error) {
-    console.error('❌ Failed to update logo API data:', error);
+    console.error('❌ Error updating logo API data:', error);
   }
 }
 
-async function runUpdate() {
-  console.log('🔄 Updating logo API data...');
-  await fetchWithLogos();
-
-  // Update every 5 seconds for real-time updates
-  setInterval(fetchWithLogos, 5000);
-}
-
-runUpdate().catch(console.error);
+// Run the update automatically
+updateLogoAPIData().then(() => process.exit(0));

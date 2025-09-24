@@ -70,33 +70,51 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   // State for cached database logos
   const [databaseLogos, setDatabaseLogos] = useState<Record<string, string>>({});
 
-  // Function to fetch logos from games_database
+  // Function to fetch logos from games_database with SQLite fallback
   const fetchDatabaseLogos = useCallback(async () => {
     if (!games || games.length === 0) return;
 
     try {
       const gameNames = games.map(game => game.name);
+      let logoMap: Record<string, string> = {};
 
+      // First try Supabase (development/primary source)
       const { data: dbGames, error } = await supabase
         .from('games_database')
-        .select('name, logo_url')
+        .select('name, logo_base64')
         .in('name', gameNames)
-        .not('logo_url', 'is', null);
+        .not('logo_base64', 'is', null);
 
-      if (error) {
-        console.error('Error fetching database logos:', error);
-        return;
+      if (!error && dbGames) {
+        dbGames.forEach(dbGame => {
+          if (dbGame.logo_base64) {
+            logoMap[dbGame.name] = dbGame.logo_base64;
+          }
+        });
+        console.log('📸 Loaded Supabase logos for:', Object.keys(logoMap).length, 'games');
+      } else {
+        console.warn('Supabase logos fetch failed:', error);
       }
 
-      const logoMap: Record<string, string> = {};
-      dbGames?.forEach(dbGame => {
-        if (dbGame.logo_url) {
-          logoMap[dbGame.name] = dbGame.logo_url;
+      // If we didn't get all logos from Supabase, try SQLite fallback
+      const missingGames = gameNames.filter(name => !logoMap[name]);
+      if (missingGames.length > 0) {
+        console.log('🗄️ Trying SQLite fallback for', missingGames.length, 'missing logos...');
+
+        try {
+          const { sqliteService } = await import('@/services/sqliteService');
+          const sqliteLogos = await sqliteService.getLogosForGames(missingGames);
+
+          // Merge SQLite results with existing logos
+          Object.assign(logoMap, sqliteLogos);
+          console.log('📸 Loaded SQLite logos for:', Object.keys(sqliteLogos).length, 'additional games');
+        } catch (sqliteError) {
+          console.warn('SQLite fallback failed:', sqliteError);
         }
-      });
+      }
 
       setDatabaseLogos(logoMap);
-      console.log('📸 Loaded database logos for:', Object.keys(logoMap));
+      console.log('📸 Total logos loaded:', Object.keys(logoMap).length, 'out of', gameNames.length, 'games');
     } catch (error) {
       console.error('Failed to fetch database logos:', error);
     }
