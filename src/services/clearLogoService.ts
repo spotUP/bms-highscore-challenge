@@ -109,9 +109,11 @@ class ClearLogoService {
 
       // Search chunks efficiently - stop when we find all games
       const maxChunksToSearch = Math.min(10, this.chunkInfo?.totalChunks || 10);
+      console.log(`🔍 Will search up to ${maxChunksToSearch} chunks`);
 
       for (let chunkIndex = 0; chunkIndex < maxChunksToSearch; chunkIndex++) {
         const chunkFile = `chunk-${chunkIndex.toString().padStart(3, '0')}.db`;
+        console.log(`🔄 Attempting to search chunk: ${chunkFile}`);
 
         try {
           await this.loadAndSearchChunk(chunkFile, gameNames, logoMap);
