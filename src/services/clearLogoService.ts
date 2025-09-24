@@ -91,13 +91,11 @@ class ClearLogoService {
    * Get Clear Logos for multiple games by name
    */
   async getClearLogosForGames(gameNames: string[]): Promise<Record<string, string>> {
-    const initialized = await this.initializeDatabase();
-    if (!initialized) {
-      console.error('❌ Cannot get Clear Logos - service not initialized');
-      return {};
-    }
-
-    return this.getClearLogosFromChunks(gameNames);
+    // Since chunk files are too large for Vercel deployment,
+    // fall back to empty results for now
+    console.log(`🔧 Clear Logo chunks too large for Vercel - returning empty results`);
+    console.log(`📋 Requested games: ${gameNames.join(', ')}`);
+    return {};
   }
 
   private async getClearLogosFromChunks(gameNames: string[]): Promise<Record<string, string>> {
