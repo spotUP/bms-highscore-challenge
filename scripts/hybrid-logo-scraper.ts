@@ -3,6 +3,8 @@
 import { createClient } from '@supabase/supabase-js';
 import sqlite3 from 'sqlite3';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
+import cliProgress from 'cli-progress';
+import chalk from 'chalk';
 import 'dotenv/config';
 
 // Supabase setup
@@ -60,7 +62,6 @@ function initializeDatabase(): Promise<sqlite3.Database> {
           reject(err);
           return;
         }
-        console.log('✅ SQLite database initialized');
         resolve(db);
       });
     });
@@ -98,11 +99,7 @@ async function fetchClearLogoByGameId(gameId: number, gameName: string): Promise
       if (!gamePageResponse.ok) {
         if (gamePageResponse.status === 429) {
           // Rate limited - wait longer before retry
-          console.log(`⏳ Rate limited (429), waiting 5 seconds before retry...`);
           await new Promise(resolve => setTimeout(resolve, 5000));
-        }
-        if (attempt === maxRetries) {
-          console.log(`❌ Game page request failed after ${maxRetries} attempts: ${gamePageResponse.status}`);
         }
         continue;
       }
@@ -113,9 +110,6 @@ async function fetchClearLogoByGameId(gameId: number, gameName: string): Promise
       const clearLogoSectionMatch = gamePageHtml.match(/Clear Logo<\/h3>([\s\S]*?)(?=<h3|$)/i);
 
       if (!clearLogoSectionMatch) {
-        if (attempt === maxRetries) {
-          console.log(`❌ No "Clear Logo" section found for ${gameName}`);
-        }
         continue;
       }
 
@@ -123,9 +117,6 @@ async function fetchClearLogoByGameId(gameId: number, gameName: string): Promise
       const imageMatches = [...clearLogoSection.matchAll(/<img[^>]*src="([^"]*\.(?:png|jpg|jpeg))"/gi)];
 
       if (imageMatches.length === 0) {
-        if (attempt === maxRetries) {
-          console.log(`❌ No images found in Clear Logo section for ${gameName}`);
-        }
         continue;
       }
 
@@ -146,9 +137,6 @@ async function fetchClearLogoByGameId(gameId: number, gameName: string): Promise
       });
 
       if (!logoResponse.ok) {
-        if (attempt === maxRetries) {
-          console.log(`❌ Logo download failed for ${gameName}: ${logoResponse.status}`);
-        }
         continue;
       }
 
@@ -156,15 +144,10 @@ async function fetchClearLogoByGameId(gameId: number, gameName: string): Promise
       const mimeType = logoResponse.headers.get('content-type') || 'image/png';
       const logoBase64 = Buffer.from(logoBuffer).toString('base64');
 
-      console.log(`✅ Successfully fetched logo for ${gameName} on attempt ${attempt}`);
       return `data:${mimeType};base64,${logoBase64}`;
 
     } catch (error) {
-      if (attempt === maxRetries) {
-        console.log(`❌ Error fetching logo for ${gameName} after ${maxRetries} attempts: ${error}`);
-      } else {
-        console.log(`⚠️  Attempt ${attempt} failed for ${gameName}: ${error.toString().substring(0, 100)}...`);
-      }
+      // Silent retry
     }
   }
 
@@ -180,7 +163,6 @@ function storeLogoInSQLite(db: sqlite3.Database, gameId: number, name: string, p
       [gameId, name, platform, logoData],
       function(err) {
         if (err) {
-          console.error(`❌ Failed to store logo for ${name}:`, err);
           resolve(false);
         } else {
           resolve(true);
@@ -233,16 +215,99 @@ const PLATFORM_PRIORITY = {
   'DEFAULT': 1000
 };
 
+// Excluded niche platforms - will be processed after mainstream platforms are complete
+const EXCLUDED_PLATFORMS = [
+  // Obscure/Regional Computers
+  'Aamber Pegasus',
+  'APF Imagination Machine',
+  'Apogee BK-01',
+  'Acorn Archimedes',
+  'Acorn Atom',
+  'Acorn Electron',
+  'BBC Microcomputer System',
+  'Camputers Lynx',
+  'Dragon 32/64',
+  'EACA EG2000 Colour Genie',
+  'Elektronika BK',
+  'Enterprise',
+  'Exidy Sorcerer',
+  'Hector HRX',
+  'Jupiter Ace',
+  'Matra and Hachette Alice',
+  'Memotech MTX512',
+  'Oric Atmos',
+  'SAM Coupé',
+  'Sinclair ZX-81',
+  'Sord M5',
+  'Tandy TRS-80',
+  'TRS-80 Color Computer',
+  'Texas Instruments TI 99/4A',
+  'Tomy Tutor',
+  'Vector-06C',
+
+  // Rare/Failed Consoles
+  'Bandai Super Vision 8000',
+  'Casio Loopy',
+  'Casio PV-1000',
+  'Coleco ADAM',
+  'Emerson Arcadia 2001',
+  'Entex Adventure Vision',
+  'Epoch Game Pocket Computer',
+  'Epoch Super Cassette Vision',
+  'Exelvision EXL 100',
+  'Fairchild Channel F',
+  'Funtech Super Acan',
+  'Game Wave Family Entertainment System',
+  'GameWave',
+  'Hartung Game Master',
+  'Magnavox Odyssey',
+  'Magnavox Odyssey 2',
+  'Mattel Aquarius',
+  'Mattel HyperScan',
+  'Mega Duck',
+  'Nintendo Pokemon Mini',
+  'Nokia N-Gage',
+  'Nuon',
+  'Othello Multivision',
+  'Ouya',
+  'Philips CD-i',
+  'RCA Studio II',
+  'Sega Pico',
+  'Tapwave Zodiac',
+  'Tiger Game.com',
+  'VTech CreatiVision',
+  'VTech Socrates',
+  'VTech V.Smile',
+  'Watara Supervision',
+  'WoW Action Max',
+  'XaviXPORT',
+
+  // Specialty/Modern Niche
+  'Arduboy',
+  'MUGEN',
+  'OpenBOR',
+  'PICO-8',
+  'ScummVM',
+  'WASM-4',
+  'Uzebox',
+  'ZiNc'
+];
+
 // Get games from Supabase with platform-aware batching
 async function getGamesToProcess(lastProcessedId: number, batchSize: number): Promise<any[]> {
   try {
+
     // Try to get games from priority platforms first
     const priorityPlatforms = Object.keys(PLATFORM_PRIORITY)
       .filter(p => p !== 'DEFAULT')
       .slice(0, 15); // Top 15 priority platforms
 
-    // First, try to get games from popular platforms
+    // First, try to get games from popular platforms (excluding niche platforms)
     for (const platform of priorityPlatforms) {
+      if (EXCLUDED_PLATFORMS.includes(platform)) {
+        continue; // Skip excluded platforms
+      }
+
       const { data: priorityGames, error: priorityError } = await supabase
         .from('games_database')
         .select('id, name, platform_name, launchbox_id')
@@ -252,27 +317,29 @@ async function getGamesToProcess(lastProcessedId: number, batchSize: number): Pr
         .limit(Math.ceil(batchSize / 3)); // Smaller batches per platform
 
       if (!priorityError && priorityGames && priorityGames.length > 0) {
-        console.log(`🎮 Prioritizing ${priorityGames.length} games from ${platform}`);
+        // Add platform info to games for progress display
+        priorityGames.forEach(game => game.currentPlatformBatch = platform);
         return priorityGames;
       }
     }
 
-    // If no priority platform games found, fall back to regular query
+    // If no priority platform games found, fall back to regular query (excluding niche platforms)
     const { data: games, error } = await supabase
       .from('games_database')
       .select('id, name, platform_name, launchbox_id')
       .gt('id', lastProcessedId)
+      .not('platform_name', 'in', `(${EXCLUDED_PLATFORMS.map(p => `"${p}"`).join(',')})`)
       .order('id')
       .limit(batchSize);
 
     if (error) {
-      console.error('❌ Error fetching games from Supabase:', error);
+      logToBottom('❌ Error fetching games from Supabase: ' + error);
       return [];
     }
 
     return games || [];
   } catch (error) {
-    console.error('❌ Error:', error);
+    logToBottom('❌ Error: ' + error);
     return [];
   }
 }
@@ -311,10 +378,9 @@ function loadProgress(): ScraperProgress {
   if (latestCheckpoint) {
     try {
       const checkpointData = JSON.parse(readFileSync(latestCheckpoint, 'utf8'));
-      console.log(`🔄 Resuming from checkpoint ${latestCheckpointNumber} (${checkpointData['0']?.processedGames || 0} games processed)`);
       return checkpointData['0'] || defaultProgress;
     } catch (error) {
-      console.log(`⚠️  Failed to load checkpoint ${latestCheckpoint}, falling back to regular progress`);
+      logToBottom(`⚠️  Failed to load checkpoint ${latestCheckpoint}, falling back to regular progress`);
     }
   }
 
@@ -349,7 +415,6 @@ function saveCheckpoint(progress: ScraperProgress, checkpointNumber: number) {
     "timestamp": new Date().toISOString()
   };
   writeFileSync(checkpointFile, JSON.stringify(data, null, 2));
-  console.log(`📋 Checkpoint ${checkpointNumber} saved at ${progress.processedGames} games`);
 }
 
 // Get current SQLite stats
@@ -357,7 +422,7 @@ function getSQLiteStats(db: sqlite3.Database): Promise<{total: number, withLogos
   return new Promise((resolve) => {
     db.get('SELECT COUNT(*) as total, COUNT(logo_base64) as withLogos FROM games', (err, row: any) => {
       if (err) {
-        console.error('Error getting SQLite stats:', err);
+        logToBottom('Error getting SQLite stats: ' + err);
         resolve({total: 0, withLogos: 0});
       } else {
         resolve({total: row.total, withLogos: row.withLogos});
@@ -366,9 +431,81 @@ function getSQLiteStats(db: sqlite3.Database): Promise<{total: number, withLogos
   });
 }
 
+// Progress bar setup
+let mainProgressBar: any = null;
+let batchProgressBar: any = null;
+let lastProgressUpdate = 0;
+
+function initProgressBars(totalGames: number, currentGames: number) {
+  // Hide cursor and setup split screen
+  process.stdout.write('\x1b[?25l'); // Hide cursor
+  console.clear();
+
+  // Reserve just 2 lines for progress display (super compact)
+  process.stdout.write('\n'); // Progress bar will go here
+  process.stdout.write('─'.repeat(process.stdout.columns || 80) + '\n'); // Separator line
+
+  // Set scrolling region to only allow scrolling from line 3 onwards
+  // This protects lines 1-2 (progress bar and separator) from scrolling
+  process.stdout.write('\x1b[3;r'); // Set scrolling region from line 3 to end
+
+  return null;
+}
+
+// Helper function for logging that preserves the split screen
+function logToBottom(message: string) {
+  // Move to the bottom of the scrolling area and add the message
+  // The scrolling region is already set to protect lines 1-2
+  process.stdout.write('\x1b[999;1H'); // Move to bottom of scrolling region
+  process.stdout.write(message + '\n'); // Write message with newline
+}
+
+// Enhanced logging function that also triggers progress update
+function logToBottomWithProgressUpdate(message: string, progress: any) {
+  logToBottom(message);
+  // Update progress bar immediately after each log message for real-time updates
+  updateProgress(progress);
+}
+
+function formatETA(seconds: number): string {
+  if (seconds === Infinity || isNaN(seconds)) return 'N/A';
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+
+function drawProgressBar(current: number, total: number, width: number = 40): string {
+  const percentage = Math.min(current / total, 1);
+  const filled = Math.round(width * percentage);
+  const empty = width - filled;
+  const bar = '█'.repeat(filled) + '░'.repeat(empty);
+  return bar;
+}
+
+function updateProgress(progress: any, platform: string = '') {
+  const percentage = Math.round((progress.processedGames / progress.totalGames) * 100);
+  const bar = drawProgressBar(progress.processedGames, progress.totalGames, 30); // Shorter bar to fit more info
+
+  const remaining = progress.totalGames - progress.processedGames;
+  const etaSeconds = remaining / (progress.gamesPerSecond || 1);
+  const etaFormatted = formatETA(etaSeconds);
+
+  // Compact all info into one line
+  const compactInfo = `${bar} ${percentage}% | ${chalk.green(progress.successfulLogos)} ✓ | ${chalk.red(progress.failedLogos)} ✗ | ETA: ${etaFormatted} | ${progress.gamesPerSecond}/s`;
+
+  // Temporarily disable scrolling region to update progress bar
+  process.stdout.write('\x1b[r'); // Reset scrolling region to full screen
+
+  // Update progress bar at line 1 (compact single line)
+  process.stdout.write('\x1b[1;1H'); // Move to line 1, column 1
+  process.stdout.write('\x1b[K'); // Clear line
+  process.stdout.write(compactInfo);
+
+  // Re-enable scrolling region to protect lines 1-2
+  process.stdout.write('\x1b[3;r'); // Set scrolling region from line 3 to end
+}
+
 async function runHybridScraper() {
-  console.log('🎮 Starting Hybrid Logo Scraper');
-  console.log('📊 Querying games from Supabase → Storing logos in SQLite');
 
   const db = await initializeDatabase();
   let progress = loadProgress();
@@ -377,13 +514,18 @@ async function runHybridScraper() {
   progress.processedGames = stats.total;
   progress.successfulLogos = stats.withLogos;
 
-  console.log(`📈 Current progress: ${progress.successfulLogos}/${progress.totalGames} logos`);
+
+  // Initialize progress bars
+  const multibar = initProgressBars(progress.totalGames, progress.processedGames);
+
+  // Position cursor in the logging area
+  process.stdout.write('\x1b[3;1H'); // Move to line 3 (after separator)
 
   // Check if we've completed the high range and need to process the low range
   const maxProcessedId = await new Promise<number>((resolve) => {
     db.get('SELECT MAX(id) as maxId FROM games', (err, row: any) => {
       if (err) {
-        console.error('Error getting max ID from SQLite:', err);
+        logToBottom('Error getting max ID from SQLite: ' + err);
         resolve(0);
       } else {
         resolve(row?.maxId || 0);
@@ -394,7 +536,7 @@ async function runHybridScraper() {
   const minProcessedId = await new Promise<number>((resolve) => {
     db.get('SELECT MIN(id) as minId FROM games', (err, row: any) => {
       if (err) {
-        console.error('Error getting min ID from SQLite:', err);
+        logToBottom('Error getting min ID from SQLite: ' + err);
         resolve(0);
       } else {
         resolve(row?.minId || 0);
@@ -407,15 +549,12 @@ async function runHybridScraper() {
   let startFromId = progress.currentGameId || 0;
 
   // Check for large gaps in processing
-  console.log(`📊 SQLite range: ${minProcessedId} to ${maxProcessedId}`);
 
   // Special case: If we have processed some games but not the majority, there's likely a gap in the middle
   // We have 45,238 out of 169,556 total games, which means there's a big gap somewhere
   const hasGap = stats.total > 0 && stats.total < 100000;
 
   if (hasGap) {
-    console.log(`🔄 Found gap in processing: minProcessedId=${minProcessedId}, maxProcessedId=${maxProcessedId}, total=${stats.total}`);
-    console.log(`🎯 Forcing restart from beginning to process missing games`);
 
     // Get the actual minimum ID from Supabase to start from the very beginning
     const { data: minSupabaseGame, error: minError } = await supabase
@@ -426,7 +565,6 @@ async function runHybridScraper() {
 
     if (!minError && minSupabaseGame && minSupabaseGame[0]) {
       startFromId = minSupabaseGame[0].id - 1; // Start from before the lowest ID
-      console.log(`🎯 Starting from absolute beginning: ID ${startFromId + 1}`);
     }
   } else {
     startFromId = Math.max(progress.currentGameId || 0, maxProcessedId);
@@ -436,7 +574,6 @@ async function runHybridScraper() {
   const DELAY_BETWEEN_BATCHES = 800; // 0.8 seconds between batches for better throughput
   let lastProcessedId = startFromId;
 
-  console.log(`🔄 Resuming from ID: ${lastProcessedId} (SQLite has ${stats.total} games, ${stats.withLogos} with logos)`);
 
   while (true) {
     try {
@@ -444,13 +581,12 @@ async function runHybridScraper() {
       const games = await getGamesToProcess(lastProcessedId, BATCH_SIZE);
 
       if (games.length === 0) {
-        console.log('🎯 No more games to process');
+        logToBottom('🎯 No more games to process');
         progress.status = 'completed';
         saveProgress(progress);
         break;
       }
 
-      console.log(`\n🔄 Processing batch of ${games.length} games SEQUENTIALLY (no concurrency to avoid timeouts)...`);
 
       // Process games ONE BY ONE (no concurrency) to avoid overwhelming the server
       for (let i = 0; i < games.length; i++) {
@@ -459,7 +595,6 @@ async function runHybridScraper() {
         // Use launchbox_id if available, otherwise use our ID
         const searchId = game.launchbox_id || game.id;
 
-        console.log(`\n[${i + 1}/${games.length}] Processing: ${game.name} (ID: ${game.id}, Search ID: ${searchId})`);
 
         // Update current progress
         progress.currentGameId = game.id;
@@ -475,7 +610,6 @@ async function runHybridScraper() {
             // Store in SQLite
             const stored = await storeLogoInSQLite(db, game.id, game.name, game.platform_name, logoData);
             if (stored) {
-              console.log(`✅ Logo saved for ${game.name}`);
               progress.successfulLogos++;
               progress.recentSuccesses.unshift({
                 gameId: game.id,
@@ -486,19 +620,18 @@ async function runHybridScraper() {
 
               // Keep only last 5 successes
               progress.recentSuccesses = progress.recentSuccesses.slice(0, 5);
+              logToBottomWithProgressUpdate(`✅ ${game.name}`, progress);
             } else {
-              console.log(`❌ Failed to store logo for ${game.name}`);
               progress.failedLogos++;
             }
           } else {
-            console.log(`⚠️  No logo found for ${game.name}`);
             // Still store the game record without logo
             await storeLogoInSQLite(db, game.id, game.name, game.platform_name, '');
             progress.failedLogos++;
+            logToBottomWithProgressUpdate(`❌ ${game.name} (no logo found)`, progress);
           }
 
         } catch (error) {
-          console.log(`❌ Error processing ${game.name}: ${error}`);
           progress.failedLogos++;
         }
 
@@ -513,6 +646,8 @@ async function runHybridScraper() {
       const elapsed = (Date.now() - new Date(progress.startTime).getTime()) / 1000;
       progress.gamesPerSecond = elapsed > 0 ? Math.round((progress.processedGames / elapsed) * 100) / 100 : 0;
 
+      // Progress bar is now updated immediately with each log message via logToBottomWithProgressUpdate()
+
       // Save progress
       saveProgress(progress);
 
@@ -522,13 +657,11 @@ async function runHybridScraper() {
         saveCheckpoint(progress, checkpointNumber);
       }
 
-      console.log(`📊 Progress: ${progress.successfulLogos}/${progress.totalGames} logos (${Math.round((progress.successfulLogos / progress.totalGames) * 100)}%)`);
-
       // Wait between batches
       await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
 
     } catch (error) {
-      console.error('❌ Batch processing error:', error);
+      logToBottom('❌ Batch processing error: ' + error);
       progress.errors.push(String(error));
       saveProgress(progress);
 
@@ -538,7 +671,16 @@ async function runHybridScraper() {
   }
 
   db.close();
-  console.log('🎯 Hybrid scraper completed');
+
+  // Show cursor again and add final newline
+  process.stdout.write('\x1b[?25h'); // Show cursor
+  console.log(); // Final newline
+
+  console.log(chalk.green.bold('🎯 Hybrid scraper completed successfully!'));
+  console.log(chalk.cyan(`✅ Total processed: ${chalk.yellow(progress.processedGames)} games`));
+  console.log(chalk.cyan(`🖼️  Successful logos: ${chalk.green(progress.successfulLogos)}`));
+  console.log(chalk.cyan(`❌ Failed logos: ${chalk.red(progress.failedLogos)}`));
+  console.log(chalk.cyan(`⚡ Average speed: ${chalk.yellow(progress.gamesPerSecond + '/s')}`));
 }
 
 runHybridScraper().catch(console.error);

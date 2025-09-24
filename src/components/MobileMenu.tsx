@@ -138,6 +138,13 @@ const MobileMenu = ({ onSpinWheel, hideBracketsLink = false, hideSpinButton = fa
                 </div>
                 <Button
                   variant="ghost"
+                  onClick={() => handleAnimatedNavigation('/brackets')}
+                  className="w-full justify-start text-left"
+                >
+                  Tournament Brackets
+                </Button>
+                <Button
+                  variant="ghost"
                   onClick={() => handleAnimatedNavigation('/auth')}
                   className="w-full justify-start text-left"
                 >

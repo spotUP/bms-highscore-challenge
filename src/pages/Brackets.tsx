@@ -115,8 +115,8 @@ const Brackets: React.FC = () => {
             <BracketView
               matches={bracketMatches}
               participants={participantMap}
-              adminMode={true}
-              onReport={handleReportWinner}
+              adminMode={false}
+              isPublic={true}
             />
           </div>
         )}
