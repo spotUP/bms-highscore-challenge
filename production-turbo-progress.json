@@ -2,48 +2,48 @@
   "0": {
     "instanceId": 0,
     "totalGames": 169556,
-    "processedGames": 57450,
-    "successfulLogos": 55796,
-    "failedLogos": 45435,
-    "currentGameId": 80124,
-    "currentGameName": "The Admin",
+    "processedGames": 35,
+    "successfulLogos": 34,
+    "failedLogos": 4,
+    "currentGameId": -49936,
+    "currentGameName": "Splinter Cell: Stealth Action Redefined",
     "currentPlatform": "Windows",
-    "lastUpdate": "2025-09-24T11:51:23.122Z",
-    "status": "completed",
+    "lastUpdate": "2025-09-24T14:07:42.423Z",
+    "status": "running",
     "errors": [],
     "recentSuccesses": [
       {
-        "gameId": 377400,
-        "gameName": "Puzzle Ball",
+        "gameId": -49936,
+        "gameName": "Splinter Cell: Stealth Action Redefined",
         "platform": "Windows",
-        "timestamp": "2025-09-24T04:52:36.233Z"
+        "timestamp": "2025-09-24T14:07:42.801Z"
       },
       {
-        "gameId": 377395,
-        "gameName": "Bitku",
+        "gameId": -49937,
+        "gameName": "Sonic Riders",
         "platform": "Windows",
-        "timestamp": "2025-09-24T04:52:30.586Z"
+        "timestamp": "2025-09-24T14:07:42.272Z"
       },
       {
-        "gameId": 377392,
-        "gameName": "Dinosaur Hunt",
+        "gameId": -49943,
+        "gameName": "Resident Evil 5",
         "platform": "Windows",
-        "timestamp": "2025-09-24T04:52:26.523Z"
+        "timestamp": "2025-09-24T14:07:40.514Z"
       },
       {
-        "gameId": 377353,
-        "gameName": "Chronicles of the Witches and Warlocks",
+        "gameId": -49945,
+        "gameName": "Command &amp; Conquer: Red Alert 3",
         "platform": "Windows",
-        "timestamp": "2025-09-24T04:51:47.968Z"
+        "timestamp": "2025-09-24T14:07:39.979Z"
       },
       {
-        "gameId": 377352,
-        "gameName": "Tahira: Echoes of the Astral Empire",
+        "gameId": -49946,
+        "gameName": "Tom Clancy's Rainbow Six: Vegas",
         "platform": "Windows",
-        "timestamp": "2025-09-24T04:51:47.367Z"
+        "timestamp": "2025-09-24T14:07:39.341Z"
       }
     ],
-    "startTime": "2025-09-23T21:45:00.000Z",
-    "gamesPerSecond": 1.13
+    "startTime": "2025-09-24T14:06:49.921Z",
+    "gamesPerSecond": 0.66
   }
 }

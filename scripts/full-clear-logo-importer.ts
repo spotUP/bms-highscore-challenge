@@ -10,6 +10,16 @@ interface ClearLogoEntry {
   region?: string;
 }
 
+interface ImportCheckpoint {
+  totalLogos: number;
+  processedCount: number;
+  successCount: number;
+  errorCount: number;
+  skippedCount: number;
+  lastDatabaseId: number;
+  timestamp: string;
+}
+
 interface GameEntry {
   databaseId: number;
   name: string;
@@ -20,9 +30,11 @@ class FullClearLogoImporter {
   private clearLogosDb: Database.Database | null = null;
   private clearLogos: ClearLogoEntry[] = [];
   private games: Map<number, GameEntry> = new Map();
+  private checkpointPath: string;
 
   constructor() {
     console.log('🚀 Full Clear Logo Importer Starting');
+    this.checkpointPath = path.join(process.cwd(), 'clear-logo-checkpoint.json');
   }
 
   private initializeDatabase() {
@@ -31,11 +43,9 @@ class FullClearLogoImporter {
 
     this.clearLogosDb = new Database(dbPath);
 
-    // Create the clear_logos table (drop and recreate to start fresh)
+    // Create the clear_logos table if it doesn't exist (preserving existing data)
     this.clearLogosDb.exec(`
-      DROP TABLE IF EXISTS clear_logos;
-
-      CREATE TABLE clear_logos (
+      CREATE TABLE IF NOT EXISTS clear_logos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         launchbox_database_id INTEGER NOT NULL,
         game_name TEXT NOT NULL,
@@ -50,9 +60,15 @@ class FullClearLogoImporter {
       );
 
       -- Create indexes for faster lookups
-      CREATE INDEX idx_clear_logos_game_platform ON clear_logos(game_name, platform_name);
-      CREATE INDEX idx_clear_logos_launchbox_id ON clear_logos(launchbox_database_id);
+      CREATE INDEX IF NOT EXISTS idx_clear_logos_game_platform ON clear_logos(game_name, platform_name);
+      CREATE INDEX IF NOT EXISTS idx_clear_logos_launchbox_id ON clear_logos(launchbox_database_id);
     `);
+
+    // Check existing progress
+    const existingCount = this.clearLogosDb.prepare('SELECT COUNT(*) as count FROM clear_logos').get() as { count: number };
+    if (existingCount.count > 0) {
+      console.log(`📊 Found existing database with ${existingCount.count.toLocaleString()} Clear Logos`);
+    }
 
     console.log('✅ Clear Logo database initialized');
   }
@@ -156,6 +172,60 @@ class FullClearLogoImporter {
     console.log(`🖼️ Found ${this.clearLogos.length.toLocaleString()} Clear Logo entries`);
   }
 
+  private loadCheckpoint(): ImportCheckpoint | null {
+    if (fs.existsSync(this.checkpointPath)) {
+      try {
+        const checkpointData = fs.readFileSync(this.checkpointPath, 'utf-8');
+        const checkpoint = JSON.parse(checkpointData) as ImportCheckpoint;
+        console.log(`📋 Loaded checkpoint: ${checkpoint.processedCount}/${checkpoint.totalLogos} processed, last ID: ${checkpoint.lastDatabaseId}`);
+        return checkpoint;
+      } catch (error) {
+        console.warn('⚠️ Failed to load checkpoint, starting fresh:', error);
+        return null;
+      }
+    }
+    return null;
+  }
+
+  private saveCheckpoint(checkpoint: ImportCheckpoint): void {
+    try {
+      fs.writeFileSync(this.checkpointPath, JSON.stringify(checkpoint, null, 2));
+    } catch (error) {
+      console.warn('⚠️ Failed to save checkpoint:', error);
+    }
+  }
+
+  private async downloadSingleLogo(databaseId: number, logo: ClearLogoEntry, game: GameEntry, insertStmt: any): Promise<{success: boolean, sizeKB?: number, error?: string}> {
+    try {
+      const imageUrl = `https://images.launchbox-app.com/${logo.fileName}`;
+
+      const response = await fetch(imageUrl);
+      if (!response.ok) {
+        if (response.status === 404) {
+          return { success: false }; // Image not found, skip silently
+        }
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const imageBuffer = await response.arrayBuffer();
+      const base64Image = Buffer.from(imageBuffer).toString('base64');
+      const sizeKB = Math.round(imageBuffer.byteLength / 1024);
+
+      const result = insertStmt.run(
+        databaseId,
+        game.name,
+        game.platform,
+        imageUrl,
+        base64Image,
+        logo.region || null
+      );
+
+      return result.changes > 0 ? { success: true, sizeKB } : { success: false };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  }
+
   private async batchDownloadLogos(): Promise<void> {
     console.log(`🚀 Starting batch download of ${this.clearLogos.length} Clear Logos...`);
 
@@ -165,9 +235,11 @@ class FullClearLogoImporter {
       VALUES (?, ?, ?, ?, ?, ?)
     `);
 
-    let successCount = 0;
-    let errorCount = 0;
-    let skippedCount = 0;
+    // Load existing checkpoint
+    const existingCheckpoint = this.loadCheckpoint();
+    let successCount = existingCheckpoint?.successCount || 0;
+    let errorCount = existingCheckpoint?.errorCount || 0;
+    let skippedCount = existingCheckpoint?.skippedCount || 0;
 
     // Group by database ID to pick best logo for each game
     const gameLogos = new Map<number, ClearLogoEntry>();
@@ -187,66 +259,105 @@ class FullClearLogoImporter {
     console.log(`📦 Processing ${gameLogos.size} unique games (deduplicated from ${this.clearLogos.length} total entries)`);
 
     const totalGames = gameLogos.size;
-    let processedCount = 0;
+    let processedCount = existingCheckpoint?.processedCount || 0;
 
-    for (const [databaseId, logo] of gameLogos) {
-      processedCount++;
+    // Get existing logos to skip them
+    const existingLogosStmt = this.clearLogosDb!.prepare('SELECT launchbox_database_id FROM clear_logos');
+    const existingLogos = new Set<number>();
+    for (const row of existingLogosStmt.iterate()) {
+      existingLogos.add((row as { launchbox_database_id: number }).launchbox_database_id);
+    }
 
+    console.log(`💾 Skipping ${existingLogos.size} already downloaded logos`);
+
+    // Sort by database ID for consistent processing order
+    const sortedGameLogos = Array.from(gameLogos.entries()).sort(([a], [b]) => a - b);
+
+    // Filter out already processed items if resuming
+    const remainingLogos = existingCheckpoint
+      ? sortedGameLogos.filter(([databaseId]) => databaseId > existingCheckpoint.lastDatabaseId)
+      : sortedGameLogos.filter(([databaseId]) => !existingLogos.has(databaseId));
+
+    console.log(`🔄 ${remainingLogos.length} logos remaining to process`);
+    console.log(`⚡ Using concurrent downloads with controlled rate limiting for faster processing`);
+
+    // Process in batches with controlled concurrency
+    const BATCH_SIZE = 5; // Number of concurrent downloads
+    const BATCH_DELAY = 250; // Delay between batches in ms
+
+    for (let i = 0; i < remainingLogos.length; i += BATCH_SIZE) {
+      const batch = remainingLogos.slice(i, i + BATCH_SIZE);
+
+      // Process batch concurrently
+      const batchPromises = batch.map(async ([databaseId, logo]) => {
+        const game = this.games.get(databaseId);
+        if (!game) {
+          return { databaseId, result: { success: false, skipped: true } };
+        }
+
+        const result = await this.downloadSingleLogo(databaseId, logo, game, insertStmt);
+        return { databaseId, logo, game, result };
+      });
+
+      const batchResults = await Promise.allSettled(batchPromises);
+
+      // Process results
+      for (const settledResult of batchResults) {
+        processedCount++;
+
+        if (settledResult.status === 'fulfilled') {
+          const { databaseId, logo, game, result } = settledResult.value;
+
+          if (result.skipped) {
+            skippedCount++;
+            continue;
+          }
+
+          if (result.success && result.sizeKB) {
+            successCount++;
+            if (successCount % 50 === 0) {
+              console.log(`✅ ${game.name} (${game.platform}) - ${result.sizeKB}KB stored [${logo.region || 'Global'}]`);
+            }
+          } else if (result.error) {
+            errorCount++;
+            if (errorCount % 10 === 0) {
+              console.error(`❌ Error processing ${game.name}: ${result.error}`);
+            }
+          } else {
+            skippedCount++;
+          }
+
+          // Save checkpoint every 500 successful imports
+          if (successCount > 0 && successCount % 500 === 0) {
+            const checkpoint: ImportCheckpoint = {
+              totalLogos: totalGames,
+              processedCount,
+              successCount,
+              errorCount,
+              skippedCount,
+              lastDatabaseId: databaseId,
+              timestamp: new Date().toISOString()
+            };
+            this.saveCheckpoint(checkpoint);
+            console.log(`💾 Checkpoint saved at ${successCount} successful imports`);
+          }
+        } else {
+          errorCount++;
+          if (errorCount % 10 === 0) {
+            console.error(`❌ Batch processing error: ${settledResult.reason}`);
+          }
+        }
+      }
+
+      // Progress reporting
       if (processedCount % 100 === 0) {
         const percentage = ((processedCount / totalGames) * 100).toFixed(1);
         console.log(`📊 Progress: ${processedCount}/${totalGames} (${percentage}%) - Success: ${successCount}, Errors: ${errorCount}`);
       }
 
-      const game = this.games.get(databaseId);
-      if (!game) {
-        console.log(`⚠️ Game data not found for ID ${databaseId}, skipping`);
-        skippedCount++;
-        continue;
-      }
-
-      try {
-        const imageUrl = `https://images.launchbox-app.com/${logo.fileName}`;
-
-        const response = await fetch(imageUrl);
-        if (!response.ok) {
-          if (response.status === 404) {
-            // Image not found on server, skip silently
-            skippedCount++;
-            continue;
-          }
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const imageBuffer = await response.arrayBuffer();
-        const base64Image = Buffer.from(imageBuffer).toString('base64');
-        const sizeKB = Math.round(imageBuffer.byteLength / 1024);
-
-        const result = insertStmt.run(
-          databaseId,
-          game.name,
-          game.platform,
-          imageUrl,
-          base64Image,
-          logo.region || null
-        );
-
-        if (result.changes > 0) {
-          successCount++;
-          if (successCount % 50 === 0) {
-            console.log(`✅ ${game.name} (${game.platform}) - ${sizeKB}KB stored [${logo.region || 'Global'}]`);
-          }
-        }
-
-        // Rate limiting - be respectful to LaunchBox servers
-        if (processedCount % 10 === 0) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
-
-      } catch (error) {
-        errorCount++;
-        if (errorCount % 10 === 0) {
-          console.error(`❌ Error processing ${game.name}: ${error}`);
-        }
+      // Rate limiting between batches - be respectful to LaunchBox servers
+      if (i + BATCH_SIZE < remainingLogos.length) {
+        await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
       }
     }
 
@@ -255,6 +366,12 @@ class FullClearLogoImporter {
     console.log(`❌ Errors: ${errorCount.toLocaleString()}`);
     console.log(`⚠️ Skipped: ${skippedCount.toLocaleString()}`);
     console.log(`📊 Total processed: ${totalGames.toLocaleString()}`);
+
+    // Clean up checkpoint file on successful completion
+    if (fs.existsSync(this.checkpointPath)) {
+      fs.unlinkSync(this.checkpointPath);
+      console.log(`🧹 Removed checkpoint file - import completed successfully`);
+    }
   }
 
   private generateStats() {
