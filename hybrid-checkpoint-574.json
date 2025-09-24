@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 57400,
+    "successfulLogos": 53019,
+    "failedLogos": 29211,
+    "currentGameId": 118148,
+    "currentGameName": "Crystar",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-24T01:47:42.722Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": 118121,
+        "gameName": "Minoria",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:47:40.631Z"
+      },
+      {
+        "gameId": 118026,
+        "gameName": "Bad Pad",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:47:40.062Z"
+      },
+      {
+        "gameId": 118024,
+        "gameName": "Jupiter Hell",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:47:39.622Z"
+      },
+      {
+        "gameId": 117998,
+        "gameName": "Roombo: First Blood",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:47:38.960Z"
+      },
+      {
+        "gameId": 117881,
+        "gameName": "Swords &amp; Souls: Neverseen",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:47:37.147Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 3.94
+  },
+  "checkpoint": 574,
+  "timestamp": "2025-09-24T01:47:43.670Z"
+}

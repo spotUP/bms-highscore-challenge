@@ -2,48 +2,48 @@
   "0": {
     "instanceId": 0,
     "totalGames": 169556,
-    "processedGames": 50723,
-    "successfulLogos": 50718,
-    "failedLogos": 43786,
-    "currentGameId": -49837,
-    "currentGameName": "Paradise",
+    "processedGames": 57450,
+    "successfulLogos": 55796,
+    "failedLogos": 45435,
+    "currentGameId": 80124,
+    "currentGameName": "The Admin",
     "currentPlatform": "Windows",
-    "lastUpdate": "2025-09-24T11:00:24.286Z",
+    "lastUpdate": "2025-09-24T11:51:23.122Z",
     "status": "completed",
     "errors": [],
     "recentSuccesses": [
       {
-        "gameId": -49837,
-        "gameName": "Paradise",
+        "gameId": 377400,
+        "gameName": "Puzzle Ball",
         "platform": "Windows",
-        "timestamp": "2025-09-24T11:00:24.783Z"
+        "timestamp": "2025-09-24T04:52:36.233Z"
       },
       {
-        "gameId": -49841,
-        "gameName": "Battlefield: Bad Company 2",
+        "gameId": 377395,
+        "gameName": "Bitku",
         "platform": "Windows",
-        "timestamp": "2025-09-24T11:00:24.134Z"
+        "timestamp": "2025-09-24T04:52:30.586Z"
       },
       {
-        "gameId": -49842,
-        "gameName": "Portal",
+        "gameId": 377392,
+        "gameName": "Dinosaur Hunt",
         "platform": "Windows",
-        "timestamp": "2025-09-24T11:00:23.492Z"
+        "timestamp": "2025-09-24T04:52:26.523Z"
       },
       {
-        "gameId": -49844,
-        "gameName": "Tom Clancy's H.A.W.X",
+        "gameId": 377353,
+        "gameName": "Chronicles of the Witches and Warlocks",
         "platform": "Windows",
-        "timestamp": "2025-09-24T11:00:22.864Z"
+        "timestamp": "2025-09-24T04:51:47.968Z"
       },
       {
-        "gameId": -49846,
-        "gameName": "Borderlands",
+        "gameId": 377352,
+        "gameName": "Tahira: Echoes of the Astral Empire",
         "platform": "Windows",
-        "timestamp": "2025-09-24T11:00:22.321Z"
+        "timestamp": "2025-09-24T04:51:47.367Z"
       }
     ],
     "startTime": "2025-09-23T21:45:00.000Z",
-    "gamesPerSecond": 1.06
+    "gamesPerSecond": 1.13
   }
 }

@@ -367,7 +367,7 @@ function loadProgress(): ScraperProgress {
   let latestCheckpoint = null;
   let latestCheckpointNumber = 0;
 
-  for (let i = 1; i <= 2000; i++) { // Check up to checkpoint 2000 (200,000 games)
+  for (let i = 1; i <= 10000; i++) { // Check up to checkpoint 10000 (200,000 games at 20/checkpoint)
     const checkpointFile = `hybrid-checkpoint-${i}.json`;
     if (existsSync(checkpointFile)) {
       latestCheckpointNumber = i;
@@ -406,7 +406,7 @@ function saveProgress(progress: ScraperProgress) {
   writeFileSync('production-scraper-progress.json', JSON.stringify(data, null, 2));
 }
 
-// Save checkpoint every 100 games
+// Save checkpoint every 20 games
 function saveCheckpoint(progress: ScraperProgress, checkpointNumber: number) {
   const checkpointFile = `hybrid-checkpoint-${checkpointNumber}.json`;
   const data = {
@@ -484,14 +484,18 @@ function drawProgressBar(current: number, total: number, width: number = 40): st
 
 function updateProgress(progress: any, platform: string = '') {
   const percentage = Math.round((progress.processedGames / progress.totalGames) * 100);
-  const bar = drawProgressBar(progress.processedGames, progress.totalGames, 30); // Shorter bar to fit more info
+  const bar = drawProgressBar(progress.processedGames, progress.totalGames, 25); // Slightly shorter bar to fit platform info
 
   const remaining = progress.totalGames - progress.processedGames;
   const etaSeconds = remaining / (progress.gamesPerSecond || 1);
   const etaFormatted = formatETA(etaSeconds);
 
-  // Compact all info into one line
-  const compactInfo = `${bar} ${percentage}% | ${chalk.green(progress.successfulLogos)} ✓ | ${chalk.red(progress.failedLogos)} ✗ | ETA: ${etaFormatted} | ${progress.gamesPerSecond}/s`;
+  // Get platform info from progress object if not passed as parameter
+  const currentPlatform = platform || progress.currentPlatform || 'Unknown';
+  const platformDisplay = currentPlatform.length > 12 ? currentPlatform.substring(0, 12) : currentPlatform;
+
+  // Compact all info into one line with platform info
+  const compactInfo = `${bar} ${percentage}% | ${chalk.green(progress.successfulLogos)} ✓ | ${chalk.red(progress.failedLogos)} ✗ | ${chalk.cyan(platformDisplay)} | ETA: ${etaFormatted} | ${progress.gamesPerSecond}/s`;
 
   // Temporarily disable scrolling region to update progress bar
   process.stdout.write('\x1b[r'); // Reset scrolling region to full screen
@@ -603,6 +607,27 @@ async function runHybridScraper() {
         progress.lastUpdate = new Date().toISOString();
 
         try {
+          // Check if logo already exists in database
+          const existingLogo = await new Promise<boolean>((resolve) => {
+            db.get('SELECT logo_base64 FROM games WHERE id = ? AND logo_base64 IS NOT NULL AND logo_base64 != ""', [game.id], (err, row) => {
+              if (err) {
+                logToBottomWithProgressUpdate(`⚠️  Error checking existing logo for ${game.name}: ${err.message}`, progress);
+                resolve(false);
+              } else {
+                resolve(!!row);
+              }
+            });
+          });
+
+          if (existingLogo) {
+            // Skip this game - logo already exists
+            logToBottomWithProgressUpdate(`⏭️  Skipping ${game.name} - logo already exists`, progress);
+            progress.successfulLogos++; // Count as successful since we have the logo
+            progress.processedGames++;
+            lastProcessedId = game.id;
+            continue;
+          }
+
           // Try to fetch logo
           const logoData = await fetchClearLogoByGameId(searchId, game.name);
 
@@ -651,9 +676,9 @@ async function runHybridScraper() {
       // Save progress
       saveProgress(progress);
 
-      // Save checkpoint every 100 games
-      if (progress.processedGames % 100 === 0) {
-        const checkpointNumber = Math.floor(progress.processedGames / 100);
+      // Save checkpoint every 20 games
+      if (progress.processedGames % 20 === 0) {
+        const checkpointNumber = Math.floor(progress.processedGames / 20);
         saveCheckpoint(progress, checkpointNumber);
       }
 

@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 64400,
+    "successfulLogos": 53172,
+    "failedLogos": 36058,
+    "currentGameId": 168728,
+    "currentGameName": "Apple Pop",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-24T03:52:44.630Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": 168644,
+        "gameName": "Alone",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T03:52:14.498Z"
+      },
+      {
+        "gameId": 168563,
+        "gameName": "Kiwi 64",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T03:51:58.662Z"
+      },
+      {
+        "gameId": 167859,
+        "gameName": "NPC Capture Academy",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T03:48:46.269Z"
+      },
+      {
+        "gameId": 156825,
+        "gameName": "The Elder Scrolls V: Skyrim Anniversary Edition",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T03:10:34.147Z"
+      },
+      {
+        "gameId": 125610,
+        "gameName": "MechWarrior 2: 31st Century Combat",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T02:07:12.781Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 2.92
+  },
+  "checkpoint": 644,
+  "timestamp": "2025-09-24T03:52:45.539Z"
+}

@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 56000,
+    "successfulLogos": 52497,
+    "failedLogos": 28333,
+    "currentGameId": 106378,
+    "currentGameName": "Mind Power Math: High School",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-24T01:23:31.202Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": 106366,
+        "gameName": "Polyball",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:23:31.100Z"
+      },
+      {
+        "gameId": 106365,
+        "gameName": "Gloom",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:23:30.556Z"
+      },
+      {
+        "gameId": 106341,
+        "gameName": "Super Bomberman R",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:23:27.806Z"
+      },
+      {
+        "gameId": 106332,
+        "gameName": "Thinkin' Things Collection 1",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:23:22.769Z"
+      },
+      {
+        "gameId": 106321,
+        "gameName": "Fantasy Strike",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:23:21.029Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 4.27
+  },
+  "checkpoint": 560,
+  "timestamp": "2025-09-24T01:23:32.448Z"
+}

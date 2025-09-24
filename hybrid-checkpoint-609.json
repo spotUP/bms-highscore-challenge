@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 60900,
+    "successfulLogos": 53168,
+    "failedLogos": 32562,
+    "currentGameId": 151431,
+    "currentGameName": "Sonic Omens",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-24T02:50:08.549Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": 125610,
+        "gameName": "MechWarrior 2: 31st Century Combat",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T02:07:12.781Z"
+      },
+      {
+        "gameId": 120881,
+        "gameName": "Deliver Us the Moon",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:54:48.562Z"
+      },
+      {
+        "gameId": 119837,
+        "gameName": "UFO: Extraterrestrials: Gold Edition",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:54:35.364Z"
+      },
+      {
+        "gameId": 119836,
+        "gameName": "Twickles",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:54:34.802Z"
+      },
+      {
+        "gameId": 119830,
+        "gameName": "Top Trumps Turbo",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:54:29.983Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 3.33
+  },
+  "checkpoint": 609,
+  "timestamp": "2025-09-24T02:50:09.456Z"
+}

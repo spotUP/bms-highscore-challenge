@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 52200,
+    "successfulLogos": 52064,
+    "failedLogos": 43917,
+    "currentGameId": -36078,
+    "currentGameName": "Madden NFL 2003",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-24T09:43:35.125Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": -36078,
+        "gameName": "Madden NFL 2003",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T09:43:35.532Z"
+      },
+      {
+        "gameId": -36079,
+        "gameName": "Madden NFL 2002",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T09:43:34.975Z"
+      },
+      {
+        "gameId": -36102,
+        "gameName": "007: Nightfire",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T09:43:34.319Z"
+      },
+      {
+        "gameId": -36105,
+        "gameName": "F.E.A.R.: Gold Edition",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T09:43:33.685Z"
+      },
+      {
+        "gameId": -36109,
+        "gameName": "Star Wars: X-Wing vs. TIE Fighter: Balance of Power Campaigns",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T09:43:33.138Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 1.21
+  },
+  "checkpoint": 522,
+  "timestamp": "2025-09-24T09:43:35.691Z"
+}

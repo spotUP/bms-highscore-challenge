@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 55300,
+    "successfulLogos": 52174,
+    "failedLogos": 27956,
+    "currentGameId": 101214,
+    "currentGameName": "One Piece Unlimited World Red: Deluxe Edition",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-24T01:11:48.324Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": 101214,
+        "gameName": "One Piece Unlimited World Red: Deluxe Edition",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:11:49.179Z"
+      },
+      {
+        "gameId": 101165,
+        "gameName": "World's Dawn",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:11:45.186Z"
+      },
+      {
+        "gameId": 101163,
+        "gameName": "Moékuri",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:11:43.522Z"
+      },
+      {
+        "gameId": 101162,
+        "gameName": "Graze Counter",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:11:41.712Z"
+      },
+      {
+        "gameId": 101159,
+        "gameName": "Dragon Sinker",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:11:39.070Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 4.46
+  },
+  "checkpoint": 553,
+  "timestamp": "2025-09-24T01:11:49.289Z"
+}

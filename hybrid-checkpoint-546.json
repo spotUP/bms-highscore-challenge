@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 54600,
+    "successfulLogos": 51826,
+    "failedLogos": 27604,
+    "currentGameId": 94934,
+    "currentGameName": "True Crime: New York City",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-24T01:00:36.008Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": 94934,
+        "gameName": "True Crime: New York City",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:00:36.437Z"
+      },
+      {
+        "gameId": 94933,
+        "gameName": "Papi Commando: Who Dares Wins III",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:00:35.905Z"
+      },
+      {
+        "gameId": 94932,
+        "gameName": "Murder Dog IV: Trial of the Murder Dog",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:00:35.479Z"
+      },
+      {
+        "gameId": 94931,
+        "gameName": "Incompatible Species",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:00:34.817Z"
+      },
+      {
+        "gameId": 94930,
+        "gameName": "Bike Banditz",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T01:00:34.304Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 4.65
+  },
+  "checkpoint": 546,
+  "timestamp": "2025-09-24T01:00:36.543Z"
+}

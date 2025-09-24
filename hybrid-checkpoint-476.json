@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 47600,
+    "successfulLogos": 47347,
+    "failedLogos": 25083,
+    "currentGameId": -32949,
+    "currentGameName": "Priston Tale (2008)",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-23T23:16:54.914Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": -32949,
+        "gameName": "Priston Tale (2008)",
+        "platform": "Windows",
+        "timestamp": "2025-09-23T23:16:55.343Z"
+      },
+      {
+        "gameId": -32952,
+        "gameName": "NiGHTS into Dreams...",
+        "platform": "Windows",
+        "timestamp": "2025-09-23T23:16:54.811Z"
+      },
+      {
+        "gameId": -32953,
+        "gameName": "Billy Hatcher and the Giant Egg",
+        "platform": "Windows",
+        "timestamp": "2025-09-23T23:16:54.282Z"
+      },
+      {
+        "gameId": -32954,
+        "gameName": "Hell Yeah! Wrath of the Dead Rabbit",
+        "platform": "Windows",
+        "timestamp": "2025-09-23T23:16:53.772Z"
+      },
+      {
+        "gameId": -32968,
+        "gameName": "Constant C",
+        "platform": "Windows",
+        "timestamp": "2025-09-23T23:16:52.174Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 8.63
+  },
+  "checkpoint": 476,
+  "timestamp": "2025-09-23T23:16:55.453Z"
+}

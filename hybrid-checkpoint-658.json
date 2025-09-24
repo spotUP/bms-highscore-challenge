@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 65800,
+    "successfulLogos": 53433,
+    "failedLogos": 37197,
+    "currentGameId": 371770,
+    "currentGameName": "PC Fútbol 2000",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-24T04:17:03.643Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": 371770,
+        "gameName": "PC Fútbol 2000",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T04:17:04.243Z"
+      },
+      {
+        "gameId": 371767,
+        "gameName": "PC Fútbol 2007",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T04:17:02.634Z"
+      },
+      {
+        "gameId": 371763,
+        "gameName": "PC Fútbol 7",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T04:17:01.218Z"
+      },
+      {
+        "gameId": 371757,
+        "gameName": "Tenebris Pictura",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T04:17:00.693Z"
+      },
+      {
+        "gameId": 371753,
+        "gameName": "PC Fútbol Selección Española: Mundial '98",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T04:16:56.939Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 2.8
+  },
+  "checkpoint": 658,
+  "timestamp": "2025-09-24T04:17:04.347Z"
+}

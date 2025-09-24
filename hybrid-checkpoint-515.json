@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 51500,
+    "successfulLogos": 51430,
+    "failedLogos": 43851,
+    "currentGameId": -41445,
+    "currentGameName": "Tony Hawk's American Wasteland",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-24T11:10:43.988Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": -41445,
+        "gameName": "Tony Hawk's American Wasteland",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T11:10:44.298Z"
+      },
+      {
+        "gameId": -41446,
+        "gameName": "Tom Clancy's Ghost Recon",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T11:10:43.836Z"
+      },
+      {
+        "gameId": -41452,
+        "gameName": "Delta Force: Black Hawk Down: Team Sabre",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T11:10:43.180Z"
+      },
+      {
+        "gameId": -41454,
+        "gameName": "Conflict: Desert Storm",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T11:10:42.633Z"
+      },
+      {
+        "gameId": -41462,
+        "gameName": "Xonotic",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T11:10:41.896Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 1.07
+  },
+  "checkpoint": 515,
+  "timestamp": "2025-09-24T11:10:44.455Z"
+}

@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 67200,
+    "successfulLogos": 53754,
+    "failedLogos": 38276,
+    "currentGameId": 376726,
+    "currentGameName": "Silent Service 2",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-24T04:41:13.526Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": 376687,
+        "gameName": "Black Viper: Sophia's Fate",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T04:40:34.284Z"
+      },
+      {
+        "gameId": 376681,
+        "gameName": "Demonlisher",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T04:40:28.606Z"
+      },
+      {
+        "gameId": 376680,
+        "gameName": "MotoGP14 Compact",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T04:40:28.075Z"
+      },
+      {
+        "gameId": 376678,
+        "gameName": "Supraball",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T04:40:26.490Z"
+      },
+      {
+        "gameId": 376673,
+        "gameName": "Magnifico",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T04:40:21.074Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 2.69
+  },
+  "checkpoint": 672,
+  "timestamp": "2025-09-24T04:41:14.431Z"
+}

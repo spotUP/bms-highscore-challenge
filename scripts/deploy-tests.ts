@@ -13,6 +13,13 @@ const requiredEnvVars = [
   'VITE_SUPABASE_ANON_KEY'
 ];
 
+// Optional but recommended environment variables for enhanced features
+const optionalEnvVars = [
+  'VITE_RAWG_API_KEY',
+  'VITE_IGDB_CLIENT_ID',
+  'VITE_IGDB_ACCESS_TOKEN'
+];
+
 let allEnvVarsPresent = true;
 
 for (const envVar of requiredEnvVars) {

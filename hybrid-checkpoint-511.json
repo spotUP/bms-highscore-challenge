@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 51100,
+    "successfulLogos": 49951,
+    "failedLogos": 25979,
+    "currentGameId": 67078,
+    "currentGameName": "Rage of Mages",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-24T00:05:41.176Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": 67078,
+        "gameName": "Rage of Mages",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T00:05:41.595Z"
+      },
+      {
+        "gameId": 67065,
+        "gameName": "Super Smash Flash EXE",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T00:05:41.075Z"
+      },
+      {
+        "gameId": 67044,
+        "gameName": "The Silent Age",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T00:05:40.547Z"
+      },
+      {
+        "gameId": 67031,
+        "gameName": "Dragon Ball: Xenoverse 2",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T00:05:39.919Z"
+      },
+      {
+        "gameId": 66688,
+        "gameName": "Rise of Nations: Extended Edition",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T00:05:34.784Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 6.05
+  },
+  "checkpoint": 511,
+  "timestamp": "2025-09-24T00:05:41.705Z"
+}

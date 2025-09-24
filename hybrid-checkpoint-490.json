@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 49000,
+    "successfulLogos": 48493,
+    "failedLogos": 25337,
+    "currentGameId": -26254,
+    "currentGameName": "Toybox Turbos",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-23T23:35:49.649Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": -26254,
+        "gameName": "Toybox Turbos",
+        "platform": "Windows",
+        "timestamp": "2025-09-23T23:35:50.512Z"
+      },
+      {
+        "gameId": -26268,
+        "gameName": "Dungeons",
+        "platform": "Windows",
+        "timestamp": "2025-09-23T23:35:43.068Z"
+      },
+      {
+        "gameId": -26302,
+        "gameName": "Seldon Crisis",
+        "platform": "Windows",
+        "timestamp": "2025-09-23T23:35:41.573Z"
+      },
+      {
+        "gameId": -26303,
+        "gameName": "Exteel",
+        "platform": "Windows",
+        "timestamp": "2025-09-23T23:35:41.039Z"
+      },
+      {
+        "gameId": -26304,
+        "gameName": "Mortal Online",
+        "platform": "Windows",
+        "timestamp": "2025-09-23T23:35:40.474Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 7.37
+  },
+  "checkpoint": 490,
+  "timestamp": "2025-09-23T23:35:50.619Z"
+}

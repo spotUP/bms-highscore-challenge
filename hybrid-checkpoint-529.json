@@ -1,0 +1,51 @@
+{
+  "0": {
+    "instanceId": 0,
+    "totalGames": 169556,
+    "processedGames": 52900,
+    "successfulLogos": 52600,
+    "failedLogos": 44081,
+    "currentGameId": -32611,
+    "currentGameName": "Madballs in Babo: Invasion",
+    "currentPlatform": "Windows",
+    "lastUpdate": "2025-09-24T08:29:38.375Z",
+    "status": "completed",
+    "errors": [],
+    "recentSuccesses": [
+      {
+        "gameId": -32611,
+        "gameName": "Madballs in Babo: Invasion",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T08:29:38.776Z"
+      },
+      {
+        "gameId": -32613,
+        "gameName": "BRAINPIPE: A Plunge to Unhumanity",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T08:29:38.224Z"
+      },
+      {
+        "gameId": -32614,
+        "gameName": "Data Jammers: FastForward",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T08:29:37.726Z"
+      },
+      {
+        "gameId": -32615,
+        "gameName": "Power of Defense",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T08:29:37.078Z"
+      },
+      {
+        "gameId": -32616,
+        "gameName": "Iron Grip: Marauders",
+        "platform": "Windows",
+        "timestamp": "2025-09-24T08:29:36.428Z"
+      }
+    ],
+    "startTime": "2025-09-23T21:45:00.000Z",
+    "gamesPerSecond": 1.37
+  },
+  "checkpoint": 529,
+  "timestamp": "2025-09-24T08:29:38.929Z"
+}
