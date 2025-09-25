@@ -20,6 +20,77 @@ import { CreateTournamentModal } from "@/components/CreateTournamentModal";
 import { useGameDatabaseFavorites } from "@/hooks/useGameDatabaseFavorites";
 import { sqliteService } from "@/services/sqliteService";
 import { clearLogoService } from "@/services/clearLogoService";
+import { AutocompleteDropdown } from "@/components/ui/autocomplete-dropdown";
+
+// Utility function to decode HTML entities
+const decodeHtmlEntities = (text: string): string => {
+  const textArea = document.createElement('textarea');
+  textArea.innerHTML = text;
+  return textArea.value;
+};
+
+// Levenshtein distance function for fuzzy matching
+const levenshteinDistance = (str1: string, str2: string): number => {
+  const matrix = [];
+
+  // Create empty matrix
+  for (let i = 0; i <= str2.length; i++) {
+    matrix[i] = [i];
+  }
+
+  for (let j = 0; j <= str1.length; j++) {
+    matrix[0][j] = j;
+  }
+
+  // Fill matrix
+  for (let i = 1; i <= str2.length; i++) {
+    for (let j = 1; j <= str1.length; j++) {
+      if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substitution
+          matrix[i][j - 1] + 1,     // insertion
+          matrix[i - 1][j] + 1      // deletion
+        );
+      }
+    }
+  }
+
+  return matrix[str2.length][str1.length];
+};
+
+// Function to generate fuzzy variations based on edit distance
+const generateFuzzyVariations = (searchTerm: string): string[] => {
+  const commonGameWords = [
+    'mario', 'sonic', 'zelda', 'pokemon', 'street', 'fighter', 'final', 'fantasy',
+    'dragon', 'quest', 'mortal', 'kombat', 'super', 'mega', 'ultra', 'turbo',
+    'world', 'land', 'adventure', 'legends', 'chronicles', 'saga', 'tales'
+  ];
+
+  const variations: string[] = [];
+  const words = searchTerm.toLowerCase().split(/\s+/);
+
+  words.forEach(word => {
+    if (word.length >= 4) { // Only apply fuzzy matching to words 4+ chars
+      commonGameWords.forEach(gameWord => {
+        const distance = levenshteinDistance(word, gameWord);
+        // Allow 1-2 character differences based on word length
+        const threshold = word.length <= 5 ? 1 : 2;
+
+        if (distance <= threshold && distance > 0) {
+          // Replace the word with the close match
+          const newTerm = searchTerm.replace(new RegExp(`\\b${word}\\b`, 'gi'), gameWord);
+          if (newTerm !== searchTerm) {
+            variations.push(newTerm);
+          }
+        }
+      });
+    }
+  });
+
+  return variations;
+};
 
 interface Game {
   id: number;
@@ -74,6 +145,11 @@ const GamesBrowser: React.FC = () => {
   const [pulsingHearts, setPulsingHearts] = useState<Set<string>>(new Set());
   const [sqliteLogos, setSqliteLogos] = useState<Record<string, string>>({});
 
+  // Search suggestions state
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [suggestionLoading, setSuggestionLoading] = useState(false);
+
   const [filters, setFilters] = useState<FilterState>({
     search: '',
     platform: 'all',
@@ -97,15 +173,21 @@ const GamesBrowser: React.FC = () => {
   // Server-side pagination
   const totalPages = Math.ceil(totalGames / gamesPerPage);
 
-  // Load filter options
+  // Load filter options - only from approved platforms
   useEffect(() => {
     const loadFilterOptions = async () => {
       try {
-        // Load unique genres
+        // Wait for platforms to be loaded first
+        if (platforms.length === 0) return;
+
+        const approvedPlatformNames = platforms.map(p => p.name);
+
+        // Load unique genres only from approved platform games
         const { data: genresData } = await supabase
           .from('games_database')
           .select('genres')
-          .not('genres', 'is', null);
+          .not('genres', 'is', null)
+          .in('platform_name', approvedPlatformNames);
 
         if (genresData) {
           const genreSet = new Set<string>();
@@ -115,11 +197,12 @@ const GamesBrowser: React.FC = () => {
           setAllGenres(Array.from(genreSet).sort());
         }
 
-        // Load unique ESRB ratings
+        // Load unique ESRB ratings only from approved platform games
         const { data: ratingsData } = await supabase
           .from('games_database')
           .select('esrb_rating')
-          .not('esrb_rating', 'is', null);
+          .not('esrb_rating', 'is', null)
+          .in('platform_name', approvedPlatformNames);
 
         if (ratingsData) {
           const ratingSet = new Set<string>();
@@ -134,7 +217,7 @@ const GamesBrowser: React.FC = () => {
     };
 
     loadFilterOptions();
-  }, []);
+  }, [platforms]); // Depend on platforms being loaded
 
   // Memoized image error handler to prevent infinite re-renders
   const handleImageError = useCallback((gameId: string) => {
@@ -192,6 +275,65 @@ const GamesBrowser: React.FC = () => {
       search: ''
     }));
     setCurrentPage(1);
+    setShowSuggestions(false);
+  };
+
+  // Fetch search suggestions
+  const fetchSearchSuggestions = async (query: string) => {
+    if (query.length < 2) {
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    setSuggestionLoading(true);
+    try {
+      const { data: suggestions, error } = await supabase
+        .from('games_database')
+        .select('name')
+        .ilike('name', `%${query}%`)
+        .limit(8)
+        .order('name');
+
+      if (error) throw error;
+
+      const suggestionNames = suggestions
+        ?.map(game => game.name)
+        .filter((name, index, arr) => arr.indexOf(name) === index) // Remove duplicates
+        .slice(0, 6) || []; // Limit to 6 suggestions
+
+      setSearchSuggestions(suggestionNames);
+      setShowSuggestions(suggestionNames.length > 0);
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+    } finally {
+      setSuggestionLoading(false);
+    }
+  };
+
+  // Handle input change with debouncing for suggestions
+  const handleSearchInputChange = (value: string) => {
+    setSearchInput(value);
+
+    // Debounce suggestion fetching
+    const timeoutId = setTimeout(() => {
+      fetchSearchSuggestions(value);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  };
+
+  // Handle suggestion selection
+  const handleSuggestionSelect = (suggestion: string) => {
+    setSearchInput(suggestion);
+    setFilters(prev => ({
+      ...prev,
+      search: suggestion
+    }));
+    setCurrentPage(1);
+    setShowSuggestions(false);
   };
 
   const loadGames = async () => {
@@ -204,6 +346,9 @@ const GamesBrowser: React.FC = () => {
     }
 
     try {
+      // Get approved platform names for filtering
+      const approvedPlatformNames = platforms.map(p => p.name);
+
       let query = supabase
         .from('games_database')
         .select(`
@@ -216,7 +361,12 @@ const GamesBrowser: React.FC = () => {
           updated_at
         `); // Only selecting fields that actually exist in games_database table
 
-      // Apply search filter - improved fuzzy matching to handle punctuation, spaces, and variations
+      // ALWAYS filter by approved platforms to prevent excluded platforms from showing
+      if (approvedPlatformNames.length > 0) {
+        query = query.in('platform_name', approvedPlatformNames);
+      }
+
+      // Apply search filter - enhanced fuzzy matching to handle punctuation, spaces, and character variations
       if (filters.search && filters.search.length >= 3) {
         const searchTerm = filters.search.toLowerCase().trim();
 
@@ -233,17 +383,80 @@ const GamesBrowser: React.FC = () => {
           searchVariations.push(normalizedTerm);
         }
 
-        // Add apostrophe variations
+        // Enhanced apostrophe handling for cases like "hammerin harry" vs "hammerin' harry"
         if (searchTerm.includes("'")) {
           // If search has apostrophes, also try without them
           searchVariations.push(searchTerm.replace(/['']/g, ''));
+          searchVariations.push(searchTerm.replace(/['']/g, ' '));
         } else {
           // If search has no apostrophes, try adding them in common positions
-          // For "solomons key" -> "solomon's key"
-          const withApostrophe = searchTerm.replace(/(\w)s\s/g, "$1's ");
+          // For "hammerin harry" -> "hammerin' harry"
+          const withApostrophe = searchTerm.replace(/(\w+)in\s/g, "$1in' ");
           if (withApostrophe !== searchTerm) {
             searchVariations.push(withApostrophe);
           }
+
+          // For "solomons key" -> "solomon's key"
+          const withPossessive = searchTerm.replace(/(\w)s\s/g, "$1's ");
+          if (withPossessive !== searchTerm) {
+            searchVariations.push(withPossessive);
+          }
+
+          // Generic pattern: try adding apostrophes before common endings
+          const commonEndings = ['in', 'n', 'er', 'ed', 'ly'];
+          commonEndings.forEach(ending => {
+            const pattern = new RegExp(`(\\w+)${ending}\\s`, 'g');
+            const withApos = searchTerm.replace(pattern, `$1${ending}' `);
+            if (withApos !== searchTerm) {
+              searchVariations.push(withApos);
+            }
+          });
+
+          // Special handling for "n" vs "'n" patterns like "ghost n goblins" vs "ghosts 'n goblins"
+          if (searchTerm.includes(' n ')) {
+            searchVariations.push(searchTerm.replace(/\s+n\s+/g, " 'n "));
+            searchVariations.push(searchTerm.replace(/\s+n\s+/g, " & "));
+            searchVariations.push(searchTerm.replace(/\s+n\s+/g, " and "));
+          }
+        }
+
+        // Handle singular/plural variations
+        const words = searchTerm.split(/\s+/);
+        const pluralVariations = [];
+        const singularVariations = [];
+
+        words.forEach(word => {
+          if (word.length > 3) {
+            // Try plural forms
+            if (!word.endsWith('s')) {
+              pluralVariations.push(word + 's');
+            }
+            // Try singular forms
+            if (word.endsWith('s') && word.length > 4) {
+              singularVariations.push(word.slice(0, -1));
+            }
+          }
+        });
+
+        // Create variations with plural/singular substitutions
+        if (pluralVariations.length > 0) {
+          words.forEach((word, index) => {
+            if (pluralVariations.includes(word + 's')) {
+              const newWords = [...words];
+              newWords[index] = word + 's';
+              searchVariations.push(newWords.join(' '));
+            }
+          });
+        }
+
+        if (singularVariations.length > 0) {
+          words.forEach((word, index) => {
+            if (word.endsWith('s') && singularVariations.includes(word.slice(0, -1))) {
+              const newWords = [...words];
+              newWords[index] = word.slice(0, -1);
+              searchVariations.push(newWords.join(' '));
+            }
+          });
         }
 
         // Add variations with common word concatenations
@@ -270,8 +483,7 @@ const GamesBrowser: React.FC = () => {
           });
         }
 
-        // Add variations with spaces added between words
-        // "dragonninja" -> "dragon ninja"
+        // Add variations with spaces added between words for compound games
         if (!searchTerm.includes(' ') && searchTerm.length > 6) {
           // Try to split common compound words
           const commonSplits = [
@@ -279,6 +491,9 @@ const GamesBrowser: React.FC = () => {
             { from: 'ninja', to: ' ninja' },
             { from: 'dragon', to: 'dragon ' },
             { from: 'dudes', to: 'dudes ' },
+            { from: 'quest', to: ' quest' },
+            { from: 'force', to: ' force' },
+            { from: 'world', to: ' world' },
           ];
 
           for (const split of commonSplits) {
@@ -291,10 +506,129 @@ const GamesBrowser: React.FC = () => {
           }
         }
 
-        // Remove duplicates and create OR conditions
-        const uniqueVariations = [...new Set(searchVariations)];
-        const conditions = uniqueVariations.map(term => `name.ilike.%${term}%`).join(',');
-        query = query.or(conditions);
+        // Add word order variations for multi-word searches
+        if (words.length === 2) {
+          // For "harry hammerin" -> also try "hammerin harry"
+          const reversed = [...words].reverse().join(' ');
+          if (reversed !== searchTerm) {
+            searchVariations.push(reversed);
+
+            // Also add apostrophe variations of the reversed order
+            const reversedWithApos = reversed.replace(/(\w+)in\s/g, "$1in' ");
+            if (reversedWithApos !== reversed) {
+              searchVariations.push(reversedWithApos);
+            }
+          }
+        } else if (words.length > 2) {
+          // For longer phrases, try common reorderings
+          // "street fighter alpha" -> "alpha street fighter", "fighter street alpha"
+          const firstLast = [words[0], words[words.length - 1]].join(' ');
+          const lastFirst = [words[words.length - 1], words[0]].join(' ');
+          searchVariations.push(firstLast, lastFirst);
+        }
+
+        // Add partial word matching for names with common prefixes/suffixes
+        if (searchTerm.length >= 5) {
+          // For searches like "street fight" -> also try "street fighter"
+          const withCommonSuffixes = [
+            searchTerm + 'er',
+            searchTerm + 'ers',
+            searchTerm + 'ing',
+            searchTerm.replace(/\s+/g, '') + 'er',
+          ];
+          searchVariations.push(...withCommonSuffixes);
+
+          // For searches ending in common suffixes, try without them
+          if (searchTerm.endsWith('er')) {
+            searchVariations.push(searchTerm.slice(0, -2));
+          }
+          if (searchTerm.endsWith('ers')) {
+            searchVariations.push(searchTerm.slice(0, -3));
+          }
+        }
+
+        // Handle common game title patterns and abbreviations
+        const gamePatterns = [
+          // Numbers and Roman numerals
+          { from: /\b2\b/g, to: ['II', 'Two'] },
+          { from: /\b3\b/g, to: ['III', 'Three'] },
+          { from: /\b4\b/g, to: ['IV', 'Four'] },
+          { from: /\bII\b/g, to: ['2', 'Two'] },
+          { from: /\bIII\b/g, to: ['3', 'Three'] },
+          { from: /\bIV\b/g, to: ['4', 'Four'] },
+
+          // Common game abbreviations
+          { from: /\bst\b/gi, to: ['street'] },
+          { from: /\bstreet\b/gi, to: ['st'] },
+          { from: /\bmk\b/gi, to: ['mortal kombat'] },
+          { from: /\bmortal kombat\b/gi, to: ['mk'] },
+          { from: /\bsf\b/gi, to: ['street fighter'] },
+          { from: /\bstreet fighter\b/gi, to: ['sf'] },
+
+          // Common word substitutions
+          { from: /\bvs\b/gi, to: ['versus', 'v'] },
+          { from: /\bversus\b/gi, to: ['vs', 'v'] },
+          { from: /\band\b/gi, to: ['&', 'n'] },
+          { from: /\bthe\b/gi, to: [''] }, // Try without "the"
+        ];
+
+        gamePatterns.forEach(pattern => {
+          if (pattern.from.test(searchTerm)) {
+            pattern.to.forEach(replacement => {
+              const variation = searchTerm.replace(pattern.from, replacement).replace(/\s+/g, ' ').trim();
+              if (variation && variation !== searchTerm) {
+                searchVariations.push(variation);
+              }
+            });
+          }
+        });
+
+        // Handle typos and common misspellings for popular games
+        const commonTypos = {
+          'mario': ['mario', 'mario'],
+          'sonic': ['sanic', 'sonik'],
+          'zelda': ['zelda', 'zeld'],
+          'pokemon': ['pokemon', 'pokeman'],
+          'final fantasy': ['final fantasy', 'final fantasi'],
+          'street fighter': ['street fighter', 'street figher'],
+          'mortal kombat': ['mortal kombat', 'mortal combat'],
+        };
+
+        Object.entries(commonTypos).forEach(([correct, variants]) => {
+          variants.forEach(variant => {
+            if (searchTerm.includes(variant) && !searchTerm.includes(correct)) {
+              searchVariations.push(searchTerm.replace(variant, correct));
+            }
+            if (searchTerm.includes(correct) && !searchTerm.includes(variant)) {
+              searchVariations.push(searchTerm.replace(correct, variant));
+            }
+          });
+        });
+
+        // Add fuzzy string matching variations
+        const fuzzyVariations = generateFuzzyVariations(searchTerm);
+        searchVariations.push(...fuzzyVariations);
+
+        // Apply apostrophe variations to ALL generated variations (including plurals)
+        const allVariations = [...searchVariations];
+        searchVariations.forEach(variation => {
+          if (!variation.includes("'") && variation.includes(' n ')) {
+            allVariations.push(variation.replace(/\s+n\s+/g, " 'n "));
+            allVariations.push(variation.replace(/\s+n\s+/g, " & "));
+            allVariations.push(variation.replace(/\s+n\s+/g, " and "));
+          }
+        });
+
+        // Remove duplicates and create OR conditions with relevance scoring
+        const uniqueVariations = [...new Set(allVariations)];
+
+        // Create weighted search conditions based on match quality
+        const exactMatchCondition = `name.ilike.${searchTerm}`;
+        const startsWithCondition = `name.ilike.${searchTerm}%`;
+        const containsCondition = uniqueVariations.map(term => `name.ilike.%${term}%`).join(',');
+
+        // Use a more sophisticated OR query that prioritizes exact matches
+        query = query.or(`${exactMatchCondition},${startsWithCondition},${containsCondition}`);
       }
 
       // Apply platform filter
@@ -324,21 +658,21 @@ const GamesBrowser: React.FC = () => {
                               filters.cooperative !== 'all';
 
       if (!hasActualFilters) {
-        // Get truly random games from entire database
+        // Get truly random games from approved platforms only
         try {
           const { data: randomGameIds, error: randomError } = await supabase.rpc('get_random_games', {
             game_count: gamesPerPage
           });
 
           if (!randomError && randomGameIds && randomGameIds.length > 0) {
-            // Use the random IDs to filter the query - no platform restriction
+            // Use the random IDs to filter the query (platform restriction already applied above)
             query = query.in('id', randomGameIds.map(g => g.id));
           } else {
-            // Fallback to all games with limited results
+            // Fallback to approved platform games with limited results
             query = query.limit(gamesPerPage);
           }
         } catch (error) {
-          // Fallback to all games with limited results
+          // Fallback to approved platform games with limited results
           query = query.limit(gamesPerPage);
         }
       }
@@ -844,8 +1178,10 @@ const GamesBrowser: React.FC = () => {
                     <Input
                       placeholder="Search games by name and press Enter..."
                       value={searchInput}
-                      onChange={(e) => setSearchInput(e.target.value)}
+                      onChange={(e) => handleSearchInputChange(e.target.value)}
                       onKeyPress={handleSearchKeyPress}
+                      onFocus={() => searchInput.length >= 2 && searchSuggestions.length > 0 && setShowSuggestions(true)}
+                      onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                       className={`pl-10 ${searchLoading ? 'pr-16' : 'pr-10'}`}
                       disabled={searchLoading}
                     />
@@ -858,15 +1194,50 @@ const GamesBrowser: React.FC = () => {
                         ✕
                       </button>
                     )}
-                    {searchLoading && (
+                    {(searchLoading || suggestionLoading) && (
                       <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                         <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
                       </div>
                     )}
+
+                    {/* Search Suggestions Dropdown */}
+                    <AutocompleteDropdown
+                      suggestions={searchSuggestions}
+                      isOpen={showSuggestions}
+                      onSelect={handleSuggestionSelect}
+                      loading={suggestionLoading}
+                    />
                   </div>
                   {filters.search && (
                     <div className="text-xs text-blue-600 mt-1">
                       Searching for: "{filters.search}"
+                    </div>
+                  )}
+
+                  {/* Platform-specific search hints */}
+                  {!filters.search && filters.platform !== 'all' && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      {(() => {
+                        const platformHints = {
+                          'Nintendo Entertainment System': 'Try: "super mario", "zelda", "metroid", "mega man"',
+                          'Super Nintendo Entertainment System': 'Try: "donkey kong country", "f-zero", "chrono trigger"',
+                          'Sega Genesis': 'Try: "sonic", "streets of rage", "golden axe"',
+                          'Nintendo Game Boy': 'Try: "tetris", "pokemon", "metroid ii"',
+                          'Sony PlayStation': 'Try: "final fantasy", "resident evil", "metal gear"',
+                          'Sony PlayStation 2': 'Try: "grand theft auto", "god of war", "shadow of the colossus"',
+                          'Arcade': 'Try: "street fighter", "pac-man", "donkey kong", "galaga"',
+                          'Nintendo 64': 'Try: "goldeneye", "mario kart 64", "ocarina of time"',
+                          'Nintendo GameCube': 'Try: "wind waker", "metroid prime", "smash bros melee"'
+                        };
+                        return platformHints[filters.platform] || `Popular on ${filters.platform}: Try searching for classic titles`;
+                      })()}
+                    </div>
+                  )}
+
+                  {/* General search tips */}
+                  {!filters.search && filters.platform === 'all' && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      💡 Tip: Try "mario", "sonic", "zelda", or use abbreviations like "sf" for Street Fighter
                     </div>
                   )}
                 </div>
@@ -1165,7 +1536,7 @@ const GamesBrowser: React.FC = () => {
 
             <CardHeader className="pb-3 pt-4">
               <div className="flex items-start justify-between">
-                <CardTitle className="text-lg leading-tight">{game.name}</CardTitle>
+                <CardTitle className="text-lg leading-tight">{decodeHtmlEntities(game.name)}</CardTitle>
               </div>
             </CardHeader>
 
@@ -1456,7 +1827,7 @@ const GamesBrowser: React.FC = () => {
 
                     <CardHeader className="pb-3 pt-4">
                       <div className="flex items-start justify-between">
-                        <CardTitle className="text-lg leading-tight">{game.name}</CardTitle>
+                        <CardTitle className="text-lg leading-tight">{decodeHtmlEntities(game.name)}</CardTitle>
                       </div>
                     </CardHeader>
 
