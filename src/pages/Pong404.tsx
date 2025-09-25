@@ -103,6 +103,7 @@ export const Pong404: React.FC = () => {
   });
 
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
+  const [localTestMode, setLocalTestMode] = useState(false);
 
   const [gameState, setGameState] = useState<GameState>({
     ball: {
@@ -570,6 +571,21 @@ export const Pong404: React.FC = () => {
         case 'arrowdown':
           setKeys(prev => ({ ...prev, down: true }));
           break;
+        case 'a':
+          if (localTestMode) {
+            setKeys(prev => ({ ...prev, w: true }));
+          }
+          break;
+        case 'd':
+          if (localTestMode) {
+            setKeys(prev => ({ ...prev, s: true }));
+          }
+          break;
+        case 'l':
+          e.preventDefault();
+          setLocalTestMode(prev => !prev);
+          console.log('Local test mode:', !localTestMode ? 'ON (A/D = left paddle, ↑/↓ = right paddle)' : 'OFF');
+          break;
         case ' ':
           e.preventDefault();
 
@@ -658,6 +674,16 @@ export const Pong404: React.FC = () => {
         case 'arrowdown':
           setKeys(prev => ({ ...prev, down: false }));
           break;
+        case 'a':
+          if (localTestMode) {
+            setKeys(prev => ({ ...prev, w: false }));
+          }
+          break;
+        case 'd':
+          if (localTestMode) {
+            setKeys(prev => ({ ...prev, s: false }));
+          }
+          break;
       }
     };
 
@@ -729,8 +755,8 @@ export const Pong404: React.FC = () => {
         newState.paddles.right.y += newState.paddles.right.velocity;
         newState.paddles.right.y = Math.max(12, Math.min(canvasSize.height - 12 - newState.paddles.right.height, newState.paddles.right.y));
       } else if (newState.gameMode === 'multiplayer') {
-        // Multiplayer controls (only the paddle assigned to this player)
-        if (multiplayerState.playerSide === 'left') {
+        // Multiplayer controls (only the paddle assigned to this player, unless in local test mode)
+        if (multiplayerState.playerSide === 'left' || localTestMode) {
           const oldY = newState.paddles.left.y;
 
           // Smooth left paddle movement for multiplayer (using W/S keys)
@@ -747,10 +773,11 @@ export const Pong404: React.FC = () => {
           newState.paddles.left.y += newState.paddles.left.velocity;
           newState.paddles.left.y = Math.max(12, Math.min(canvasSize.height - 12 - newState.paddles.left.height, newState.paddles.left.y));
 
-          if (Math.abs(newState.paddles.left.y - oldY) > 2.0) {
+          if (Math.abs(newState.paddles.left.y - oldY) > 2.0 && !localTestMode) {
             updatePaddlePosition('left', newState.paddles.left.y);
           }
-        } else if (multiplayerState.playerSide === 'right') {
+        }
+        if (multiplayerState.playerSide === 'right' || localTestMode) {
           const oldY = newState.paddles.right.y;
 
           // Smooth right paddle movement for multiplayer
@@ -767,7 +794,7 @@ export const Pong404: React.FC = () => {
           newState.paddles.right.y += newState.paddles.right.velocity;
           newState.paddles.right.y = Math.max(12, Math.min(canvasSize.height - 12 - newState.paddles.right.height, newState.paddles.right.y));
 
-          if (Math.abs(newState.paddles.right.y - oldY) > 2.0) {
+          if (Math.abs(newState.paddles.right.y - oldY) > 2.0 && !localTestMode) {
             updatePaddlePosition('right', newState.paddles.right.y);
           }
         }
@@ -1241,7 +1268,7 @@ export const Pong404: React.FC = () => {
 
       return newState;
     });
-  }, [keys, playBeep, canvasSize, multiplayerState.isGameMaster, updateMultiplayerGameState]);
+  }, [keys, playBeep, canvasSize, multiplayerState.isGameMaster, updateMultiplayerGameState, localTestMode]);
 
   // Render game
   const render = useCallback(() => {
@@ -1390,8 +1417,16 @@ export const Pong404: React.FC = () => {
           ctx.fillText(playerSideText, canvasSize.width / 2, canvasSize.height - 60);
 
           if (multiplayerState.playerSide !== 'spectator') {
-            const controls = multiplayerState.playerSide === 'left' ? 'W/S keys' : '↑/↓ arrows';
+            const controls = localTestMode
+              ? 'A/D = left paddle, ↑/↓ = right paddle'
+              : multiplayerState.playerSide === 'left' ? 'W/S keys' : '↑/↓ arrows';
             ctx.fillText(`Controls: ${controls}`, canvasSize.width / 2, canvasSize.height - 40);
+          }
+
+          if (localTestMode) {
+            ctx.fillText('LOCAL TEST MODE - Press L to toggle', canvasSize.width / 2, canvasSize.height - 20);
+          } else {
+            ctx.fillText('Press L for local test mode', canvasSize.width / 2, canvasSize.height - 20);
           }
         } else {
           ctx.fillText('CONNECTING...', canvasSize.width / 2, canvasSize.height - 60);
@@ -1438,7 +1473,7 @@ export const Pong404: React.FC = () => {
       renderDecrunchEffect(ctx, canvasSize, targetColor, progress);
     }
 
-  }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart]);
+  }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode]);
 
   // C64-style decrunch effect renderer - only affects foreground elements
   const renderDecrunchEffect = useCallback((ctx: CanvasRenderingContext2D, canvasSize: { width: number; height: number }, targetColor: string, progress: number) => {
