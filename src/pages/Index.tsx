@@ -12,11 +12,8 @@ import QRCodeDisplay from "@/components/QRCodeDisplay";
 import DynamicOverallLeaderboard from "@/components/DynamicOverallLeaderboard";
 import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import TournamentDropdown from "@/components/TournamentDropdown";
-import ManualRefreshButton from "@/components/ManualRefreshButton";
 import { useTournament } from "@/contexts/TournamentContext";
-import { usePerformanceMode } from "@/hooks/usePerformanceMode";
 import { dlog } from "@/lib/debug";
-import CompetitionStatus from "@/components/CompetitionStatus";
 import pacmanLogo from "@/assets/pacman-logo.png";
 import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 import tetrisLogo from "@/assets/tetris-logo.png";
@@ -57,7 +54,6 @@ interface IndexProps {
 const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   // Clean index page with single navigation via Layout component
   const { currentTournament, loading: tournamentLoading } = useTournament();
-  const { isPerformanceMode } = usePerformanceMode();
 
   // Check if animations should be suppressed (during tests)
   const [suppressAnimations, setSuppressAnimations] = useState(
@@ -312,20 +308,6 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
 
           {/* Right column - Game content (5 games) */}
           <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-5 flex flex-col'} overflow-visible`}>
-            {/* Competition Status and Controls */}
-            <div className={`mb-4 flex-shrink-0 ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? '0ms' : '100ms')}}>
-              {/* Competition Status */}
-              <div className="status-bar-stable mb-2" data-testid="competition-status">
-                <CompetitionStatus />
-              </div>
-
-              {/* Controls Bar */}
-              <div className="flex items-center justify-end gap-2">
-                {!isPerformanceMode && (
-                  <ManualRefreshButton onRefresh={refetch} />
-                )}
-              </div>
-            </div>
 
             <div className={`${isMobile ? 'flex flex-col space-y-6' : 'grid gap-2 flex-1 min-h-0'}`} style={{
               overflow: 'visible',

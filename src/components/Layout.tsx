@@ -16,6 +16,7 @@ interface LayoutProps {
     hideFullscreenButton?: boolean;
     centerNav?: boolean;
     rightActions?: React.ReactNode;
+    leftActions?: React.ReactNode;
     onShowRules?: () => void;
     hideRulesButton?: boolean;
   };

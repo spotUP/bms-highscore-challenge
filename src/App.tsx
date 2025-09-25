@@ -19,6 +19,10 @@ import { ScoreNotificationsListener } from "@/components/ScoreNotification";
 import Layout from "@/components/Layout";
 import Index from "./pages/Index";
 import CompetitionRulesModal from "@/components/CompetitionRulesModal";
+import CompetitionStatus from "@/components/CompetitionStatus";
+import ManualRefreshButton from "@/components/ManualRefreshButton";
+import { usePerformanceMode } from "@/hooks/usePerformanceMode";
+import { useTournamentGameData } from "@/hooks/useTournamentGameData";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import { WelcomeModal } from "@/components/WelcomeModal";
 import InteractiveHelpGuide from "@/components/InteractiveHelpGuide";
@@ -48,10 +52,20 @@ const queryClient = new QueryClient();
 // Wrapper component for Index page with rules modal
 const IndexWithRules = ({ isExiting }: { isExiting?: boolean }) => {
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
+  const { isPerformanceMode } = usePerformanceMode();
+  const { refetch } = useTournamentGameData();
 
   return (
     <Layout topNavProps={{
-      onShowRules: () => setIsRulesModalOpen(true)
+      onShowRules: () => setIsRulesModalOpen(true),
+      leftActions: (
+        <div className="flex items-center gap-2">
+          <CompetitionStatus />
+          {!isPerformanceMode && (
+            <ManualRefreshButton onRefresh={refetch} />
+          )}
+        </div>
+      )
     }}>
       <Index isExiting={isExiting} />
       <CompetitionRulesModal
