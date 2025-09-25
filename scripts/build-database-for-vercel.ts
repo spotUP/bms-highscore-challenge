@@ -30,7 +30,6 @@ async function buildDatabaseForVercel() {
         id INTEGER PRIMARY KEY,
         name TEXT NOT NULL,
         platform_name TEXT,
-        logo_base64 TEXT,
         launchbox_id INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -49,7 +48,7 @@ async function buildDatabaseForVercel() {
     while (true) {
       const { data: games, error } = await supabase
         .from('games_database')
-        .select('id, name, platform_name, logo_base64, launchbox_id, created_at, updated_at')
+        .select('id, name, platform_name, launchbox_id, created_at, updated_at')
         .range(offset, offset + batchSize - 1)
         .order('id');
 
@@ -64,8 +63,8 @@ async function buildDatabaseForVercel() {
 
       // Insert batch into SQLite
       const insert = db.prepare(`
-        INSERT OR REPLACE INTO games (id, name, platform_name, logo_base64, launchbox_id, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO games (id, name, platform_name, launchbox_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
       `);
 
       const insertMany = db.transaction((gamesBatch: any[]) => {
@@ -74,7 +73,6 @@ async function buildDatabaseForVercel() {
             game.id,
             game.name,
             game.platform_name,
-            game.logo_base64,
             game.launchbox_id,
             game.created_at,
             game.updated_at
