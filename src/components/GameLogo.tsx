@@ -85,13 +85,12 @@ export const GameLogo: React.FC<GameLogoProps> = ({
       setError(false);
 
       try {
-        // Get Clear Logo from local SQLite database
+        // Get Clear Logo from Cloudflare R2
         const logoMap = await clearLogoService.getClearLogosForGames([gameName]);
-        const base64Logo = logoMap[gameName];
+        const logoDataUrl = logoMap[gameName];
 
-        if (base64Logo) {
-          const dataUrl = `data:image/png;base64,${base64Logo}`;
-          setLogoUrl(dataUrl);
+        if (logoDataUrl) {
+          setLogoUrl(logoDataUrl);
         } else {
           setError(true);
         }
