@@ -15,22 +15,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                    process.env.VITE_CLOUDFLARE_R2_DOMAIN ||
                    'pub-1a84b69be18749cc982661f2fd3478b2.r2.dev'; // Fallback to correct domain
 
-  if (!r2Domain) {
-    console.error('❌ R2 domain not configured in environment variables');
-    return res.status(500).json({ error: 'R2 domain not configured' });
-  }
-
-  console.log(`🔗 Using R2 domain: ${r2Domain}`);
+  console.log(`🔍 Environment check:`);
+  console.log(`   - CLOUDFLARE_R2_DOMAIN: ${process.env.CLOUDFLARE_R2_DOMAIN || 'undefined'}`);
+  console.log(`   - VITE_CLOUDFLARE_R2_DOMAIN: ${process.env.VITE_CLOUDFLARE_R2_DOMAIN || 'undefined'}`);
+  console.log(`   - Using R2 domain: ${r2Domain}`);
 
   const logoUrl = `https://${r2Domain}/clear-logos/${filename}`;
 
   try {
     console.log(`🖼️ Proxying logo request: ${filename}`);
+    console.log(`🌐 Full URL: ${logoUrl}`);
 
     const response = await fetch(logoUrl);
 
     if (!response.ok) {
-      console.log(`❌ Logo not found: ${filename} (${response.status})`);
+      console.log(`❌ Logo not found: ${filename} (${response.status} ${response.statusText})`);
+      console.log(`❌ Response headers:`, Object.fromEntries(response.headers.entries()));
       return res.status(404).json({ error: 'Logo not found' });
     }
 
