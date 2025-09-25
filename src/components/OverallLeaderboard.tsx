@@ -101,7 +101,6 @@ const OverallLeaderboard = React.memo(() => {
                     className="font-bold font-arcade text-xs animated-gradient-vertical flex-shrink-0"
               >
                 {formatScore(player.total_ranking_points)}
-                  </div>
               </div>
             </div>
           ))}

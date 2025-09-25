@@ -58,19 +58,15 @@ const LeaderItem = React.memo(({
             {player.achievement_count}a
           </div>
         )}
-          {type === 'achievement' && (
-            <div className="text-xs text-gray-400">
-              {player.achievement_count} achievement{player.achievement_count !== 1 ? 's' : ''}
-            </div>
-          )}
-        </div>
+      </div>
+      {type === 'standard' && (
         <div
-          className={`font-bold font-arcade text-base ${gradientClass}`}
+          className={`font-bold font-arcade text-xs ${gradientClass} flex-shrink-0`}
           style={{ '--wave-delay': `${waveDelay}s` } as React.CSSProperties}
         >
-          {type === 'demolition' ? formatScore(player.score) : formatScore(player.total_ranking_points || 0)}
+          {formatScore(player.total_ranking_points || 0)}
         </div>
-      </div>
+      )}
     </div>
   );
 });

@@ -362,7 +362,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                     onClick={() => handleGameLogoClick(game)}
                     title={`Click to submit score for ${game.name}`}
                   >
-                      <CardHeader className="pb-1 pt-2">
+                      <CardHeader className="py-1">
                         {/* Game logo inside card header */}
                         <div className="flex justify-center">
                           <div className="transition-transform duration-200">
@@ -372,28 +372,28 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                                   bucket={storageRef.bucket}
                                   path={storageRef.path}
                                   alt={game.name}
-                                  className="h-32 md:h-40 w-auto object-contain max-w-full"
+                                  className="h-24 md:h-32 w-auto object-contain max-w-full"
                                   expiresIn={300}
                                 />
                               ) : (
                                 <img
                                   src={logoUrl}
                                   alt={game.name}
-                                  className="h-32 md:h-40 w-auto object-contain max-w-full"
+                                  className="h-24 md:h-32 w-auto object-contain max-w-full"
                                 />
                               )
                             ) : (
-                              <div className="h-32 md:h-40 flex items-center justify-center bg-black/30 rounded-lg px-4 min-w-[300px]">
-                                <span className="text-white font-bold text-center text-xl">{game.name}</span>
+                              <div className="h-24 md:h-32 flex items-center justify-center bg-black/30 rounded-lg px-4 min-w-[200px]">
+                                <span className="text-white font-bold text-center text-lg">{game.name}</span>
                               </div>
                             )}
                           </div>
                         </div>
                       </CardHeader>
-                      <CardContent className="flex-1 flex flex-col pt-1 min-h-0">
+                      <CardContent className="flex-1 flex flex-col pt-0 min-h-0">
                         {/* Scores section - scrollable with constrained height */}
                         <div className="flex-1 overflow-y-auto min-h-0">
-                          <div className="space-y-2 leaderboard-gradient-scope">
+                          <div className="space-y-1 leaderboard-gradient-scope">
                             {filtered.map((score, index) => (
                               <LeaderboardEntry
                                 key={score.id}
