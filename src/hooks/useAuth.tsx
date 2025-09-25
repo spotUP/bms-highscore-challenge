@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase, setRememberMe } from '@/integrations/supabase/client';
+import { useNetworkStatus } from './useNetworkStatus';
 
 interface AuthContextType {
   user: User | null;
@@ -26,41 +27,123 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
   });
+  const isOnline = useNetworkStatus();
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
+    let mounted = true;
+
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (!mounted) return;
+
+        console.log('Auth state change:', event, session?.user?.email || 'no user');
+
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
 
-        // Check if user is admin (defer to prevent deadlock)
-        if (session?.user) {
-          setTimeout(() => {
-            checkAdminRole(session.user.id);
-          }, 100);
-        } else {
+        // Handle session events
+        if (event === 'SIGNED_OUT') {
           setIsAdmin(false);
+          try { localStorage.removeItem('rr_isAdmin'); } catch {}
+        } else if (event === 'TOKEN_REFRESHED') {
+          console.log('Token refreshed successfully');
+        } else if (event === 'SIGNED_IN' || (event === 'TOKEN_REFRESHED' && session?.user)) {
+          // Check admin role for sign-in or successful token refresh
+          setTimeout(() => {
+            if (mounted && session?.user) {
+              checkAdminRole(session.user.id);
+            }
+          }, 100);
         }
       }
     );
 
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-      
-      if (session?.user) {
-        setTimeout(() => {
-          checkAdminRole(session.user.id);
-        }, 100);
-      }
-    });
+    // Check for existing session with better error handling
+    const initializeSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
 
-    return () => subscription.unsubscribe();
+        if (!mounted) return;
+
+        if (error) {
+          console.error('Error getting session:', error);
+          // Try to recover by refreshing session if we have refresh token
+          try {
+            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+            if (!refreshError && refreshData?.session && mounted) {
+              setSession(refreshData.session);
+              setUser(refreshData.session.user);
+              setTimeout(() => {
+                if (mounted) checkAdminRole(refreshData.session.user.id);
+              }, 100);
+            }
+          } catch (refreshErr) {
+            console.error('Session recovery failed:', refreshErr);
+          }
+        } else {
+          setSession(session);
+          setUser(session?.user ?? null);
+
+          if (session?.user) {
+            setTimeout(() => {
+              if (mounted) checkAdminRole(session.user.id);
+            }, 100);
+          }
+        }
+      } catch (err) {
+        console.error('Session initialization failed:', err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    initializeSession();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
+
+  // Network reconnection effect - try to recover session when coming back online
+  useEffect(() => {
+    if (!isOnline || user) return; // Don't retry if offline or already signed in
+
+    const attemptSessionRecovery = async () => {
+      if (retryCount < 3) { // Limit retries
+        console.log(`Attempting session recovery (attempt ${retryCount + 1})`);
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession();
+          if (!error && session && !user) {
+            console.log('Session recovered after network reconnection');
+            setSession(session);
+            setUser(session.user);
+            if (session.user) {
+              setTimeout(() => checkAdminRole(session.user.id), 100);
+            }
+            setRetryCount(0); // Reset on success
+          }
+        } catch (err) {
+          console.error('Session recovery failed:', err);
+          setRetryCount(prev => prev + 1);
+        }
+      }
+    };
+
+    // Wait a moment after coming online to attempt recovery
+    const timer = setTimeout(attemptSessionRecovery, 1000);
+    return () => clearTimeout(timer);
+  }, [isOnline, user, retryCount]);
+
+  // Reset retry count when user signs in successfully
+  useEffect(() => {
+    if (user) {
+      setRetryCount(0);
+    }
+  }, [user]);
 
   const checkAdminRole = async (userId: string) => {
     try {
@@ -102,6 +185,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (email: string, password: string, remember: boolean = true) => {
     // Persist preference before sign-in so Supabase stores tokens in the desired storage
     setRememberMe(remember);
+
+    // If offline, return a helpful error
+    if (!isOnline) {
+      return {
+        error: {
+          message: "No internet connection. Please check your network and try again."
+        }
+      };
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,

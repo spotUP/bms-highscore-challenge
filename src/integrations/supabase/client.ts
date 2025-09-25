@@ -24,7 +24,25 @@ const dynamicStorage = {
   getItem(key: string) {
     try {
       const remember = localStorage.getItem(REMEMBER_ME_KEY) !== 'false';
-      return (remember ? localStorage : sessionStorage).getItem(key);
+      const storage = remember ? localStorage : sessionStorage;
+
+      // Try primary storage first
+      let value = storage.getItem(key);
+
+      // If not found and we're looking for auth tokens, check the other storage
+      // This helps with session recovery when users change devices/browsers
+      if (!value && key.startsWith('sb-')) {
+        const fallbackStorage = remember ? sessionStorage : localStorage;
+        value = fallbackStorage.getItem(key);
+
+        // If found in fallback, migrate it to correct storage
+        if (value) {
+          storage.setItem(key, value);
+          fallbackStorage.removeItem(key);
+        }
+      }
+
+      return value;
     } catch {
       return null;
     }
@@ -32,7 +50,16 @@ const dynamicStorage = {
   setItem(key: string, value: string) {
     try {
       const remember = localStorage.getItem(REMEMBER_ME_KEY) !== 'false';
-      (remember ? localStorage : sessionStorage).setItem(key, value);
+      const storage = remember ? localStorage : sessionStorage;
+
+      // Set in primary storage
+      storage.setItem(key, value);
+
+      // For auth tokens, also clean up from the opposite storage to prevent conflicts
+      if (key.startsWith('sb-')) {
+        const oppositeStorage = remember ? sessionStorage : localStorage;
+        oppositeStorage.removeItem(key);
+      }
     } catch {
       // ignore write errors
     }
@@ -88,13 +115,16 @@ const mockClient = {
   })
 };
 
-export const supabase = (missingUrl || missingKey) 
+export const supabase = (missingUrl || missingKey)
   ? mockClient as any
   : createClient<Database>(SUPABASE_URL!, SUPABASE_PUBLISHABLE_KEY!, {
       auth: {
         storage: dynamicStorage,
         persistSession: true,
         autoRefreshToken: true,
+        detectSessionInUrl: true,
+        // Improve session recovery with longer grace period
+        refreshThreshold: 60, // Refresh tokens 60 seconds before expiry
       }
     });
 
