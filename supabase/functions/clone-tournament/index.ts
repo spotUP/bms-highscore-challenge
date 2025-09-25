@@ -141,6 +141,7 @@ serve(async (req) => {
     }
     console.log(`Found ${games?.length || 0} games to clone.`);
 
+    let gameIdMapping: Record<string, string> = {};
     if (games && games.length > 0) {
       const gameRows = games.map((g) => ({
         name: g.name,
@@ -151,14 +152,83 @@ serve(async (req) => {
         tournament_id: newTournamentId,
       }));
       console.log('Inserting new game rows...');
-      const { error: insGamesErr } = await supabase
+      const { data: insertedGames, error: insGamesErr } = await supabase
         .from('games')
-        .insert(gameRows);
+        .insert(gameRows)
+        .select('id, name');
       if (insGamesErr) {
         console.error('Error inserting new games:', insGamesErr);
         return new Response(JSON.stringify({ error: insGamesErr.message }), { status: 400, headers: corsHeaders });
       }
       console.log('Games cloned successfully.');
+
+      // Create mapping between old and new game IDs based on game names
+      if (insertedGames && insertedGames.length > 0) {
+        console.log('Creating game ID mapping...');
+        const { data: originalGames, error: origGamesErr } = await supabase
+          .from('games')
+          .select('id, name')
+          .eq('tournament_id', sourceTournamentId);
+
+        if (origGamesErr) {
+          console.error('Error fetching original games for mapping:', origGamesErr);
+        } else {
+          // Create mapping: original_game_id -> new_game_id
+          originalGames?.forEach(originalGame => {
+            const matchingNewGame = insertedGames.find(newGame => newGame.name === originalGame.name);
+            if (matchingNewGame) {
+              gameIdMapping[originalGame.id] = matchingNewGame.id;
+            }
+          });
+          console.log('Game ID mapping created:', gameIdMapping);
+        }
+      }
+    }
+
+    // Clone scores: copy scores and map them to new game IDs
+    if (Object.keys(gameIdMapping).length > 0) {
+      console.log(`Cloning scores from source tournament ${sourceTournamentId}...`);
+      const { data: scores, error: scoresErr } = await supabase
+        .from('scores')
+        .select('player_name, score, game_id, created_at')
+        .eq('tournament_id', sourceTournamentId);
+
+      if (scoresErr) {
+        console.error('Error fetching scores from source tournament:', scoresErr);
+        // Don't fail the entire clone operation if scores can't be fetched
+        console.log('Continuing without score cloning due to error');
+      }
+
+      console.log(`Found ${scores?.length || 0} scores to clone.`);
+
+      if (scores && scores.length > 0) {
+        // Filter scores that have matching games in our mapping
+        const scoreRows = scores
+          .filter(score => gameIdMapping[score.game_id]) // Only clone scores for games we cloned
+          .map((score) => ({
+            player_name: score.player_name,
+            score: score.score,
+            game_id: gameIdMapping[score.game_id], // Map to new game ID
+            tournament_id: newTournamentId,
+            created_at: score.created_at, // Preserve original timestamp
+          }));
+
+        if (scoreRows.length > 0) {
+          console.log(`Inserting ${scoreRows.length} score rows...`);
+          const { error: insScoresErr } = await supabase
+            .from('scores')
+            .insert(scoreRows);
+
+          if (insScoresErr) {
+            console.error('Error inserting new scores:', insScoresErr);
+            console.log('Continuing without score cloning due to insertion error');
+          } else {
+            console.log('Scores cloned successfully.');
+          }
+        } else {
+          console.log('No scores to clone (no matching games found).');
+        }
+      }
     }
 
     console.log('Clone process completed successfully.');

@@ -18,6 +18,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { deleteScoreWithAchievementCleanup } from "@/utils/achievementUtils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, Trash2, Plus, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy, Zap, RotateCcw, Maximize, Palette } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
@@ -1215,6 +1217,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
   const [isTournamentEditOpen, setIsTournamentEditOpen] = useState(false);
   const [isCreateTournamentOpen, setIsCreateTournamentOpen] = useState(false);
   const [isSuggestGamesOpen, setIsSuggestGamesOpen] = useState(false);
+  const [cloneDialogOpen, setCloneDialogOpen] = useState<string | null>(null);
   const [scoreFormData, setScoreFormData] = useState({
     player_name: "",
     score: ""
@@ -1710,18 +1713,13 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
 
   const confirmDeleteScore = async () => {
     try {
-      const { error } = await supabase
-        .from('scores')
-        .delete()
-        .eq('id', deleteScoreDialog.scoreId);
+      await deleteScoreWithAchievementCleanup(deleteScoreDialog.scoreId);
 
-      if (error) throw error;
-      
       toast({
         title: "Success",
-        description: "Score deleted successfully"
+        description: "Score deleted successfully (including achievement cleanup)"
       });
-      
+
       loadGames(); // Reload to refresh scores
       setDeleteScoreDialog({ open: false, scoreId: '' });
     } catch (error) {
@@ -2134,26 +2132,31 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
               <CardContent>
                 <div className="space-y-4">
                   <div className="text-sm text-gray-300 mb-4">You have access to {userTournaments.length} highscore tournament{userTournaments.length !== 1 ? 's' : ''}.</div>
-                  <div className="grid gap-4">
+                  <Accordion type="single" defaultValue={currentTournament?.id} collapsible className="w-full">
                     {userTournaments.map((tournament) => (
-                      <div key={tournament.id} className="p-4 bg-black/30 rounded-lg border border-white/10">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <h4 className="font-semibold text-white">{tournament.name}</h4>
-                              {tournament.id === currentTournament?.id && (<span className="px-2 py-1 text-xs bg-arcade-neonCyan text-black rounded">Current</span>)}
-                              {tournament.is_public ? (<div title="Public Highscore Tournament"><Globe className="w-4 h-4 text-green-400" /></div>) : (<div title="Private Highscore Tournament"><Lock className="w-4 h-4 text-yellow-400" /></div>)}
-                            </div>
-                            <p className="text-sm text-gray-400 mb-1 truncate">Slug: /t/{tournament.slug}</p>
-                            {tournament.description && (<p className="text-sm text-gray-300 break-words">{tournament.description}</p>)}
-                            <p className="text-xs text-gray-500">Created: {new Date(tournament.created_at).toLocaleDateString()}</p>
+                      <AccordionItem key={tournament.id} value={tournament.id} className="border-white/10">
+                        <AccordionTrigger className="p-4 bg-black/30 rounded-t-lg border border-white/10 border-b-0 hover:bg-black/40 data-[state=open]:rounded-b-none">
+                          <div className="flex items-center gap-2 flex-wrap w-full text-left">
+                            <h4 className="font-semibold text-white">{tournament.name}</h4>
+                            {tournament.id === currentTournament?.id && (<span className="px-2 py-1 text-xs bg-arcade-neonCyan text-black rounded">Current</span>)}
+                            {tournament.is_public ? (<div title="Public Highscore Tournament"><Globe className="w-4 h-4 text-green-400" /></div>) : (<div title="Private Highscore Tournament"><Lock className="w-4 h-4 text-yellow-400" /></div>)}
+                            <span className="text-sm text-gray-400">({games.filter(g => g.tournament_id === tournament.id).length} games)</span>
                           </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="p-0 max-h-[500px] overflow-y-auto">
+                          <div className="p-4 bg-black/30 rounded-b-lg border border-white/10 border-t-0">
+                            <div className="flex items-start justify-between gap-4 mb-3">
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-gray-400 mb-1 truncate">Slug: /t/{tournament.slug}</p>
+                                {tournament.description && (<p className="text-sm text-gray-300 break-words">{tournament.description}</p>)}
+                                <p className="text-xs text-gray-500">Created: {new Date(tournament.created_at).toLocaleDateString()}</p>
+                              </div>
                           <div className="flex gap-3 items-center shrink-0">
-                            <Dialog>
+                            <Dialog open={cloneDialogOpen === tournament.id} onOpenChange={(open) => setCloneDialogOpen(open ? tournament.id : null)}>
                               <DialogTrigger asChild>
                                 <Button size="sm" variant="outline" title="Clone"><Copy className="w-4 h-4" /></Button>
                               </DialogTrigger>
-                              <DialogContent className="bg-gray-900 text-white border-white/20">
+                              <DialogContent className="bg-gray-900 text-white border-white/20 max-h-[90vh] overflow-y-auto">
                                 <DialogHeader><DialogTitle>Clone Highscore Tournament</DialogTitle></DialogHeader>
                                 <div className="space-y-4">
                                   <div><Label className="text-white">Source Tournament</Label><Input value={tournament.name} disabled className="bg-black/50 border-white/20 text-white" /></div>
@@ -2161,8 +2164,8 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                   <div><Label className="text-white">New Slug</Label><Input id={`clone-slug-${tournament.id}`} defaultValue={`${tournament.slug}-copy-${generateRandomString(4)}`} className="bg-black/50 border-white/20 text-white" /></div>
                                   <div className="flex items-center space-x-2"><Switch id={`clone-public-${tournament.id}`} defaultChecked={tournament.is_public} /><Label htmlFor={`clone-public-${tournament.id}`}>Make Public</Label></div>
                                   <div className="flex justify-end space-x-2 pt-4">
-                                    <Button variant="outline" onClick={() => {}}>Cancel</Button>
-                                    <Button onClick={async () => { const nameEl = document.getElementById(`clone-name-${tournament.id}`) as HTMLInputElement; const slugEl = document.getElementById(`clone-slug-${tournament.id}`) as HTMLInputElement; const pubEl = document.getElementById(`clone-public-${tournament.id}`) as HTMLInputElement; const name = nameEl?.value?.trim() || `${tournament.name} (Copy)`; const slug = slugEl?.value?.trim() || `${tournament.slug}-${generateRandomString(4)}`; const isPublic = !!pubEl?.checked; const created = await cloneTournament(tournament.id, { name, slug, is_public: isPublic }); if (created) { await refreshTournaments(); toast({ title: 'Success', description: `Cloned "${tournament.name}" as "${name}"` }); } }}>Clone Highscore Tournament</Button>
+                                    <Button variant="outline" onClick={() => setCloneDialogOpen(null)}>Cancel</Button>
+                                    <Button onClick={async () => { const nameEl = document.getElementById(`clone-name-${tournament.id}`) as HTMLInputElement; const slugEl = document.getElementById(`clone-slug-${tournament.id}`) as HTMLInputElement; const pubEl = document.getElementById(`clone-public-${tournament.id}`) as HTMLInputElement; const name = nameEl?.value?.trim() || `${tournament.name} (Copy)`; const slug = slugEl?.value?.trim() || `${tournament.slug}-${generateRandomString(4)}`; const isPublic = !!pubEl?.checked; const created = await cloneTournament(tournament.id, { name, slug, is_public: isPublic }); if (created) { await refreshTournaments(); setCloneDialogOpen(null); toast({ title: 'Success', description: `Cloned "${tournament.name}" as "${name}"` }); } }}>Clone Highscore Tournament</Button>
                                   </div>
                                 </div>
                               </DialogContent>
@@ -2190,7 +2193,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                           </div>
                           {/* Bulk actions removed */}
 
-                          <div className="overflow-x-auto">
+                          <div className="overflow-x-auto max-h-96 overflow-y-auto">
                             <Table className="w-full table-fixed">
                               <TableHeader>
                                 <TableRow className="border-white/10 sticky top-0 bg-gray-900 z-10">
@@ -2315,10 +2318,12 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                               </TableBody>
                             </Table>
                           </div>
-                        </div>
-                      </div>
+                            </div>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
                     ))}
-                  </div>
+                  </Accordion>
                 </div>
               </CardContent>
             </Card>
@@ -2468,13 +2473,13 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
 
         {/* Shared Add/Edit Game Dialog */}
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="bg-gray-900 text-white border-white/20 max-w-2xl w-[95vw] max-h-[90vh] overflow-hidden mx-auto">
+          <DialogContent className="bg-gray-900 text-white border-white/20 max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto mx-auto">
             <DialogHeader>
               <DialogTitle className="text-lg font-semibold break-words">
                 {editingGame ? 'Edit Game' : 'Add New Game'}
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-4 overflow-y-auto max-h-[70vh] px-1">
+            <div className="space-y-4 px-1">
               <div className="w-full">
                 <Label htmlFor="name">Game Name *</Label>
                 <Input
@@ -2537,7 +2542,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
 
         {/* Edit Tournament Dialog */}
         <Dialog open={isTournamentEditOpen} onOpenChange={setIsTournamentEditOpen}>
-          <DialogContent className="bg-gray-900 text-white border-white/20 max-w-lg">
+          <DialogContent className="bg-gray-900 text-white border-white/20 max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Tournament</DialogTitle>
             </DialogHeader>

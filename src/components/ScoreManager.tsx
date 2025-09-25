@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import { formatScore } from '@/lib/utils';
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { deleteScoreWithAchievementCleanup } from "@/utils/achievementUtils";
 
 interface Score {
   id: string;
@@ -356,16 +357,11 @@ const ScoreManager = () => {
     const idToDelete = scoreId || deleteDialog.id;
     if (!idToDelete) return;
     try {
-      const { error } = await supabase
-        .from('scores')
-        .delete()
-        .eq('id', idToDelete);
-
-      if (error) throw error;
+      await deleteScoreWithAchievementCleanup(idToDelete);
 
       toast({
         title: "Success",
-        description: "Score deleted successfully"
+        description: "Score deleted successfully (including achievement cleanup)"
       });
 
       if (!scoreId) {
