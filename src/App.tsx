@@ -23,6 +23,7 @@ import CompetitionStatus from "@/components/CompetitionStatus";
 import ManualRefreshButton from "@/components/ManualRefreshButton";
 import { usePerformanceMode } from "@/hooks/usePerformanceMode";
 import { useTournamentGameData } from "@/hooks/useTournamentGameData";
+import { useIsMobile } from "@/hooks/use-mobile";
 import PerformanceMonitor from "@/components/PerformanceMonitor";
 import { WelcomeModal } from "@/components/WelcomeModal";
 import InteractiveHelpGuide from "@/components/InteractiveHelpGuide";
@@ -54,18 +55,19 @@ const IndexWithRules = ({ isExiting }: { isExiting?: boolean }) => {
   const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
   const { isPerformanceMode } = usePerformanceMode();
   const { refetch } = useTournamentGameData();
+  const isMobile = useIsMobile();
 
   return (
     <Layout topNavProps={{
       onShowRules: () => setIsRulesModalOpen(true),
-      leftActions: (
+      leftActions: !isMobile ? (
         <div className="flex items-center gap-2">
           <CompetitionStatus />
           {!isPerformanceMode && (
             <ManualRefreshButton onRefresh={refetch} />
           )}
         </div>
-      )
+      ) : undefined
     }}>
       <Index isExiting={isExiting} />
       <CompetitionRulesModal
