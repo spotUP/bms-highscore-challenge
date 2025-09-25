@@ -109,20 +109,20 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
           </div>
         </div>
       ) : (
-        <div className="flex items-center">
+        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-0">
           <h1
-            className="text-3xl md:text-4xl font-bold animated-gradient leading-tight pl-4 cursor-pointer hover:opacity-80 transition-opacity"
+            className="text-3xl md:text-4xl font-bold animated-gradient leading-tight pl-4 cursor-pointer hover:opacity-80 transition-opacity text-center md:text-left"
             onClick={handleLogoClick}
           >
             Retro Ranks
           </h1>
-          <div className="ml-auto flex items-center">
+          <div className="md:ml-auto flex items-center justify-center">
             <div
-              className="flex gap-4 items-center whitespace-nowrap flex-shrink-0 flex-none flex-nowrap min-w-max"
+              className="flex gap-2 md:gap-4 items-center whitespace-nowrap flex-shrink-0 flex-none flex-nowrap min-w-max"
               style={{ width: 'max-content' }}
             >
               <div
-                className="font-arcade font-bold text-lg animated-gradient whitespace-nowrap text-center"
+                className="font-arcade font-bold text-base md:text-lg animated-gradient whitespace-nowrap text-center"
                 style={{
                   minWidth: 96, // enough for 00:00:00 in this font size
                   fontVariantNumeric: 'tabular-nums',
@@ -138,7 +138,7 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
                   second: '2-digit'
                 })}
               </div>
-              <TournamentDropdown />
+              {!hideTournamentSelector && <TournamentDropdown />}
               <SmartMenu
                 animatedNavigate={finalAnimatedNavigate}
                 onShowRules={onShowRules}
