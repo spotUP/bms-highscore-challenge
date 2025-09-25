@@ -61,12 +61,12 @@ const IndexWithRules = ({ isExiting }: { isExiting?: boolean }) => {
     <Layout topNavProps={{
       onShowRules: () => setIsRulesModalOpen(true),
       leftActions: !isMobile ? (
-        <>
+        <div className="flex items-center gap-4" style={{ lineHeight: '1.2' }}>
           <CompetitionStatus />
           {!isPerformanceMode && (
             <ManualRefreshButton onRefresh={refetch} />
           )}
-        </>
+        </div>
       ) : undefined
     }}>
       <Index isExiting={isExiting} />
