@@ -22,6 +22,10 @@ export default defineConfig(({ mode }) => ({
       plugins: mode === 'production' ? [] : undefined,
     }),
   ],
+  esbuild: {
+    // Remove console logs and debugger statements in production
+    drop: mode === 'production' ? ['console', 'debugger'] : [],
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -30,8 +34,8 @@ export default defineConfig(({ mode }) => ({
   // Optimized build configuration for Raspberry Pi 5
   build: {
     chunkSizeWarningLimit: 1000,
-    // Disable minification to prevent chart initialization issues
-    minify: false,
+    // Enable minification in production (console logs already stripped by esbuild)
+    minify: mode === 'production' ? 'esbuild' : false,
     // Optimize for modern browsers (Pi 5 runs modern Chromium)
     target: 'es2020',
     // Better source maps for production
