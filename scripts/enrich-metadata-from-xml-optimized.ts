@@ -33,20 +33,38 @@ function parseGenres(genresString?: string): string[] | null {
   return genresString.split(';').map(g => g.trim()).filter(g => g.length > 0);
 }
 
-async function enrichMetadataFromXML() {
+async function enrichMetadataFromXMLOptimized() {
   const failedGames: Array<{launchboxId: number, name: string, error: string, updateData: any}> = [];
 
   try {
-    console.log('🚀 Enriching metadata from LaunchBox XML in memory-efficient chunks...\\n');
+    console.log('🚀 Optimized metadata enrichment from LaunchBox XML...\n');
 
-    // Parse XML in streaming chunks to avoid memory issues
-    console.log('📖 Reading LaunchBox XML file...');
+    // Step 1: Pre-load LaunchBox IDs we actually need
+    console.log('📊 Loading LaunchBox IDs from our database...');
+    const { data: existingGames, error: gamesError } = await supabase
+      .from('games_database')
+      .select('launchbox_id')
+      .not('launchbox_id', 'is', null);
+
+    if (gamesError) {
+      console.error('❌ Error loading existing games:', gamesError);
+      return;
+    }
+
+    const neededLaunchboxIds = new Set(
+      existingGames.map(game => game.launchbox_id.toString())
+    );
+
+    console.log(`✅ Loaded ${neededLaunchboxIds.size} LaunchBox IDs that need metadata`);
+    console.log(`🎯 Will skip ${169664 - neededLaunchboxIds.size} unnecessary XML entries (${(((169664 - neededLaunchboxIds.size) / 169664) * 100).toFixed(1)}% reduction)`);
+
+    // Step 2: Read and filter XML efficiently
+    console.log('\n📖 Reading LaunchBox XML file...');
     const xmlData = fs.readFileSync('Metadata.xml', 'utf8');
 
-    // Split XML into smaller chunks by processing games in batches
-    console.log('🔍 Extracting game entries from XML...');
+    console.log('🔍 Extracting and filtering game entries from XML...');
 
-    // Find all game entries using regex to avoid parsing entire XML
+    // Extract all game XML blocks
     const gameMatches = xmlData.match(/<Game>.*?<\/Game>/gs);
 
     if (!gameMatches) {
@@ -54,8 +72,24 @@ async function enrichMetadataFromXML() {
       return;
     }
 
-    console.log(`📊 Found ${gameMatches.length} game entries in XML`);
+    console.log(`📊 Found ${gameMatches.length} total game entries in XML`);
 
+    // Step 3: Pre-filter XML games by DatabaseID before parsing
+    console.log('⚡ Pre-filtering XML games by LaunchBox ID...');
+    const filteredGameXml: string[] = [];
+
+    for (const gameXml of gameMatches) {
+      // Quick regex check for DatabaseID without full XML parsing
+      const dbIdMatch = gameXml.match(/<DatabaseID>(\d+)<\/DatabaseID>/);
+      if (dbIdMatch && neededLaunchboxIds.has(dbIdMatch[1])) {
+        filteredGameXml.push(gameXml);
+      }
+    }
+
+    console.log(`✅ Filtered down to ${filteredGameXml.length} games that need metadata (${((filteredGameXml.length / gameMatches.length) * 100).toFixed(1)}% of original)`);
+    console.log(`🚀 Processing will be ${Math.round(gameMatches.length / filteredGameXml.length)}x faster!\n`);
+
+    // Step 4: Process only the filtered games
     const parser = new XMLParser({
       ignoreAttributes: false,
       parseAttributeValue: false,
@@ -66,10 +100,10 @@ async function enrichMetadataFromXML() {
     let processed = 0;
     let updated = 0;
 
-    console.log('\\n📥 Processing XML games in batches...');
+    console.log('📥 Processing filtered XML games in batches...');
 
-    for (let i = 0; i < gameMatches.length; i += BATCH_SIZE) {
-      const batch = gameMatches.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < filteredGameXml.length; i += BATCH_SIZE) {
+      const batch = filteredGameXml.slice(i, i + BATCH_SIZE);
 
       // Parse this batch of games
       const parsedGames: LaunchBoxGame[] = [];
@@ -130,16 +164,17 @@ async function enrichMetadataFromXML() {
       }
 
       processed += batch.length;
-      const progress = ((processed / gameMatches.length) * 100).toFixed(1);
-      console.log(`📈 Progress: ${processed}/${gameMatches.length} games processed (${progress}%) - ${updated} updated`);
+      const progress = ((processed / filteredGameXml.length) * 100).toFixed(1);
+      console.log(`📈 Progress: ${processed}/${filteredGameXml.length} relevant games processed (${progress}%) - ${updated} updated`);
 
       // Small delay to avoid overwhelming the database
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 50)); // Shorter delay since we're processing fewer games
     }
 
-    console.log(`\\n🎉 Metadata enrichment completed!`);
-    console.log(`📊 Total XML games processed: ${processed}`);
+    console.log(`\n🎉 Optimized metadata enrichment completed!`);
+    console.log(`📊 Total relevant XML games processed: ${processed}`);
     console.log(`📊 Games updated with metadata: ${updated}`);
+    console.log(`⚡ Efficiency: Skipped ${gameMatches.length - filteredGameXml.length} irrelevant games`);
 
     // Verify some updated records
     const { data: sampleGames, error: sampleError } = await supabase
@@ -149,7 +184,7 @@ async function enrichMetadataFromXML() {
       .limit(5);
 
     if (!sampleError && sampleGames && sampleGames.length > 0) {
-      console.log('\\n🎮 Sample updated games with metadata:');
+      console.log('\n🎮 Sample updated games with metadata:');
       sampleGames.forEach((game, index) => {
         const rating = game.community_rating ? `${game.community_rating}/10` : 'No rating';
         const dev = game.developer || 'Unknown developer';
@@ -161,29 +196,17 @@ async function enrichMetadataFromXML() {
         console.log(`    Overview: ${overview}`);
         console.log('');
       });
-    } else {
-      console.log('\\n⚠️ No games found with updated metadata - checking if updates were applied...');
-
-      // Check total count of games with any metadata
-      const { count: enrichedCount, error: countError } = await supabase
-        .from('games_database')
-        .select('*', { count: 'exact', head: true })
-        .or('overview.not.is.null,developer.not.is.null,community_rating.not.is.null');
-
-      if (!countError) {
-        console.log(`📊 Games with some metadata: ${enrichedCount}`);
-      }
     }
 
     // Save failed games to file for retry later
     if (failedGames.length > 0) {
-      const failedGamesFile = 'failed-games-enrichment.json';
+      const failedGamesFile = 'failed-games-enrichment-optimized.json';
       fs.writeFileSync(failedGamesFile, JSON.stringify(failedGames, null, 2));
-      console.log(`\\n⚠️  ${failedGames.length} games failed to update due to network/server errors`);
+      console.log(`\n⚠️  ${failedGames.length} games failed to update due to network/server errors`);
       console.log(`📄 Failed games saved to: ${failedGamesFile}`);
       console.log(`🔄 You can retry these later with: npx tsx scripts/retry-failed-enrichment.ts`);
     } else {
-      console.log(`\\n✅ All games were successfully enriched with no failures!`);
+      console.log(`\n✅ All games were successfully enriched with no failures!`);
     }
 
   } catch (error) {
@@ -191,11 +214,11 @@ async function enrichMetadataFromXML() {
 
     // Save failed games even if script crashes
     if (failedGames.length > 0) {
-      const failedGamesFile = 'failed-games-enrichment.json';
+      const failedGamesFile = 'failed-games-enrichment-optimized.json';
       fs.writeFileSync(failedGamesFile, JSON.stringify(failedGames, null, 2));
       console.log(`📄 Failed games saved to: ${failedGamesFile}`);
     }
   }
 }
 
-enrichMetadataFromXML().catch(console.error);
+enrichMetadataFromXMLOptimized().catch(console.error);

@@ -96,8 +96,22 @@ function getClearLogoStats(): ClearLogoStats | null {
 
     db.close();
 
+    // Try to read total from checkpoint file (more accurate)
+    let totalTarget = 31202; // Default fallback
+    const checkpointPath = path.join(process.cwd(), 'clear-logo-checkpoint.json');
+    if (existsSync(checkpointPath)) {
+      try {
+        const checkpointData = JSON.parse(require('fs').readFileSync(checkpointPath, 'utf-8'));
+        if (checkpointData.totalLogos) {
+          totalTarget = checkpointData.totalLogos;
+        }
+      } catch (error) {
+        // Fallback to default if checkpoint can't be read
+      }
+    }
+
     return {
-      totalLogos: 109202, // Known from the importer
+      totalLogos: totalTarget,
       processed: totalResult.count,
       successfulLogos: totalResult.count,
       failedLogos: 0, // SQLite only stores successful ones
@@ -220,7 +234,7 @@ async function main() {
   initializeSplitScreen();
 
   let samples: Array<{ count: number; time: number }> = [];
-  const SAMPLE_WINDOW = 30; // Keep 30 seconds of samples
+  const SAMPLE_WINDOW = 5; // Keep 5 seconds of samples (very responsive)
 
   // Monitor loop
   setInterval(() => {
@@ -235,20 +249,35 @@ async function main() {
     const currentTime = Date.now();
     samples.push({ count: stats.processed, time: currentTime });
 
-    // Keep only recent samples (30 seconds)
+    // Keep only recent samples
     samples = samples.filter(sample => currentTime - sample.time <= SAMPLE_WINDOW * 1000);
 
-    // Calculate average speed over the sample window
+    // Calculate speed - use shorter window for more responsiveness
     if (samples.length >= 2) {
-      const oldestSample = samples[0];
-      const newestSample = samples[samples.length - 1];
-      const timeDiff = (newestSample.time - oldestSample.time) / 1000;
-      const countDiff = newestSample.count - oldestSample.count;
+      // Use last 5 seconds for immediate responsiveness, or all samples if less
+      const recentSamples = samples.filter(sample => currentTime - sample.time <= 5000);
+      if (recentSamples.length >= 2) {
+        const oldestRecent = recentSamples[0];
+        const newestRecent = recentSamples[recentSamples.length - 1];
+        const timeDiff = (newestRecent.time - oldestRecent.time) / 1000;
+        const countDiff = newestRecent.count - oldestRecent.count;
 
-      if (timeDiff > 0) {
-        stats.logosPerSecond = countDiff / timeDiff;
+        if (timeDiff > 0 && countDiff > 0) {
+          stats.logosPerSecond = countDiff / timeDiff;
+        } else {
+          // Fallback to longer window
+          const oldestSample = samples[0];
+          const newestSample = samples[samples.length - 1];
+          const longTimeDiff = (newestSample.time - oldestSample.time) / 1000;
+          const longCountDiff = newestSample.count - oldestSample.count;
+          stats.logosPerSecond = longTimeDiff > 0 ? longCountDiff / longTimeDiff : 0;
+        }
       } else {
-        stats.logosPerSecond = 0;
+        const oldestSample = samples[0];
+        const newestSample = samples[samples.length - 1];
+        const timeDiff = (newestSample.time - oldestSample.time) / 1000;
+        const countDiff = newestSample.count - oldestSample.count;
+        stats.logosPerSecond = timeDiff > 0 ? countDiff / timeDiff : 0;
       }
     } else {
       stats.logosPerSecond = 0;
@@ -265,15 +294,15 @@ async function main() {
       return;
     }
 
-  }, 1000); // Update every second
+  }, 200); // Update every 200ms (5 times per second) for real-time feel
 
-  // Show detailed stats every 10 seconds
+  // Show detailed stats every 5 seconds (more frequent)
   setInterval(() => {
     const stats = getClearLogoStats();
     if (stats && stats.processed < stats.totalLogos) {
       showStats(stats);
     }
-  }, 10000);
+  }, 5000);
 
   // Cleanup on exit
   process.on('SIGINT', () => {

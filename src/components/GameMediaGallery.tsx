@@ -138,7 +138,7 @@ const MediaLightbox: React.FC<MediaLightboxProps> = ({
             <div className="w-full max-w-[90vw] max-h-[85vh] flex items-center justify-center">
               {currentItem.embedId ? (
                 <iframe
-                  src={'https://www.youtube.com/embed/' + currentItem.embedId + '?autoplay=1&rel=0'}
+                  src={`https://www.youtube.com/embed/${currentItem.embedId}?autoplay=1&rel=0&mute=0`}
                   className="w-full h-full aspect-video rounded-lg"
                   style={{ minHeight: '60vh', maxHeight: '85vh' }}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -149,7 +149,6 @@ const MediaLightbox: React.FC<MediaLightboxProps> = ({
                   src={currentItem.url}
                   controls
                   autoPlay
-                  muted
                   className="w-full h-full max-h-[85vh] rounded-lg object-contain"
                 />
               )}
@@ -160,6 +159,9 @@ const MediaLightbox: React.FC<MediaLightboxProps> = ({
                 src={currentItem.url}
                 alt={`Screenshot ${currentIndex + 1}`}
                 className="w-full h-full max-w-full max-h-[85vh] object-contain rounded-lg"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
               />
             </div>
           )}
@@ -168,26 +170,16 @@ const MediaLightbox: React.FC<MediaLightboxProps> = ({
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black bg-opacity-60 text-white text-sm px-4 py-2 rounded-full flex items-center gap-2">
             {isVideo ? <Play className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
             <span>{currentIndex + 1} / {media.length}</span>
-            {currentItem.source && (
-              <Badge variant="secondary" className="text-xs">
-                {currentItem.source}
-              </Badge>
-            )}
           </div>
 
-          {/* Source and actions */}
-          <div className="absolute top-4 left-4 flex items-center gap-2">
-            {currentItem.source && (
-              <Badge className="bg-black bg-opacity-60 text-white border-white border-opacity-20">
-                {currentItem.source.toUpperCase()}
-              </Badge>
-            )}
-            {isVideo && currentItem.title && (
+          {/* Video title */}
+          {isVideo && currentItem.title && (
+            <div className="absolute top-4 left-4 flex items-center gap-2">
               <Badge variant="outline" className="bg-black bg-opacity-60 text-white border-white border-opacity-20">
                 {currentItem.title}
               </Badge>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Thumbnail strip */}
@@ -247,6 +239,8 @@ export const GameMediaGallery: React.FC<GameMediaGalleryProps> = ({
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [autoPlayEnabled, setAutoPlayEnabled] = useState(true);
+  const [isPlayingVideo, setIsPlayingVideo] = useState(false);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
 
   useEffect(() => {
     const fetchMedia = async () => {
@@ -268,18 +262,45 @@ export const GameMediaGallery: React.FC<GameMediaGalleryProps> = ({
     fetchMedia();
   }, [gameName, platform, existingMedia]);
 
-  // Auto-play slideshow for featured screenshots
+  // Create unified media array (must be before early returns to maintain hook order)
+  const allMedia = gameMedia ? [...gameMedia.screenshots, ...gameMedia.videos] : [];
+  const screenshots = gameMedia ? gameMedia.screenshots.slice(0, 4) : [];
+  const videos = gameMedia ? gameMedia.videos.slice(0, 4) : [];
+  const unifiedMedia = [
+    ...screenshots.map(screenshot => ({ ...screenshot, type: 'screenshot' })),
+    ...videos.map(video => ({ ...video, type: 'video' }))
+  ];
+
+  // Auto-advance slideshow with special handling for videos
   useEffect(() => {
-    if (!gameMedia || gameMedia.screenshots.length <= 1 || !autoPlayEnabled) return;
+    if (!autoPlayEnabled || unifiedMedia.length <= 1) return;
 
-    const interval = setInterval(() => {
-      setCurrentSlideIndex((prevIndex) =>
-        (prevIndex + 1) % gameMedia.screenshots.length
-      );
-    }, 4000); // 4 seconds per slide
+    const currentMedia = unifiedMedia[currentSlideIndex];
+    const isVideo = currentMedia?.type === 'video';
 
-    return () => clearInterval(interval);
-  }, [gameMedia, autoPlayEnabled]);
+    // Different timing for videos vs images
+    let interval: NodeJS.Timeout;
+
+    if (isVideo) {
+      // For videos, wait longer to let them play fully
+      // YouTube videos get longer duration, direct videos get standard duration
+      const videoDuration = currentMedia.embedId ? 15000 : 8000; // 15s for YouTube, 8s for direct videos
+      interval = setTimeout(() => {
+        // After video finishes, go back to first image if at end, otherwise next
+        const nextIndex = currentSlideIndex === unifiedMedia.length - 1 ? 0 : currentSlideIndex + 1;
+        setCurrentSlideIndex(nextIndex);
+      }, videoDuration);
+    } else {
+      // For images, advance every 3 seconds
+      interval = setTimeout(() => {
+        setCurrentSlideIndex((prev) => (prev + 1) % unifiedMedia.length);
+      }, 3000);
+    }
+
+    return () => {
+      if (interval) clearTimeout(interval);
+    };
+  }, [currentSlideIndex, autoPlayEnabled, unifiedMedia]);
 
   if (loading) {
     return (
@@ -300,39 +321,9 @@ export const GameMediaGallery: React.FC<GameMediaGalleryProps> = ({
     );
   }
 
-  const allMedia = [...gameMedia.screenshots, ...gameMedia.videos];
-
-  // Mix media for unified display - limit to 4 screenshots and 4 videos max for better balance
-  const unifiedMedia = [];
-  const videos = gameMedia.videos.slice(0, 4); // Max 4 videos
-  const screenshots = gameMedia.screenshots.slice(0, 4); // Max 4 screenshots
-
-  // Add first few screenshots, then sprinkle in videos
-  let screenshotIndex = 0;
-  let videoIndex = 0;
-
-  // Priority pattern: screenshots first, but prioritize Supabase videos early
-  const maxItems = Math.min(8, screenshots.length + videos.length); // Max 8 total items for better preview
-  for (let i = 0; i < maxItems; i++) {
-    if (i < 3 && screenshotIndex < screenshots.length) {
-      // First 3 positions for screenshots
-      unifiedMedia.push({ ...screenshots[screenshotIndex], type: 'screenshot' });
-      screenshotIndex++;
-    } else if (videoIndex < videos.length && (videoIndex === 0 || i % 3 === 0)) {
-      // Add videos strategically: first video early (position 3), then every 3rd position
-      // Supabase videos will appear first since they're now at videos[0]
-      unifiedMedia.push({ ...videos[videoIndex], type: 'video' });
-      videoIndex++;
-    } else if (screenshotIndex < screenshots.length) {
-      // Fill remaining with screenshots
-      unifiedMedia.push({ ...screenshots[screenshotIndex], type: 'screenshot' });
-      screenshotIndex++;
-    } else if (videoIndex < videos.length) {
-      // Add remaining videos if screenshots are exhausted
-      unifiedMedia.push({ ...videos[videoIndex], type: 'video' });
-      videoIndex++;
-    }
-  }
+  // Count actual displayed media types
+  const actualDisplayedScreenshots = unifiedMedia.filter(media => media.type === 'screenshot').length;
+  const actualDisplayedVideos = unifiedMedia.filter(media => media.type === 'video').length;
 
   const openLightbox = (unifiedIndex: number) => {
     // Map unified index back to allMedia index for lightbox
@@ -366,15 +357,15 @@ export const GameMediaGallery: React.FC<GameMediaGalleryProps> = ({
       <div className="flex items-center gap-4 text-sm">
         <div className="flex items-center gap-1">
           <ImageIcon className="w-4 h-4" />
-          <span>{gameMedia.screenshots.length} Screenshots</span>
+          <span>{actualDisplayedScreenshots} Screenshot{actualDisplayedScreenshots !== 1 ? 's' : ''}</span>
         </div>
         <div className="flex items-center gap-1">
           <Play className="w-4 h-4" />
-          <span>{gameMedia.videos.length} Videos</span>
+          <span>{actualDisplayedVideos} Video{actualDisplayedVideos !== 1 ? 's' : ''}</span>
         </div>
-        {gameMedia.totalMediaCount > 0 && (
+        {unifiedMedia.length > 0 && (
           <Badge variant="secondary" className="text-xs">
-            {gameMedia.totalMediaCount} total items
+            {unifiedMedia.length} showing
           </Badge>
         )}
       </div>
@@ -385,25 +376,41 @@ export const GameMediaGallery: React.FC<GameMediaGalleryProps> = ({
           <h4 className="font-medium mb-3 flex items-center gap-2">
             Media Gallery
             <Badge variant="secondary" className="text-xs">
-              {gameMedia.totalMediaCount} items
+              {unifiedMedia.length} items
             </Badge>
           </h4>
 
           {/* Featured/Hero Media */}
           <div
-            className="relative group cursor-pointer rounded-lg overflow-hidden bg-muted mb-4"
+            className="relative group cursor-pointer rounded-lg overflow-hidden bg-black mb-4 aspect-video"
             onClick={() => openLightbox(currentSlideIndex)}
           >
             {unifiedMedia[currentSlideIndex]?.type === 'video' ? (
-              <div className="w-full min-h-64 max-h-96 relative">
-                <img
-                  src={unifiedMedia[currentSlideIndex].thumbnailUrl}
-                  alt={unifiedMedia[currentSlideIndex].title || `Video ${currentSlideIndex + 1}`}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-                <div className="absolute inset-0 bg-black bg-opacity-30 group-hover:bg-opacity-40 transition-colors duration-300 flex items-center justify-center">
-                  <div className="w-16 h-16 rounded-full bg-white bg-opacity-90 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="w-full h-full relative">
+                {unifiedMedia[currentSlideIndex].embedId ? (
+                  <iframe
+                    src={`https://www.youtube.com/embed/${unifiedMedia[currentSlideIndex].embedId}?autoplay=1&mute=1&controls=0&rel=0&loop=1&playlist=${unifiedMedia[currentSlideIndex].embedId}&modestbranding=1&showinfo=0`}
+                    className="w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                ) : (
+                  <video
+                    src={unifiedMedia[currentSlideIndex].url}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    className="w-full h-full object-contain bg-black"
+                    style={{ pointerEvents: 'none' }}
+                    onLoadedMetadata={(e) => {
+                      const video = e.currentTarget;
+                      setVideoDuration(video.duration);
+                    }}
+                  />
+                )}
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-colors duration-300 flex items-center justify-center">
+                  <div className="w-16 h-16 rounded-full bg-white bg-opacity-70 flex items-center justify-center group-hover:scale-110 transition-transform opacity-0 group-hover:opacity-100">
                     <Play className="w-8 h-8 text-black ml-1" />
                   </div>
                 </div>
@@ -412,9 +419,12 @@ export const GameMediaGallery: React.FC<GameMediaGalleryProps> = ({
               <img
                 src={unifiedMedia[currentSlideIndex]?.url}
                 alt={`Featured media ${currentSlideIndex + 1}`}
-                className="w-full min-h-64 max-h-96 object-contain bg-gray-900 group-hover:scale-105 transition-all duration-500"
+                className="w-full h-full object-contain bg-black group-hover:scale-105 transition-all duration-500"
                 loading="lazy"
                 key={currentSlideIndex}
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
               />
             )}
 
@@ -432,11 +442,6 @@ export const GameMediaGallery: React.FC<GameMediaGalleryProps> = ({
               {currentSlideIndex + 1} / {unifiedMedia.length}
             </div>
 
-            <div className="absolute top-2 left-2">
-              <Badge className="bg-black bg-opacity-60 text-white border-white border-opacity-20 text-xs">
-                {unifiedMedia[currentSlideIndex]?.source?.toUpperCase() || 'UNKNOWN'}
-              </Badge>
-            </div>
 
             {/* Slideshow indicators */}
             {unifiedMedia.length > 1 && (
@@ -478,6 +483,9 @@ export const GameMediaGallery: React.FC<GameMediaGalleryProps> = ({
                     alt={isVideo ? `Video ${index + 1}` : `Screenshot ${index + 1}`}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                     loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
                   />
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-black group-hover:bg-opacity-20 transition-colors duration-300" />
 
@@ -490,11 +498,6 @@ export const GameMediaGallery: React.FC<GameMediaGalleryProps> = ({
                     </div>
                   )}
 
-                  <div className="absolute bottom-1 right-1">
-                    <Badge className="bg-black bg-opacity-60 text-white text-xs">
-                      {media.source?.[0]?.toUpperCase() || '?'}
-                    </Badge>
-                  </div>
 
                   {currentSlideIndex === index && (
                     <div className="absolute top-1 left-1">

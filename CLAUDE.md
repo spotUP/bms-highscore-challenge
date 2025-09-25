@@ -6,3 +6,4 @@
 - LaunchBox provides daily database exports at:
   - https://gamesdb.launchbox-app.com/Metadata.zip (92MB, refreshed daily)
 - remember this process to import clear logos, in the future when i ask you to import clear logos use this process
+- remember to always start the logo proxy server in the background when starting/restarting the dev server

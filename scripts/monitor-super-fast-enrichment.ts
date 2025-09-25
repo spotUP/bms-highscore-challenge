@@ -59,77 +59,74 @@ function formatTime(seconds: number): string {
   }
 }
 
-async function showProgress() {
+async function monitorSuperFastEnrichment() {
   const startTime = Date.now();
-  const totalXMLGames = 169664; // Total games in LaunchBox XML
   const totalDatabaseGames = 31753; // Games with clear logos in our database
+  let lastEnrichedCount = 0;
+  let lastCheckTime = startTime;
 
   while (true) {
     try {
       clearScreen();
 
       // Header
-      console.log(`${colors.bright}${colors.blue}🔄 LAUNCHBOX XML PROCESSING PROGRESS${colors.reset}\n`);
+      console.log(`${colors.bright}${colors.magenta}⚡ SUPER FAST METADATA ENRICHMENT MONITOR${colors.reset}\n`);
 
-      // Get database games count (with cache-busting timestamp)
-      const cacheKey = Date.now();
+      // Get current enrichment status
       const { count: totalGames, error: totalError } = await supabase
         .from('games_database')
         .select('*', { count: 'exact', head: true })
-        .gte('id', 0); // Force fresh query
+        .gte('id', 0);
 
       if (totalError) {
         console.log(`${colors.red}❌ Error getting total games: ${totalError.message}${colors.reset}`);
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
         continue;
       }
 
-      // Get games with metadata (enriched) - force fresh query
+      // Get enriched games count
       const { count: enrichedGames, error: enrichedError } = await supabase
         .from('games_database')
         .select('*', { count: 'exact', head: true })
         .not('developer', 'is', null)
-        .gte('id', 0); // Force fresh query
+        .gte('id', 0);
 
       if (enrichedError) {
         console.log(`${colors.red}❌ Error getting enriched games: ${enrichedError.message}${colors.reset}`);
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
         continue;
       }
 
-      // Get games with video URLs count - force fresh query
+      // Get games with video URLs
       const { count: gamesWithVideos, error: videoError } = await supabase
         .from('games_database')
         .select('*', { count: 'exact', head: true })
         .not('video_url', 'is', null)
         .neq('video_url', '')
-        .gte('id', 0); // Force fresh query
+        .gte('id', 0);
 
       if (videoError) {
         console.log(`${colors.red}❌ Error getting games with videos: ${videoError.message}${colors.reset}`);
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await new Promise(resolve => setTimeout(resolve, 2000));
         continue;
       }
 
-      // Calculate progress percentages
-      const databaseEnrichmentPercentage = totalGames ? (enrichedGames / totalGames) * 100 : 0;
-
-      // Calculate XML processing progress more accurately
-      // The enrichment script processes XML games sequentially, updating matching database games
-      // If we have enriched X database games out of ~31,753 total, that corresponds to
-      // processing (X / 31,753) * 169,664 XML games (proportional processing)
-      const xmlProcessingRatio = totalDatabaseGames > 0 ? (enrichedGames / totalDatabaseGames) : 0;
-      const estimatedXMLProcessed = Math.round(xmlProcessingRatio * totalXMLGames);
-      const xmlProcessingPercentage = Math.min(100, (estimatedXMLProcessed / totalXMLGames) * 100);
-
+      // Calculate progress and rates
+      const enrichmentPercentage = totalGames ? (enrichedGames / totalGames) * 100 : 0;
+      const videoPercentage = totalGames ? (gamesWithVideos / totalGames) * 100 : 0;
       const remainingToEnrich = Math.max(0, totalGames - enrichedGames);
 
-      // Display progress bars
-      console.log(`${colors.bright}XML Processing Progress:${colors.reset}`);
-      console.log(createProgressBar(estimatedXMLProcessed, totalXMLGames, 60));
-      console.log('');
+      // Calculate real-time processing rate
+      const currentTime = Date.now();
+      const timeSinceLastCheck = (currentTime - lastCheckTime) / 1000;
+      const gamesSinceLastCheck = enrichedGames - lastEnrichedCount;
+      const currentRate = timeSinceLastCheck > 0 ? gamesSinceLastCheck / timeSinceLastCheck : 0;
 
-      console.log(`${colors.bright}Database Enrichment:${colors.reset}`);
+      lastEnrichedCount = enrichedGames;
+      lastCheckTime = currentTime;
+
+      // Display progress bars
+      console.log(`${colors.bright}Enrichment Progress:${colors.reset}`);
       console.log(createProgressBar(enrichedGames, totalGames, 60));
       console.log('');
 
@@ -137,35 +134,37 @@ async function showProgress() {
       console.log(createProgressBar(gamesWithVideos, Math.round(totalGames * 0.6), 60));
       console.log('');
 
-      // Display stats
+      // Display detailed stats
       console.log(`${colors.bright}Processing Statistics:${colors.reset}`);
-      console.log(`${colors.green}🔄 XML Games Processed:${colors.reset}   ${colors.bright}${formatNumber(estimatedXMLProcessed)}${colors.reset} / ${formatNumber(totalXMLGames)} (${xmlProcessingPercentage.toFixed(1)}%)`);
-      console.log(`${colors.blue}📚 Database Enriched:${colors.reset}    ${colors.bright}${formatNumber(enrichedGames)}${colors.reset} / ${formatNumber(totalGames)} (${databaseEnrichmentPercentage.toFixed(1)}%)`);
-      console.log(`${colors.magenta}🎬 Games with Videos:${colors.reset}    ${colors.bright}${formatNumber(gamesWithVideos)}${colors.reset}`);
-      console.log(`${colors.yellow}⏳ Remaining to Process:${colors.reset} ${colors.bright}${formatNumber(totalXMLGames - estimatedXMLProcessed)}${colors.reset}`);
+      console.log(`${colors.blue}📚 Database Games:${colors.reset}       ${colors.bright}${formatNumber(totalGames)}${colors.reset} total games with clear logos`);
+      console.log(`${colors.green}✅ Enriched Games:${colors.reset}       ${colors.bright}${formatNumber(enrichedGames)}${colors.reset} / ${formatNumber(totalGames)} (${enrichmentPercentage.toFixed(1)}%)`);
+      console.log(`${colors.magenta}🎬 Games with Videos:${colors.reset}    ${colors.bright}${formatNumber(gamesWithVideos)}${colors.reset} (${videoPercentage.toFixed(1)}%)`);
+      console.log(`${colors.yellow}⏳ Remaining:${colors.reset}            ${colors.bright}${formatNumber(remainingToEnrich)}${colors.reset} games need metadata`);
 
-      // Calculate elapsed time and estimated completion
+      // Calculate timing
       const elapsedSeconds = (Date.now() - startTime) / 1000;
       const elapsedTime = formatTime(elapsedSeconds);
 
       console.log('');
-      console.log(`${colors.bright}Timing:${colors.reset}`);
+      console.log(`${colors.bright}Performance Metrics:${colors.reset}`);
       console.log(`${colors.cyan}⏰ Elapsed Time:${colors.reset}         ${colors.bright}${elapsedTime}${colors.reset}`);
 
-      if (enrichedGames > 0 && xmlProcessingPercentage < 100) {
-        const rate = estimatedXMLProcessed / elapsedSeconds; // XML games per second
-        const remainingSeconds = (totalXMLGames - estimatedXMLProcessed) / rate;
-        const estimatedTime = formatTime(remainingSeconds);
-        console.log(`${colors.cyan}⏱️  Estimated Remaining:${colors.reset}    ${colors.bright}${estimatedTime}${colors.reset}`);
-        console.log(`${colors.dim}   Rate: ${rate.toFixed(1)} XML games/second${colors.reset}`);
+      if (currentRate > 0) {
+        console.log(`${colors.cyan}⚡ Current Rate:${colors.reset}         ${colors.bright}${currentRate.toFixed(1)} games/second${colors.reset}`);
       }
 
-      // Show recently enriched games - force fresh query
+      if (enrichedGames > 0 && remainingToEnrich > 0 && currentRate > 0) {
+        const estimatedSeconds = remainingToEnrich / currentRate;
+        const estimatedTime = formatTime(estimatedSeconds);
+        console.log(`${colors.cyan}⏱️  Estimated Remaining:${colors.reset}   ${colors.bright}${estimatedTime}${colors.reset}`);
+      }
+
+      // Show recently enriched games
       const { data: recentGames, error: recentError } = await supabase
         .from('games_database')
         .select('name, platform_name, developer, community_rating, video_url, updated_at')
         .not('developer', 'is', null)
-        .gte('id', 0) // Force fresh query
+        .gte('id', 0)
         .order('updated_at', { ascending: false })
         .limit(3);
 
@@ -182,38 +181,36 @@ async function showProgress() {
 
       // Status indicator
       console.log('');
-      if (xmlProcessingPercentage >= 99.5) {
-        console.log(`${colors.bgGreen}${colors.white} 🎉 XML PROCESSING COMPLETE! 🎉 ${colors.reset}`);
-      } else if (databaseEnrichmentPercentage >= 95) {
-        console.log(`${colors.bgYellow}${colors.white} 🔄 NEARLY COMPLETE - PROCESSING FINAL XML GAMES 🔄 ${colors.reset}`);
+      if (enrichmentPercentage >= 99.5) {
+        console.log(`${colors.bgGreen}${colors.white} 🎉 SUPER FAST ENRICHMENT COMPLETE! 🎉 ${colors.reset}`);
+        console.log(`${colors.green}${colors.bright}All games have been enriched with metadata at lightning speed!${colors.reset}`);
+        break;
+      } else if (enrichmentPercentage >= 95) {
+        console.log(`${colors.bgYellow}${colors.white} ⚡ NEARLY COMPLETE - FINAL GAMES PROCESSING ⚡ ${colors.reset}`);
+      } else if (currentRate > 50) {
+        console.log(`${colors.bgMagenta}${colors.white} 🚀 SUPER FAST MODE - HIGH SPEED PROCESSING 🚀 ${colors.reset}`);
       } else {
-        console.log(`${colors.bgBlue}${colors.white} 🔄 XML PROCESSING IN PROGRESS... 🔄 ${colors.reset}`);
+        console.log(`${colors.bgBlue}${colors.white} ⚡ FAST ENRICHMENT IN PROGRESS... ⚡ ${colors.reset}`);
       }
 
       console.log('');
-      console.log(`${colors.dim}Press Ctrl+C to exit | Refreshing every 5 seconds...${colors.reset}`);
+      console.log(`${colors.dim}Press Ctrl+C to exit | Refreshing every 2 seconds for fast updates...${colors.reset}`);
 
-      // Exit if complete
-      if (xmlProcessingPercentage >= 99.5) {
-        console.log(`${colors.green}${colors.bright}LaunchBox XML processing completed! All games have been enriched with metadata!${colors.reset}`);
-        break;
-      }
-
-      // Wait 5 seconds before next update
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      // Shorter refresh interval for fast processing
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
     } catch (error) {
-      console.log(`${colors.red}❌ Error: ${error}${colors.reset}`);
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      console.log(`${colors.red}❌ Monitor error: ${error}${colors.reset}`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
 }
 
 // Handle Ctrl+C gracefully
 process.on('SIGINT', () => {
-  console.log(`\n${colors.yellow}👋 Progress monitoring stopped.${colors.reset}`);
+  console.log(`\n${colors.yellow}👋 Super fast enrichment monitoring stopped.${colors.reset}`);
   process.exit(0);
 });
 
-console.log(`${colors.bright}${colors.cyan}Starting metadata enrichment progress monitor...${colors.reset}`);
-showProgress().catch(console.error);
+console.log(`${colors.bright}${colors.magenta}Starting super fast metadata enrichment monitor...${colors.reset}`);
+monitorSuperFastEnrichment().catch(console.error);

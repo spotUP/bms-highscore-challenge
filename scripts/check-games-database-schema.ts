@@ -1,37 +1,54 @@
+#!/usr/bin/env tsx
+
+import { config } from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
 
-dotenv.config();
+config();
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL!,
-  process.env.VITE_SUPABASE_SERVICE_ROLE_KEY!
-);
+const supabaseUrl = process.env.VITE_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-async function checkGamesSchema() {
-  console.log('🔍 Checking games_database table schema...');
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Try to fetch a few games to see what columns exist
-  const { data: sampleGames, error } = await supabase
-    .from('games_database')
-    .select('*')
-    .limit(3);
+async function checkSchema() {
+  try {
+    console.log('🔍 Checking games_database schema...\n');
 
-  if (error) {
-    console.error('❌ Error fetching sample games:', error);
-    return;
-  }
+    // Try to get a single row to see what fields are available
+    const { data, error } = await supabase
+      .from('games_database')
+      .select('*')
+      .limit(1);
 
-  if (sampleGames && sampleGames.length > 0) {
-    console.log('✅ Sample games data structure:');
-    console.log('Available columns:', Object.keys(sampleGames[0]));
-    console.log('\n📋 Sample data:');
-    sampleGames.forEach((game, index) => {
-      console.log(`Game ${index + 1}:`, game);
-    });
-  } else {
-    console.log('❌ No games found in database');
+    if (error) {
+      console.error('Error fetching from games_database:', error);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      console.log('📊 games_database is empty, checking with describe');
+
+      // Try to insert a dummy row to see what fields are expected
+      const { error: insertError } = await supabase
+        .from('games_database')
+        .insert([{ name: 'test' }]);
+
+      if (insertError) {
+        console.log('Schema validation error:', insertError.message);
+        console.log('Details:', insertError.details);
+      }
+
+    } else {
+      console.log('📋 Available fields in games_database:');
+      const fields = Object.keys(data[0]);
+      fields.forEach((field, index) => {
+        console.log(`   ${index + 1}. ${field}: ${typeof data[0][field]} = ${data[0][field]}`);
+      });
+    }
+
+  } catch (error) {
+    console.error('Schema check error:', error);
   }
 }
 
-checkGamesSchema().catch(console.error);
+checkSchema().catch(console.error);

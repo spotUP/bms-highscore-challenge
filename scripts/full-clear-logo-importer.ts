@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { createReadStream } from 'fs';
 import { createInterface } from 'readline';
+import sharp from 'sharp';
 
 interface ClearLogoEntry {
   databaseId: number;
@@ -20,10 +21,92 @@ interface ImportCheckpoint {
   timestamp: string;
 }
 
+// Only include these 62 mainstream platforms (final list)
+const INCLUDED_PLATFORMS = [
+  'Arcade',
+  'Atari Jaguar',
+  'Atari Jaguar CD',
+  'Atari Lynx',
+  'Atari ST',
+  'Bally Astrocade',
+  'Commodore 64',
+  'Commodore Amiga',
+  'Commodore Amiga CD32',
+  'Commodore CDTV',
+  'Fujitsu FM Towns Marty',
+  'MUGEN',
+  'Namco System 22',
+  'NEC PC-FX',
+  'NEC TurboGrafx-16',
+  'NEC TurboGrafx-CD',
+  'Nintendo 3DS',
+  'Nintendo 64',
+  'Nintendo 64DD',
+  'Nintendo Entertainment System',
+  'Nintendo Famicom Disk System',
+  'Nintendo Game & Watch',
+  'Nintendo Game Boy',
+  'Nintendo Game Boy Advance',
+  'Nintendo Game Boy Color',
+  'Nintendo GameCube',
+  'Nintendo Satellaview',
+  'Nintendo Wii U',
+  'OpenBOR',
+  'PC Engine SuperGrafx',
+  'Pinball',
+  'Sammy Atomiswave',
+  'Sega 32X',
+  'Sega CD',
+  'Sega CD 32X',
+  'Sega Dreamcast',
+  'Sega Game Gear',
+  'Sega Genesis',
+  'Sega Hikaru',
+  'Sega Master System',
+  'Sega Model 1',
+  'Sega Model 2',
+  'Sega Model 3',
+  'Sega Naomi',
+  'Sega Naomi 2',
+  'Sega Saturn',
+  'Sega SC-3000',
+  'Sega SG-1000',
+  'Sega ST-V',
+  'Sega System 16',
+  'Sega System 32',
+  'Sega Triforce',
+  'Sharp X68000',
+  'SNK Neo Geo AES',
+  'SNK Neo Geo CD',
+  'SNK Neo Geo MVS',
+  'SNK Neo Geo Pocket',
+  'SNK Neo Geo Pocket Color',
+  'Super Nintendo Entertainment System',
+  'Taito Type X',
+  'WonderSwan',
+  'WonderSwan Color'
+];
+
+// Exclude games with these genres (not suitable for highscore competitions)
+const EXCLUDED_GENRES = [
+  'Board Game',
+  'Casino',
+  'Compilation',
+  'Education',
+  'Life Simulation',
+  'Music',
+  'Party',
+  'Quiz',
+  'Role-Playing',
+  'Strategy',
+  'Visual Novel'
+];
+
 interface GameEntry {
   databaseId: number;
   name: string;
   platform: string;
+  genres?: string[];
 }
 
 class FullClearLogoImporter {
@@ -92,6 +175,8 @@ class FullClearLogoImporter {
     let inGameImage = false;
     let currentImage: Partial<ClearLogoEntry> | null = null;
     let lineCount = 0;
+    let platformFilteredCount = 0;
+    let genreFilteredCount = 0;
 
     for await (const line of rl) {
       lineCount++;
@@ -108,7 +193,19 @@ class FullClearLogoImporter {
         currentGame = {};
       } else if (trimmedLine === '</Game>' && inGame) {
         if (currentGame?.databaseId && currentGame.name && currentGame.platform) {
-          this.games.set(currentGame.databaseId, currentGame as GameEntry);
+          // Only include mainstream platforms
+          if (INCLUDED_PLATFORMS.includes(currentGame.platform)) {
+            platformFilteredCount++;
+            // Check if game has any excluded genres
+            const hasExcludedGenre = currentGame.genres && currentGame.genres.length > 0 &&
+              currentGame.genres.some(genre => EXCLUDED_GENRES.includes(genre));
+
+            if (hasExcludedGenre) {
+              genreFilteredCount++;
+            } else {
+              this.games.set(currentGame.databaseId, currentGame as GameEntry);
+            }
+          }
         }
         inGame = false;
         currentGame = null;
@@ -127,6 +224,17 @@ class FullClearLogoImporter {
           const match = trimmedLine.match(/<Platform>(.*?)<\/Platform>/);
           if (match && currentGame) {
             currentGame.platform = match[1];
+          }
+        } else if (trimmedLine.includes('<Genres>') && trimmedLine.includes('</Genres>')) {
+          const match = trimmedLine.match(/<Genres>(.*?)<\/Genres>/);
+          if (match && currentGame) {
+            if (match[1].trim()) {
+              // Split genres by semicolon and clean them up
+              currentGame.genres = match[1].split(';').map(g => g.trim()).filter(g => g);
+            } else {
+              // Empty genres tag
+              currentGame.genres = [];
+            }
           }
         }
       }
@@ -168,9 +276,41 @@ class FullClearLogoImporter {
     }
 
     console.log(`✅ Parsed ${lineCount.toLocaleString()} lines`);
-    console.log(`🎮 Found ${this.games.size.toLocaleString()} games`);
+    console.log(`🏆 Platform filter: ${platformFilteredCount.toLocaleString()} games passed platform filter`);
+    console.log(`🚫 Genre filter: ${genreFilteredCount.toLocaleString()} games excluded by genre filter`);
+    console.log(`🎮 Found ${this.games.size.toLocaleString()} games (after platform and genre filtering)`);
     console.log(`🖼️ Found ${this.clearLogos.length.toLocaleString()} Clear Logo entries`);
+
+    // Filter Clear Logo entries to only include games from allowed platforms and genres
+    const originalLogoCount = this.clearLogos.length;
+    this.clearLogos = this.clearLogos.filter(logo => this.games.has(logo.databaseId));
+    console.log(`🔍 Filtered to ${this.clearLogos.length.toLocaleString()} Clear Logo entries for mainstream platforms and allowed genres`);
+    console.log(`📉 Excluded ${(originalLogoCount - this.clearLogos.length).toLocaleString()} logos from removed platforms and excluded genres`);
+
+    // Further deduplication: Keep only one logo per game (prefer Global region, then any region)
+    const filteredLogoCount = this.clearLogos.length;
+    const bestLogoPerGame = new Map<number, ClearLogoEntry>();
+
+    for (const logo of this.clearLogos) {
+      const existing = bestLogoPerGame.get(logo.databaseId);
+      if (!existing) {
+        bestLogoPerGame.set(logo.databaseId, logo);
+      } else {
+        // Prefer logos without region (global), then keep existing
+        if (!logo.region && existing.region) {
+          bestLogoPerGame.set(logo.databaseId, logo);
+        } else if (logo.region === 'Global' && existing.region !== 'Global' && existing.region) {
+          bestLogoPerGame.set(logo.databaseId, logo);
+        }
+        // Otherwise keep the existing one
+      }
+    }
+
+    this.clearLogos = Array.from(bestLogoPerGame.values());
+    console.log(`🎯 Deduplicated to ${this.clearLogos.length.toLocaleString()} unique Clear Logo entries (one per game)`);
+    console.log(`📉 Removed ${(filteredLogoCount - this.clearLogos.length).toLocaleString()} duplicate regional variants`);
   }
+
 
   private loadCheckpoint(): ImportCheckpoint | null {
     if (fs.existsSync(this.checkpointPath)) {
@@ -195,7 +335,7 @@ class FullClearLogoImporter {
     }
   }
 
-  private async downloadSingleLogo(databaseId: number, logo: ClearLogoEntry, game: GameEntry, insertStmt: any): Promise<{success: boolean, sizeKB?: number, error?: string}> {
+  private async downloadSingleLogo(databaseId: number, logo: ClearLogoEntry, game: GameEntry, insertStmt: any): Promise<{success: boolean, sizeKB?: number, originalSizeKB?: number, error?: string}> {
     try {
       const imageUrl = `https://images.launchbox-app.com/${logo.fileName}`;
 
@@ -207,9 +347,16 @@ class FullClearLogoImporter {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      const imageBuffer = await response.arrayBuffer();
-      const base64Image = Buffer.from(imageBuffer).toString('base64');
-      const sizeKB = Math.round(imageBuffer.byteLength / 1024);
+      const originalImageBuffer = await response.arrayBuffer();
+      const originalSizeKB = Math.round(originalImageBuffer.byteLength / 1024);
+
+      // Convert to WebP with faster processing (optimized for speed)
+      const webpBuffer = await sharp(Buffer.from(originalImageBuffer))
+        .webp({ quality: 80, effort: 2 }) // Lower effort for faster conversion
+        .toBuffer();
+
+      const base64Image = webpBuffer.toString('base64');
+      const sizeKB = Math.round(webpBuffer.byteLength / 1024);
 
       const result = insertStmt.run(
         databaseId,
@@ -220,7 +367,7 @@ class FullClearLogoImporter {
         logo.region || null
       );
 
-      return result.changes > 0 ? { success: true, sizeKB } : { success: false };
+      return result.changes > 0 ? { success: true, sizeKB, originalSizeKB } : { success: false };
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -240,6 +387,8 @@ class FullClearLogoImporter {
     let successCount = existingCheckpoint?.successCount || 0;
     let errorCount = existingCheckpoint?.errorCount || 0;
     let skippedCount = existingCheckpoint?.skippedCount || 0;
+    let totalOriginalSize = 0;
+    let totalCompressedSize = 0;
 
     // Group by database ID to pick best logo for each game
     const gameLogos = new Map<number, ClearLogoEntry>();
@@ -281,9 +430,9 @@ class FullClearLogoImporter {
     console.log(`🔄 ${remainingLogos.length} logos remaining to process`);
     console.log(`⚡ Using concurrent downloads with controlled rate limiting for faster processing`);
 
-    // Process in batches with controlled concurrency
-    const BATCH_SIZE = 5; // Number of concurrent downloads
-    const BATCH_DELAY = 250; // Delay between batches in ms
+    // Process in batches with controlled concurrency - optimized for speed
+    const BATCH_SIZE = 15; // Number of concurrent downloads (increased from 5)
+    const BATCH_DELAY = 100; // Delay between batches in ms (reduced from 250)
 
     for (let i = 0; i < remainingLogos.length; i += BATCH_SIZE) {
       const batch = remainingLogos.slice(i, i + BATCH_SIZE);
@@ -293,6 +442,11 @@ class FullClearLogoImporter {
         const game = this.games.get(databaseId);
         if (!game) {
           return { databaseId, result: { success: false, skipped: true } };
+        }
+
+        // Skip non-included platforms
+        if (!INCLUDED_PLATFORMS.includes(game.platform)) {
+          return { databaseId, result: { success: false, skipped: true, reason: 'Platform not in inclusion list' } };
         }
 
         const result = await this.downloadSingleLogo(databaseId, logo, game, insertStmt);
@@ -315,8 +469,12 @@ class FullClearLogoImporter {
 
           if (result.success && result.sizeKB) {
             successCount++;
+            if (result.originalSizeKB) totalOriginalSize += result.originalSizeKB;
+            if (result.sizeKB) totalCompressedSize += result.sizeKB;
+
             if (successCount % 50 === 0) {
-              console.log(`✅ ${game.name} (${game.platform}) - ${result.sizeKB}KB stored [${logo.region || 'Global'}]`);
+              const compressionRatio = result.originalSizeKB ? Math.round((1 - result.sizeKB / result.originalSizeKB) * 100) : 0;
+              console.log(`✅ ${game.name} (${game.platform}) - ${result.sizeKB}KB WebP (${compressionRatio}% smaller) [${logo.region || 'Global'}]`);
             }
           } else if (result.error) {
             errorCount++;
@@ -366,6 +524,13 @@ class FullClearLogoImporter {
     console.log(`❌ Errors: ${errorCount.toLocaleString()}`);
     console.log(`⚠️ Skipped: ${skippedCount.toLocaleString()}`);
     console.log(`📊 Total processed: ${totalGames.toLocaleString()}`);
+
+    if (totalOriginalSize > 0 && totalCompressedSize > 0) {
+      const overallCompressionRatio = Math.round((1 - totalCompressedSize / totalOriginalSize) * 100);
+      const savedMB = Math.round((totalOriginalSize - totalCompressedSize) / 1024);
+      console.log(`🗜️ WebP Compression: ${overallCompressionRatio}% smaller (saved ${savedMB.toLocaleString()}MB)`);
+      console.log(`📉 Original size: ${Math.round(totalOriginalSize / 1024).toLocaleString()}MB → Compressed: ${Math.round(totalCompressedSize / 1024).toLocaleString()}MB`);
+    }
 
     // Clean up checkpoint file on successful completion
     if (fs.existsSync(this.checkpointPath)) {
