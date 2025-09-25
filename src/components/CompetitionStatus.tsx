@@ -33,7 +33,7 @@ const CompetitionStatus: React.FC = () => {
   // Always render the full container to prevent layout shifts
   if (loading) {
     return (
-      <div className="bg-black/20 border border-white/20 rounded-lg p-4 backdrop-blur-sm status-bar-stable">
+      <div className="status-bar-stable">
         <div className="flex flex-wrap items-center gap-6 text-sm">
           <div className="flex items-center gap-2 text-gray-400">
             <div className="w-4 h-4 bg-gray-400/30 rounded animate-pulse"></div>
@@ -56,7 +56,7 @@ const CompetitionStatus: React.FC = () => {
 
   if (error) {
     return (
-      <div className="bg-black/20 border border-white/20 rounded-lg p-4 backdrop-blur-sm status-bar-stable">
+      <div className="status-bar-stable">
         <div className="flex flex-wrap items-center gap-6 text-sm">
           <div className="text-red-400 flex items-center gap-2">
             <Trophy className="w-4 h-4" />
@@ -192,7 +192,7 @@ const CompetitionStatus: React.FC = () => {
   };
 
   return (
-    <div className="bg-black/20 border border-white/20 rounded-lg p-4 backdrop-blur-sm status-bar-stable">
+    <div className="status-bar-stable">
       <div className="flex flex-wrap items-center justify-center gap-6 text-sm min-h-[2rem]">
         {competition ? (
           <>
