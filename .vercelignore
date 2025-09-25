@@ -1,8 +1,11 @@
-# Large database files
-*.db
+# Large database files (but allow optimized games.db)
+clear-logos.db
+logos-*.db
+dev-games.db
+games-index.db
 *.sqlite
 *.sqlite3
-games.db*
+production-*.db
 production-*.db
 *turbo-logos.db
 *turbo-progress.json
