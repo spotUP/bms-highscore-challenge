@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from "@/hooks/useAuth";
 import {
   Dialog,
   DialogContent,
@@ -77,6 +78,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
 }) => {
   const [enrichedGame, setEnrichedGame] = useState<Game | null>(game);
   const [isLoading, setIsLoading] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     if (!game || !isOpen) return;
@@ -128,7 +130,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
               {displayGame.name}
               {isLoading && <Loader2 className="w-5 h-5 animate-spin" />}
             </div>
-            {favoriteGameIds && toggleFavorite && (
+            {favoriteGameIds && toggleFavorite && user && (
               <button
                 className="p-2 transition-colors hover:bg-gray-100 rounded-full"
                 onClick={() => toggleFavorite(displayGame.id.toString())}

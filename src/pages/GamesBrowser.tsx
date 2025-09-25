@@ -1516,29 +1516,31 @@ const GamesBrowser: React.FC = () => {
                 );
               })()}
 
-              {/* Heart icon for favorites */}
-              <button
-                className="absolute top-2 left-2 z-10 p-1 transition-colors bg-black/20 rounded-full backdrop-blur-sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFavorite(game.id.toString());
-                }}
-              >
-                <div className="relative">
-                  <Heart
-                    className={`w-5 h-5 ${
-                      favoriteGameIds.has(game.id.toString())
-                        ? 'text-red-500 fill-red-500'
-                        : 'text-white'
-                    }`}
-                  />
-                  {pulsingHearts.has(game.id.toString()) && (
+              {/* Heart icon for favorites - only show for logged in users */}
+              {user && (
+                <button
+                  className="absolute top-2 left-2 z-10 p-1 transition-colors bg-black/20 rounded-full backdrop-blur-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFavorite(game.id.toString());
+                  }}
+                >
+                  <div className="relative">
                     <Heart
-                      className="absolute top-0 left-0 w-5 h-5 text-red-500 fill-red-500 heart-pulse pointer-events-none"
+                      className={`w-5 h-5 ${
+                        favoriteGameIds.has(game.id.toString())
+                          ? 'text-red-500 fill-red-500'
+                          : 'text-white'
+                      }`}
                     />
-                  )}
-                </div>
-              </button>
+                    {pulsingHearts.has(game.id.toString()) && (
+                      <Heart
+                        className="absolute top-0 left-0 w-5 h-5 text-red-500 fill-red-500 heart-pulse pointer-events-none"
+                      />
+                    )}
+                  </div>
+                </button>
+              )}
 
               {selectedGames.has(game.id) && (
                 <div className="absolute top-2 right-2">
@@ -1820,29 +1822,31 @@ const GamesBrowser: React.FC = () => {
                         );
                       })()}
 
-                      {/* Heart icon for favorites */}
-                      <button
-                        className="absolute top-2 left-2 z-10 p-1 transition-colors bg-black/20 rounded-full backdrop-blur-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(game.id.toString());
-                        }}
-                      >
-                        <div className="relative">
-                          <Heart
-                            className={`w-5 h-5 ${
-                              favoriteGameIds.has(game.id.toString())
-                                ? 'text-red-500 fill-red-500'
-                                : 'text-white'
-                            }`}
-                          />
-                          {pulsingHearts.has(game.id.toString()) && (
+                      {/* Heart icon for favorites - only show for logged in users */}
+                      {user && (
+                        <button
+                          className="absolute top-2 left-2 z-10 p-1 transition-colors bg-black/20 rounded-full backdrop-blur-sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(game.id.toString());
+                          }}
+                        >
+                          <div className="relative">
                             <Heart
-                              className="absolute top-0 left-0 w-5 h-5 text-red-500 fill-red-500 heart-pulse pointer-events-none"
+                              className={`w-5 h-5 ${
+                                favoriteGameIds.has(game.id.toString())
+                                  ? 'text-red-500 fill-red-500'
+                                  : 'text-white'
+                              }`}
                             />
-                          )}
-                        </div>
-                      </button>
+                            {pulsingHearts.has(game.id.toString()) && (
+                              <Heart
+                                className="absolute top-0 left-0 w-5 h-5 text-red-500 fill-red-500 heart-pulse pointer-events-none"
+                              />
+                            )}
+                          </div>
+                        </button>
+                      )}
 
                       {selectedGames.has(game.id) && (
                         <div className="absolute top-2 right-2">
