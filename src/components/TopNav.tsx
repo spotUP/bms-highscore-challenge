@@ -79,11 +79,7 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
               className="flex gap-4 items-center whitespace-nowrap flex-shrink-0 flex-none flex-nowrap min-w-max"
               style={{ width: 'max-content' }}
             >
-              {leftActions && (
-                <div className="flex items-center gap-2">
-                  {leftActions}
-                </div>
-              )}
+              {leftActions && leftActions}
               <div
                 className="font-arcade font-bold text-lg animated-gradient whitespace-nowrap text-center"
                 style={{
@@ -127,11 +123,7 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
               className="flex gap-2 md:gap-4 items-center whitespace-nowrap flex-shrink-0 flex-none flex-nowrap min-w-max"
               style={{ width: 'max-content' }}
             >
-              {leftActions && (
-                <div className="flex items-center gap-2">
-                  {leftActions}
-                </div>
-              )}
+              {leftActions && leftActions}
               <div
                 className="font-arcade font-bold text-base md:text-lg animated-gradient whitespace-nowrap text-center"
                 style={{
