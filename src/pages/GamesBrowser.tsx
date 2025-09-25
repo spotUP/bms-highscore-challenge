@@ -1164,7 +1164,7 @@ const GamesBrowser: React.FC = () => {
         <TabsList className="grid w-full grid-cols-2 max-w-md">
           <TabsTrigger value="all" className="flex items-center gap-2">
             <Gamepad2 className="w-4 h-4" />
-            All Games ({totalGames})
+            All Games
           </TabsTrigger>
           <TabsTrigger value="favorites" className="flex items-center gap-2">
             <Heart className="w-4 h-4" />
