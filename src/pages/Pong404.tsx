@@ -733,10 +733,10 @@ export const Pong404: React.FC = () => {
         if (multiplayerState.playerSide === 'left') {
           const oldY = newState.paddles.left.y;
 
-          // Smooth left paddle movement for multiplayer (using arrow keys)
-          if (keys.up && newState.paddles.left.y > 12) {
+          // Smooth left paddle movement for multiplayer (using W/S keys)
+          if (keys.w && newState.paddles.left.y > 12) {
             newState.paddles.left.velocity -= 1.8; // Faster acceleration
-          } else if (keys.down && newState.paddles.left.y < canvasSize.height - 12 - newState.paddles.left.height) {
+          } else if (keys.s && newState.paddles.left.y < canvasSize.height - 12 - newState.paddles.left.height) {
             newState.paddles.left.velocity += 1.8; // Faster acceleration
           } else {
             newState.paddles.left.velocity *= 0.85; // Smooth deceleration
@@ -1390,7 +1390,7 @@ export const Pong404: React.FC = () => {
           ctx.fillText(playerSideText, canvasSize.width / 2, canvasSize.height - 60);
 
           if (multiplayerState.playerSide !== 'spectator') {
-            const controls = '↑/↓ arrows';
+            const controls = multiplayerState.playerSide === 'left' ? 'W/S keys' : '↑/↓ arrows';
             ctx.fillText(`Controls: ${controls}`, canvasSize.width / 2, canvasSize.height - 40);
           }
         } else {
