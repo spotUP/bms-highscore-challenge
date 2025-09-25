@@ -27,18 +27,18 @@ const LeaderboardEntry = React.memo(({ rank, name, score, isNewScore }: Leaderbo
   const waveDelay = (rank - 1) * 0.3; // 300ms delay per rank for more visible wave effect
 
   return (
-    <div className="flex items-center justify-between py-0.5">
-      <div className="flex items-center gap-2">
+    <div className="flex items-center justify-between py-0.5 md:flex-row flex-col md:text-left text-center">
+      <div className="flex items-center gap-2 md:flex-row flex-col">
         {getRankIcon(rank)}
         <div className="flex-1 min-w-0">
           <div
-            className="font-arcade font-bold text-lg animated-gradient-vertical truncate"
+            className="font-arcade font-bold text-2xl md:text-lg animated-gradient-vertical truncate"
             style={{ '--wave-delay': `${waveDelay}s` } as React.CSSProperties}
           >
             {name}
           </div>
           <div
-            className="text-sm font-arcade animated-gradient-vertical mt-0.5"
+            className="text-lg md:text-sm font-arcade animated-gradient-vertical mt-0.5"
             style={{ '--wave-delay': `${waveDelay}s` } as React.CSSProperties}
           >
             {formatScore(score)}

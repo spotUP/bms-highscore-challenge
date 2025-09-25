@@ -80,7 +80,7 @@ const Layout: React.FC<LayoutProps> = ({
   }, [getLeaderboardNames]);
 
   return (
-    <div className="min-h-screen text-white relative z-10 pt-4"
+    <div className="min-h-screen text-white relative z-10 pt-2"
          style={{
            background: 'var(--page-bg)'
          }}>
@@ -92,7 +92,7 @@ const Layout: React.FC<LayoutProps> = ({
         />
       )}
 
-      <div className={`${shouldShowTopNav ? 'pt-4' : ''}`}>
+      <div className={`${shouldShowTopNav ? 'pt-2' : ''}`}>
         {React.isValidElement(children) ?
           React.cloneElement(children, { isExiting }) :
           children

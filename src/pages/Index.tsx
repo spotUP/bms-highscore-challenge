@@ -344,7 +344,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                     onClick={() => handleGameLogoClick(game)}
                     title={`Click to submit score for ${game.name}`}
                   >
-                      <CardHeader className="p-2">
+                      <CardHeader className="px-3 py-2 pb-4">
                         {/* Game logo inside card header */}
                         <div className="flex justify-center">
                           {logoUrl ? (
@@ -384,7 +384,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                               />
                             ))}
                             {filtered.length === 0 && (
-                              <div className="text-center py-8 text-gray-400">
+                              <div className="text-center py-8 text-gray-400 text-lg md:text-base">
                                 No scores yet. Be the first to submit!
                               </div>
                             )}

@@ -81,7 +81,7 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
             >
               {leftActions && leftActions}
               <div
-                className="font-arcade font-bold text-lg animated-gradient whitespace-nowrap text-center"
+                className="font-arcade font-bold text-lg animated-gradient whitespace-nowrap text-center hidden md:block"
                 style={{
                   minWidth: 96, // enough for 00:00:00 in this font size
                   fontVariantNumeric: 'tabular-nums',
@@ -125,7 +125,7 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
             >
               {leftActions && leftActions}
               <div
-                className="font-arcade font-bold text-base md:text-lg animated-gradient whitespace-nowrap text-center"
+                className="font-arcade font-bold text-base md:text-lg animated-gradient whitespace-nowrap text-center hidden md:block"
                 style={{
                   minWidth: 96, // enough for 00:00:00 in this font size
                   fontVariantNumeric: 'tabular-nums',

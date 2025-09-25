@@ -656,6 +656,10 @@
 /* Force font application */
 .font-arcade {
   font-family: 'Press Start 2P', monospace !important;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+  font-smooth: never;
+  text-rendering: pixelated;
 }
 
 /* Shiny animations for medals */
@@ -1328,7 +1332,6 @@ body.loading-animations {
   transform: translateZ(0); /* Force hardware acceleration for stability */
   backface-visibility: hidden; /* Prevent flickering during 3D transforms */
   contain: layout style; /* Contain layout and style changes */
-  min-height: 72px; /* Reserve minimum height to prevent layout shifts */
 }
 
 /* Fade and bounce-in animation for new brackets */

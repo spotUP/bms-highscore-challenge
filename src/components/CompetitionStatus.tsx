@@ -34,17 +34,17 @@ const CompetitionStatus: React.FC = () => {
   if (loading) {
     return (
       <div className="status-bar-stable">
-        <div className="flex flex-wrap items-center gap-6 text-sm">
+        <div className="flex flex-wrap items-center gap-4 text-sm">
           <div className="flex items-center gap-2 text-gray-400">
             <div className="w-4 h-4 bg-gray-400/30 rounded animate-pulse"></div>
             <span className="animate-pulse">Loading competition status...</span>
           </div>
           <div className="ml-auto flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-gray-400 bg-gray-500/20 border border-gray-500/30">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-gray-400 bg-gray-500/20 border border-gray-500/30">
               <div className="w-3 h-3 bg-gray-400/30 rounded animate-pulse"></div>
               <span className="animate-pulse">System...</span>
             </div>
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-gray-400 bg-gray-500/20 border border-gray-500/30">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-gray-400 bg-gray-500/20 border border-gray-500/30">
               <div className="w-3 h-3 bg-gray-400/30 rounded animate-pulse"></div>
               <span className="animate-pulse">Loading...</span>
             </div>
@@ -57,21 +57,21 @@ const CompetitionStatus: React.FC = () => {
   if (error) {
     return (
       <div className="status-bar-stable">
-        <div className="flex flex-wrap items-center gap-6 text-sm">
+        <div className="flex flex-wrap items-center gap-4 text-sm">
           <div className="text-red-400 flex items-center gap-2">
             <Trophy className="w-4 h-4" />
             <span>{error}</span>
           </div>
           <div className="ml-auto flex items-center gap-3">
             <button
-              className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${getHealthColor(healthStatus.overall)} cursor-pointer hover:scale-105 transition-transform duration-200`}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getHealthColor(healthStatus.overall)} cursor-pointer hover:scale-105 transition-transform duration-200`}
               title={`System Health: ${healthStatus.message}\nLast checked: ${new Date(healthStatus.lastChecked).toLocaleTimeString()}\n\nClick for detailed overview`}
               onClick={() => setIsSystemModalOpen(true)}
             >
               {getHealthIcon(healthStatus.overall)}
               <span>System {healthStatus.overall === 'healthy' ? 'OK' : healthStatus.overall}</span>
             </button>
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium text-red-300 bg-red-500/20 border border-red-500/30">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-red-300 bg-red-500/20 border border-red-500/30">
               <Lock className="w-3 h-3" />
               <span>Error</span>
             </div>
@@ -193,7 +193,7 @@ const CompetitionStatus: React.FC = () => {
 
   return (
     <div className="status-bar-stable">
-      <div className="flex flex-wrap items-baseline gap-6 text-sm" style={{ lineHeight: '1.2' }}>
+      <div className="flex flex-wrap items-center gap-4 text-sm">
         {competition ? (
           <>
             {/* Competition Status */}
@@ -228,7 +228,7 @@ const CompetitionStatus: React.FC = () => {
           {/* Edit Tournament Button (for tournament owners/admins) */}
           {currentTournament && hasPermission('owner') && (
             <button
-              className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border text-blue-300 bg-blue-500/20 border-blue-500/30 cursor-pointer hover:scale-105 transition-transform duration-200"
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border text-blue-300 bg-blue-500/20 border-blue-500/30 cursor-pointer hover:scale-105 transition-transform duration-200"
               title="Edit Tournament Settings"
               onClick={openEditTournamentDialog}
             >
@@ -239,7 +239,7 @@ const CompetitionStatus: React.FC = () => {
 
           {/* System Health Indicator */}
           <button
-            className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium border ${getHealthColor(healthStatus.overall)} cursor-pointer hover:scale-105 transition-transform duration-200`}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getHealthColor(healthStatus.overall)} cursor-pointer hover:scale-105 transition-transform duration-200`}
             title={`System Health: ${healthStatus.message}\nLast checked: ${new Date(healthStatus.lastChecked).toLocaleTimeString()}\n\nClick for detailed overview`}
             onClick={() => setIsSystemModalOpen(true)}
           >
@@ -248,7 +248,7 @@ const CompetitionStatus: React.FC = () => {
           </button>
 
           {/* Score Lock Status */}
-          <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${
+          <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
             isLocked
               ? 'text-red-300 bg-red-500/20 border border-red-500/30'
               : 'text-green-300 bg-green-500/20 border border-green-500/30'
