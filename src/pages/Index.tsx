@@ -344,32 +344,30 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                     onClick={() => handleGameLogoClick(game)}
                     title={`Click to submit score for ${game.name}`}
                   >
-                      <CardHeader className="py-1">
+                      <CardHeader className="p-2">
                         {/* Game logo inside card header */}
                         <div className="flex justify-center">
-                          <div className="transition-transform duration-200">
-                            {logoUrl ? (
-                              storageRef && !isPublicObject ? (
-                                <StorageImage
-                                  bucket={storageRef.bucket}
-                                  path={storageRef.path}
-                                  alt={game.name}
-                                  className="h-24 md:h-32 w-auto object-contain max-w-full"
-                                  expiresIn={300}
-                                />
-                              ) : (
-                                <img
-                                  src={logoUrl}
-                                  alt={game.name}
-                                  className="h-24 md:h-32 w-auto object-contain max-w-full"
-                                />
-                              )
+                          {logoUrl ? (
+                            storageRef && !isPublicObject ? (
+                              <StorageImage
+                                bucket={storageRef.bucket}
+                                path={storageRef.path}
+                                alt={game.name}
+                                className="h-20 md:h-24 w-auto object-contain max-w-full"
+                                expiresIn={300}
+                              />
                             ) : (
-                              <div className="h-24 md:h-32 flex items-center justify-center bg-black/30 rounded-lg px-4 min-w-[200px]">
-                                <span className="text-white font-bold text-center text-lg">{game.name}</span>
-                              </div>
-                            )}
-                          </div>
+                              <img
+                                src={logoUrl}
+                                alt={game.name}
+                                className="h-20 md:h-24 w-auto object-contain max-w-full"
+                              />
+                            )
+                          ) : (
+                            <div className="h-20 md:h-24 flex items-center justify-center bg-black/30 rounded-lg px-4 min-w-[180px]">
+                              <span className="text-white font-bold text-center text-base">{game.name}</span>
+                            </div>
+                          )}
                         </div>
                       </CardHeader>
                       <CardContent className="flex-1 flex flex-col pt-0 min-h-0">
