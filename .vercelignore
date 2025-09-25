@@ -1,0 +1,53 @@
+# Large database files
+*.db
+*.sqlite
+*.sqlite3
+games.db*
+production-*.db
+*turbo-logos.db
+*turbo-progress.json
+*scraper-progress.json
+
+# XML metadata files
+*.xml
+Metadata.xml
+
+# Large text/data files
+*.txt
+all-game-genres.txt
+downloaded-platforms.txt
+excluded-genres.txt
+final-platforms-list.txt
+included-platforms-*.txt
+launchbox-platforms-list.txt
+remaining-platforms.txt
+
+# JSON data files (too large for deployment)
+games-with-logos.json
+available-logos-list.json
+hybrid-checkpoint-*.json
+
+# Scripts folder (not needed for production)
+scripts/
+
+# Node modules (already excluded by default but being explicit)
+node_modules/
+
+# Log files
+*.log
+logs/
+
+# Temporary files
+tmp/
+.tmp/
+
+# Development artifacts
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Extract script
+extract-genres.js
