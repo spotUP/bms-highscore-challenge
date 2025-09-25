@@ -6,6 +6,10 @@ games-index.db
 *.sqlite
 *.sqlite3
 production-*.db
+
+# Large logo chunks directories
+public/clear-logo-chunks/
+public/game-logos/
 production-*.db
 *turbo-logos.db
 *turbo-progress.json
