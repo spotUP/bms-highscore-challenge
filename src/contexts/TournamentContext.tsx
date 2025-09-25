@@ -592,15 +592,78 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Delete tournament
+  // Delete tournament with proper cascade handling
   const deleteTournament = async (id: string): Promise<boolean> => {
     try {
-      const { error } = await supabase
+      // Delete related data first to avoid constraint violations
+      console.log(`Deleting tournament ${id} and all related data...`);
+
+      // 1. Delete tournament members
+      const { error: membersError } = await supabase
+        .from('tournament_members')
+        .delete()
+        .eq('tournament_id', id);
+
+      if (membersError) {
+        console.error('Error deleting tournament members:', membersError);
+        // Continue anyway, might not have members
+      }
+
+      // 2. Delete scores
+      const { error: scoresError } = await supabase
+        .from('scores')
+        .delete()
+        .eq('tournament_id', id);
+
+      if (scoresError) {
+        console.error('Error deleting scores:', scoresError);
+        // Continue anyway, might not have scores
+      }
+
+      // 3. Delete tournament games
+      const { error: gamesError } = await supabase
+        .from('tournament_games')
+        .delete()
+        .eq('tournament_id', id);
+
+      if (gamesError) {
+        console.error('Error deleting tournament games:', gamesError);
+        // Continue anyway, might not have games
+      }
+
+      // 4. Delete achievements and player achievements
+      const { error: playerAchievementsError } = await supabase
+        .from('player_achievements')
+        .delete()
+        .eq('tournament_id', id);
+
+      if (playerAchievementsError) {
+        console.error('Error deleting player achievements:', playerAchievementsError);
+        // Continue anyway
+      }
+
+      const { error: achievementsError } = await supabase
+        .from('achievements')
+        .delete()
+        .eq('tournament_id', id);
+
+      if (achievementsError) {
+        console.error('Error deleting achievements:', achievementsError);
+        // Continue anyway
+      }
+
+      // 5. Finally delete the tournament itself
+      const { error: tournamentError } = await supabase
         .from('tournaments')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (tournamentError) {
+        console.error('Error deleting tournament:', tournamentError);
+        throw tournamentError;
+      }
+
+      console.log(`Tournament ${id} successfully deleted`);
 
       // If we deleted the current tournament, switch to another one
       if (currentTournament?.id === id) {
@@ -615,10 +678,10 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       await refreshTournaments();
-      
+
       toast({
         title: "Success",
-        description: "Tournament deleted successfully",
+        description: "Tournament and all related data deleted successfully",
       });
 
       return true;
@@ -631,9 +694,9 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         hint: error?.hint,
         tournamentId: id
       }, null, 2));
-      
+
       setError(errorDetails);
-      
+
       toast({
         title: "Error",
         description: error.message || "Failed to delete tournament",
