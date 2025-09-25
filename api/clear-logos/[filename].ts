@@ -10,11 +10,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Filename required' });
   }
 
-  const r2Domain = process.env.VITE_CLOUDFLARE_R2_DOMAIN;
+  // Try multiple environment variable formats for R2 domain
+  const r2Domain = process.env.CLOUDFLARE_R2_DOMAIN ||
+                   process.env.VITE_CLOUDFLARE_R2_DOMAIN ||
+                   'pub-e97a329a31c94c34ad3badd9b7eb4fe1.r2.dev'; // Fallback to known domain
 
   if (!r2Domain) {
+    console.error('❌ R2 domain not configured in environment variables');
     return res.status(500).json({ error: 'R2 domain not configured' });
   }
+
+  console.log(`🔗 Using R2 domain: ${r2Domain}`);
 
   const logoUrl = `https://${r2Domain}/clear-logos/${filename}`;
 
