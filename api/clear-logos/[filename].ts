@@ -13,7 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Try multiple environment variable formats for R2 domain
   const r2Domain = process.env.CLOUDFLARE_R2_DOMAIN ||
                    process.env.VITE_CLOUDFLARE_R2_DOMAIN ||
-                   'pub-e97a329a31c94c34ad3badd9b7eb4fe1.r2.dev'; // Fallback to known domain
+                   'pub-1a84b69be18749cc982661f2fd3478b2.r2.dev'; // Fallback to correct domain
 
   if (!r2Domain) {
     console.error('❌ R2 domain not configured in environment variables');
