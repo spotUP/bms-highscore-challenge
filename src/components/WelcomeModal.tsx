@@ -11,7 +11,6 @@ export const WelcomeModal: React.FC = () => {
   const { user } = useAuth();
   const { startTour, tours } = useHelpGuide();
 
-  console.log('🎪 WelcomeModal render - tours available:', tours.length, 'startTour function:', typeof startTour);
 
   useEffect(() => {
     if (user) {

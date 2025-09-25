@@ -32,8 +32,6 @@ const InteractiveHelpGuide: React.FC<InteractiveHelpGuideProps> = ({
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  console.log('🎪 InteractiveHelpGuide render:', { isOpen, steps: steps?.length, currentStep });
-  console.log('🔍 InteractiveHelpGuide detailed props:', { isOpen, stepsArray: steps, currentStep, hasSteps: steps?.length > 0 });
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

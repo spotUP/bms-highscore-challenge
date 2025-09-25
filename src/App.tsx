@@ -132,19 +132,7 @@ const GlobalUIComponents = () => {
 
 // Help Guide Integration Component (inside router context)
 const HelpGuideRenderer = () => {
-  console.log('🎪🎪🎪 HelpGuideRenderer component is mounting/rendering!');
-
   const { isOpen, currentTour, currentStepIndex, closeTour } = useHelpGuide();
-
-  console.log('🎪 HelpGuideRenderer render - Help Guide State:', {
-    isOpen,
-    currentTourId: currentTour?.id,
-    stepsCount: currentTour?.steps?.length,
-    currentStepIndex
-  });
-
-  // Always render but log the state
-  console.log('🎪 HelpGuideRenderer: About to render InteractiveHelpGuide with isOpen:', isOpen);
 
   return (
     <InteractiveHelpGuide
