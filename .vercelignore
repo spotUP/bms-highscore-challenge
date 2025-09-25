@@ -37,6 +37,9 @@ hybrid-checkpoint-*.json
 # Scripts folder (not needed for production)
 scripts/
 
+# Obsolete files (organized in separate folder)
+obsolete/
+
 # Node modules (already excluded by default but being explicit)
 node_modules/
 

@@ -1,0 +1,24 @@
+Action
+Adventure
+Beat 'em Up
+Board Game
+Casino
+Compilation
+Education
+Fighting
+Flight Simulator
+Horror
+Life Simulation
+Music
+Party
+Platform
+Puzzle
+Quiz
+Racing
+Role-Playing
+Shooter
+Sports
+Stealth
+Strategy
+Vehicle Simulation
+Visual Novel
