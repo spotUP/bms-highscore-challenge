@@ -65,5 +65,12 @@ Contains obsolete SQL files organized by purpose:
 - **schema/** - Database schema creation and modification scripts
 - **debug/** - Debug and troubleshooting SQL scripts
 
+### `/dev-tools/`
+Contains obsolete development and debugging tools:
+- **test-puppeteer-logo-extraction.ts** - Puppeteer-based logo scraping test
+- **debug-launchbox-fetch.ts** - LaunchBox API debugging script
+- **debug-email.html** - Email testing HTML tool
+- **create-og-image.html** - Open Graph image creation tool
+
 ## Note
 These files are excluded from Vercel deployments via .vercelignore to keep deployment sizes small.

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Email Debug Tool</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1a1a1a; color: white; }
+        .container { max-width: 800px; margin: 0 auto; }
+        button { padding: 10px 20px; margin: 5px; background: #333; color: white; border: 1px solid #555; cursor: pointer; }
+        button:hover { background: #444; }
+        .result { background: #222; padding: 15px; margin: 10px 0; border-radius: 5px; white-space: pre-wrap; }
+        input { padding: 8px; margin: 5px; background: #333; color: white; border: 1px solid #555; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>RetroRanks Email Debug Tool</h1>
+        
+        <div>
+            <input type="email" id="testEmail" placeholder="test@example.com" value="test@example.com">
+            <select id="testRole">
+                <option value="user">User</option>
+                <option value="moderator">Moderator</option>
+                <option value="admin">Admin</option>
+            </select>
+        </div>
+        
+        <button onclick="checkHealth()">Check Function Health</button>
+        <button onclick="testInvite()">Send Test Invite</button>
+        <button onclick="checkSession()">Check Session</button>
+        <button onclick="clearResults()">Clear Results</button>
+        
+        <div id="results"></div>
+    </div>
+
+    <script type="module">
+        let supabase;
+        
+        async function initSupabase() {
+            try {
+                const m = await import('/src/integrations/supabase/client.ts');
+                supabase = m.supabase;
+                log('✅ Supabase client loaded');
+            } catch (e) {
+                log('❌ Failed to load Supabase client: ' + e.message);
+            }
+        }
+        
+        function log(message) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = 'result';
+            div.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            results.appendChild(div);
+            results.scrollTop = results.scrollHeight;
+        }
+        
+        function logJson(label, obj) {
+            log(label + ':\n' + JSON.stringify(obj, null, 2));
+        }
+        
+        window.checkSession = async function() {
+            if (!supabase) await initSupabase();
+            try {
+                const { data, error } = await supabase.auth.getSession();
+                if (error) throw error;
+                
+                const hasSession = !!data?.session;
+                const hasToken = !!data?.session?.access_token;
+                const userEmail = data?.session?.user?.email;
+                
+                log(`Session: ${hasSession ? '✅' : '❌'} | Token: ${hasToken ? '✅' : '❌'} | User: ${userEmail || 'none'}`);
+                
+                if (hasToken) {
+                    log('Access token: ' + data.session.access_token.substring(0, 20) + '...');
+                }
+            } catch (e) {
+                log('❌ Session check failed: ' + e.message);
+            }
+        };
+        
+        window.checkHealth = async function() {
+            if (!supabase) await initSupabase();
+            try {
+                const { data: sess } = await supabase.auth.getSession();
+                const headers = sess?.session?.access_token ? { Authorization: `Bearer ${sess.session.access_token}` } : {};
+                
+                log('🔍 Checking function health...');
+                
+                const [inviteRes, manageRes] = await Promise.allSettled([
+                    supabase.functions.invoke('invite-user', { body: { action: 'health' }, headers }),
+                    supabase.functions.invoke('manage-users', { body: { action: 'health' }, headers })
+                ]);
+                
+                if (inviteRes.status === 'fulfilled') {
+                    logJson('invite-user health', inviteRes.value);
+                } else {
+                    log('❌ invite-user health failed: ' + inviteRes.reason);
+                }
+                
+                if (manageRes.status === 'fulfilled') {
+                    logJson('manage-users health', manageRes.value);
+                } else {
+                    log('❌ manage-users health failed: ' + manageRes.reason);
+                }
+                
+            } catch (e) {
+                log('❌ Health check failed: ' + e.message);
+            }
+        };
+        
+        window.testInvite = async function() {
+            if (!supabase) await initSupabase();
+            try {
+                const email = document.getElementById('testEmail').value;
+                const role = document.getElementById('testRole').value;
+                
+                if (!email) {
+                    log('❌ Please enter an email address');
+                    return;
+                }
+                
+                const { data: sess } = await supabase.auth.getSession();
+                const headers = sess?.session?.access_token ? { Authorization: `Bearer ${sess.session.access_token}` } : {};
+                
+                log(`📧 Sending invite to ${email} with role ${role}...`);
+                
+                const res = await supabase.functions.invoke('invite-user', {
+                    body: { email, role },
+                    headers
+                });
+                
+                logJson('Invite result', res);
+                
+                if (res.data?.success) {
+                    if (res.data.action_link) {
+                        log('⚠️ SMTP not configured - fallback link generated');
+                        log('🔗 Invite link: ' + res.data.action_link);
+                        try {
+                            await navigator.clipboard.writeText(res.data.action_link);
+                            log('📋 Link copied to clipboard');
+                        } catch (e) {
+                            log('❌ Failed to copy to clipboard');
+                        }
+                    } else {
+                        log('✅ Email sent successfully!');
+                    }
+                } else {
+                    log('❌ Invite failed: ' + (res.data?.error || res.error?.message || 'Unknown error'));
+                }
+                
+            } catch (e) {
+                log('❌ Test invite failed: ' + e.message);
+            }
+        };
+        
+        window.clearResults = function() {
+            document.getElementById('results').innerHTML = '';
+        };
+        
+        // Initialize on load
+        initSupabase();
+    </script>
+</body>
+</html>
