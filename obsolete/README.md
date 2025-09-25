@@ -51,5 +51,19 @@ Contains 49+ test and debug scripts:
 - **Logo storage**: Uses S3 bucket via clearLogoService
 - **Metadata**: Fetched from Supabase directly
 
+### `/docs/`
+Contains obsolete documentation files:
+- **achievement-system/** - Achievement system setup and analysis docs
+- **setup-guides/** - Various system setup guides and documentation
+  - CHANGELOG.md, CLEAR_LOGOS.md, COMPETITION_LIFECYCLE_WEBHOOKS.md
+  - DATABASE_SCHEMA_ANALYSIS_REPORT.md, ENHANCED_RATINGS_SETUP.md
+  - LOGO_SCRAPER.md, SECURITY_UPDATES.md, WEBHOOK_SETUP.md
+
+### `/sql/`
+Contains obsolete SQL files organized by purpose:
+- **fixes/** - Database fixes and maintenance scripts
+- **schema/** - Database schema creation and modification scripts
+- **debug/** - Debug and troubleshooting SQL scripts
+
 ## Note
 These files are excluded from Vercel deployments via .vercelignore to keep deployment sizes small.
