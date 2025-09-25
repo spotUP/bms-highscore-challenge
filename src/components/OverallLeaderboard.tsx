@@ -77,24 +77,28 @@ const OverallLeaderboard = React.memo(() => {
     <div className="flex flex-col h-full space-y-4 overflow-hidden">
       {/* Overall Leaders */}
       <div className="flex-shrink-0 animate-slide-in-left animation-delay-400">
-        <span className="text-xl font-bold text-white mb-3 block">Overall Leaders</span>
+        <span className="text-lg font-bold text-white mb-2 block">Overall Leaders</span>
         <div className="space-y-1 max-h-80 overflow-y-auto">
           {displayLeaders.map((player, index) => (
-              <div key={player.player_name} className="flex items-center gap-3 py-1">
-                {getRankIcon(index)}
-                <div className="flex-1 flex items-baseline">
-                  <div className="flex-1">
-                  <div 
-                      className="font-arcade font-bold text-lg animated-gradient-vertical"
+              <div key={player.player_name} className="flex items-center gap-2 py-1">
+                <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
+                  {index === 0 ? <span className="text-2xl animate-gold-shine">🏆</span> :
+                   index === 1 ? <span className="text-2xl animate-silver-shine">🥈</span> :
+                   index === 2 ? <span className="text-2xl animate-bronze-shine">🥉</span> :
+                   <span className="text-xs font-bold text-white">#{index + 1}</span>}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div
+                      className="font-arcade font-bold text-sm animated-gradient-vertical truncate"
                   >
                     {player.player_name}
                   </div>
                   <div className="text-xs text-gray-400">
-                    {player.game_count} game{player.game_count !== 1 ? 's' : ''}
+                    {player.game_count}g
                 </div>
               </div>
-              <div 
-                    className="font-bold font-arcade text-base animated-gradient-vertical"
+              <div
+                    className="font-bold font-arcade text-xs animated-gradient-vertical flex-shrink-0"
               >
                 {formatScore(player.total_ranking_points)}
                   </div>
@@ -111,19 +115,24 @@ const OverallLeaderboard = React.memo(() => {
 
       {/* Achievement Hunters */}
       <div className="flex-shrink-0 animate-slide-in-left animation-delay-600">
-        <span className="text-xl font-bold text-white mb-3 block">Achievement Hunters</span>
+        <span className="text-lg font-bold text-white mb-2 block">Achievement Hunters</span>
         <div className="space-y-1 max-h-80 overflow-y-auto">
             {displayAchievementHunters.map((hunter, index) => (
-              <div key={hunter.player_name} className="flex items-center gap-3 py-1">
-                {getAchievementRankIcon(index)}
-                <div>
-                  <div 
-                    className="font-arcade font-bold text-lg animated-gradient-vertical"
+              <div key={hunter.player_name} className="flex items-center gap-2 py-1">
+                <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
+                  {index === 0 ? <span className="text-2xl">🌟</span> :
+                   index === 1 ? <span className="text-2xl">⭐</span> :
+                   index === 2 ? <span className="text-2xl">✨</span> :
+                   <span className="text-xs font-bold text-white">#{index + 1}</span>}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div
+                    className="font-arcade font-bold text-sm animated-gradient-vertical truncate"
                   >
                     {hunter.player_name}
                   </div>
                   <div className="text-xs text-gray-400">
-                    {hunter.achievement_count} achievement{hunter.achievement_count !== 1 ? 's' : ''}
+                    {hunter.achievement_count}a
                   </div>
                 </div>
               </div>

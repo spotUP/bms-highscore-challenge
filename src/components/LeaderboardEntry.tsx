@@ -14,13 +14,13 @@ const LeaderboardEntry = React.memo(({ rank, name, score, isNewScore }: Leaderbo
   const getRankIcon = (rank: number) => {
     switch (rank) {
       case 1:
-        return <span className="w-12 h-12 flex items-center justify-center text-4xl animate-gold-shine">🏆</span>;
+        return <span className="w-8 h-8 flex items-center justify-center text-2xl animate-gold-shine">🏆</span>;
       case 2:
-        return <span className="w-12 h-12 flex items-center justify-center text-4xl animate-silver-shine">🥈</span>;
+        return <span className="w-8 h-8 flex items-center justify-center text-2xl animate-silver-shine">🥈</span>;
       case 3:
-        return <span className="w-12 h-12 flex items-center justify-center text-4xl animate-bronze-shine">🥉</span>;
+        return <span className="w-8 h-8 flex items-center justify-center text-2xl animate-bronze-shine">🥉</span>;
       default:
-        return <span className="w-12 h-12 flex items-center justify-center text-3xl font-bold text-white">#{rank}</span>;
+        return <span className="w-8 h-8 flex items-center justify-center text-sm font-bold text-white">#{rank}</span>;
     }
   };
 
@@ -28,24 +28,24 @@ const LeaderboardEntry = React.memo(({ rank, name, score, isNewScore }: Leaderbo
 
   return (
     <div className="flex items-center justify-between py-1">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         {getRankIcon(rank)}
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <div
-            className="font-arcade font-bold text-2xl animated-gradient-vertical"
+            className="font-arcade font-bold text-lg animated-gradient-vertical truncate"
             style={{ '--wave-delay': `${waveDelay}s` } as React.CSSProperties}
           >
             {name}
           </div>
           <div
-            className="text-lg font-arcade animated-gradient-vertical mt-1"
+            className="text-sm font-arcade animated-gradient-vertical mt-1"
             style={{ '--wave-delay': `${waveDelay}s` } as React.CSSProperties}
           >
             {formatScore(score)}
           </div>
         </div>
       </div>
-      {isNewScore && <Star className="text-arcade-neonYellow animate-glow w-4 h-4" />}
+      {isNewScore && <Star className="text-arcade-neonYellow animate-glow w-3 h-3 flex-shrink-0" />}
     </div>
   );
 });

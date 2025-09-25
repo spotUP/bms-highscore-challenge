@@ -8,21 +8,18 @@ import { useRaspberryPiOptimizations } from '@/hooks/useRaspberryPiOptimizations
 const RankIcon = React.memo(({ rank, type = 'standard' }: { rank: number; type?: string }) => {
   if (rank === 0) {
     const emoji = type === 'achievement' ? '🌟' : '🏆';
-    const color = '';
-    return <span className={`w-12 h-12 flex items-center justify-center text-4xl ${color}`}>{emoji}</span>;
+    return <span className="w-8 h-8 flex items-center justify-center text-2xl">{emoji}</span>;
   }
   if (rank === 1) {
     const emoji = type === 'achievement' ? '⭐' : '🥈';
-    const color = '';
-    return <span className={`w-12 h-12 flex items-center justify-center text-4xl ${color}`}>{emoji}</span>;
+    return <span className="w-8 h-8 flex items-center justify-center text-2xl">{emoji}</span>;
   }
   if (rank === 2) {
     const emoji = type === 'achievement' ? '✨' : '🥉';
-    const color = '';
-    return <span className={`w-12 h-12 flex items-center justify-center text-4xl ${color}`}>{emoji}</span>;
+    return <span className="w-8 h-8 flex items-center justify-center text-2xl">{emoji}</span>;
   }
 
-  return <span className="w-12 h-12 flex items-center justify-center text-3xl font-bold text-white">#{rank + 1}</span>;
+  return <span className="w-8 h-8 flex items-center justify-center text-sm font-bold text-white">#{rank + 1}</span>;
 });
 
 RankIcon.displayName = 'RankIcon';
@@ -43,21 +40,24 @@ const LeaderItem = React.memo(({
   const waveDelay = index * 0.3;
 
   return (
-    <div className="flex items-center gap-3 py-1">
+    <div className="flex items-center gap-2 py-1">
       <RankIcon rank={index} type={type} />
-      <div className="flex-1 flex items-baseline">
-        <div className="flex-1">
-          <div
-            className={`font-arcade font-bold text-lg ${gradientClass}`}
-            style={{ '--wave-delay': `${waveDelay}s` } as React.CSSProperties}
-          >
-            {player.player_name}
+      <div className="flex-1 min-w-0">
+        <div
+          className={`font-arcade font-bold text-sm ${gradientClass} truncate`}
+          style={{ '--wave-delay': `${waveDelay}s` } as React.CSSProperties}
+        >
+          {player.player_name}
+        </div>
+        {type === 'standard' ? (
+          <div className="text-xs text-gray-400">
+            {player.game_count}g
           </div>
-          {type === 'standard' && (
-            <div className="text-xs text-gray-400">
-              {player.game_count} game{player.game_count !== 1 ? 's' : ''}
-            </div>
-          )}
+        ) : (
+          <div className="text-xs text-gray-400">
+            {player.achievement_count}a
+          </div>
+        )}
           {type === 'achievement' && (
             <div className="text-xs text-gray-400">
               {player.achievement_count} achievement{player.achievement_count !== 1 ? 's' : ''}
@@ -129,7 +129,7 @@ const OverallLeaderboardOptimized = React.memo(() => {
   // Memoized sections
   const leadersSection = useMemo(() => (
     <div className="flex-shrink-0">
-      <span className="text-xl font-bold text-white mb-3 block">Overall Leaders</span>
+      <span className="text-lg font-bold text-white mb-2 block">Overall Leaders</span>
       <div className="space-y-1 max-h-80 overflow-y-auto">
         {displayData.leaders.map((player, index) => (
           <LeaderItem
@@ -149,7 +149,7 @@ const OverallLeaderboardOptimized = React.memo(() => {
 
   const achievementSection = useMemo(() => (
     <div className="flex-shrink-0">
-      <span className="text-xl font-bold text-white mb-3 block">Achievement Hunters</span>
+      <span className="text-lg font-bold text-white mb-2 block">Achievement Hunters</span>
       <div className="space-y-1 max-h-80 overflow-y-auto">
         {displayData.achievementHunters.map((hunter, index) => (
           <LeaderItem

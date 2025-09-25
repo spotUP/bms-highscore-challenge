@@ -304,14 +304,14 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   return (
     <div className="p-3 md:p-4 overflow-visible">
       <div className="w-full space-y-4 overflow-visible">
-        <div className={`grid gap-4 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-12rem)] grid-cols-1 lg:grid-cols-5'} overflow-visible`}>
-          {/* Left column - Overall Leaderboard (smaller) */}
+        <div className={`grid gap-3 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-12rem)] grid-cols-1 lg:grid-cols-6'} overflow-visible`}>
+          {/* Left column - Overall Leaderboard (narrower) */}
           <div className={`${isMobile ? 'order-1' : 'h-full lg:col-span-1'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-left' : 'animate-slide-in-left animation-delay-200')}`} data-testid="overall-leaderboard">
             <DynamicOverallLeaderboard />
           </div>
 
-          {/* Right column - Game content (4 games instead of 5) */}
-          <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-4 flex flex-col'} overflow-visible`}>
+          {/* Right column - Game content (5 games) */}
+          <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-5 flex flex-col'} overflow-visible`}>
             {/* Competition Status and Controls */}
             <div className={`mb-4 flex-shrink-0 ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? '0ms' : '100ms')}}>
               {/* Competition Status */}
@@ -327,7 +327,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
               </div>
             </div>
 
-            <div className={`${isMobile ? 'flex flex-col space-y-6' : 'grid gap-4 flex-1 min-h-0'}`} style={{
+            <div className={`${isMobile ? 'flex flex-col space-y-6' : 'grid gap-2 flex-1 min-h-0'}`} style={{
               overflow: 'visible',
               position: 'relative',
               gridTemplateColumns: isMobile ? 'none' : `repeat(${games?.length || 1}, 1fr)`
