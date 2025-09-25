@@ -424,7 +424,7 @@ export const Pong404: React.FC = () => {
 
               // Update left paddle if it changed (ultra-sensitive threshold)
               if (payload.new.player_left_paddle_y !== null &&
-                  Math.abs(payload.new.player_left_paddle_y - currentState.paddles.left.y) > 0.1) {
+                  Math.abs(payload.new.player_left_paddle_y - currentState.paddles.left.y) > 2.0) {
                 updatedState = {
                   ...updatedState,
                   paddles: {
@@ -441,8 +441,8 @@ export const Pong404: React.FC = () => {
                         const velocity = difference * 0.1; // Predict based on movement trend
                         const predictedY = targetY + velocity;
 
-                        // Ultra-fast interpolation with prediction for 60fps smoothness
-                        const interpolatedY = currentY + (predictedY - currentY) * 0.95;
+                        // Smooth interpolation to prevent jittering when both players move
+                        const interpolatedY = currentY + (predictedY - currentY) * 0.3;
 
                         return Math.max(12, Math.min(canvasSize.height - 12 - updatedState.paddles.left.height, interpolatedY));
                       })()
@@ -454,7 +454,7 @@ export const Pong404: React.FC = () => {
 
               // Update right paddle if it changed (ultra-sensitive threshold)
               if (payload.new.player_right_paddle_y !== null &&
-                  Math.abs(payload.new.player_right_paddle_y - currentState.paddles.right.y) > 0.1) {
+                  Math.abs(payload.new.player_right_paddle_y - currentState.paddles.right.y) > 2.0) {
                 updatedState = {
                   ...updatedState,
                   paddles: {
@@ -471,8 +471,8 @@ export const Pong404: React.FC = () => {
                         const velocity = difference * 0.1; // Predict based on movement trend
                         const predictedY = targetY + velocity;
 
-                        // Ultra-fast interpolation with prediction for 60fps smoothness
-                        const interpolatedY = currentY + (predictedY - currentY) * 0.95;
+                        // Smooth interpolation to prevent jittering when both players move
+                        const interpolatedY = currentY + (predictedY - currentY) * 0.3;
 
                         return Math.max(12, Math.min(canvasSize.height - 12 - updatedState.paddles.right.height, interpolatedY));
                       })()
@@ -747,7 +747,7 @@ export const Pong404: React.FC = () => {
           newState.paddles.left.y += newState.paddles.left.velocity;
           newState.paddles.left.y = Math.max(12, Math.min(canvasSize.height - 12 - newState.paddles.left.height, newState.paddles.left.y));
 
-          if (Math.abs(newState.paddles.left.y - oldY) > 0.1) {
+          if (Math.abs(newState.paddles.left.y - oldY) > 2.0) {
             updatePaddlePosition('left', newState.paddles.left.y);
           }
         } else if (multiplayerState.playerSide === 'right') {
@@ -767,7 +767,7 @@ export const Pong404: React.FC = () => {
           newState.paddles.right.y += newState.paddles.right.velocity;
           newState.paddles.right.y = Math.max(12, Math.min(canvasSize.height - 12 - newState.paddles.right.height, newState.paddles.right.y));
 
-          if (Math.abs(newState.paddles.right.y - oldY) > 0.1) {
+          if (Math.abs(newState.paddles.right.y - oldY) > 2.0) {
             updatePaddlePosition('right', newState.paddles.right.y);
           }
         }
