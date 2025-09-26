@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 
 interface GameState {
   ball: {
@@ -39,20 +38,29 @@ interface MultiplayerState {
   playerCount: number;
 }
 
+interface WebSocketMessage {
+  type: string;
+  playerId?: string;
+  roomId?: string;
+  data?: any;
+}
+
 // Canvas size will be calculated dynamically based on viewport
-const PADDLE_SPEED = 32; // 4x faster (was 8, now 2x faster than previous 16)
-const BALL_SPEED = 9; // Halved from 18 to 9 for better gameplay
-const MIN_BALL_SPEED = 6;  // Halved from 12 to 6 for slower center hits
-const MAX_BALL_SPEED = 14; // Halved from 28 to 14 for slower edge hits
-const TARGET_FPS = 75; // Slightly higher target to ensure consistent 60fps on all devices
-const FRAME_TIME = 1000 / TARGET_FPS;
-const PADDLE_ACCELERATION = 0.3;
-const PADDLE_FRICTION = 0.85;
-const HUMAN_REACTION_DELAY = 8; // frames of delay for human-like response (increased for 60fps)
-const PANIC_MOVE_CHANCE = 0.15; // 15% chance per frame for sudden movement (reduced for 60fps)
-const PANIC_VELOCITY_MULTIPLIER = 15; // How much faster panic moves are (halved for 60fps)
-const EXTREME_PANIC_CHANCE = 0.08; // 8% chance for extreme panic moves (reduced for 60fps)
-const EXTREME_PANIC_MULTIPLIER = 35; // Extremely fast spinner turns (halved for 60fps)
+const PADDLE_SPEED = 18; // Reduced for 60fps gameplay
+const BALL_SPEED = 5; // Much slower for better 60fps gameplay
+const MIN_BALL_SPEED = 3;  // Slower minimum speed
+const MAX_BALL_SPEED = 8; // Slower maximum speed
+// Game runs at native refresh rate via requestAnimationFrame (typically 60fps)
+const PADDLE_ACCELERATION = 0.2; // Reduced acceleration for smoother control
+const PADDLE_FRICTION = 0.88; // Slightly more friction for better control
+const HUMAN_REACTION_DELAY = 12; // More frames of delay for realistic AI at 60fps
+const PANIC_MOVE_CHANCE = 0.08; // Lower chance for panic moves at 60fps
+const PANIC_VELOCITY_MULTIPLIER = 8; // Reduced panic speed multiplier
+const EXTREME_PANIC_CHANCE = 0.04; // Lower extreme panic chance
+const EXTREME_PANIC_MULTIPLIER = 20; // Reduced extreme panic speed
+
+// WebSocket server URL - direct connection for development
+const WS_SERVER_URL = 'ws://localhost:3002';
 
 // Beautiful color palette inspired by retro gaming and synthwave aesthetics
 const COLOR_PALETTE = [
@@ -74,37 +82,18 @@ const COLOR_PALETTE = [
   { background: '#4338ca', foreground: '#fde047' }, // Indigo & Lime
 ];
 
-export const Pong404: React.FC = () => {
+const Pong404: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number>();
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const lastTimeRef = useRef<number>(0);
-  const leftFrameCountRef = useRef<number>(0);
-  const rightFrameCountRef = useRef<number>(0);
-  const subscriptionRef = useRef<any>(null);
-  const lastUpdateRef = useRef<number>(0);
-  const lastPaddleUpdateRef = useRef<number>(0);
-  const lastPaddlePositionRef = useRef<{left: number, right: number}>({left: 200, right: 200});
+  const animationFrameRef = useRef<number>(0);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Dynamic canvas size state
+  // Dynamic canvas size state with proper aspect ratio
   const [canvasSize, setCanvasSize] = useState({
-    width: 800,
-    height: 400
+    width: 1200,
+    height: 750
   });
-
-  // Multiplayer state
-  const [multiplayerState, setMultiplayerState] = useState<MultiplayerState>({
-    playerId: Math.random().toString(36).substr(2, 9),
-    playerSide: 'spectator',
-    isConnected: false,
-    roomId: 'main',
-    isGameMaster: false,
-    playerCount: 0
-  });
-
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
-  const [localTestMode, setLocalTestMode] = useState(false);
-
   const [gameState, setGameState] = useState<GameState>({
     ball: {
       x: canvasSize.width / 2,
@@ -130,383 +119,209 @@ export const Pong404: React.FC = () => {
     },
   });
 
-  const [keys, setKeys] = useState({
-    w: false,
-    s: false,
-    up: false,
-    down: false,
+  // Multiplayer state
+  const [multiplayerState, setMultiplayerState] = useState<MultiplayerState>({
+    playerId: Math.random().toString(36).substr(2, 9),
+    playerSide: 'spectator',
+    isConnected: false,
+    roomId: 'main',
+    isGameMaster: false,
+    playerCount: 0
   });
 
-  const [infoTextFadeStart, setInfoTextFadeStart] = useState<number | null>(null);
+  const [localTestMode, setLocalTestMode] = useState(false);
+  const [crtEffect, setCrtEffect] = useState(true); // CRT shader enabled by default
 
-  // Helper function to fix paddle positions for current window height
-  const fixPaddlePositions = useCallback((gameState: any) => {
-    const currentHeight = window.innerHeight;
-    const paddleHeight = 80;
-    const safeTop = 50; // 50px from top border
-    const safeBottom = currentHeight - paddleHeight - 50; // 50px from bottom border
-
-    return {
-      ...gameState,
-      paddles: {
-        left: {
-          ...gameState.paddles.left,
-          y: Math.max(safeTop, Math.min(safeBottom, Math.max(safeTop, currentHeight / 2 - paddleHeight / 2))) // Center vertically in current window
-        },
-        right: {
-          ...gameState.paddles.right,
-          y: Math.max(safeTop, Math.min(safeBottom, Math.max(safeTop, currentHeight / 2 - paddleHeight / 2))) // Center vertically in current window
-        }
-      }
-    };
-  }, []);
-
-  // Initialize Web Audio API
-  useEffect(() => {
-    audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-  }, []);
-
-  // Multiplayer functions
-  const joinMultiplayerGame = useCallback(async () => {
-    try {
-      setConnectionStatus('connecting');
-
-      // Try to get existing game state
-      const { data: existingGame, error: fetchError } = await supabase
-        .from('live_pong')
-        .select('*')
-        .eq('room_id', multiplayerState.roomId)
-        .single();
-
-
-      if (fetchError && fetchError.code !== 'PGRST116') {
-        console.error('❌ Error fetching game state:', fetchError);
-        setConnectionStatus('error');
-        throw new Error(`Database error: ${fetchError.message}`);
-      }
-
-      let playerSide: 'left' | 'right' | 'spectator' = 'spectator';
-      let isGameMaster = false;
-
-      if (!existingGame) {
-        // Create new game room - always reset to fresh state for single game
-        const initialGameState = {
-          ball: {
-            x: canvasSize.width / 2,
-            y: canvasSize.height / 2,
-            dx: BALL_SPEED,
-            dy: BALL_SPEED,
-            size: 12,
-          },
-          paddles: {
-            left: { y: Math.max(0, Math.min(canvasSize.height - 80, canvasSize.height / 2 - 40)), height: 80, width: 12, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(0, Math.min(canvasSize.height - 80, canvasSize.height / 2 - 40)) },
-            right: { y: Math.max(0, Math.min(canvasSize.height - 80, canvasSize.height / 2 - 40)), height: 80, width: 12, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(0, Math.min(canvasSize.height - 80, canvasSize.height / 2 - 40)) },
-          },
-          score: { left: 0, right: 0 },
-          isPlaying: true,
-          gameMode: 'multiplayer',
-          colorIndex: 0,
-          isPaused: false,
-          pauseEndTime: 0,
-          decrunchEffect: {
-            isActive: false,
-            startTime: 0,
-            duration: 200,
-          },
-        };
-
-        const { error: insertError } = await supabase
-          .from('live_pong')
-          .insert({
-            room_id: multiplayerState.roomId,
-            game_state: initialGameState,
-            player_left_id: multiplayerState.playerId,
-            last_updated_by: multiplayerState.playerId
-          });
-
-        if (insertError) {
-          console.error('Error creating game room (likely race condition):', insertError);
-          // Retry by fetching the existing game that was created by another browser
-          const { data: retryGame, error: retryError } = await supabase
-            .from('live_pong')
-            .select('*')
-            .eq('room_id', multiplayerState.roomId)
-            .single();
-
-          if (retryError || !retryGame) {
-            console.error('Failed to recover from race condition:', retryError);
-            return;
-          }
-
-          // Process as joining existing game
-          if (retryGame.player_right_id) {
-            playerSide = 'spectator';
-          } else {
-            // Assign to right paddle since left is taken
-            const { error: updateError } = await supabase
-              .from('live_pong')
-              .update({ player_right_id: multiplayerState.playerId })
-              .eq('room_id', multiplayerState.roomId);
-
-            if (updateError) {
-              console.error('Error joining as right player:', updateError);
-              playerSide = 'spectator';
-            } else {
-              playerSide = 'right';
-            }
-          }
-
-          // Set game state from existing game
-          if (retryGame.game_state) {
-            setGameState(retryGame.game_state);
-          }
-          isGameMaster = false; // Other player is already game master
-        } else {
-          // Successfully created new game room
-          playerSide = 'left';
-          isGameMaster = true;
-          setGameState(initialGameState);
-        }
-      } else {
-        // Join existing game
-        let updateData: any = {};
-
-        // Check if current player is already assigned
-        if (existingGame.player_left_id === multiplayerState.playerId) {
-          playerSide = 'left';
-        } else if (existingGame.player_right_id === multiplayerState.playerId) {
-          playerSide = 'right';
-        } else if (!existingGame.player_left_id) {
-          updateData.player_left_id = multiplayerState.playerId;
-          playerSide = 'left';
-        } else if (!existingGame.player_right_id) {
-          updateData.player_right_id = multiplayerState.playerId;
-          playerSide = 'right';
-        } else {
-          // Both slots taken by other players - become a spectator
-          playerSide = 'spectator';
-        }
-
-        if (Object.keys(updateData).length > 0) {
-          const { error: updateError } = await supabase
-            .from('live_pong')
-            .update(updateData)
-            .eq('room_id', multiplayerState.roomId);
-
-          if (updateError) {
-            console.error('Error joining game:', updateError);
-            return;
-          }
-        }
-
-        // Set the game state from the server with bounds checking
-        if (existingGame.game_state) {
-          const fixedGameState = fixPaddlePositions(existingGame.game_state);
-          setGameState(fixedGameState);
-        }
-      }
-
-
-      setMultiplayerState(prev => ({
-        ...prev,
-        playerSide,
-        isConnected: true,
-        isGameMaster
-      }));
-
-      setConnectionStatus('connected');
-
-    } catch (error) {
-      console.error('Error joining multiplayer game:', error);
-      setConnectionStatus('error');
-      // Reset connection after 3 seconds for retry
-      setTimeout(() => {
-        setConnectionStatus('idle');
-      }, 3000);
+  // WebSocket connection management
+  const connectWebSocket = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      return;
     }
-  }, [multiplayerState.roomId, multiplayerState.playerId, gameState]);
 
-  const updateMultiplayerGameState = useCallback(async (newGameState: GameState) => {
-    if (!multiplayerState.isConnected || !multiplayerState.isGameMaster) return;
-
-    // Throttle updates to avoid overwhelming the database
-    const now = Date.now();
-    if (now - lastUpdateRef.current < 16) return; // ~60fps max
-    lastUpdateRef.current = now;
+    console.log('🔌 Connecting to WebSocket server...');
+    setConnectionStatus('connecting');
 
     try {
-      const { error } = await supabase
-        .from('live_pong')
-        .update({
-          game_state: newGameState,
-          last_updated_by: multiplayerState.playerId
-        })
-        .eq('room_id', multiplayerState.roomId);
+      const ws = new WebSocket(WS_SERVER_URL);
+      wsRef.current = ws;
 
-      if (error) {
-        console.error('Error updating game state:', error);
-      }
-    } catch (error) {
-      console.error('Error updating multiplayer game state:', error);
-    }
-  }, [multiplayerState.isConnected, multiplayerState.isGameMaster, multiplayerState.playerId, multiplayerState.roomId]);
+      ws.onopen = () => {
+        console.log('✅ WebSocket connected');
+        setConnectionStatus('connected');
 
-  const updatePaddlePosition = useCallback(async (side: 'left' | 'right', y: number) => {
-    if (!multiplayerState.isConnected || multiplayerState.playerSide !== side) return;
-
-    // Throttle paddle updates but prioritize responsiveness
-    const now = Date.now();
-    const timeSinceLastUpdate = now - lastPaddleUpdateRef.current;
-    const lastY = lastPaddlePositionRef.current[side];
-    const movementDistance = Math.abs(y - lastY);
-
-    // Smart throttling: send updates on velocity changes or significant movement
-    const velocity = movementDistance / Math.max(timeSinceLastUpdate, 1) * 16; // pixels per frame
-    const lastVelocity = lastPaddlePositionRef.current.velocity || 0;
-    const velocityChange = Math.abs(velocity - lastVelocity);
-
-    // Send update if:
-    // 1. Significant velocity change (direction change or speed change)
-    // 2. Large movement (>5px)
-    // 3. Movement stopped (velocity near zero after movement)
-    // 4. Minimum time elapsed for maximum update rate
-    const significantVelocityChange = velocityChange > 0.5;
-    const largeMovement = movementDistance > 5;
-    const movementStopped = velocity < 0.1 && lastVelocity > 0.1;
-    const minTimeElapsed = timeSinceLastUpdate > 8; // Max 125fps
-
-    if (!significantVelocityChange && !largeMovement && !movementStopped && !minTimeElapsed) return;
-
-    lastPaddlePositionRef.current.velocity = velocity;
-
-    lastPaddleUpdateRef.current = now;
-    lastPaddlePositionRef.current[side] = y;
-
-    try {
-
-      // Store individual paddle positions to avoid conflicts
-      const updateData: any = {
-        last_updated_by: multiplayerState.playerId
+        // Join the multiplayer room
+        ws.send(JSON.stringify({
+          type: 'join_room',
+          playerId: multiplayerState.playerId,
+          roomId: multiplayerState.roomId
+        }));
       };
 
-      if (side === 'left') {
-        updateData.player_left_paddle_y = y;
-      } else {
-        updateData.player_right_paddle_y = y;
-      }
-
-      const { error } = await supabase
-        .from('live_pong')
-        .update(updateData)
-        .eq('room_id', multiplayerState.roomId);
-
-      if (error) {
-        console.error('Error updating paddle position:', error);
-      }
-    } catch (error) {
-      console.error('Error updating paddle position:', error);
-    }
-  }, [multiplayerState.isConnected, multiplayerState.playerSide, multiplayerState.playerId, multiplayerState.roomId, gameState]);
-
-  // Setup real-time subscription
-  useEffect(() => {
-    if (!multiplayerState.isConnected) return;
-
-    const subscription = supabase
-      .channel(`live_pong_changes_${multiplayerState.roomId}`)
-      .on('postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'live_pong', filter: `room_id=eq.${multiplayerState.roomId}` },
-        (payload) => {
-          if (payload.new.last_updated_by !== multiplayerState.playerId) {
-            // Update individual paddle positions from the database fields
-            setGameState(currentState => {
-              let updatedState = { ...currentState };
-              let changed = false;
-
-              // Update left paddle if it changed (ultra-sensitive threshold)
-              if (payload.new.player_left_paddle_y !== null &&
-                  Math.abs(payload.new.player_left_paddle_y - currentState.paddles.left.y) > 2.0) {
-                updatedState = {
-                  ...updatedState,
-                  paddles: {
-                    ...updatedState.paddles,
-                    left: {
-                      ...updatedState.paddles.left,
-                      y: (() => {
-                        // Calculate velocity-based prediction for ultra-smooth movement
-                        const targetY = payload.new.player_left_paddle_y;
-                        const currentY = currentState.paddles.left.y;
-                        const difference = targetY - currentY;
-
-                        // Estimate velocity and add prediction
-                        const velocity = difference * 0.1; // Predict based on movement trend
-                        const predictedY = targetY + velocity;
-
-                        // Smooth interpolation to prevent jittering when both players move
-                        const interpolatedY = currentY + (predictedY - currentY) * 0.3;
-
-                        return Math.max(12, Math.min(canvasSize.height - 12 - updatedState.paddles.left.height, interpolatedY));
-                      })()
-                    }
-                  }
-                };
-                changed = true;
-              }
-
-              // Update right paddle if it changed (ultra-sensitive threshold)
-              if (payload.new.player_right_paddle_y !== null &&
-                  Math.abs(payload.new.player_right_paddle_y - currentState.paddles.right.y) > 2.0) {
-                updatedState = {
-                  ...updatedState,
-                  paddles: {
-                    ...updatedState.paddles,
-                    right: {
-                      ...updatedState.paddles.right,
-                      y: (() => {
-                        // Calculate velocity-based prediction for ultra-smooth movement
-                        const targetY = payload.new.player_right_paddle_y;
-                        const currentY = currentState.paddles.right.y;
-                        const difference = targetY - currentY;
-
-                        // Estimate velocity and add prediction
-                        const velocity = difference * 0.1; // Predict based on movement trend
-                        const predictedY = targetY + velocity;
-
-                        // Smooth interpolation to prevent jittering when both players move
-                        const interpolatedY = currentY + (predictedY - currentY) * 0.3;
-
-                        return Math.max(12, Math.min(canvasSize.height - 12 - updatedState.paddles.right.height, interpolatedY));
-                      })()
-                    }
-                  }
-                };
-                changed = true;
-              }
-
-
-              return updatedState;
-            });
-
-            // Update player count
-            const newPlayerCount = (payload.new.player_left_id ? 1 : 0) + (payload.new.player_right_id ? 1 : 0);
-            setMultiplayerState(prev => ({ ...prev, playerCount: newPlayerCount }));
-          }
+      ws.onmessage = (event) => {
+        try {
+          const message: WebSocketMessage = JSON.parse(event.data);
+          handleWebSocketMessage(message);
+        } catch (error) {
+          console.error('❌ Error parsing WebSocket message:', error);
         }
-      )
-      .subscribe();
+      };
 
-    subscriptionRef.current = subscription;
+      ws.onclose = (event) => {
+        console.log('🔌 WebSocket disconnected:', event.reason);
+        setConnectionStatus('error');
+        setMultiplayerState(prev => ({ ...prev, isConnected: false }));
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [multiplayerState.isConnected, multiplayerState.roomId, multiplayerState.playerId, multiplayerState.playerSide]);
+        // Attempt to reconnect after 3 seconds
+        if (!event.wasClean) {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            console.log('🔄 Attempting to reconnect...');
+            connectWebSocket();
+          }, 3000);
+        }
+      };
 
-  // Handle window resize to make playfield fullscreen
+      ws.onerror = (error) => {
+        console.error('❌ WebSocket error:', error);
+        setConnectionStatus('error');
+      };
+
+    } catch (error) {
+      console.error('❌ Failed to create WebSocket connection:', error);
+      setConnectionStatus('error');
+    }
+  }, [multiplayerState.playerId, multiplayerState.roomId]);
+
+  // Handle incoming WebSocket messages
+  const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
+    switch (message.type) {
+      case 'joined_room':
+        console.log('🏓 Joined room successfully:', message.data);
+        setMultiplayerState(prev => ({
+          ...prev,
+          playerSide: message.data.playerSide,
+          isGameMaster: message.data.isGameMaster,
+          playerCount: message.data.playerCount,
+          isConnected: true
+        }));
+
+        if (message.data.gameState) {
+          setGameState(message.data.gameState);
+        }
+        break;
+
+      case 'player_joined':
+        console.log('👋 Player joined:', message.data);
+        setMultiplayerState(prev => ({
+          ...prev,
+          playerCount: message.data.playerCount
+        }));
+        break;
+
+      case 'player_left':
+        console.log('👋 Player left:', message.data);
+        setMultiplayerState(prev => ({
+          ...prev,
+          playerCount: message.data.playerCount
+        }));
+        break;
+
+      case 'paddle_updated':
+        setGameState(prev => {
+          const newState = { ...prev };
+          if (message.data.side === 'left') {
+            newState.paddles.left.y = message.data.y;
+            newState.paddles.left.velocity = message.data.velocity || 0;
+            newState.paddles.left.targetY = message.data.targetY || message.data.y;
+          } else if (message.data.side === 'right') {
+            newState.paddles.right.y = message.data.y;
+            newState.paddles.right.velocity = message.data.velocity || 0;
+            newState.paddles.right.targetY = message.data.targetY || message.data.y;
+          }
+          return newState;
+        });
+        break;
+
+      case 'game_state_updated':
+        if (message.data) {
+          setGameState(message.data);
+        }
+        break;
+
+      case 'game_reset':
+        if (message.data) {
+          setGameState(message.data);
+        }
+        break;
+
+      case 'gamemaster_assigned':
+        setMultiplayerState(prev => ({
+          ...prev,
+          isGameMaster: message.data.isGameMaster
+        }));
+        break;
+
+      default:
+        console.log('❓ Unknown WebSocket message:', message);
+    }
+  }, []);
+
+  // Send paddle update via WebSocket
+  const updatePaddlePosition = useCallback((y: number, velocity = 0, targetY?: number) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN && multiplayerState.isConnected) {
+      wsRef.current.send(JSON.stringify({
+        type: 'update_paddle',
+        playerId: multiplayerState.playerId,
+        data: {
+          y,
+          velocity,
+          targetY: targetY || y
+        }
+      }));
+    }
+  }, [multiplayerState.playerId, multiplayerState.isConnected]);
+
+  // Send game state update via WebSocket (only for gamemaster)
+  const updateGameState = useCallback((newGameState: GameState) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN &&
+        multiplayerState.isConnected &&
+        multiplayerState.isGameMaster) {
+      wsRef.current.send(JSON.stringify({
+        type: 'update_game_state',
+        playerId: multiplayerState.playerId,
+        roomId: multiplayerState.roomId,
+        data: newGameState
+      }));
+    }
+  }, [multiplayerState.playerId, multiplayerState.roomId, multiplayerState.isConnected, multiplayerState.isGameMaster]);
+
+  // Reset game room
+  const resetRoom = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN &&
+        multiplayerState.isConnected &&
+        multiplayerState.isGameMaster) {
+      wsRef.current.send(JSON.stringify({
+        type: 'reset_room',
+        playerId: multiplayerState.playerId,
+        roomId: multiplayerState.roomId
+      }));
+    }
+  }, [multiplayerState.playerId, multiplayerState.roomId, multiplayerState.isConnected, multiplayerState.isGameMaster]);
+
+  // Handle window resize with constrained playfield size
   useEffect(() => {
     const updateCanvasSize = () => {
-      const width = window.innerWidth; // Full screen width
-      const height = window.innerHeight; // Full screen height
+      // Use 90% of viewport with reasonable constraints
+      const viewportWidth = window.innerWidth * 0.9;
+      const viewportHeight = window.innerHeight * 0.9;
+
+      // Set reasonable bounds
+      const maxWidth = Math.min(viewportWidth, 1200);
+      const maxHeight = Math.min(viewportHeight, 700);
+
+      // Use actual dimensions but ensure minimum size
+      const width = Math.max(maxWidth, 800);
+      const height = Math.max(maxHeight, 500);
+
       setCanvasSize({ width, height });
 
       // Update game state when canvas size changes
@@ -535,9 +350,27 @@ export const Pong404: React.FC = () => {
     return () => window.removeEventListener('resize', updateCanvasSize);
   }, []);
 
-  // Generate authentic Pong beep sound
+  // Initialize Web Audio API (only after user gesture)
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioInitAttempted = useRef<boolean>(false);
+
+  // Generate authentic Pong beep sound - only create AudioContext when actually needed
   const playBeep = useCallback((frequency: number, duration: number) => {
-    if (!audioContextRef.current) return;
+    // Only create AudioContext when actually trying to play a sound (user gesture)
+    if (!audioContextRef.current && !audioInitAttempted.current) {
+      audioInitAttempted.current = true;
+      try {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      } catch (error) {
+        // Audio not supported - fail silently
+        return;
+      }
+    }
+
+    // Exit early if no audio context or not in running state
+    if (!audioContextRef.current || audioContextRef.current.state !== 'running') {
+      return;
+    }
 
     const oscillator = audioContextRef.current.createOscillator();
     const gainNode = audioContextRef.current.createGain();
@@ -555,146 +388,32 @@ export const Pong404: React.FC = () => {
     oscillator.stop(audioContextRef.current.currentTime + duration);
   }, []);
 
-  // Handle keyboard input
+  // Connect WebSocket when entering multiplayer mode
   useEffect(() => {
-    const handleKeyDown = async (e: KeyboardEvent) => {
-      switch (e.key.toLowerCase()) {
-        case 'w':
-          setKeys(prev => ({ ...prev, w: true }));
-          break;
-        case 's':
-          setKeys(prev => ({ ...prev, s: true }));
-          break;
-        case 'arrowup':
-          setKeys(prev => ({ ...prev, up: true }));
-          break;
-        case 'arrowdown':
-          setKeys(prev => ({ ...prev, down: true }));
-          break;
-        case 'a':
-          if (localTestMode) {
-            setKeys(prev => ({ ...prev, w: true }));
-          }
-          break;
-        case 'd':
-          if (localTestMode) {
-            setKeys(prev => ({ ...prev, s: true }));
-          }
-          break;
-        case 'l':
-          e.preventDefault();
-          setLocalTestMode(prev => !prev);
-          console.log('Local test mode:', !localTestMode ? 'ON (A/D = left paddle, ↑/↓ = right paddle)' : 'OFF');
-          break;
-        case ' ':
-          e.preventDefault();
-
-          // Don't allow multiple connection attempts
-          if (connectionStatus === 'connecting') {
-            return;
-          }
-
-          if (!multiplayerState.isConnected && connectionStatus !== 'error') {
-            try {
-              await joinMultiplayerGame();
-              setGameState(prev => ({
-                ...prev,
-                gameMode: 'multiplayer',
-                score: { left: 0, right: 0 }
-              }));
-            } catch (error) {
-              console.error('Failed to join multiplayer game:', error);
-            }
-          } else if (connectionStatus === 'error') {
-            setConnectionStatus('idle');
-            try {
-              await joinMultiplayerGame();
-              setGameState(prev => ({
-                ...prev,
-                gameMode: 'multiplayer',
-                score: { left: 0, right: 0 }
-              }));
-            } catch (error) {
-              console.error('Failed to join multiplayer game:', error);
-            }
-          } else {
-            if (gameState.gameMode !== 'multiplayer') {
-              setGameState(prev => ({
-                ...prev,
-                gameMode: 'multiplayer'
-              }));
-            }
-            if (multiplayerState.playerSide === 'spectator') {
-              try {
-                await joinMultiplayerGame();
-              } catch (error) {
-                console.error('Failed to rejoin as player:', error);
-              }
-            }
-          }
-          break;
-        case 'r':
-          // Reset game room (for testing)
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            try {
-              await supabase
-                .from('live_pong')
-                .delete()
-                .eq('room_id', multiplayerState.roomId);
-              setMultiplayerState(prev => ({
-                ...prev,
-                isConnected: false,
-                playerSide: 'spectator',
-                isGameMaster: false
-              }));
-              setGameState(prev => ({
-                ...prev,
-                gameMode: 'auto'
-              }));
-            } catch (error) {
-              console.error('Failed to reset game room:', error);
-            }
-          }
-          break;
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      switch (e.key.toLowerCase()) {
-        case 'w':
-          setKeys(prev => ({ ...prev, w: false }));
-          break;
-        case 's':
-          setKeys(prev => ({ ...prev, s: false }));
-          break;
-        case 'arrowup':
-          setKeys(prev => ({ ...prev, up: false }));
-          break;
-        case 'arrowdown':
-          setKeys(prev => ({ ...prev, down: false }));
-          break;
-        case 'a':
-          if (localTestMode) {
-            setKeys(prev => ({ ...prev, w: false }));
-          }
-          break;
-        case 'd':
-          if (localTestMode) {
-            setKeys(prev => ({ ...prev, s: false }));
-          }
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
+    if (gameState.gameMode === 'multiplayer' && !multiplayerState.isConnected && connectionStatus === 'idle') {
+      connectWebSocket();
+    }
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
     };
-  }, [connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, gameState.gameMode, joinMultiplayerGame, multiplayerState.roomId, setGameState]);
+  }, [gameState.gameMode, multiplayerState.isConnected, connectionStatus, connectWebSocket]);
+
+  const [keys, setKeys] = useState({
+    w: false,
+    s: false,
+    up: false,
+    down: false,
+  });
+
+  const [infoTextFadeStart, setInfoTextFadeStart] = useState<number | null>(null);
+  const leftFrameCountRef = useRef<number>(0);
+  const rightFrameCountRef = useRef<number>(0);
 
   // Game logic
   const updateGame = useCallback(() => {
@@ -710,7 +429,6 @@ export const Pong404: React.FC = () => {
         }
       }
 
-
       // Check if we're in a pause state
       if (newState.isPaused) {
         const currentTime = Date.now();
@@ -724,16 +442,21 @@ export const Pong404: React.FC = () => {
         }
       }
 
+      // Auto-switch to player mode when keys are pressed (if not in multiplayer)
+      if (newState.gameMode === 'auto' && (keys.w || keys.s || keys.up || keys.down)) {
+        newState.gameMode = 'player';
+      }
+
       // Update paddle positions
       if (newState.gameMode === 'player') {
         // Single-player controls with smooth interpolation
         // Left paddle smooth movement
         if (keys.w && newState.paddles.left.y > 12) {
-          newState.paddles.left.velocity -= 1.8; // Faster acceleration
+          newState.paddles.left.velocity -= 1.0; // Slower acceleration for 60fps
         } else if (keys.s && newState.paddles.left.y < canvasSize.height - 12 - newState.paddles.left.height) {
-          newState.paddles.left.velocity += 1.8; // Faster acceleration
+          newState.paddles.left.velocity += 1.0; // Slower acceleration for 60fps
         } else {
-          newState.paddles.left.velocity *= 0.85; // Smooth deceleration
+          newState.paddles.left.velocity *= 0.88; // More friction for control
         }
 
         // Apply velocity with limits
@@ -743,11 +466,11 @@ export const Pong404: React.FC = () => {
 
         // Right paddle smooth movement
         if (keys.up && newState.paddles.right.y > 12) {
-          newState.paddles.right.velocity -= 1.8; // Faster acceleration
+          newState.paddles.right.velocity -= 1.0; // Slower acceleration for 60fps
         } else if (keys.down && newState.paddles.right.y < canvasSize.height - 12 - newState.paddles.right.height) {
-          newState.paddles.right.velocity += 1.8; // Faster acceleration
+          newState.paddles.right.velocity += 1.0; // Slower acceleration for 60fps
         } else {
-          newState.paddles.right.velocity *= 0.85; // Smooth deceleration
+          newState.paddles.right.velocity *= 0.88; // More friction for control
         }
 
         // Apply velocity with limits
@@ -761,11 +484,11 @@ export const Pong404: React.FC = () => {
 
           // Smooth left paddle movement for multiplayer (using W/S keys)
           if (keys.w && newState.paddles.left.y > 12) {
-            newState.paddles.left.velocity -= 1.8; // Faster acceleration
+            newState.paddles.left.velocity -= 1.0; // Slower acceleration for 60fps
           } else if (keys.s && newState.paddles.left.y < canvasSize.height - 12 - newState.paddles.left.height) {
-            newState.paddles.left.velocity += 1.8; // Faster acceleration
+            newState.paddles.left.velocity += 1.0; // Slower acceleration for 60fps
           } else {
-            newState.paddles.left.velocity *= 0.85; // Smooth deceleration
+            newState.paddles.left.velocity *= 0.88; // More friction for control
           }
 
           // Apply velocity with limits
@@ -774,7 +497,7 @@ export const Pong404: React.FC = () => {
           newState.paddles.left.y = Math.max(12, Math.min(canvasSize.height - 12 - newState.paddles.left.height, newState.paddles.left.y));
 
           if (Math.abs(newState.paddles.left.y - oldY) > 2.0 && !localTestMode) {
-            updatePaddlePosition('left', newState.paddles.left.y);
+            updatePaddlePosition(newState.paddles.left.y, newState.paddles.left.velocity, newState.paddles.left.y);
           }
         }
         if (multiplayerState.playerSide === 'right' || localTestMode) {
@@ -782,11 +505,11 @@ export const Pong404: React.FC = () => {
 
           // Smooth right paddle movement for multiplayer
           if (keys.up && newState.paddles.right.y > 12) {
-            newState.paddles.right.velocity -= 1.8; // Faster acceleration
+            newState.paddles.right.velocity -= 1.0; // Slower acceleration for 60fps
           } else if (keys.down && newState.paddles.right.y < canvasSize.height - 12 - newState.paddles.right.height) {
-            newState.paddles.right.velocity += 1.8; // Faster acceleration
+            newState.paddles.right.velocity += 1.0; // Slower acceleration for 60fps
           } else {
-            newState.paddles.right.velocity *= 0.85; // Smooth deceleration
+            newState.paddles.right.velocity *= 0.88; // More friction for control
           }
 
           // Apply velocity with limits
@@ -795,165 +518,8 @@ export const Pong404: React.FC = () => {
           newState.paddles.right.y = Math.max(12, Math.min(canvasSize.height - 12 - newState.paddles.right.height, newState.paddles.right.y));
 
           if (Math.abs(newState.paddles.right.y - oldY) > 2.0 && !localTestMode) {
-            updatePaddlePosition('right', newState.paddles.right.y);
+            updatePaddlePosition(newState.paddles.right.y, newState.paddles.right.velocity, newState.paddles.right.y);
           }
-        }
-
-        // In multiplayer mode, disable AI control entirely
-        // Players control their own paddles, game master syncs states
-        // Uncontrolled paddles will be updated via real-time sync from other browsers
-
-        // DISABLED: Auto-control for unassigned paddles - only if no human player is controlling them
-        // DISABLED: Check if left paddle has no human player assigned
-        if (false && multiplayerState.playerSide !== 'left') {
-          // Auto-control left paddle if no player assigned
-          leftFrameCountRef.current++;
-          const updatePaddleWithSpinner = (paddle: any, isLeft: boolean, frameCount: number) => {
-            // Same auto-control logic as before...
-            const reactionDelay = isLeft ? HUMAN_REACTION_DELAY : HUMAN_REACTION_DELAY + 3;
-            const ballCenterY = newState.ball.y + newState.ball.size / 2;
-
-            if (frameCount % reactionDelay === 0) {
-              const baseInaccuracy = isLeft ? 12 : 18;
-              const inaccuracy = (Math.random() - 0.5) * baseInaccuracy;
-              const predictionError = Math.random() < 0.3 ? (Math.random() - 0.5) * 30 : 0;
-              const targetY = Math.max(
-                paddle.height / 2,
-                Math.min(
-                  canvasSize.height - paddle.height / 2,
-                  ballCenterY - paddle.height / 2 + inaccuracy + predictionError
-                )
-              );
-              paddle.targetY = targetY;
-            }
-
-            const distance = paddle.targetY - paddle.y;
-            const direction = Math.sign(distance);
-            const ballDistance = Math.abs(newState.ball.x - (isLeft ? 0 : canvasSize.width));
-            const ballSpeed = Math.abs(newState.ball.dx);
-            const isPanicSituation = ballDistance < 300;
-            const currentPaddleCenter = paddle.y + paddle.height / 2;
-            const ballPaddleDistance = Math.abs(ballCenterY - currentPaddleCenter);
-            const ballHeadingTowardsPaddle = isLeft ? newState.ball.dx < 0 : newState.ball.dx > 0;
-            const isEmergencyPanic = ballHeadingTowardsPaddle && ballDistance < 150 && ballPaddleDistance > 30;
-            const panicThreatLevel = isPanicSituation && ballPaddleDistance > 20;
-            const shouldPanic = (Math.random() < PANIC_MOVE_CHANCE && panicThreatLevel) || isEmergencyPanic;
-            const shouldExtremePanic = (Math.random() < EXTREME_PANIC_CHANCE && panicThreatLevel) || isEmergencyPanic;
-
-            let acceleration = isLeft ? PADDLE_ACCELERATION : PADDLE_ACCELERATION * 0.85;
-
-            if (shouldExtremePanic) {
-              const extremePanicDirection = Math.sign(ballCenterY - currentPaddleCenter);
-              let panicMultiplier = EXTREME_PANIC_MULTIPLIER;
-              if (isEmergencyPanic) {
-                panicMultiplier = EXTREME_PANIC_MULTIPLIER * 2;
-              }
-              paddle.velocity = extremePanicDirection * paddle.speed * panicMultiplier;
-              paddle.velocity += (Math.random() - 0.5) * 8;
-              paddle.velocity *= isEmergencyPanic ? 2.0 : 1.5;
-            } else if (shouldPanic) {
-              const panicDirection = Math.sign(ballCenterY - currentPaddleCenter);
-              paddle.velocity += panicDirection * acceleration * PANIC_VELOCITY_MULTIPLIER;
-              paddle.velocity += (Math.random() - 0.5) * 2;
-            } else {
-              // Human-like movement: decisive action to intercept ball
-              if (Math.abs(distance) > 25) {
-                // Far from target - move decisively toward ball
-                paddle.velocity += direction * acceleration * 3.0;
-              } else if (Math.abs(distance) > 8) {
-                // Getting close - moderate movement
-                paddle.velocity += direction * acceleration * 1.2;
-              } else {
-                // At target - stop moving (humans don't micro-adjust constantly)
-                paddle.velocity *= 0.5;
-              }
-            }
-
-            const friction = isLeft ? PADDLE_FRICTION : PADDLE_FRICTION * 0.95;
-            paddle.velocity *= friction;
-            const maxSpeed = isLeft ? paddle.speed : paddle.speed * 0.9;
-            paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
-            paddle.y += paddle.velocity;
-            paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
-          };
-
-          updatePaddleWithSpinner(newState.paddles.left, true, leftFrameCountRef.current);
-        }
-
-        // DISABLED: Check if right paddle has no human player assigned
-        if (false && multiplayerState.playerSide !== 'right') {
-          // Auto-control right paddle if no player assigned
-          rightFrameCountRef.current++;
-          const updatePaddleWithSpinner = (paddle: any, isLeft: boolean, frameCount: number) => {
-            // Same logic repeated for right paddle...
-            const reactionDelay = isLeft ? HUMAN_REACTION_DELAY : HUMAN_REACTION_DELAY + 3;
-            const ballCenterY = newState.ball.y + newState.ball.size / 2;
-
-            if (frameCount % reactionDelay === 0) {
-              const baseInaccuracy = isLeft ? 12 : 18;
-              const inaccuracy = (Math.random() - 0.5) * baseInaccuracy;
-              const predictionError = Math.random() < 0.3 ? (Math.random() - 0.5) * 30 : 0;
-              const targetY = Math.max(
-                paddle.height / 2,
-                Math.min(
-                  canvasSize.height - paddle.height / 2,
-                  ballCenterY - paddle.height / 2 + inaccuracy + predictionError
-                )
-              );
-              paddle.targetY = targetY;
-            }
-
-            const distance = paddle.targetY - paddle.y;
-            const direction = Math.sign(distance);
-            const ballDistance = Math.abs(newState.ball.x - (isLeft ? 0 : canvasSize.width));
-            const ballSpeed = Math.abs(newState.ball.dx);
-            const isPanicSituation = ballDistance < 300;
-            const currentPaddleCenter = paddle.y + paddle.height / 2;
-            const ballPaddleDistance = Math.abs(ballCenterY - currentPaddleCenter);
-            const ballHeadingTowardsPaddle = isLeft ? newState.ball.dx < 0 : newState.ball.dx > 0;
-            const isEmergencyPanic = ballHeadingTowardsPaddle && ballDistance < 150 && ballPaddleDistance > 30;
-            const panicThreatLevel = isPanicSituation && ballPaddleDistance > 20;
-            const shouldPanic = (Math.random() < PANIC_MOVE_CHANCE && panicThreatLevel) || isEmergencyPanic;
-            const shouldExtremePanic = (Math.random() < EXTREME_PANIC_CHANCE && panicThreatLevel) || isEmergencyPanic;
-
-            let acceleration = isLeft ? PADDLE_ACCELERATION : PADDLE_ACCELERATION * 0.85;
-
-            if (shouldExtremePanic) {
-              const extremePanicDirection = Math.sign(ballCenterY - currentPaddleCenter);
-              let panicMultiplier = EXTREME_PANIC_MULTIPLIER;
-              if (isEmergencyPanic) {
-                panicMultiplier = EXTREME_PANIC_MULTIPLIER * 2;
-              }
-              paddle.velocity = extremePanicDirection * paddle.speed * panicMultiplier;
-              paddle.velocity += (Math.random() - 0.5) * 8;
-              paddle.velocity *= isEmergencyPanic ? 2.0 : 1.5;
-            } else if (shouldPanic) {
-              const panicDirection = Math.sign(ballCenterY - currentPaddleCenter);
-              paddle.velocity += panicDirection * acceleration * PANIC_VELOCITY_MULTIPLIER;
-              paddle.velocity += (Math.random() - 0.5) * 2;
-            } else {
-              // Human-like movement: decisive action to intercept ball
-              if (Math.abs(distance) > 25) {
-                // Far from target - move decisively toward ball
-                paddle.velocity += direction * acceleration * 3.0;
-              } else if (Math.abs(distance) > 8) {
-                // Getting close - moderate movement
-                paddle.velocity += direction * acceleration * 1.2;
-              } else {
-                // At target - stop moving (humans don't micro-adjust constantly)
-                paddle.velocity *= 0.5;
-              }
-            }
-
-            const friction = isLeft ? PADDLE_FRICTION : PADDLE_FRICTION * 0.95;
-            paddle.velocity *= friction;
-            const maxSpeed = isLeft ? paddle.speed : paddle.speed * 0.9;
-            paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
-            paddle.y += paddle.velocity;
-            paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
-          };
-
-          updatePaddleWithSpinner(newState.paddles.right, false, rightFrameCountRef.current);
         }
       } else {
         // Human-like spinner controls with momentum and reaction delay
@@ -1078,205 +644,579 @@ export const Pong404: React.FC = () => {
         newState.ball.x += newState.ball.dx;
         newState.ball.y += newState.ball.dy;
 
-      // Ball collision with top/bottom walls (account for border thickness)
-      const borderThickness = 12;
-      const ballAtTopWall = newState.ball.y <= borderThickness;
-      const ballAtBottomWall = newState.ball.y >= canvasSize.height - borderThickness - newState.ball.size;
+        // Ball collision with top/bottom walls (account for border thickness)
+        const borderThickness = 12;
+        const ballAtTopWall = newState.ball.y <= borderThickness;
+        const ballAtBottomWall = newState.ball.y >= canvasSize.height - borderThickness - newState.ball.size;
 
-      // Only trigger collision if ball is moving towards the wall (prevents repeated triggers)
-      if ((ballAtTopWall && newState.ball.dy < 0) || (ballAtBottomWall && newState.ball.dy > 0)) {
-        newState.ball.dy = -newState.ball.dy;
+        // Only trigger collision if ball is moving towards the wall (prevents repeated triggers)
+        if ((ballAtTopWall && newState.ball.dy < 0) || (ballAtBottomWall && newState.ball.dy > 0)) {
+          newState.ball.dy = -newState.ball.dy;
 
-        // Only play beep sound if we're the game master to avoid duplicate sounds
-        if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
-          playBeep(800, 0.1); // Wall hit sound
-        }
-      }
-
-      // Ball collision with paddles
-      const ballLeft = newState.ball.x;
-      const ballRight = newState.ball.x + newState.ball.size;
-      const ballTop = newState.ball.y;
-      const ballBottom = newState.ball.y + newState.ball.size;
-
-      // Advanced paddle collision with speed variation based on hit position
-
-      // Left paddle collision (with spacing from wall)
-      const leftPaddleX = 30; // 30px spacing from left wall
-      if (
-        ballLeft <= leftPaddleX + newState.paddles.left.width &&
-        ballBottom >= newState.paddles.left.y &&
-        ballTop <= newState.paddles.left.y + newState.paddles.left.height &&
-        newState.ball.dx < 0
-      ) {
-        // Calculate where on the paddle the ball hit (0 = top edge, 1 = bottom edge, 0.5 = center)
-        const ballCenterY = newState.ball.y + newState.ball.size / 2;
-        const paddleCenterY = newState.paddles.left.y + newState.paddles.left.height / 2;
-        const hitPosition = (ballCenterY - newState.paddles.left.y) / newState.paddles.left.height;
-
-        // Calculate distance from center (0 = center, 1 = edge)
-        const distanceFromCenter = Math.abs(hitPosition - 0.5) * 2;
-
-        // Calculate new speed based on hit position (edge hits = faster, center hits = slower)
-        const speedMultiplier = MIN_BALL_SPEED + (MAX_BALL_SPEED - MIN_BALL_SPEED) * distanceFromCenter;
-
-        // Calculate current ball speed magnitude
-        const currentSpeed = Math.sqrt(newState.ball.dx * newState.ball.dx + newState.ball.dy * newState.ball.dy);
-
-        // Preserve direction but apply new speed
-        newState.ball.dx = -newState.ball.dx * (speedMultiplier / currentSpeed);
-        newState.ball.dy = newState.ball.dy * (speedMultiplier / currentSpeed);
-
-        // Add slight angle variation based on hit position (like real Pong)
-        const angleVariation = (hitPosition - 0.5) * 2; // -1 to 1
-        newState.ball.dy += angleVariation * 2;
-
-        // Change colors on paddle hit!
-        newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
-
-        // Different beep pitch based on hit position (edge hits = higher pitch)
-        // Only play beep sound if we're the game master to avoid duplicate sounds
-        if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
-          const beepFreq = 500 + (distanceFromCenter * 300); // 500-800 Hz
-          playBeep(beepFreq, 0.1);
-        }
-      }
-
-      // Right paddle collision (with spacing from wall)
-      const rightPaddleX = canvasSize.width - 30 - newState.paddles.right.width; // 30px spacing from right wall
-      if (
-        ballRight >= rightPaddleX &&
-        ballBottom >= newState.paddles.right.y &&
-        ballTop <= newState.paddles.right.y + newState.paddles.right.height &&
-        newState.ball.dx > 0
-      ) {
-        // Calculate where on the paddle the ball hit (0 = top edge, 1 = bottom edge, 0.5 = center)
-        const ballCenterY = newState.ball.y + newState.ball.size / 2;
-        const paddleCenterY = newState.paddles.right.y + newState.paddles.right.height / 2;
-        const hitPosition = (ballCenterY - newState.paddles.right.y) / newState.paddles.right.height;
-
-        // Calculate distance from center (0 = center, 1 = edge)
-        const distanceFromCenter = Math.abs(hitPosition - 0.5) * 2;
-
-        // Calculate new speed based on hit position (edge hits = faster, center hits = slower)
-        const speedMultiplier = MIN_BALL_SPEED + (MAX_BALL_SPEED - MIN_BALL_SPEED) * distanceFromCenter;
-
-        // Calculate current ball speed magnitude
-        const currentSpeed = Math.sqrt(newState.ball.dx * newState.ball.dx + newState.ball.dy * newState.ball.dy);
-
-        // Preserve direction but apply new speed
-        newState.ball.dx = -newState.ball.dx * (speedMultiplier / currentSpeed);
-        newState.ball.dy = newState.ball.dy * (speedMultiplier / currentSpeed);
-
-        // Add slight angle variation based on hit position (like real Pong)
-        const angleVariation = (hitPosition - 0.5) * 2; // -1 to 1
-        newState.ball.dy += angleVariation * 2;
-
-        // Change colors on paddle hit!
-        newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
-
-        // Different beep pitch based on hit position (edge hits = higher pitch)
-        // Only play beep sound if we're the game master to avoid duplicate sounds
-        if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
-          const beepFreq = 500 + (distanceFromCenter * 300); // 500-800 Hz
-          playBeep(beepFreq, 0.1);
-        }
-      }
-
-      // Handle scoring when ball goes off screen
-      if (newState.ball.x < -20) {
-        // Right player scores (left computer player missed)
-        newState.score.right++;
-        // Only play beep sound if we're the game master to avoid duplicate sounds
-        if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
-          playBeep(300, 0.3); // Lower tone for score
+          // Only play beep sound if we're the game master to avoid duplicate sounds
+          if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
+            playBeep(800, 0.1); // Wall hit sound
+          }
         }
 
-        // Trigger decrunch effect for the miss
-        newState.decrunchEffect.isActive = true;
-        newState.decrunchEffect.startTime = Date.now();
+        // Ball collision with paddles
+        const ballLeft = newState.ball.x;
+        const ballRight = newState.ball.x + newState.ball.size;
+        const ballTop = newState.ball.y;
+        const ballBottom = newState.ball.y + newState.ball.size;
 
-        // Reset ball to center
-        newState.ball.x = canvasSize.width / 2;
-        newState.ball.y = canvasSize.height / 2;
-        newState.ball.dx = 0; // Stop ball movement during pause
-        newState.ball.dy = 0;
-        // Start 2-second pause
-        newState.isPaused = true;
-        newState.pauseEndTime = Date.now() + 2000; // 2 seconds
-        // Store next ball direction for after pause
-        setTimeout(() => {
-          setGameState(current => ({
-            ...current,
-            ball: {
-              ...current.ball,
-              dx: BALL_SPEED, // Always serve to left after right scores
-              dy: Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED
-            }
-          }));
-        }, 2000);
-      } else if (newState.ball.x > canvasSize.width + 20) {
-        // Left player scores (right computer player missed)
-        newState.score.left++;
-        // Only play beep sound if we're the game master to avoid duplicate sounds
-        if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
-          playBeep(300, 0.3); // Lower tone for score
+        // Advanced paddle collision with speed variation based on hit position
+
+        // Left paddle collision (with spacing from wall)
+        const leftPaddleX = 30; // 30px spacing from left wall
+        if (
+          ballLeft <= leftPaddleX + newState.paddles.left.width &&
+          ballBottom >= newState.paddles.left.y &&
+          ballTop <= newState.paddles.left.y + newState.paddles.left.height &&
+          newState.ball.dx < 0
+        ) {
+          // Calculate where on the paddle the ball hit (0 = top edge, 1 = bottom edge, 0.5 = center)
+          const ballCenterY = newState.ball.y + newState.ball.size / 2;
+          const paddleCenterY = newState.paddles.left.y + newState.paddles.left.height / 2;
+          const hitPosition = (ballCenterY - newState.paddles.left.y) / newState.paddles.left.height;
+
+          // Calculate distance from center (0 = center, 1 = edge)
+          const distanceFromCenter = Math.abs(hitPosition - 0.5) * 2;
+
+          // Calculate new speed based on hit position (edge hits = faster, center hits = slower)
+          const speedMultiplier = MIN_BALL_SPEED + (MAX_BALL_SPEED - MIN_BALL_SPEED) * distanceFromCenter;
+
+          // Calculate current ball speed magnitude
+          const currentSpeed = Math.sqrt(newState.ball.dx * newState.ball.dx + newState.ball.dy * newState.ball.dy);
+
+          // Preserve direction but apply new speed
+          newState.ball.dx = -newState.ball.dx * (speedMultiplier / currentSpeed);
+          newState.ball.dy = newState.ball.dy * (speedMultiplier / currentSpeed);
+
+          // Add slight angle variation based on hit position (like real Pong)
+          const angleVariation = (hitPosition - 0.5) * 2; // -1 to 1
+          newState.ball.dy += angleVariation * 2;
+
+          // Change colors on paddle hit!
+          newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
+
+          // Different beep pitch based on hit position (edge hits = higher pitch)
+          // Only play beep sound if we're the game master to avoid duplicate sounds
+          if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
+            const beepFreq = 500 + (distanceFromCenter * 300); // 500-800 Hz
+            playBeep(beepFreq, 0.1);
+          }
         }
 
-        // Trigger decrunch effect for the miss
-        newState.decrunchEffect.isActive = true;
-        newState.decrunchEffect.startTime = Date.now();
+        // Right paddle collision (with spacing from wall)
+        const rightPaddleX = canvasSize.width - 30 - newState.paddles.right.width; // 30px spacing from right wall
+        if (
+          ballRight >= rightPaddleX &&
+          ballBottom >= newState.paddles.right.y &&
+          ballTop <= newState.paddles.right.y + newState.paddles.right.height &&
+          newState.ball.dx > 0
+        ) {
+          // Calculate where on the paddle the ball hit (0 = top edge, 1 = bottom edge, 0.5 = center)
+          const ballCenterY = newState.ball.y + newState.ball.size / 2;
+          const paddleCenterY = newState.paddles.right.y + newState.paddles.right.height / 2;
+          const hitPosition = (ballCenterY - newState.paddles.right.y) / newState.paddles.right.height;
 
-        // Reset ball to center
-        newState.ball.x = canvasSize.width / 2;
-        newState.ball.y = canvasSize.height / 2;
-        newState.ball.dx = 0; // Stop ball movement during pause
-        newState.ball.dy = 0;
-        // Start 2-second pause
-        newState.isPaused = true;
-        newState.pauseEndTime = Date.now() + 2000; // 2 seconds
-        // Store next ball direction for after pause
-        setTimeout(() => {
-          setGameState(current => ({
-            ...current,
-            ball: {
-              ...current.ball,
-              dx: -BALL_SPEED, // Always serve to right after left scores
-              dy: Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED
-            }
-          }));
-        }, 2000);
-      }
+          // Calculate distance from center (0 = center, 1 = edge)
+          const distanceFromCenter = Math.abs(hitPosition - 0.5) * 2;
 
-      // In multiplayer mode, only sync ball/score changes, not paddle positions
-      // Paddle positions are handled individually by each player
-      if (newState.gameMode === 'multiplayer' && multiplayerState.isGameMaster) {
-        // Only sync ball and score changes, and throttle heavily to reduce load
-        const now = Date.now();
-        const timeSinceLastUpdate = now - lastUpdateRef.current;
+          // Calculate new speed based on hit position (edge hits = faster, center hits = slower)
+          const speedMultiplier = MIN_BALL_SPEED + (MAX_BALL_SPEED - MIN_BALL_SPEED) * distanceFromCenter;
 
-        const ballMoved = Math.abs(newState.ball.x - gameState.ball.x) > 5 || Math.abs(newState.ball.y - gameState.ball.y) > 5;
-        const scoreChanged = newState.score.left !== gameState.score.left || newState.score.right !== gameState.score.right;
+          // Calculate current ball speed magnitude
+          const currentSpeed = Math.sqrt(newState.ball.dx * newState.ball.dx + newState.ball.dy * newState.ball.dy);
 
-        if ((ballMoved || scoreChanged) && timeSinceLastUpdate > 100) { // Max 10fps for ball sync
-          lastUpdateRef.current = now;
-          updateMultiplayerGameState(newState);
+          // Preserve direction but apply new speed
+          newState.ball.dx = -newState.ball.dx * (speedMultiplier / currentSpeed);
+          newState.ball.dy = newState.ball.dy * (speedMultiplier / currentSpeed);
+
+          // Add slight angle variation based on hit position (like real Pong)
+          const angleVariation = (hitPosition - 0.5) * 2; // -1 to 1
+          newState.ball.dy += angleVariation * 2;
+
+          // Change colors on paddle hit!
+          newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
+
+          // Different beep pitch based on hit position (edge hits = higher pitch)
+          // Only play beep sound if we're the game master to avoid duplicate sounds
+          if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
+            const beepFreq = 500 + (distanceFromCenter * 300); // 500-800 Hz
+            playBeep(beepFreq, 0.1);
+          }
         }
-      }
 
+        // Handle scoring when ball goes off screen
+        if (newState.ball.x < -20) {
+          // Right player scores (left computer player missed)
+          newState.score.right++;
+          // Only play beep sound if we're the game master to avoid duplicate sounds
+          if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
+            playBeep(300, 0.3); // Lower tone for score
+          }
+
+          // Trigger decrunch effect for the miss
+          newState.decrunchEffect.isActive = true;
+          newState.decrunchEffect.startTime = Date.now();
+
+          // Reset ball to center
+          newState.ball.x = canvasSize.width / 2;
+          newState.ball.y = canvasSize.height / 2;
+          newState.ball.dx = 0; // Stop ball movement during pause
+          newState.ball.dy = 0;
+          // Start 2-second pause
+          newState.isPaused = true;
+          newState.pauseEndTime = Date.now() + 2000; // 2 seconds
+          // Store next ball direction for after pause
+          setTimeout(() => {
+            setGameState(current => ({
+              ...current,
+              ball: {
+                ...current.ball,
+                dx: BALL_SPEED, // Always serve to left after right scores
+                dy: Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED
+              }
+            }));
+          }, 2000);
+        } else if (newState.ball.x > canvasSize.width + 20) {
+          // Left player scores (right computer player missed)
+          newState.score.left++;
+          // Only play beep sound if we're the game master to avoid duplicate sounds
+          if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
+            playBeep(300, 0.3); // Lower tone for score
+          }
+
+          // Trigger decrunch effect for the miss
+          newState.decrunchEffect.isActive = true;
+          newState.decrunchEffect.startTime = Date.now();
+
+          // Reset ball to center
+          newState.ball.x = canvasSize.width / 2;
+          newState.ball.y = canvasSize.height / 2;
+          newState.ball.dx = 0; // Stop ball movement during pause
+          newState.ball.dy = 0;
+          // Start 2-second pause
+          newState.isPaused = true;
+          newState.pauseEndTime = Date.now() + 2000; // 2 seconds
+          // Store next ball direction for after pause
+          setTimeout(() => {
+            setGameState(current => ({
+              ...current,
+              ball: {
+                ...current.ball,
+                dx: -BALL_SPEED, // Always serve to right after left scores
+                dy: Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED
+              }
+            }));
+          }, 2000);
+        }
+
+        // In multiplayer mode, only sync ball/score changes if we're the gamemaster
+        if (newState.gameMode === 'multiplayer' && multiplayerState.isGameMaster) {
+          updateGameState(newState);
+        }
       } // End of !newState.isPaused check - ball logic only
 
       return newState;
     });
-  }, [keys, playBeep, canvasSize, multiplayerState.isGameMaster, updateMultiplayerGameState, localTestMode]);
+  }, [keys, playBeep, canvasSize, multiplayerState.isGameMaster, updateGameState, localTestMode, multiplayerState.playerSide, updatePaddlePosition, multiplayerState]);
 
-  // Render game
+  // Handle keyboard input
+  useEffect(() => {
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      switch (e.key.toLowerCase()) {
+        case 'w':
+          setKeys(prev => ({ ...prev, w: true }));
+          break;
+        case 's':
+          setKeys(prev => ({ ...prev, s: true }));
+          break;
+        case 'arrowup':
+          setKeys(prev => ({ ...prev, up: true }));
+          break;
+        case 'arrowdown':
+          setKeys(prev => ({ ...prev, down: true }));
+          break;
+        case 'a':
+          if (localTestMode) {
+            setKeys(prev => ({ ...prev, w: true }));
+          }
+          break;
+        case 'd':
+          if (localTestMode) {
+            setKeys(prev => ({ ...prev, s: true }));
+          }
+          break;
+        case 'l':
+          e.preventDefault();
+          setLocalTestMode(prev => !prev);
+          console.log('Local test mode:', !localTestMode ? 'ON (A/D = left paddle, ↑/↓ = right paddle)' : 'OFF');
+          break;
+        case 'c':
+          e.preventDefault();
+          setCrtEffect(prev => !prev);
+          console.log('CRT Effect:', !crtEffect ? 'ON (Vintage CRT monitor simulation)' : 'OFF (Clean modern display)');
+          break;
+        case ' ':
+          e.preventDefault();
+
+          // Don't allow multiple connection attempts
+          if (connectionStatus === 'connecting') {
+            return;
+          }
+
+          if (!multiplayerState.isConnected && connectionStatus !== 'error') {
+            try {
+              connectWebSocket();
+              setGameState(prev => ({
+                ...prev,
+                gameMode: 'multiplayer',
+                score: { left: 0, right: 0 }
+              }));
+            } catch (error) {
+              console.error('Failed to join multiplayer game:', error);
+            }
+          } else if (connectionStatus === 'error') {
+            setConnectionStatus('idle');
+            try {
+              connectWebSocket();
+              setGameState(prev => ({
+                ...prev,
+                gameMode: 'multiplayer',
+                score: { left: 0, right: 0 }
+              }));
+            } catch (error) {
+              console.error('Failed to join multiplayer game:', error);
+            }
+          } else {
+            if (gameState.gameMode !== 'multiplayer') {
+              setGameState(prev => ({
+                ...prev,
+                gameMode: 'multiplayer'
+              }));
+            }
+          }
+          break;
+        case 'r':
+          // Reset game room (for testing)
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            try {
+              resetRoom();
+              setMultiplayerState(prev => ({
+                ...prev,
+                isConnected: false,
+                playerSide: 'spectator',
+                isGameMaster: false
+              }));
+              setGameState(prev => ({
+                ...prev,
+                gameMode: 'auto'
+              }));
+            } catch (error) {
+              console.error('Failed to reset game room:', error);
+            }
+          }
+          break;
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      switch (e.key.toLowerCase()) {
+        case 'w':
+          setKeys(prev => ({ ...prev, w: false }));
+          break;
+        case 's':
+          setKeys(prev => ({ ...prev, s: false }));
+          break;
+        case 'arrowup':
+          setKeys(prev => ({ ...prev, up: false }));
+          break;
+        case 'arrowdown':
+          setKeys(prev => ({ ...prev, down: false }));
+          break;
+        case 'a':
+          if (localTestMode) {
+            setKeys(prev => ({ ...prev, w: false }));
+          }
+          break;
+        case 'd':
+          if (localTestMode) {
+            setKeys(prev => ({ ...prev, s: false }));
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [connectionStatus, multiplayerState.isConnected, gameState.gameMode, connectWebSocket, resetRoom, localTestMode, crtEffect]);
+
+  // Helper function to convert hex to RGB
+  const hexToRgb = useCallback((hex: string) => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    return result ? {
+      r: parseInt(result[1], 16),
+      g: parseInt(result[2], 16),
+      b: parseInt(result[3], 16)
+    } : { r: 0, g: 0, b: 0 };
+  }, []);
+
+  // Simplified CRT Effect - overlay effects only for better performance and appearance
+  const applyCRTEffect = useCallback((ctx: CanvasRenderingContext2D, canvasSize: { width: number; height: number }) => {
+    const time = Date.now() * 0.001;
+    const frameCount = Math.floor(time * 15); // Frame count for animation timing
+
+    ctx.save();
+
+    // 1. CRT Curvature Effect - Visible edge darkening to simulate curved screen
+    const centerX = canvasSize.width / 2;
+    const centerY = canvasSize.height / 2;
+
+    ctx.globalCompositeOperation = 'multiply';
+    const curvatureGradient = ctx.createRadialGradient(
+      centerX, centerY, 0,
+      centerX, centerY, Math.max(canvasSize.width, canvasSize.height) * 0.7
+    );
+    curvatureGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    curvatureGradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.95)');
+    curvatureGradient.addColorStop(0.9, 'rgba(255, 255, 255, 0.8)');
+    curvatureGradient.addColorStop(1, 'rgba(255, 255, 255, 0.65)'); // More visible edge darkening
+
+    ctx.fillStyle = curvatureGradient;
+    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+
+    // 2. Scanlines - Most important CRT effect, highly optimized
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.globalAlpha = 1;
+
+    // Pre-calculate scanline pattern once per 4 frames for better performance
+    const scanlineOffset = frameCount % 2;
+
+    // Draw scanlines in batches using gradients for better performance
+    const scanlineGradient = ctx.createLinearGradient(0, 0, 0, 4);
+    scanlineGradient.addColorStop(0, 'rgba(0, 0, 0, 0.2)');
+    scanlineGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.3)');
+    scanlineGradient.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
+
+    ctx.fillStyle = scanlineGradient;
+
+    // Draw scanlines every 2 pixels with pattern offset
+    for (let y = scanlineOffset; y < canvasSize.height; y += 4) {
+      ctx.fillRect(0, y, canvasSize.width, 1);
+    }
+
+
+    // 4. Vignette - Use single radial gradient (cached)
+    ctx.globalCompositeOperation = 'multiply';
+    const vignetteGradient = ctx.createRadialGradient(
+      canvasSize.width / 2, canvasSize.height / 2, 0,
+      canvasSize.width / 2, canvasSize.height / 2, canvasSize.width * 0.7
+    );
+    vignetteGradient.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    vignetteGradient.addColorStop(0.8, 'rgba(255, 255, 255, 0.9)');
+    vignetteGradient.addColorStop(1, 'rgba(255, 255, 255, 0.7)');
+
+    ctx.fillStyle = vignetteGradient;
+    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+
+    // 5. Screen Flicker - Simple but effective
+    const flicker = 0.98 + 0.015 * Math.sin(time * 47); // Different frequency to avoid patterns
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = `rgba(255, 255, 255, ${flicker})`;
+    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+
+    // 6. Phosphor Glow - Only around key elements, very minimal
+    if (frameCount % 3 === 0) { // Every 3rd frame only
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = 0.08;
+      const currentColors = COLOR_PALETTE[gameState.colorIndex];
+      ctx.shadowColor = currentColors.foreground;
+      ctx.shadowBlur = 2;
+      ctx.fillStyle = currentColors.foreground;
+
+      // Minimal glow around center line only
+      ctx.fillRect(canvasSize.width / 2 - 1, 0, 2, canvasSize.height);
+      ctx.shadowBlur = 0;
+    }
+
+    // 6.5. Enhanced RGB Bleed Effect - More prominent chromatic aberration simulation
+    // frameCount already declared above, reuse it
+    if (frameCount % 1 === 0) { // Every frame for more visible effect
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = 0.08; // More prominent effect
+
+      const currentColors = COLOR_PALETTE[gameState.colorIndex];
+      const rgbColor = hexToRgb(currentColors.foreground);
+
+      // Create more noticeable horizontal red/blue shift for RGB bleed
+      const bleedOffset = 2; // 2 pixel offset for more visible effect
+
+      // Red channel shift (left) - more prominent
+      ctx.fillStyle = `rgba(${rgbColor.r}, 0, 0, 0.5)`;
+      ctx.fillRect(-bleedOffset, 0, canvasSize.width + bleedOffset, canvasSize.height);
+
+      // Blue channel shift (right) - more prominent
+      ctx.fillStyle = `rgba(0, 0, ${rgbColor.b}, 0.5)`;
+      ctx.fillRect(bleedOffset, 0, canvasSize.width - bleedOffset, canvasSize.height);
+
+      // Green stays in place but enhanced for better contrast
+      ctx.fillStyle = `rgba(0, ${Math.min(255, rgbColor.g + 20)}, 0, 0.3)`;
+      ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+    }
+
+    // 7. Enhanced CRT Noise - Static and interference patterns
+    if (Math.random() < 0.4) { // 40% chance per frame for static noise
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = 0.025;
+
+      // Random static noise (white noise)
+      for (let i = 0; i < 15; i++) {
+        const x = Math.random() * canvasSize.width;
+        const y = Math.random() * canvasSize.height;
+        const brightness = Math.random() * 255;
+        ctx.fillStyle = `rgb(${brightness}, ${brightness}, ${brightness})`;
+        ctx.fillRect(x, y, Math.random() < 0.3 ? 2 : 1, Math.random() < 0.2 ? 2 : 1);
+      }
+
+      // Colored noise (RGB static)
+      for (let i = 0; i < 8; i++) {
+        const x = Math.random() * canvasSize.width;
+        const y = Math.random() * canvasSize.height;
+        const r = Math.random() * 255;
+        const g = Math.random() * 255;
+        const b = Math.random() * 255;
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        ctx.fillRect(x, y, 1, 1);
+      }
+    }
+
+
+    // 8. Refresh Line - Very occasionally
+    if (Math.random() < 0.008) { // 0.8% chance per frame
+      const refreshY = (time * 300) % canvasSize.height;
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = 0.05;
+      const currentColors = COLOR_PALETTE[gameState.colorIndex];
+      ctx.fillStyle = currentColors.foreground;
+      ctx.fillRect(0, refreshY, canvasSize.width, 1);
+    }
+
+    ctx.restore();
+  }, [gameState.colorIndex]);
+
+  // C64-style decrunch effect renderer - only affects foreground elements
+  const renderDecrunchEffect = useCallback((ctx: CanvasRenderingContext2D, canvasSize: { width: number; height: number }, targetColor: string, progress: number) => {
+    // Create a mask that only affects non-background pixels
+    // This simulates the authentic C64 decrunch effect that only affects sprites/text
+
+    // Get current canvas data to identify non-background pixels
+    const imageData = ctx.getImageData(0, 0, canvasSize.width, canvasSize.height);
+    const data = imageData.data;
+    const backgroundColorRGB = hexToRgb(COLOR_PALETTE[gameState.colorIndex].background);
+
+    // Create effect patterns based on progress
+    const scanlineSpacing = 2; // Every 2 pixels like C64
+    const time = progress * 16; // Much faster animation (doubled from 8)
+
+    // Apply decrunch effect only to foreground pixels
+    for (let y = 0; y < canvasSize.height; y += scanlineSpacing) {
+      for (let x = 0; x < canvasSize.width; x++) {
+        const pixelIndex = (y * canvasSize.width + x) * 4;
+
+        // Check if this pixel is not background color
+        const r = data[pixelIndex];
+        const g = data[pixelIndex + 1];
+        const b = data[pixelIndex + 2];
+
+        // If pixel is not background color (i.e., it's a paddle, ball, text, etc.)
+        const isBackground = Math.abs(r - backgroundColorRGB.r) < 30 &&
+                           Math.abs(g - backgroundColorRGB.g) < 30 &&
+                           Math.abs(b - backgroundColorRGB.b) < 30;
+
+        if (!isBackground) {
+          // Apply authentic C64 decrunch effect patterns
+
+          // Phase 1: Horizontal line corruption (like the GIF) - faster oscillation
+          const corruptionOffset = Math.sin(y * 0.1 + time * 6) * 5 * progress; // Reduced from 10 to 5
+          const shouldCorrupt = Math.random() < (0.4 * progress); // More frequent corruption
+
+          if (shouldCorrupt) {
+            // Create horizontal line artifacts
+            ctx.globalAlpha = 0.7;
+            ctx.strokeStyle = targetColor;
+            ctx.lineWidth = 1;
+
+            const lineStartX = Math.max(0, x + corruptionOffset);
+            const lineEndX = Math.min(canvasSize.width, x + corruptionOffset + 10 + Math.random() * 20); // Reduced from 20+40 to 10+20
+
+            // Flickering horizontal lines (like in the GIF)
+            if (Math.random() > 0.4) {
+              ctx.beginPath();
+              ctx.moveTo(lineStartX, y);
+              ctx.lineTo(lineEndX, y);
+              ctx.stroke();
+            }
+          }
+
+          // Phase 2: Interlaced effect (classic C64 loading pattern) - faster interlacing
+          if (progress > 0.3) {
+            const interlacePhase = (progress - 0.3) * 2; // Faster phase progression
+            if (y % 4 === Math.floor(time * 4) % 4) { // Faster interlace cycling
+              // Create interlaced corruption
+              const displacement = Math.sin(x * 0.05 + time * 8) * 2.5 * interlacePhase; // Reduced from 5 to 2.5
+
+              if (Math.random() < (0.4 * interlacePhase)) {
+                ctx.globalAlpha = 0.6;
+                ctx.fillStyle = targetColor;
+
+                // Draw corrupted pixel blocks
+                const blockWidth = 2 + Math.floor(Math.random() * 4);
+                ctx.fillRect(x + displacement, y, blockWidth, 1);
+              }
+            }
+          }
+
+          // Phase 3: Final decompression artifacts
+          if (progress > 0.7) {
+            const finalPhase = (progress - 0.7) * 3;
+
+            // Random pixel corruption that fades out
+            if (Math.random() < (0.2 * (1 - finalPhase))) {
+              ctx.globalAlpha = 0.5 * (1 - finalPhase);
+              ctx.fillStyle = targetColor;
+
+              // Small corruption blocks
+              const corruptSize = Math.random() < 0.5 ? 1 : 2;
+              ctx.fillRect(x, y, corruptSize, corruptSize);
+            }
+          }
+        }
+      }
+    }
+
+    // Reset alpha
+    ctx.globalAlpha = 1;
+  }, [gameState.colorIndex, hexToRgb]);
+
+  // High-performance render function
   const render = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
+
+    // Optimize canvas for performance
+    ctx.imageSmoothingEnabled = false; // Disable anti-aliasing for pixel-perfect rendering
 
     // Get current color scheme
     const currentColors = COLOR_PALETTE[gameState.colorIndex];
@@ -1374,11 +1314,14 @@ export const Pong404: React.FC = () => {
       ctx.font = 'bold 10px "Press Start 2P", monospace';
 
       if (connectionStatus === 'connecting') {
-        ctx.fillText('CONNECTING TO MULTIPLAYER...', canvasSize.width / 2, canvasSize.height - 20);
+        ctx.fillText('CONNECTING TO MULTIPLAYER...', canvasSize.width / 2, canvasSize.height - 40);
+        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
       } else if (connectionStatus === 'error') {
-        ctx.fillText('CONNECTION FAILED - Press SPACEBAR to retry', canvasSize.width / 2, canvasSize.height - 20);
+        ctx.fillText('CONNECTION FAILED - Press SPACEBAR to retry', canvasSize.width / 2, canvasSize.height - 40);
+        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
       } else {
-        ctx.fillText('Press SPACEBAR to join online multiplayer', canvasSize.width / 2, canvasSize.height - 20);
+        ctx.fillText('Press SPACEBAR to join online multiplayer', canvasSize.width / 2, canvasSize.height - 40);
+        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
       }
     } else if (gameState.gameMode === 'multiplayer') {
       // Calculate fade out for ALL multiplayer info text
@@ -1413,21 +1356,22 @@ export const Pong404: React.FC = () => {
             ? 'SPECTATING'
             : `YOU: ${multiplayerState.playerSide.toUpperCase()} PADDLE`;
 
-          ctx.fillText('MULTIPLAYER MODE', canvasSize.width / 2, canvasSize.height - 80);
-          ctx.fillText(playerSideText, canvasSize.width / 2, canvasSize.height - 60);
+          ctx.fillText('MULTIPLAYER MODE', canvasSize.width / 2, canvasSize.height - 100);
+          ctx.fillText(playerSideText, canvasSize.width / 2, canvasSize.height - 80);
 
           if (multiplayerState.playerSide !== 'spectator') {
             const controls = localTestMode
               ? 'A/D = left paddle, ↑/↓ = right paddle'
               : multiplayerState.playerSide === 'left' ? 'W/S keys' : '↑/↓ arrows';
-            ctx.fillText(`Controls: ${controls}`, canvasSize.width / 2, canvasSize.height - 40);
+            ctx.fillText(`Controls: ${controls}`, canvasSize.width / 2, canvasSize.height - 60);
           }
 
           if (localTestMode) {
-            ctx.fillText('LOCAL TEST MODE - Press L to toggle', canvasSize.width / 2, canvasSize.height - 20);
+            ctx.fillText('LOCAL TEST MODE - Press L to toggle', canvasSize.width / 2, canvasSize.height - 40);
           } else {
-            ctx.fillText('Press L for local test mode', canvasSize.width / 2, canvasSize.height - 20);
+            ctx.fillText('Press L for local test mode', canvasSize.width / 2, canvasSize.height - 40);
           }
+          ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
         } else {
           ctx.fillText('CONNECTING...', canvasSize.width / 2, canvasSize.height - 60);
         }
@@ -1457,7 +1401,13 @@ export const Pong404: React.FC = () => {
       // Center instruction
       ctx.textAlign = 'center';
       ctx.font = 'bold 10px "Press Start 2P", monospace';
-      ctx.fillText('Press SPACEBAR to return to auto-play', canvasSize.width / 2, canvasSize.height - 20);
+      ctx.fillText('Press SPACEBAR to return to auto-play', canvasSize.width / 2, canvasSize.height - 40);
+      ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
+    }
+
+    // Apply CRT shader effect (if enabled) - but only do expensive pixel distortion occasionally
+    if (crtEffect) {
+      applyCRTEffect(ctx, canvasSize);
     }
 
     // Apply C64-style decrunch effect when active
@@ -1473,195 +1423,33 @@ export const Pong404: React.FC = () => {
       renderDecrunchEffect(ctx, canvasSize, targetColor, progress);
     }
 
-  }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode]);
+  }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, renderDecrunchEffect, crtEffect, applyCRTEffect]);
 
-  // C64-style decrunch effect renderer - only affects foreground elements
-  const renderDecrunchEffect = useCallback((ctx: CanvasRenderingContext2D, canvasSize: { width: number; height: number }, targetColor: string, progress: number) => {
-    // Create a mask that only affects non-background pixels
-    // This simulates the authentic C64 decrunch effect that only affects sprites/text
-
-    // Get current canvas data to identify non-background pixels
-    const imageData = ctx.getImageData(0, 0, canvasSize.width, canvasSize.height);
-    const data = imageData.data;
-    const backgroundColorRGB = hexToRgb(COLOR_PALETTE[gameState.colorIndex].background);
-
-    // Create effect patterns based on progress
-    const scanlineSpacing = 2; // Every 2 pixels like C64
-    const time = progress * 16; // Much faster animation (doubled from 8)
-
-    // Apply decrunch effect only to foreground pixels
-    for (let y = 0; y < canvasSize.height; y += scanlineSpacing) {
-      for (let x = 0; x < canvasSize.width; x++) {
-        const pixelIndex = (y * canvasSize.width + x) * 4;
-
-        // Check if this pixel is not background color
-        const r = data[pixelIndex];
-        const g = data[pixelIndex + 1];
-        const b = data[pixelIndex + 2];
-
-        // If pixel is not background color (i.e., it's a paddle, ball, text, etc.)
-        const isBackground = Math.abs(r - backgroundColorRGB.r) < 30 &&
-                           Math.abs(g - backgroundColorRGB.g) < 30 &&
-                           Math.abs(b - backgroundColorRGB.b) < 30;
-
-        if (!isBackground) {
-          // Apply authentic C64 decrunch effect patterns
-
-          // Phase 1: Horizontal line corruption (like the GIF) - faster oscillation
-          const corruptionOffset = Math.sin(y * 0.1 + time * 6) * 5 * progress; // Reduced from 10 to 5
-          const shouldCorrupt = Math.random() < (0.4 * progress); // More frequent corruption
-
-          if (shouldCorrupt) {
-            // Create horizontal line artifacts
-            ctx.globalAlpha = 0.7;
-            ctx.strokeStyle = targetColor;
-            ctx.lineWidth = 1;
-
-            const lineStartX = Math.max(0, x + corruptionOffset);
-            const lineEndX = Math.min(canvasSize.width, x + corruptionOffset + 10 + Math.random() * 20); // Reduced from 20+40 to 10+20
-
-            // Flickering horizontal lines (like in the GIF)
-            if (Math.random() > 0.4) {
-              ctx.beginPath();
-              ctx.moveTo(lineStartX, y);
-              ctx.lineTo(lineEndX, y);
-              ctx.stroke();
-            }
-          }
-
-          // Phase 2: Interlaced effect (classic C64 loading pattern) - faster interlacing
-          if (progress > 0.3) {
-            const interlacePhase = (progress - 0.3) * 2; // Faster phase progression
-            if (y % 4 === Math.floor(time * 4) % 4) { // Faster interlace cycling
-              // Create interlaced corruption
-              const displacement = Math.sin(x * 0.05 + time * 8) * 2.5 * interlacePhase; // Reduced from 5 to 2.5
-
-              if (Math.random() < (0.4 * interlacePhase)) {
-                ctx.globalAlpha = 0.6;
-                ctx.fillStyle = targetColor;
-
-                // Draw corrupted pixel blocks
-                const blockWidth = 2 + Math.floor(Math.random() * 4);
-                ctx.fillRect(x + displacement, y, blockWidth, 1);
-              }
-            }
-          }
-
-          // Phase 3: Final decompression artifacts
-          if (progress > 0.7) {
-            const finalPhase = (progress - 0.7) * 3;
-
-            // Random pixel corruption that fades out
-            if (Math.random() < (0.2 * (1 - finalPhase))) {
-              ctx.globalAlpha = 0.5 * (1 - finalPhase);
-              ctx.fillStyle = targetColor;
-
-              // Small corruption blocks
-              const corruptSize = Math.random() < 0.5 ? 1 : 2;
-              ctx.fillRect(x, y, corruptSize, corruptSize);
-            }
-          }
-        }
-      }
-    }
-
-    // Reset alpha
-    ctx.globalAlpha = 1;
-  }, [gameState.colorIndex]);
-
-  // Tiny random glitch renderer - applies to actual objects like ball lost effect
-  const renderTinyGlitch = useCallback((ctx: CanvasRenderingContext2D, centerX: number, centerY: number, targetColor: string, progress: number, canvasSize: { width: number; height: number }) => {
-    const glitchSize = 15; // Small area around the center point
-    const intensity = Math.sin(progress * Math.PI);
-    const time = progress * 8;
-
-    // Get current canvas data to identify non-background pixels (same as ball lost effect)
-    const imageData = ctx.getImageData(
-      Math.max(0, centerX - glitchSize),
-      Math.max(0, centerY - glitchSize),
-      Math.min(glitchSize * 2, canvasSize.width - Math.max(0, centerX - glitchSize)),
-      Math.min(glitchSize * 2, canvasSize.height - Math.max(0, centerY - glitchSize))
-    );
-    const data = imageData.data;
-    const backgroundColorRGB = hexToRgb(COLOR_PALETTE[gameState.colorIndex].background);
-
-    ctx.globalAlpha = 0.8 * intensity;
-    ctx.strokeStyle = targetColor;
-    ctx.lineWidth = 1;
-
-    // Apply tiny decrunch effect only to foreground pixels (same logic as ball lost effect)
-    const scanlineSpacing = 2;
-    for (let localY = 0; localY < Math.min(glitchSize * 2, canvasSize.height - Math.max(0, centerY - glitchSize)); localY += scanlineSpacing) {
-      const actualY = Math.max(0, centerY - glitchSize) + localY;
-
-      for (let localX = 0; localX < Math.min(glitchSize * 2, canvasSize.width - Math.max(0, centerX - glitchSize)); localX++) {
-        const actualX = Math.max(0, centerX - glitchSize) + localX;
-        const pixelIndex = (localY * Math.min(glitchSize * 2, canvasSize.width - Math.max(0, centerX - glitchSize)) + localX) * 4;
-
-        if (pixelIndex + 2 < data.length) {
-          // Check if this pixel is not background color (i.e., it's a game object)
-          const r = data[pixelIndex];
-          const g = data[pixelIndex + 1];
-          const b = data[pixelIndex + 2];
-
-          const isBackground = Math.abs(r - backgroundColorRGB.r) < 30 &&
-                             Math.abs(g - backgroundColorRGB.g) < 30 &&
-                             Math.abs(b - backgroundColorRGB.b) < 30;
-
-          if (!isBackground) {
-            // Apply mini corruption only to this object pixel
-            const corruptionOffset = Math.sin(actualY * 0.2 + time * 4) * 1 * progress;
-            const shouldCorrupt = Math.random() < (0.6 * progress);
-
-            if (shouldCorrupt && Math.random() > 0.4) {
-              const lineStartX = actualX + corruptionOffset;
-              const lineEndX = lineStartX + 2 + Math.random() * 4; // Very short lines
-
-              ctx.beginPath();
-              ctx.moveTo(lineStartX, actualY);
-              ctx.lineTo(lineEndX, actualY);
-              ctx.stroke();
-            }
-          }
-        }
-      }
-    }
-
-    ctx.globalAlpha = 1;
-  }, [gameState.colorIndex]);
-
-  // Helper function to convert hex to RGB
-  const hexToRgb = useCallback((hex: string) => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-      r: parseInt(result[1], 16),
-      g: parseInt(result[2], 16),
-      b: parseInt(result[3], 16)
-    } : { r: 0, g: 0, b: 0 };
-  }, []);
-
-  // Optimized game loop for smooth 60fps
+  // High-performance 60fps game loop
   useEffect(() => {
     if (!gameState.isPlaying) return;
 
+    let lastTime = 0;
+
     const gameLoop = (currentTime: number) => {
-      const deltaTime = currentTime - lastTimeRef.current;
+      // Calculate actual delta time
+      const deltaTime = currentTime - lastTime;
+      lastTime = currentTime;
 
-      // Always update game logic and render for smoothest experience
-      // Don't wait for exact frame timing - let requestAnimationFrame handle the timing
-      if (deltaTime >= FRAME_TIME * 0.8) { // Slightly more aggressive timing
-        updateGame();
-        lastTimeRef.current = currentTime;
-      }
+      // Cap delta time to prevent spiral of death on lag
+      const clampedDelta = Math.min(deltaTime, 33.33); // Max 33ms (30fps minimum)
 
-      // Always render at display refresh rate for smoothest visuals
+      // Update game logic at consistent rate
+      updateGame();
+
+      // Render immediately after game update for best performance
       render();
 
       animationFrameRef.current = requestAnimationFrame(gameLoop);
     };
 
-    lastTimeRef.current = performance.now();
-    gameLoop(lastTimeRef.current);
+    // Start the game loop
+    animationFrameRef.current = requestAnimationFrame(gameLoop);
 
     return () => {
       if (animationFrameRef.current) {
@@ -1670,23 +1458,29 @@ export const Pong404: React.FC = () => {
     };
   }, [gameState.isPlaying, updateGame, render]);
 
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (subscriptionRef.current) {
-        subscriptionRef.current.unsubscribe();
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
       }
     };
   }, []);
 
   return (
-    <div className="w-screen h-screen overflow-hidden bg-black">
+    <div className="w-screen h-screen overflow-hidden bg-black flex items-center justify-center">
       <canvas
         ref={canvasRef}
         width={canvasSize.width}
         height={canvasSize.height}
-        className="block w-full h-full"
-        style={{ background: COLOR_PALETTE[gameState.colorIndex].background }}
+        className="block border border-gray-600"
+        style={{
+          background: COLOR_PALETTE[gameState.colorIndex].background
+        }}
       />
 
       {/* Hidden back link for navigation (accessible via keyboard) */}
