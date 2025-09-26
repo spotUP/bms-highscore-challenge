@@ -67,8 +67,12 @@ class PongWebSocketServer {
 
   private setupWebSocketHandlers() {
     this.wss.on('connection', (ws) => {
-      console.log('🎮 New WebSocket connection');
+      const connectionTime = Date.now();
+      console.log('🎮 New WebSocket connection at', new Date().toISOString());
       let playerId: string | null = null;
+
+      // Enhanced connection tracking
+      (ws as any)._connectionTime = connectionTime;
 
       ws.on('message', (message) => {
         try {
@@ -82,8 +86,15 @@ class PongWebSocketServer {
         }
       });
 
-      ws.on('close', () => {
+      ws.on('close', (code, reason) => {
+        const closeTime = Date.now();
+        const connectionDuration = closeTime - (ws as any)._connectionTime;
         console.log('🔌 WebSocket disconnected');
+        console.log(`   ├─ Close code: ${code}`);
+        console.log(`   ├─ Reason: ${reason ? reason.toString() : 'none'}`);
+        console.log(`   ├─ Connection duration: ${connectionDuration}ms`);
+        console.log(`   └─ Player ID: ${playerId || 'none'}`);
+
         if (playerId) {
           this.handlePlayerDisconnect(playerId);
         }
