@@ -1,6 +1,8 @@
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 
+// Force redeploy - 2025-09-26T16:42:00Z
+
 interface GameState {
   ball: {
     x: number;
