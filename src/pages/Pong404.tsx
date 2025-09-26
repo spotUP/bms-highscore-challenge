@@ -2253,8 +2253,6 @@ const Pong404: React.FC = () => {
       ctx.shadowBlur = 2;
       ctx.fillStyle = currentColors.foreground;
 
-      // Minimal glow around center line only
-      ctx.fillRect(canvasSize.width / 2 - 1, 0, 2, canvasSize.height);
       ctx.shadowBlur = 0;
     }
 
