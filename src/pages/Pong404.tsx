@@ -103,6 +103,12 @@ const Pong404: React.FC = () => {
     }
   }, [debugMode]);
 
+  // Test debug logging on mount
+  useEffect(() => {
+    console.log('🚀 Component mounted. Debug mode:', debugMode, 'DEV mode:', import.meta.env.DEV);
+    debugLog('🐛 DEBUG TEST: If you see this, debug logging is working!');
+  }, [debugMode, debugLog]);
+
   // Dynamic canvas size state with proper aspect ratio
   const [canvasSize, setCanvasSize] = useState({
     width: 1200,
@@ -987,22 +993,27 @@ const Pong404: React.FC = () => {
   // Handle keyboard input
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
+      console.log('🔑 FORCED LOG - Key down event:', e.key, 'from element:', e.target?.tagName);
       debugLog('🔑 Key down event:', e.key, 'from element:', e.target?.tagName);
 
       switch (e.key.toLowerCase()) {
         case 'w':
+          console.log('🔽 FORCED LOG - W key pressed');
           debugLog('🔽 W key pressed');
           setKeys(prev => ({ ...prev, w: true }));
           break;
         case 's':
+          console.log('🔽 FORCED LOG - S key pressed');
           debugLog('🔽 S key pressed');
           setKeys(prev => ({ ...prev, s: true }));
           break;
         case 'arrowup':
+          console.log('🔽 FORCED LOG - UP arrow pressed');
           debugLog('🔽 UP arrow pressed');
           setKeys(prev => ({ ...prev, up: true }));
           break;
         case 'arrowdown':
+          console.log('🔽 FORCED LOG - DOWN arrow pressed');
           debugLog('🔽 DOWN arrow pressed');
           setKeys(prev => ({ ...prev, down: true }));
           break;
@@ -1680,6 +1691,7 @@ const Pong404: React.FC = () => {
         onClick={() => {
           if (canvasRef.current) {
             canvasRef.current.focus();
+            console.log('🎯 Canvas clicked and focused - FORCED LOG');
             debugLog('🎯 Canvas clicked and focused');
           }
         }}
