@@ -52,9 +52,11 @@ class PongWebSocketServer {
   private rooms: Map<string, GameRoom> = new Map();
   private players: Map<string, Player> = new Map();
   private port: number;
+  private instanceId: string;
 
   constructor(port = 3002) {
     this.port = port;
+    this.instanceId = Math.random().toString(36).substr(2, 9);
     this.server = createServer();
     this.wss = new WebSocketServer({
       server: this.server,
@@ -128,13 +130,18 @@ class PongWebSocketServer {
   }
 
   private handleJoinRoom(ws: any, playerId: string, roomId: string) {
-    console.log(`🏓 Player ${playerId} joining room ${roomId}`);
+    console.log(`🏓 Player ${playerId} joining room ${roomId} (Instance: ${this.instanceId})`);
+    console.log(`   ├─ Current rooms: ${this.rooms.size}`);
+    console.log(`   ├─ Current players: ${this.players.size}`);
 
     // Get or create room
     let room = this.rooms.get(roomId);
     if (!room) {
+      console.log(`   ├─ Creating new room: ${roomId}`);
       room = this.createNewRoom(roomId);
       this.rooms.set(roomId, room);
+    } else {
+      console.log(`   ├─ Found existing room with ${room.players.size} players`);
     }
 
     // Determine player side
@@ -382,6 +389,7 @@ class PongWebSocketServer {
     this.server.listen(this.port, () => {
       console.log(`🚀 Pong WebSocket server running on http://localhost:${this.port}`);
       console.log(`🎮 Ready for Pong multiplayer connections!`);
+      console.log(`🆔 Server Instance ID: ${this.instanceId}`);
     });
   }
 
