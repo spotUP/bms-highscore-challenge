@@ -59,8 +59,10 @@ const PANIC_VELOCITY_MULTIPLIER = 8; // Reduced panic speed multiplier
 const EXTREME_PANIC_CHANCE = 0.04; // Lower extreme panic chance
 const EXTREME_PANIC_MULTIPLIER = 20; // Reduced extreme panic speed
 
-// WebSocket server URL - only available in development
-const WS_SERVER_URL = import.meta.env.DEV ? 'ws://localhost:3002' : null;
+// WebSocket server URL - production server on Render
+const WS_SERVER_URL = import.meta.env.DEV
+  ? 'ws://localhost:3002'
+  : 'wss://pong-websocket-server-1.onrender.com';
 
 // Beautiful color palette inspired by retro gaming and synthwave aesthetics
 const COLOR_PALETTE = [
