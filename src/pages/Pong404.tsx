@@ -595,6 +595,16 @@ const Pong404: React.FC = () => {
     setGameState(prevState => {
       const newState = { ...prevState };
 
+      // Debug: Log game state and keys occasionally
+      if (Math.random() < 0.01) { // 1% chance each frame (~0.6 times per second at 60fps)
+        debugLog('🎮 Game State:', {
+          gameMode: newState.gameMode,
+          keys,
+          connectionStatus,
+          multiplayerConnected: multiplayerState.isConnected
+        });
+      }
+
       // Check decrunch effect timeout FIRST (should work even when paused)
       if (newState.decrunchEffect.isActive) {
         const currentTime = Date.now();
@@ -619,6 +629,7 @@ const Pong404: React.FC = () => {
 
       // Auto-switch to player mode when keys are pressed (if not in multiplayer)
       if (newState.gameMode === 'auto' && (keys.w || keys.s || keys.up || keys.down)) {
+        debugLog('🎮 Switching from auto to player mode - keys pressed:', keys);
         newState.gameMode = 'player';
       }
 
@@ -1005,15 +1016,19 @@ const Pong404: React.FC = () => {
 
       switch (e.key.toLowerCase()) {
         case 'w':
+          debugLog('🔽 W key pressed');
           setKeys(prev => ({ ...prev, w: true }));
           break;
         case 's':
+          debugLog('🔽 S key pressed');
           setKeys(prev => ({ ...prev, s: true }));
           break;
         case 'arrowup':
+          debugLog('🔽 UP arrow pressed');
           setKeys(prev => ({ ...prev, up: true }));
           break;
         case 'arrowdown':
+          debugLog('🔽 DOWN arrow pressed');
           setKeys(prev => ({ ...prev, down: true }));
           break;
         case 'a':
