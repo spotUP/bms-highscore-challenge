@@ -643,6 +643,12 @@ const Pong404: React.FC = () => {
       connectWebSocket();
     }
 
+    // Only clean up on component unmount, not on every dependency change
+    // This prevents the WebSocket from being closed immediately after opening
+  }, [gameState.gameMode, multiplayerState.isConnected, connectionStatus]);
+
+  // Separate cleanup effect that only runs on unmount
+  useEffect(() => {
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
@@ -651,7 +657,7 @@ const Pong404: React.FC = () => {
         clearTimeout(reconnectTimeoutRef.current);
       }
     };
-  }, [gameState.gameMode, multiplayerState.isConnected, connectionStatus, connectWebSocket]);
+  }, []); // Empty dependency array = only on mount/unmount
 
   const [keys, setKeys] = useState({
     w: false,
