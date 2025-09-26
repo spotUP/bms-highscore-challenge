@@ -253,12 +253,9 @@ const Pong404: React.FC = () => {
       debugLog('⏰ Waking up server...');
       debugLog('ℹ️ Note: Free server may take 50+ seconds to wake up if inactive');
 
-      fetch(`${serverUrl}/health`, {
+      fetch(`${serverUrl}/health?t=${Date.now()}`, {
         method: 'GET',
-        cache: 'no-cache',
-        headers: {
-          'Cache-Control': 'no-cache'
-        }
+        cache: 'no-cache'
       })
         .then(response => {
           if (response.ok) {
@@ -1668,8 +1665,13 @@ const Pong404: React.FC = () => {
   }, [gameState.isPlaying, updateGame, render]);
 
 
-  // Cleanup on unmount
+  // Focus canvas on mount and cleanup on unmount
   useEffect(() => {
+    if (canvasRef.current) {
+      canvasRef.current.focus();
+      debugLog('🎯 Canvas auto-focused on mount');
+    }
+
     return () => {
       if (wsRef.current) {
         wsRef.current.close();
@@ -1690,6 +1692,9 @@ const Pong404: React.FC = () => {
         style={{
           background: COLOR_PALETTE[gameState.colorIndex].background
         }}
+        tabIndex={0}
+        onFocus={() => debugLog('🎯 Canvas focused')}
+        onBlur={() => debugLog('🎯 Canvas lost focus')}
       />
 
       {/* Hidden back link for navigation (accessible via keyboard) */}
