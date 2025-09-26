@@ -410,7 +410,8 @@ class PongWebSocketServer {
 }
 
 // Start the server
-const pongServer = new PongWebSocketServer(3002);
+const port = process.env.PORT ? parseInt(process.env.PORT) : 3002;
+const pongServer = new PongWebSocketServer(port);
 pongServer.start();
 
 // Log stats periodically
