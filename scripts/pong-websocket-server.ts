@@ -1,7 +1,7 @@
 import { WebSocketServer } from 'ws';
 import { createServer } from 'http';
 
-// Force redeploy - 2025-09-26T16:45:00Z - GitHub sync issue fix
+// Force redeploy - 2025-09-26T16:47:00Z - Root directory already empty, forcing webhook
 
 interface GameState {
   ball: {
