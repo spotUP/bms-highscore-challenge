@@ -337,8 +337,8 @@ class PongWebSocketServer {
       ball: {
         x: 400,
         y: 300,
-        dx: 9,
-        dy: 0,
+        dx: 5,
+        dy: Math.random() > 0.5 ? 5 : -5, // Random vertical direction
         size: 8
       },
       paddles: {
@@ -349,7 +349,7 @@ class PongWebSocketServer {
         left: 0,
         right: 0
       },
-      isPlaying: false,
+      isPlaying: true, // ✅ Start the game immediately
       gameMode: 'multiplayer' as const,
       colorIndex: 0,
       isPaused: false,

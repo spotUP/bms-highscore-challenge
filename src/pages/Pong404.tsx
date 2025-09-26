@@ -119,11 +119,6 @@ const Pong404: React.FC = () => {
     height: 750
   });
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
-
-  // Debug connection status changes
-  useEffect(() => {
-    debugLog('📊 FORCED - Connection status changed to:', connectionStatus);
-  }, [connectionStatus, debugLog]);
   const [gameState, setGameState] = useState<GameState>({
     ball: {
       x: canvasSize.width / 2,
@@ -159,8 +154,25 @@ const Pong404: React.FC = () => {
     playerCount: 0
   });
 
+  // Ref to track the latest multiplayer state for immediate access during rendering
+  const latestMultiplayerStateRef = useRef(multiplayerState);
+
+  // Helper function to update both state and ref for immediate access
+  const updateMultiplayerState = useCallback((newState: MultiplayerState) => {
+    latestMultiplayerStateRef.current = newState;
+    setMultiplayerState(newState);
+  }, []);
+
   const [localTestMode, setLocalTestMode] = useState(false);
   const [crtEffect, setCrtEffect] = useState(true); // CRT shader enabled by default
+
+  // Debug connection status changes (moved here after multiplayerState is defined)
+  useEffect(() => {
+    // Only log significant status changes
+    if (connectionStatus === 'connected' || connectionStatus === 'error') {
+      debugLog('📊 Connection status:', connectionStatus, '| Player side:', multiplayerState.playerSide);
+    }
+  }, [connectionStatus, multiplayerState.playerSide, debugLog]);
 
   // Local multiplayer using localStorage for cross-tab sync
   const connectLocalMultiplayer = useCallback(() => {
@@ -362,13 +374,16 @@ const Pong404: React.FC = () => {
         debugLog('🏓 Joined room successfully:', message.data);
         debugLog('🔄 FORCED - Setting connection status to connected (from joined_room)');
         setConnectionStatus('connected');
-        setMultiplayerState(prev => ({
-          ...prev,
+        const newMultiplayerState = {
+          playerId: multiplayerState.playerId,
+          roomId: multiplayerState.roomId,
           playerSide: message.data.playerSide,
           isGameMaster: message.data.isGameMaster,
           playerCount: message.data.playerCount,
           isConnected: true
-        }));
+        };
+        debugLog('🔄 FORCED - Setting multiplayer state to:', newMultiplayerState);
+        updateMultiplayerState(newMultiplayerState);
 
         if (message.data.gameState) {
           setGameState(message.data.gameState);
@@ -430,7 +445,7 @@ const Pong404: React.FC = () => {
       default:
         debugLog('❓ Unknown WebSocket message:', message);
     }
-  }, []);
+  }, [multiplayerState.playerId, multiplayerState.roomId]);
 
   // Send paddle update via WebSocket
   const updatePaddlePosition = useCallback((y: number, velocity = 0, targetY?: number) => {
@@ -1655,18 +1670,26 @@ const Pong404: React.FC = () => {
         } else if (connectionStatus === 'error') {
           ctx.fillText('CONNECTION FAILED', canvasSize.width / 2, canvasSize.height - 80);
           ctx.fillText('Press SPACEBAR to retry', canvasSize.width / 2, canvasSize.height - 60);
-        } else if (multiplayerState.isConnected) {
-          const playerSideText = multiplayerState.playerSide === 'spectator'
+        } else if (connectionStatus === 'connected' || multiplayerState.isConnected) {
+          // Use the latest state from ref to handle React timing issues
+          const currentMultiplayerState = latestMultiplayerStateRef.current;
+
+          // Only log if there's a state mismatch (debugging timing issues)
+          if (currentMultiplayerState.playerSide !== multiplayerState.playerSide) {
+            debugLog('🎨 STATE TIMING FIX - using ref:', currentMultiplayerState.playerSide, 'instead of state:', multiplayerState.playerSide);
+          }
+
+          const playerSideText = currentMultiplayerState.playerSide === 'spectator'
             ? 'SPECTATING'
-            : `YOU: ${multiplayerState.playerSide.toUpperCase()} PADDLE`;
+            : `YOU: ${currentMultiplayerState.playerSide.toUpperCase()} PADDLE`;
 
           ctx.fillText('MULTIPLAYER MODE', canvasSize.width / 2, canvasSize.height - 100);
           ctx.fillText(playerSideText, canvasSize.width / 2, canvasSize.height - 80);
 
-          if (multiplayerState.playerSide !== 'spectator') {
+          if (currentMultiplayerState.playerSide !== 'spectator') {
             const controls = localTestMode
               ? 'A/D = left paddle, ↑/↓ = right paddle'
-              : multiplayerState.playerSide === 'left' ? 'W/S keys' : '↑/↓ arrows';
+              : currentMultiplayerState.playerSide === 'left' ? 'W/S keys' : '↑/↓ arrows';
             ctx.fillText(`Controls: ${controls}`, canvasSize.width / 2, canvasSize.height - 60);
           }
 
@@ -1677,6 +1700,7 @@ const Pong404: React.FC = () => {
           }
           ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
         } else {
+          debugLog('🎨 UI BRANCH: FALLBACK - status:', connectionStatus, 'isConnected:', multiplayerState.isConnected, 'playerSide:', multiplayerState.playerSide);
           ctx.fillText('CONNECTING...', canvasSize.width / 2, canvasSize.height - 60);
         }
 
