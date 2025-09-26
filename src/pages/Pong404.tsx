@@ -243,42 +243,19 @@ const Pong404: React.FC = () => {
       }
     };
 
-    // Skip server wake-up for localhost, wake up production server
+    // Skip server wake-up for localhost, use delay for production server
     if (WS_SERVER_URL.includes('localhost')) {
       debugLog('🏠 Localhost detected, connecting directly...');
       connectToWebSocket();
     } else {
-      // First, wake up the Render server by hitting the health endpoint
-      const serverUrl = WS_SERVER_URL.replace('wss://', 'https://').replace('ws://', 'http://');
-      debugLog('⏰ Waking up server...');
-      debugLog('ℹ️ Note: Free server may take 50+ seconds to wake up if inactive');
+      debugLog('⏰ Production server detected, using delayed connection...');
+      debugLog('ℹ️ Note: Free server may take 60+ seconds to wake up if inactive');
+      debugLog('⏳ Waiting 3 seconds before attempting WebSocket connection...');
 
-      fetch(`${serverUrl}/health?t=${Date.now()}`, {
-        method: 'GET',
-        cache: 'no-cache'
-      })
-        .then(response => {
-          if (response.ok) {
-            return response.json();
-          }
-          throw new Error(`Server responded with ${response.status}`);
-        })
-        .then(healthData => {
-          debugLog('✅ Server is awake:', healthData.status);
-          // Wait an additional 2 seconds to ensure server is fully ready
-          debugLog('⏳ Waiting 2 seconds for server to be fully ready...');
-          setTimeout(() => {
-            connectToWebSocket();
-          }, 2000);
-        })
-        .catch(error => {
-          debugLog('⚠️ Server wake-up failed, will try with delay:', error);
-          debugLog('⏳ Waiting 5 seconds before attempting WebSocket connection...');
-          // Wait longer if health check failed - server might still be waking up
-          setTimeout(() => {
-            connectToWebSocket();
-          }, 5000);
-        });
+      // Wait 3 seconds then try WebSocket directly - the connection attempt will wake the server
+      setTimeout(() => {
+        connectToWebSocket();
+      }, 3000);
     }
   }, [multiplayerState.playerId, multiplayerState.roomId]);
 
@@ -1010,6 +987,7 @@ const Pong404: React.FC = () => {
   // Handle keyboard input
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
+      debugLog('🔑 Key down event:', e.key, 'from element:', e.target?.tagName);
 
       switch (e.key.toLowerCase()) {
         case 'w':
@@ -1695,6 +1673,16 @@ const Pong404: React.FC = () => {
         tabIndex={0}
         onFocus={() => debugLog('🎯 Canvas focused')}
         onBlur={() => debugLog('🎯 Canvas lost focus')}
+        onKeyDown={(e) => {
+          debugLog('🎯 Canvas keydown:', e.key);
+          e.preventDefault(); // Prevent default browser behavior
+        }}
+        onClick={() => {
+          if (canvasRef.current) {
+            canvasRef.current.focus();
+            debugLog('🎯 Canvas clicked and focused');
+          }
+        }}
       />
 
       {/* Hidden back link for navigation (accessible via keyboard) */}
