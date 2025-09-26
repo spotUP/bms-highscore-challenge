@@ -2481,188 +2481,189 @@ const Pong404: React.FC = () => {
       ctx.save();
       ctx.globalAlpha = pulse;
 
-      // Draw smooth pattern based on pickup type
-      const drawSmoothPattern = (pattern: string, x: number, y: number, size: number, color: string) => {
-        const centerX = x + size / 2;
-        const centerY = y + size / 2;
-        const halfSize = size / 2;
+      // Draw pixelated pattern with NO gaps between pixels
+      const drawPixelatedPattern = (pattern: string, x: number, y: number, size: number, color: string) => {
+        const pixelSize = 8; // Smaller pixels for tighter detail
+        const gridSize = Math.floor(size / pixelSize);
 
         ctx.fillStyle = color;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
 
         switch (pattern) {
           case 'zigzag': // Speed up - lightning bolt
-            ctx.beginPath();
-            ctx.moveTo(centerX - halfSize * 0.3, centerY - halfSize * 0.7);
-            ctx.lineTo(centerX + halfSize * 0.1, centerY - halfSize * 0.7);
-            ctx.lineTo(centerX - halfSize * 0.4, centerY);
-            ctx.lineTo(centerX + halfSize * 0.4, centerY);
-            ctx.lineTo(centerX - halfSize * 0.1, centerY + halfSize * 0.7);
-            ctx.lineTo(centerX + halfSize * 0.3, centerY + halfSize * 0.7);
-            ctx.lineTo(centerX, centerY + halfSize * 0.2);
-            ctx.lineTo(centerX + halfSize * 0.2, centerY - halfSize * 0.2);
-            ctx.closePath();
-            ctx.fill();
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                if ((row < 4 && col >= 6 && col <= 8) ||
+                    (row >= 4 && row < 8 && col >= 3 && col <= 5) ||
+                    (row >= 8 && col >= 6 && col <= 8)) {
+                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                }
+              }
+            }
             break;
 
           case 'waves': // Slow down - wavy lines
-            ctx.beginPath();
-            for (let i = 0; i < 3; i++) {
-              const yOffset = (i - 1) * halfSize * 0.4;
-              ctx.moveTo(x + halfSize * 0.1, centerY + yOffset);
-              for (let t = 0; t <= 1; t += 0.1) {
-                const waveX = x + halfSize * 0.1 + t * size * 0.8;
-                const waveY = centerY + yOffset + Math.sin(t * Math.PI * 3) * halfSize * 0.15;
-                ctx.lineTo(waveX, waveY);
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                if (row === 3 || row === 6 || row === 9) {
+                  if (Math.sin(col * 0.8) > 0) {
+                    ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  }
+                }
               }
             }
-            ctx.stroke();
             break;
 
           case 'circle': // Big ball - circle
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, halfSize * 0.6, 0, 2 * Math.PI);
-            ctx.stroke();
+            const centerX = gridSize / 2;
+            const centerY = gridSize / 2;
+            const radius = gridSize / 3;
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
+                if (dist <= radius && dist >= radius - 1.5) {
+                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                }
+              }
+            }
             break;
 
           case 'dot': // Small ball - small dot
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, halfSize * 0.3, 0, 2 * Math.PI);
-            ctx.fill();
+            const dotSize = 3;
+            const startX = Math.floor((gridSize - dotSize) / 2);
+            const startY = Math.floor((gridSize - dotSize) / 2);
+            for (let row = 0; row < dotSize; row++) {
+              for (let col = 0; col < dotSize; col++) {
+                ctx.fillRect(x + (startX + col) * pixelSize, y + (startY + row) * pixelSize, pixelSize, pixelSize);
+              }
+            }
             break;
 
           case 'spiral': // Drunk ball - spiral
-            ctx.beginPath();
-            ctx.moveTo(centerX, centerY);
-            for (let angle = 0; angle < Math.PI * 4; angle += 0.1) {
-              const radius = (angle / (Math.PI * 4)) * halfSize * 0.6;
-              const spiralX = centerX + Math.cos(angle) * radius;
-              const spiralY = centerY + Math.sin(angle) * radius;
-              ctx.lineTo(spiralX, spiralY);
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                const angle = Math.atan2(row - gridSize/2, col - gridSize/2);
+                const dist = Math.sqrt((col - gridSize/2) ** 2 + (row - gridSize/2) ** 2);
+                if (Math.sin(angle * 3 + dist * 0.5) > 0.5) {
+                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                }
+              }
             }
-            ctx.stroke();
             break;
 
           case 'arrow_up': // Grow paddle - up arrow
-            ctx.beginPath();
-            ctx.moveTo(centerX, centerY - halfSize * 0.6);
-            ctx.lineTo(centerX - halfSize * 0.4, centerY - halfSize * 0.1);
-            ctx.lineTo(centerX - halfSize * 0.2, centerY - halfSize * 0.1);
-            ctx.lineTo(centerX - halfSize * 0.2, centerY + halfSize * 0.6);
-            ctx.lineTo(centerX + halfSize * 0.2, centerY + halfSize * 0.6);
-            ctx.lineTo(centerX + halfSize * 0.2, centerY - halfSize * 0.1);
-            ctx.lineTo(centerX + halfSize * 0.4, centerY - halfSize * 0.1);
-            ctx.closePath();
-            ctx.fill();
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                if ((row >= 2 && row <= 6 && col >= 5 && col <= 7) || // Stem
+                    (row >= 0 && row <= 4 && Math.abs(col - 6) <= row)) { // Arrow head
+                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                }
+              }
+            }
             break;
 
           case 'arrow_down': // Shrink paddle - down arrow
-            ctx.beginPath();
-            ctx.moveTo(centerX, centerY + halfSize * 0.6);
-            ctx.lineTo(centerX - halfSize * 0.4, centerY + halfSize * 0.1);
-            ctx.lineTo(centerX - halfSize * 0.2, centerY + halfSize * 0.1);
-            ctx.lineTo(centerX - halfSize * 0.2, centerY - halfSize * 0.6);
-            ctx.lineTo(centerX + halfSize * 0.2, centerY - halfSize * 0.6);
-            ctx.lineTo(centerX + halfSize * 0.2, centerY + halfSize * 0.1);
-            ctx.lineTo(centerX + halfSize * 0.4, centerY + halfSize * 0.1);
-            ctx.closePath();
-            ctx.fill();
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                if ((row >= 2 && row <= 8 && col >= 5 && col <= 7) || // Stem
+                    (row >= 6 && row <= 10 && Math.abs(col - 6) <= (10 - row))) { // Arrow head
+                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                }
+              }
+            }
             break;
 
           case 'arrows': // Reverse controls - left/right arrows
-            // Left arrow
-            ctx.beginPath();
-            ctx.moveTo(centerX - halfSize * 0.6, centerY);
-            ctx.lineTo(centerX - halfSize * 0.1, centerY - halfSize * 0.3);
-            ctx.lineTo(centerX - halfSize * 0.1, centerY + halfSize * 0.3);
-            ctx.closePath();
-            ctx.fill();
-            // Right arrow
-            ctx.beginPath();
-            ctx.moveTo(centerX + halfSize * 0.6, centerY);
-            ctx.lineTo(centerX + halfSize * 0.1, centerY - halfSize * 0.3);
-            ctx.lineTo(centerX + halfSize * 0.1, centerY + halfSize * 0.3);
-            ctx.closePath();
-            ctx.fill();
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                if ((row >= 4 && row <= 6 && col >= 1 && col <= 4) || // Left arrow
+                    (row >= 3 && row <= 7 && col === 1) ||
+                    (row >= 4 && row <= 6 && col >= 8 && col <= 11) || // Right arrow
+                    (row >= 3 && row <= 7 && col === 11)) {
+                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                }
+              }
+            }
             break;
 
           case 'ghost': // Invisible ball - dotted outline
-            ctx.setLineDash([8, 8]);
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, halfSize * 0.6, 0, 2 * Math.PI);
-            ctx.stroke();
-            ctx.setLineDash([]);
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                if ((row + col) % 3 === 0 &&
+                    ((row === 2 || row === gridSize - 3) && col >= 2 && col <= gridSize - 3) ||
+                    ((col === 2 || col === gridSize - 3) && row >= 2 && row <= gridSize - 3)) {
+                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                }
+              }
+            }
             break;
 
           case 'plus': // Multi ball - plus sign
-            ctx.beginPath();
-            // Horizontal line
-            ctx.moveTo(centerX - halfSize * 0.6, centerY);
-            ctx.lineTo(centerX + halfSize * 0.6, centerY);
-            // Vertical line
-            ctx.moveTo(centerX, centerY - halfSize * 0.6);
-            ctx.lineTo(centerX, centerY + halfSize * 0.6);
-            ctx.stroke();
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                if ((row >= 4 && row <= 7 && col >= 1 && col <= 10) || // Horizontal
+                    (col >= 4 && col <= 7 && row >= 1 && row <= 10)) { // Vertical
+                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                }
+              }
+            }
             break;
 
           case 'cross': // Freeze - X pattern
-            ctx.beginPath();
-            // Diagonal 1
-            ctx.moveTo(centerX - halfSize * 0.5, centerY - halfSize * 0.5);
-            ctx.lineTo(centerX + halfSize * 0.5, centerY + halfSize * 0.5);
-            // Diagonal 2
-            ctx.moveTo(centerX - halfSize * 0.5, centerY + halfSize * 0.5);
-            ctx.lineTo(centerX + halfSize * 0.5, centerY - halfSize * 0.5);
-            ctx.stroke();
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                if (Math.abs(row - col) <= 1 || Math.abs(row - (gridSize - col - 1)) <= 1) {
+                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                }
+              }
+            }
             break;
 
           case 'stripes': // Super speed - diagonal stripes
-            ctx.beginPath();
-            for (let i = -2; i <= 2; i++) {
-              const offset = i * halfSize * 0.3;
-              ctx.moveTo(centerX - halfSize + offset, centerY - halfSize);
-              ctx.lineTo(centerX + halfSize + offset, centerY + halfSize);
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                if ((row + col) % 3 === 0) {
+                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                }
+              }
             }
-            ctx.stroke();
             break;
 
           case 'diamond': // Coin shower - diamond shape
-            ctx.beginPath();
-            ctx.moveTo(centerX, centerY - halfSize * 0.6);
-            ctx.lineTo(centerX + halfSize * 0.6, centerY);
-            ctx.lineTo(centerX, centerY + halfSize * 0.6);
-            ctx.lineTo(centerX - halfSize * 0.6, centerY);
-            ctx.closePath();
-            ctx.stroke();
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                const centerX = gridSize / 2;
+                const centerY = gridSize / 2;
+                const distanceFromCenter = Math.abs(row - centerY) + Math.abs(col - centerX);
+                if (distanceFromCenter >= 3 && distanceFromCenter <= 4) {
+                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                }
+              }
+            }
             break;
 
           case 'star': // Teleport ball - star shape
-            ctx.beginPath();
-            const spikes = 5;
-            const outerRadius = halfSize * 0.6;
-            const innerRadius = halfSize * 0.3;
+            for (let row = 0; row < gridSize; row++) {
+              for (let col = 0; col < gridSize; col++) {
+                const centerX = gridSize / 2;
+                const centerY = gridSize / 2;
+                const dx = col - centerX;
+                const dy = row - centerY;
 
-            for (let i = 0; i < spikes * 2; i++) {
-              const angle = (i * Math.PI) / spikes;
-              const radius = i % 2 === 0 ? outerRadius : innerRadius;
-              const starX = centerX + Math.cos(angle - Math.PI / 2) * radius;
-              const starY = centerY + Math.sin(angle - Math.PI / 2) * radius;
-
-              if (i === 0) {
-                ctx.moveTo(starX, starY);
-              } else {
-                ctx.lineTo(starX, starY);
+                // Create star shape with 5 points
+                if ((Math.abs(dx) <= 1 && Math.abs(dy) <= 4) || // Vertical line
+                    (Math.abs(dy) <= 1 && Math.abs(dx) <= 4) || // Horizontal line
+                    (Math.abs(dx - dy) <= 1 && Math.abs(dx) <= 3) || // Diagonal 1
+                    (Math.abs(dx + dy) <= 1 && Math.abs(dx) <= 3)) { // Diagonal 2
+                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                }
               }
             }
-            ctx.closePath();
-            ctx.fill();
             break;
         }
       };
 
-      // Draw the smooth pattern
-      drawSmoothPattern(pickup.pattern, pickup.x, pickup.y, pickup.size, currentColors.foreground);
+      // Draw the pixelated pattern
+      drawPixelatedPattern(pickup.pattern, pickup.x, pickup.y, pickup.size, currentColors.foreground);
 
       ctx.restore();
     });
