@@ -262,20 +262,23 @@ const Pong404: React.FC = () => {
             clearTimeout(connectionTimeout);
           }
 
-          // Add a small delay before sending join message to ensure connection is stable
-          setTimeout(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-              const joinMessage = {
-                type: 'join_room',
-                playerId: multiplayerState.playerId,
-                roomId: multiplayerState.roomId
-              };
-              debugLog('🏓 FORCED - Sending join_room message after delay:', joinMessage);
+          // Send join message immediately - no delay needed
+          if (ws.readyState === WebSocket.OPEN) {
+            const joinMessage = {
+              type: 'join_room',
+              playerId: multiplayerState.playerId,
+              roomId: multiplayerState.roomId
+            };
+            debugLog('🏓 FORCED - Sending join_room message immediately:', joinMessage);
+            try {
               ws.send(JSON.stringify(joinMessage));
-            } else {
-              debugLog('❌ FORCED - WebSocket closed before join message could be sent');
+              debugLog('✅ FORCED - Join message sent successfully');
+            } catch (error) {
+              debugLog('❌ FORCED - Error sending join message:', error);
             }
-          }, 100); // 100ms delay
+          } else {
+            debugLog('❌ FORCED - WebSocket not open when trying to send join message, readyState:', ws.readyState);
+          }
         };
 
         ws.onmessage = (event) => {
