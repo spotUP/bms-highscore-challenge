@@ -149,26 +149,16 @@ const Pong404: React.FC = () => {
     console.log('🔌 Preparing WebSocket connection...');
     setConnectionStatus('connecting');
 
-    // First, wake up the Render server by hitting the health endpoint
-    const serverUrl = WS_SERVER_URL.replace('wss://', 'https://').replace('ws://', 'http://');
-    console.log('⏰ Waking up server...');
-
-    fetch(`${serverUrl}/health`)
-      .then(response => response.json())
-      .then(healthData => {
-        console.log('✅ Server is awake:', healthData.status);
-        // Server is ready, now connect WebSocket
-        connectToWebSocket();
-      })
-      .catch(error => {
-        console.warn('⚠️ Could not wake server, attempting WebSocket anyway:', error);
-        // Try WebSocket anyway, might work
-        connectToWebSocket();
-      });
+    // Reset connection status after 30 seconds if still connecting
+    setTimeout(() => {
+      setConnectionStatus(prev => prev === 'connecting' ? 'error' : prev);
+    }, 30000);
 
     const connectToWebSocket = () => {
       try {
         console.log('🔌 Connecting to WebSocket server...');
+        console.log('📍 WebSocket URL:', WS_SERVER_URL);
+        console.log('🌐 Current location:', window.location.origin);
         const ws = new WebSocket(WS_SERVER_URL);
         wsRef.current = ws;
 
@@ -194,7 +184,10 @@ const Pong404: React.FC = () => {
         };
 
         ws.onclose = (event) => {
-          console.log('🔌 WebSocket disconnected:', event.reason);
+          console.log('🔌 WebSocket disconnected');
+          console.log('🔌 Close code:', event.code);
+          console.log('🔌 Close reason:', event.reason);
+          console.log('🔌 Was clean:', event.wasClean);
           setConnectionStatus('error');
           setMultiplayerState(prev => ({ ...prev, isConnected: false }));
 
@@ -209,6 +202,8 @@ const Pong404: React.FC = () => {
 
         ws.onerror = (error) => {
           console.error('❌ WebSocket error:', error);
+          console.error('❌ WebSocket readyState:', ws.readyState);
+          console.error('❌ WebSocket URL was:', ws.url);
           setConnectionStatus('error');
         };
 
@@ -217,6 +212,30 @@ const Pong404: React.FC = () => {
         setConnectionStatus('error');
       }
     };
+
+    // Skip server wake-up for localhost, wake up production server
+    if (WS_SERVER_URL.includes('localhost')) {
+      console.log('🏠 Localhost detected, connecting directly...');
+      connectToWebSocket();
+    } else {
+      // First, wake up the Render server by hitting the health endpoint
+      const serverUrl = WS_SERVER_URL.replace('wss://', 'https://').replace('ws://', 'http://');
+      console.log('⏰ Waking up server...');
+      console.log('ℹ️ Note: Free server may take 50+ seconds to wake up if inactive');
+
+      fetch(`${serverUrl}/health`)
+        .then(response => response.json())
+        .then(healthData => {
+          console.log('✅ Server is awake:', healthData.status);
+          // Server is ready, now connect WebSocket
+          connectToWebSocket();
+        })
+        .catch(error => {
+          console.warn('⚠️ Could not wake server, attempting WebSocket anyway:', error);
+          // Try WebSocket anyway, might work
+          connectToWebSocket();
+        });
+    }
   }, [multiplayerState.playerId, multiplayerState.roomId]);
 
   // Handle incoming WebSocket messages
@@ -936,6 +955,7 @@ const Pong404: React.FC = () => {
   // Handle keyboard input
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
+
       switch (e.key.toLowerCase()) {
         case 'w':
           setKeys(prev => ({ ...prev, w: true }));
@@ -972,8 +992,17 @@ const Pong404: React.FC = () => {
         case ' ':
           e.preventDefault();
 
+          console.log('🚀 Spacebar pressed - attempting multiplayer connection');
+          console.log('📊 Current states:', {
+            connectionStatus,
+            isConnected: multiplayerState.isConnected,
+            gameMode: gameState.gameMode
+          });
+
+
           // Don't allow multiple connection attempts
           if (connectionStatus === 'connecting') {
+            console.log('⚠️ Already connecting, ignoring spacebar');
             return;
           }
 
