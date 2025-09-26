@@ -8,3 +8,7 @@
 - remember this process to import clear logos, in the future when i ask you to import clear logos use this process
 - remember to always start the logo proxy server in the background when starting/restarting the dev server
 - always make sure that the logo proxy server is running
+- remember to commit ro render.com via cli it's already set up
+- remember the rendoer deploy hook key: https://api.render.com/deploy/srv-d3b6ku6r433s738fn32g?key=geHuFzc6DF0
+- remember the pixel size in pong is 12x12
+- remember the pixel size in pong404 is the same as in the scores use this for every pickup etc that you draw

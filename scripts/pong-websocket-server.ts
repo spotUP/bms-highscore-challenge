@@ -126,6 +126,14 @@ class PongWebSocketServer {
       case 'reset_room':
         this.handleResetRoom(playerId, roomId);
         break;
+      case 'ping':
+        // Respond to ping with pong to keep connection alive
+        ws.send(JSON.stringify({ type: 'pong', timestamp: Date.now() }));
+        if (playerId) {
+          const player = this.players.get(playerId);
+          if (player) player.lastSeen = Date.now();
+        }
+        break;
       default:
         console.log('❓ Unknown message type:', type);
     }
@@ -339,9 +347,9 @@ class PongWebSocketServer {
       ball: {
         x: 400,
         y: 300,
-        dx: 5,
-        dy: Math.random() > 0.5 ? 5 : -5, // Random vertical direction
-        size: 8
+        dx: 10,
+        dy: Math.random() > 0.5 ? 10 : -10, // Random vertical direction
+        size: 12
       },
       paddles: {
         left: { y: 250, height: 100, width: 12, speed: 32, velocity: 0, targetY: 250 },
@@ -393,6 +401,23 @@ class PongWebSocketServer {
       console.log(`🎮 Ready for Pong multiplayer connections!`);
       console.log(`🆔 Server Instance ID: ${this.instanceId}`);
     });
+
+    // Send periodic heartbeat to all connected clients
+    setInterval(() => {
+      this.players.forEach((player) => {
+        if (player.ws.readyState === 1) { // WebSocket.OPEN
+          try {
+            player.ws.send(JSON.stringify({
+              type: 'heartbeat',
+              timestamp: Date.now(),
+              serverInstanceId: this.instanceId
+            }));
+          } catch (error) {
+            console.error(`❌ Error sending heartbeat to player ${player.id}:`, error);
+          }
+        }
+      });
+    }, 30000); // Send heartbeat every 30 seconds
   }
 
   public getStats() {
