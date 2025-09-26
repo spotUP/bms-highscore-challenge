@@ -678,21 +678,19 @@ const Pong404: React.FC = () => {
     }
   }, [multiplayerState.playerId, multiplayerState.isConnected, multiplayerState.playerSide]);
 
-  // Send game state update via localStorage (only for gamemaster)
+  // Send game state update via WebSocket (only for gamemaster)
   const updateGameState = useCallback((newGameState: GameState) => {
-    if (multiplayerState.isConnected && multiplayerState.isGameMaster) {
-      localStorage.setItem('pong-game-state', JSON.stringify({
-        ...newGameState,
-        timestamp: Date.now()
-      }));
-
-      // Trigger storage event for other tabs
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: 'pong-game-state',
-        newValue: JSON.stringify(newGameState)
+    if (wsRef.current?.readyState === WebSocket.OPEN &&
+        multiplayerState.isConnected &&
+        multiplayerState.isGameMaster) {
+      wsRef.current.send(JSON.stringify({
+        type: 'update_game_state',
+        playerId: multiplayerState.playerId,
+        roomId: multiplayerState.roomId,
+        data: newGameState
       }));
     }
-  }, [multiplayerState.isConnected, multiplayerState.isGameMaster]);
+  }, [multiplayerState.isConnected, multiplayerState.isGameMaster, multiplayerState.playerId, multiplayerState.roomId]);
 
   // Reset game room
   const resetRoom = useCallback(() => {
@@ -3460,12 +3458,11 @@ const Pong404: React.FC = () => {
 
     // 🏆 EPIC WINNER ANNOUNCEMENT! 🏆
     if (gameState.gameEnded && gameState.winner) {
-      console.log('🎨 RENDERING WINNER SCREEN:', gameState.winner, { gameEnded: gameState.gameEnded, winner: gameState.winner });
       const now = Date.now();
 
-      // Animated background flash
+      // Animated background flash - monochrome white
       const flashIntensity = Math.sin(now * 0.01) * 0.3 + 0.7; // Pulsing between 0.4 and 1.0
-      ctx.fillStyle = `rgba(255, 215, 0, ${flashIntensity * 0.15})`; // Golden flash
+      ctx.fillStyle = `rgba(255, 255, 255, ${flashIntensity * 0.15})`; // White flash
       ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
       // Main winner text with scaling animation
@@ -3474,39 +3471,29 @@ const Pong404: React.FC = () => {
       ctx.translate(canvasSize.width / 2, canvasSize.height / 2);
       ctx.scale(scaleAnimation, scaleAnimation);
 
-      // Winner announcement with rainbow cycling colors
-      const hue = (now * 0.005) % 360; // Cycle through colors
-      ctx.fillStyle = `hsl(${hue}, 100%, 60%)`;
-      ctx.strokeStyle = `hsl(${(hue + 180) % 360}, 100%, 30%)`;
-      ctx.lineWidth = 4;
+      // Winner announcement - monochrome white, no outline
+      ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 64px "Press Start 2P", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
       const winnerText = `${gameState.winner.toUpperCase()} WINS!`;
-      ctx.strokeText(winnerText, 0, -40);
       ctx.fillText(winnerText, 0, -40);
 
-      // Victory subtitle
+      // Victory subtitle - monochrome white, no outline
       ctx.font = 'bold 32px "Press Start 2P", monospace';
-      ctx.fillStyle = `hsl(${(hue + 60) % 360}, 100%, 70%)`;
-      ctx.strokeStyle = `hsl(${(hue + 240) % 360}, 100%, 20%)`;
-      ctx.lineWidth = 2;
-      ctx.strokeText('FIRST TO 21!', 0, 20);
-      ctx.fillText('FIRST TO 21!', 0, 20);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('FIRST TO 3!', 0, 20);
 
-      // Victory score display
+      // Victory score display - monochrome white, no outline
       ctx.font = 'bold 24px "Press Start 2P", monospace';
-      ctx.fillStyle = `hsl(${(hue + 120) % 360}, 100%, 80%)`;
-      ctx.strokeStyle = `hsl(${(hue + 300) % 360}, 100%, 10%)`;
-      ctx.lineWidth = 1;
+      ctx.fillStyle = '#ffffff';
       const finalScore = gameState.score[gameState.winner];
-      ctx.strokeText(`FINAL SCORE: ${finalScore}`, 0, 60);
       ctx.fillText(`FINAL SCORE: ${finalScore}`, 0, 60);
 
       ctx.restore();
 
-      // Retro pixel confetti around the winner text
+      // Retro pixel confetti around the winner text - monochrome
       for (let i = 0; i < 30; i++) {
         const angle = (now * 0.003 + i * 12) % 360;
         const radius = 120 + Math.sin(now * 0.002 + i) * 60;
@@ -3515,30 +3502,32 @@ const Pong404: React.FC = () => {
 
         // Pixel-perfect confetti - use various square sizes
         const pixelSize = 8 + (i % 3) * 4; // 8px, 12px, or 16px squares
-        const confettiHue = (now * 0.008 + i * 25) % 360;
 
-        // Main square pixel
-        ctx.fillStyle = `hsl(${confettiHue}, 100%, 75%)`;
+        // Monochrome confetti with varying opacity/brightness
+        const brightness = 70 + (i % 4) * 20; // Varying brightness: 70%, 90%, 110%, 130%
+
+        // Main square pixel - white with varying brightness
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(brightness / 100, 1.0)})`;
         ctx.fillRect(Math.floor(confettiX), Math.floor(confettiY), pixelSize, pixelSize);
 
         // Add smaller accent pixels for 8-bit effect
         if (pixelSize >= 12) {
-          ctx.fillStyle = `hsl(${confettiHue}, 100%, 90%)`;
+          ctx.fillStyle = `rgba(255, 255, 255, ${Math.min((brightness + 20) / 100, 1.0)})`;
           ctx.fillRect(Math.floor(confettiX) + 2, Math.floor(confettiY) + 2, 4, 4);
         }
 
-        // Falling pixel effect (slower, more controlled)
+        // Falling pixel effect (slower, more controlled) - also monochrome
         const fallOffset = (now * 0.001 + i) % 100;
         const fallX = confettiX + Math.sin(now * 0.002 + i) * 20;
         const fallY = (confettiY + fallOffset) % canvasSize.height;
 
-        ctx.fillStyle = `hsl(${(confettiHue + 60) % 360}, 100%, 60%)`;
+        ctx.fillStyle = `rgba(255, 255, 255, ${Math.min((brightness - 10) / 100, 0.8)})`;
         ctx.fillRect(Math.floor(fallX), Math.floor(fallY), 6, 6);
       }
 
-      // Continue button prompt
+      // Continue button prompt - monochrome
       ctx.font = 'bold 16px "Press Start 2P", monospace';
-      ctx.fillStyle = `hsl(${(now * 0.01) % 360}, 80%, 90%)`;
+      ctx.fillStyle = '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
       const blinkFactor = Math.sin(now * 0.005) > 0 ? 1 : 0.3;
@@ -3732,7 +3721,8 @@ const Pong404: React.FC = () => {
 
   // High-performance 60fps game loop
   useEffect(() => {
-    if (!gameState.isPlaying) return;
+    // Continue running if game is playing OR if there's a winner to display
+    if (!gameState.isPlaying && !(gameState.gameEnded && gameState.winner)) return;
 
     let lastTime = 0;
 
