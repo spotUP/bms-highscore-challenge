@@ -162,10 +162,14 @@ const Pong404: React.FC = () => {
     debugLog('🔌 Preparing WebSocket connection...');
     setConnectionStatus('connecting');
 
-    // Reset connection status after 30 seconds if still connecting
-    setTimeout(() => {
+    // Reset connection status after 60 seconds if still connecting (longer for sleeping servers)
+    const connectionTimeout = setTimeout(() => {
+      if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+        debugLog('⏰ Connection timeout - server may still be waking up');
+        wsRef.current.close();
+      }
       setConnectionStatus(prev => prev === 'connecting' ? 'error' : prev);
-    }, 30000);
+    }, 60000);
 
     const connectToWebSocket = () => {
       try {
@@ -178,6 +182,11 @@ const Pong404: React.FC = () => {
         ws.onopen = () => {
           debugLog('✅ WebSocket connected');
           setConnectionStatus('connected');
+
+          // Clear the connection timeout since we connected successfully
+          if (connectionTimeout) {
+            clearTimeout(connectionTimeout);
+          }
 
           // Join the multiplayer room
           ws.send(JSON.stringify({
@@ -204,12 +213,14 @@ const Pong404: React.FC = () => {
           setConnectionStatus('error');
           setMultiplayerState(prev => ({ ...prev, isConnected: false }));
 
-          // Attempt to reconnect after 3 seconds
+          // Attempt to reconnect with exponential backoff
           if (!event.wasClean) {
+            const retryDelay = Math.min(5000 + Math.random() * 5000, 15000); // 5-10 seconds, max 15s
+            debugLog(`🔄 Attempting to reconnect in ${Math.round(retryDelay/1000)}s...`);
             reconnectTimeoutRef.current = setTimeout(() => {
-              debugLog('🔄 Attempting to reconnect...');
+              debugLog('🔄 Reconnecting...');
               connectWebSocket();
-            }, 3000);
+            }, retryDelay);
           }
         };
 
@@ -217,6 +228,12 @@ const Pong404: React.FC = () => {
           debugLog('❌ WebSocket error:', error);
           debugLog('❌ WebSocket readyState:', ws.readyState);
           debugLog('❌ WebSocket URL was:', ws.url);
+
+          // Clear the connection timeout since we got an error
+          if (connectionTimeout) {
+            clearTimeout(connectionTimeout);
+          }
+
           setConnectionStatus('error');
         };
 
@@ -236,17 +253,34 @@ const Pong404: React.FC = () => {
       debugLog('⏰ Waking up server...');
       debugLog('ℹ️ Note: Free server may take 50+ seconds to wake up if inactive');
 
-      fetch(`${serverUrl}/health`)
-        .then(response => response.json())
+      fetch(`${serverUrl}/health`, {
+        method: 'GET',
+        cache: 'no-cache',
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      })
+        .then(response => {
+          if (response.ok) {
+            return response.json();
+          }
+          throw new Error(`Server responded with ${response.status}`);
+        })
         .then(healthData => {
           debugLog('✅ Server is awake:', healthData.status);
-          // Server is ready, now connect WebSocket
-          connectToWebSocket();
+          // Wait an additional 2 seconds to ensure server is fully ready
+          debugLog('⏳ Waiting 2 seconds for server to be fully ready...');
+          setTimeout(() => {
+            connectToWebSocket();
+          }, 2000);
         })
         .catch(error => {
-          debugLog('⚠️ Could not wake server, attempting WebSocket anyway:', error);
-          // Try WebSocket anyway, might work
-          connectToWebSocket();
+          debugLog('⚠️ Server wake-up failed, will try with delay:', error);
+          debugLog('⏳ Waiting 5 seconds before attempting WebSocket connection...');
+          // Wait longer if health check failed - server might still be waking up
+          setTimeout(() => {
+            connectToWebSocket();
+          }, 5000);
         });
     }
   }, [multiplayerState.playerId, multiplayerState.roomId]);
@@ -1471,14 +1505,17 @@ const Pong404: React.FC = () => {
       ctx.font = 'bold 10px "Press Start 2P", monospace';
 
       if (connectionStatus === 'connecting') {
-        ctx.fillText('CONNECTING TO MULTIPLAYER...', canvasSize.width / 2, canvasSize.height - 40);
+        ctx.fillText('WAKING UP SERVER... (may take 60+ seconds)', canvasSize.width / 2, canvasSize.height - 60);
+        ctx.fillText('Press D for debug mode to see connection logs', canvasSize.width / 2, canvasSize.height - 40);
         ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
       } else if (connectionStatus === 'error') {
-        ctx.fillText('CONNECTION FAILED - Press SPACEBAR to retry', canvasSize.width / 2, canvasSize.height - 40);
+        ctx.fillText('CONNECTION FAILED - Server may be sleeping', canvasSize.width / 2, canvasSize.height - 60);
+        ctx.fillText('Press SPACEBAR to retry (takes 60+ seconds)', canvasSize.width / 2, canvasSize.height - 40);
         ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
       } else {
-        ctx.fillText('Press SPACEBAR to join online multiplayer', canvasSize.width / 2, canvasSize.height - 40);
-        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
+        ctx.fillText('Press SPACEBAR to join online multiplayer', canvasSize.width / 2, canvasSize.height - 60);
+        ctx.fillText('Press D for debug mode, C for CRT effect', canvasSize.width / 2, canvasSize.height - 40);
+        ctx.fillText(`CRT Effect: ${crtEffect ? 'ON' : 'OFF'}`, canvasSize.width / 2, canvasSize.height - 20);
       }
     } else if (gameState.gameMode === 'multiplayer') {
       // Calculate fade out for ALL multiplayer info text
