@@ -2389,15 +2389,6 @@ const Pong404: React.FC = () => {
     ctx.lineTo(canvasSize.width - borderInset, canvasSize.height);
     ctx.stroke();
 
-    // Draw center line (dashed) - thick as paddles - using dynamic color
-    ctx.strokeStyle = currentColors.foreground;
-    ctx.lineWidth = 12;
-    ctx.setLineDash([20, 20]); // Larger dashes to match thickness
-    ctx.beginPath();
-    ctx.moveTo(canvasSize.width / 2, 0);
-    ctx.lineTo(canvasSize.width / 2, canvasSize.height);
-    ctx.stroke();
-    ctx.setLineDash([]);
 
     // Draw comet trails first (behind everything)
     const currentTime = Date.now();
