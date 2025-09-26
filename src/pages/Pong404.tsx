@@ -119,6 +119,11 @@ const Pong404: React.FC = () => {
     height: 750
   });
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle');
+
+  // Debug connection status changes
+  useEffect(() => {
+    debugLog('📊 FORCED - Connection status changed to:', connectionStatus);
+  }, [connectionStatus, debugLog]);
   const [gameState, setGameState] = useState<GameState>({
     ball: {
       x: canvasSize.width / 2,
@@ -255,6 +260,7 @@ const Pong404: React.FC = () => {
           (ws as any)._openTime = openTime;
           const connectionTime = openTime - (ws as any)._createTime;
           debugLog('✅ FORCED - WebSocket connection opened after', connectionTime, 'ms');
+          debugLog('🔄 FORCED - Setting connection status to connected');
           setConnectionStatus('connected');
 
           // Clear the connection timeout since we connected successfully
@@ -354,6 +360,8 @@ const Pong404: React.FC = () => {
     switch (message.type) {
       case 'joined_room':
         debugLog('🏓 Joined room successfully:', message.data);
+        debugLog('🔄 FORCED - Setting connection status to connected (from joined_room)');
+        setConnectionStatus('connected');
         setMultiplayerState(prev => ({
           ...prev,
           playerSide: message.data.playerSide,
