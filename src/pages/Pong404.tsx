@@ -703,9 +703,17 @@ const Pong404: React.FC = () => {
       }
     }
 
-    // Exit early if no audio context or not in running state
-    if (!audioContextRef.current || audioContextRef.current.state !== 'running') {
+    // Exit early if no audio context
+    if (!audioContextRef.current) {
       return;
+    }
+
+    // Resume audio context if suspended (required for production builds)
+    if (audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume().catch(() => {
+        // Fail silently if resume fails
+        return;
+      });
     }
 
     const ctx = audioContextRef.current;
@@ -762,6 +770,23 @@ const Pong404: React.FC = () => {
     // Start and stop
     oscillator.start(now);
     oscillator.stop(now + duration);
+  }, [initializeAudioEffects]);
+
+  // Initialize audio on user interaction
+  const initializeAudio = useCallback(async () => {
+    if (!audioContextRef.current && !audioInitAttempted.current) {
+      audioInitAttempted.current = true;
+      try {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        initializeAudioEffects(audioContextRef.current);
+        // Resume context if suspended
+        if (audioContextRef.current.state === 'suspended') {
+          await audioContextRef.current.resume();
+        }
+      } catch (error) {
+        // Audio not supported - fail silently
+      }
+    }
   }, [initializeAudioEffects]);
 
   // Legacy beep function for compatibility
@@ -1987,13 +2012,16 @@ const Pong404: React.FC = () => {
 
       return newState;
     });
-  }, [keys, playMelodyNote, canvasSize, multiplayerState.isGameMaster, updateGameState, localTestMode, multiplayerState.playerSide, updatePaddlePosition, multiplayerState, mouseY, touchY, controlSide, createPickup, applyPickupEffect, updateEffects]);
+  }, [keys, playMelodyNote, canvasSize, multiplayerState.isGameMaster, updateGameState, localTestMode, multiplayerState.playerSide, updatePaddlePosition, multiplayerState, mouseY, touchY, controlSide, createPickup, applyPickupEffect, updateEffects, initializeAudio]);
 
   // Handle keyboard input
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
       // Ignore key repeat events
       if (e.repeat) return;
+
+      // Initialize audio on first user interaction
+      await initializeAudio();
 
       switch (e.key.toLowerCase()) {
         case 'w':
@@ -3028,7 +3056,9 @@ const Pong404: React.FC = () => {
           }
           setCursorHidden(true);
         }}
-        onMouseMove={(e) => {
+        onMouseMove={async (e) => {
+          // Initialize audio on first mouse interaction
+          await initializeAudio();
           const rect = canvasRef.current?.getBoundingClientRect();
           if (rect) {
             const y = e.clientY - rect.top;
@@ -3053,8 +3083,10 @@ const Pong404: React.FC = () => {
           setControlSide(null);
           setCursorHidden(false);
         }}
-        onTouchStart={(e) => {
+        onTouchStart={async (e) => {
           e.preventDefault();
+          // Initialize audio on first touch
+          await initializeAudio();
           const rect = canvasRef.current?.getBoundingClientRect();
           if (rect && e.touches.length > 0) {
             const touch = e.touches[0];
