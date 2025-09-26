@@ -358,17 +358,58 @@ const Pong404: React.FC = () => {
     return () => window.removeEventListener('resize', updateCanvasSize);
   }, []);
 
-  // Initialize Web Audio API (only after user gesture)
+  // Initialize Web Audio API with reverb effects (only after user gesture)
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioInitAttempted = useRef<boolean>(false);
+  const reverbNodeRef = useRef<ConvolverNode | null>(null);
+  const delayNodeRef = useRef<DelayNode | null>(null);
+  const echoGainRef = useRef<GainNode | null>(null);
 
-  // Generate authentic Pong beep sound - only create AudioContext when actually needed
-  const playBeep = useCallback((frequency: number, duration: number) => {
+  // Create impulse response for reverb effect
+  const createImpulseResponse = useCallback((audioContext: AudioContext) => {
+    const length = audioContext.sampleRate * 2; // 2 seconds of reverb
+    const impulse = audioContext.createBuffer(2, length, audioContext.sampleRate);
+
+    for (let channel = 0; channel < 2; channel++) {
+      const channelData = impulse.getChannelData(channel);
+      for (let i = 0; i < length; i++) {
+        const decay = Math.pow(1 - i / length, 2); // Exponential decay
+        channelData[i] = (Math.random() * 2 - 1) * decay * 0.3;
+      }
+    }
+    return impulse;
+  }, []);
+
+  // Initialize audio effects chain
+  const initializeAudioEffects = useCallback((audioContext: AudioContext) => {
+    // Create reverb
+    const convolver = audioContext.createConvolver();
+    convolver.buffer = createImpulseResponse(audioContext);
+    reverbNodeRef.current = convolver;
+
+    // Create echo/delay
+    const delay = audioContext.createDelay(1.0);
+    delay.delayTime.setValueAtTime(0.15, audioContext.currentTime); // 150ms delay
+    delayNodeRef.current = delay;
+
+    // Echo feedback gain
+    const echoGain = audioContext.createGain();
+    echoGain.gain.setValueAtTime(0.4, audioContext.currentTime); // 40% feedback
+    echoGainRef.current = echoGain;
+
+    // Connect echo feedback loop
+    delay.connect(echoGain);
+    echoGain.connect(delay);
+  }, [createImpulseResponse]);
+
+  // Enhanced Pong beep sound with reverb and echo
+  const playBeep = useCallback((frequency: number, duration: number, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both') => {
     // Only create AudioContext when actually trying to play a sound (user gesture)
     if (!audioContextRef.current && !audioInitAttempted.current) {
       audioInitAttempted.current = true;
       try {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        initializeAudioEffects(audioContextRef.current);
       } catch (error) {
         // Audio not supported - fail silently
         return;
@@ -380,21 +421,61 @@ const Pong404: React.FC = () => {
       return;
     }
 
-    const oscillator = audioContextRef.current.createOscillator();
-    const gainNode = audioContextRef.current.createGain();
+    const ctx = audioContextRef.current;
+    const now = ctx.currentTime;
 
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContextRef.current.destination);
+    // Create oscillator and main gain
+    const oscillator = ctx.createOscillator();
+    const mainGain = ctx.createGain();
 
-    oscillator.frequency.setValueAtTime(frequency, audioContextRef.current.currentTime);
+    // Create dry/wet mix gains
+    const dryGain = ctx.createGain();
+    const wetGain = ctx.createGain();
+    const echoWetGain = ctx.createGain();
+
+    // Configure oscillator
+    oscillator.frequency.setValueAtTime(frequency, now);
     oscillator.type = 'square'; // Classic arcade sound
 
-    gainNode.gain.setValueAtTime(0.3, audioContextRef.current.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, audioContextRef.current.currentTime + duration);
+    // Configure main envelope
+    mainGain.gain.setValueAtTime(0, now);
+    mainGain.gain.linearRampToValueAtTime(0.25, now + 0.01); // Quick attack
+    mainGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
-    oscillator.start(audioContextRef.current.currentTime);
-    oscillator.stop(audioContextRef.current.currentTime + duration);
-  }, []);
+    // Configure mix levels based on effect type
+    const dryLevel = effectType === 'reverb' || effectType === 'both' ? 0.6 : 1.0;
+    const reverbLevel = effectType === 'reverb' || effectType === 'both' ? 0.3 : 0.0;
+    const echoLevel = effectType === 'echo' || effectType === 'both' ? 0.25 : 0.0;
+
+    dryGain.gain.setValueAtTime(dryLevel, now);
+    wetGain.gain.setValueAtTime(reverbLevel, now);
+    echoWetGain.gain.setValueAtTime(echoLevel, now);
+
+    // Connect the audio graph
+    oscillator.connect(mainGain);
+
+    // Dry signal (direct to output)
+    mainGain.connect(dryGain);
+    dryGain.connect(ctx.destination);
+
+    // Wet signal (through reverb)
+    if ((effectType === 'reverb' || effectType === 'both') && reverbNodeRef.current) {
+      mainGain.connect(reverbNodeRef.current);
+      reverbNodeRef.current.connect(wetGain);
+      wetGain.connect(ctx.destination);
+    }
+
+    // Echo signal
+    if ((effectType === 'echo' || effectType === 'both') && delayNodeRef.current) {
+      mainGain.connect(delayNodeRef.current);
+      delayNodeRef.current.connect(echoWetGain);
+      echoWetGain.connect(ctx.destination);
+    }
+
+    // Start and stop
+    oscillator.start(now);
+    oscillator.stop(now + duration);
+  }, [initializeAudioEffects]);
 
   // Connect WebSocket when entering multiplayer mode
   useEffect(() => {
@@ -663,7 +744,7 @@ const Pong404: React.FC = () => {
 
           // Only play beep sound if we're the game master to avoid duplicate sounds
           if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
-            playBeep(800, 0.1); // Wall hit sound
+            playBeep(800, 0.1, 'echo'); // Wall hit sound with echo
           }
         }
 
@@ -712,7 +793,7 @@ const Pong404: React.FC = () => {
           // Only play beep sound if we're the game master to avoid duplicate sounds
           if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
             const beepFreq = 500 + (distanceFromCenter * 300); // 500-800 Hz
-            playBeep(beepFreq, 0.1);
+            playBeep(beepFreq, 0.15, 'both'); // Paddle hit with full effects
           }
         }
 
@@ -753,7 +834,7 @@ const Pong404: React.FC = () => {
           // Only play beep sound if we're the game master to avoid duplicate sounds
           if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
             const beepFreq = 500 + (distanceFromCenter * 300); // 500-800 Hz
-            playBeep(beepFreq, 0.1);
+            playBeep(beepFreq, 0.15, 'both'); // Paddle hit with full effects
           }
         }
 
@@ -763,7 +844,7 @@ const Pong404: React.FC = () => {
           newState.score.right++;
           // Only play beep sound if we're the game master to avoid duplicate sounds
           if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
-            playBeep(300, 0.3); // Lower tone for score
+            playBeep(300, 0.5, 'reverb'); // Score sound with dramatic reverb
           }
 
           // Trigger decrunch effect for the miss
@@ -794,7 +875,7 @@ const Pong404: React.FC = () => {
           newState.score.left++;
           // Only play beep sound if we're the game master to avoid duplicate sounds
           if (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer') {
-            playBeep(300, 0.3); // Lower tone for score
+            playBeep(300, 0.5, 'reverb'); // Score sound with dramatic reverb
           }
 
           // Trigger decrunch effect for the miss
