@@ -83,6 +83,11 @@ interface GameState {
     leftPaddle: TrailPoint[];
     rightPaddle: TrailPoint[];
   };
+  decrunchEffect: {
+    isActive: boolean;
+    startTime: number;
+    duration: number;
+  };
 }
 
 interface MultiplayerState {
@@ -248,6 +253,11 @@ const Pong404: React.FC = () => {
       ball: [],
       leftPaddle: [],
       rightPaddle: [],
+    },
+    decrunchEffect: {
+      isActive: false,
+      startTime: 0,
+      duration: 0,
     },
   });
 
