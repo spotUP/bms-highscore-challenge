@@ -134,7 +134,7 @@ const Pong404: React.FC = () => {
   const [localTestMode, setLocalTestMode] = useState(false);
   const [crtEffect, setCrtEffect] = useState(true); // CRT shader enabled by default
 
-  // WebSocket connection management
+  // WebSocket connection management with server wake-up
   const connectWebSocket = useCallback(() => {
     if (!WS_SERVER_URL) {
       console.log('⚠️ Multiplayer not available in production');
@@ -146,57 +146,77 @@ const Pong404: React.FC = () => {
       return;
     }
 
-    console.log('🔌 Connecting to WebSocket server...');
+    console.log('🔌 Preparing WebSocket connection...');
     setConnectionStatus('connecting');
 
-    try {
-      const ws = new WebSocket(WS_SERVER_URL);
-      wsRef.current = ws;
+    // First, wake up the Render server by hitting the health endpoint
+    const serverUrl = WS_SERVER_URL.replace('wss://', 'https://').replace('ws://', 'http://');
+    console.log('⏰ Waking up server...');
 
-      ws.onopen = () => {
-        console.log('✅ WebSocket connected');
-        setConnectionStatus('connected');
+    fetch(`${serverUrl}/health`)
+      .then(response => response.json())
+      .then(healthData => {
+        console.log('✅ Server is awake:', healthData.status);
+        // Server is ready, now connect WebSocket
+        connectToWebSocket();
+      })
+      .catch(error => {
+        console.warn('⚠️ Could not wake server, attempting WebSocket anyway:', error);
+        // Try WebSocket anyway, might work
+        connectToWebSocket();
+      });
 
-        // Join the multiplayer room
-        ws.send(JSON.stringify({
-          type: 'join_room',
-          playerId: multiplayerState.playerId,
-          roomId: multiplayerState.roomId
-        }));
-      };
+    const connectToWebSocket = () => {
+      try {
+        console.log('🔌 Connecting to WebSocket server...');
+        const ws = new WebSocket(WS_SERVER_URL);
+        wsRef.current = ws;
 
-      ws.onmessage = (event) => {
-        try {
-          const message: WebSocketMessage = JSON.parse(event.data);
-          handleWebSocketMessage(message);
-        } catch (error) {
-          console.error('❌ Error parsing WebSocket message:', error);
-        }
-      };
+        ws.onopen = () => {
+          console.log('✅ WebSocket connected');
+          setConnectionStatus('connected');
 
-      ws.onclose = (event) => {
-        console.log('🔌 WebSocket disconnected:', event.reason);
+          // Join the multiplayer room
+          ws.send(JSON.stringify({
+            type: 'join_room',
+            playerId: multiplayerState.playerId,
+            roomId: multiplayerState.roomId
+          }));
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const message: WebSocketMessage = JSON.parse(event.data);
+            handleWebSocketMessage(message);
+          } catch (error) {
+            console.error('❌ Error parsing WebSocket message:', error);
+          }
+        };
+
+        ws.onclose = (event) => {
+          console.log('🔌 WebSocket disconnected:', event.reason);
+          setConnectionStatus('error');
+          setMultiplayerState(prev => ({ ...prev, isConnected: false }));
+
+          // Attempt to reconnect after 3 seconds
+          if (!event.wasClean) {
+            reconnectTimeoutRef.current = setTimeout(() => {
+              console.log('🔄 Attempting to reconnect...');
+              connectWebSocket();
+            }, 3000);
+          }
+        };
+
+        ws.onerror = (error) => {
+          console.error('❌ WebSocket error:', error);
+          setConnectionStatus('error');
+        };
+
+      } catch (error) {
+        console.error('❌ Failed to create WebSocket connection:', error);
         setConnectionStatus('error');
-        setMultiplayerState(prev => ({ ...prev, isConnected: false }));
-
-        // Attempt to reconnect after 3 seconds
-        if (!event.wasClean) {
-          reconnectTimeoutRef.current = setTimeout(() => {
-            console.log('🔄 Attempting to reconnect...');
-            connectWebSocket();
-          }, 3000);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error('❌ WebSocket error:', error);
-        setConnectionStatus('error');
-      };
-
-    } catch (error) {
-      console.error('❌ Failed to create WebSocket connection:', error);
-      setConnectionStatus('error');
-    }
+      }
+    };
   }, [multiplayerState.playerId, multiplayerState.roomId]);
 
   // Handle incoming WebSocket messages
