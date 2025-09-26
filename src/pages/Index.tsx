@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTournamentGameData } from "@/hooks/useTournamentGameData";
 import { getGameLogoUrl } from "@/lib/utils";
+import { clearLogoService } from "@/services/clearLogoService";
 import StorageImage from "@/components/StorageImage";
 import { parseStorageObjectUrl } from "@/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,28 +15,27 @@ import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import TournamentDropdown from "@/components/TournamentDropdown";
 import { useTournament } from "@/contexts/TournamentContext";
 import { dlog } from "@/lib/debug";
-import pacmanLogo from "@/assets/pacman-logo.png";
-import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
-import tetrisLogo from "@/assets/tetris-logo.png";
-import donkeyKongLogo from "@/assets/donkey-kong-logo.png";
+// import pacmanLogo from "@/assets/pacman-logo.png";
+// import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
+// import tetrisLogo from "@/assets/tetris-logo.png";
+// import donkeyKongLogo from "@/assets/donkey-kong-logo.png";
 import { supabase } from "@/integrations/supabase/client";
 
 // Fallback logo mapping for backwards compatibility
 const LOGO_MAP: Record<string, string> = {
-  "pacman": pacmanLogo,
-  "pac-man": pacmanLogo,
-  "spaceinvaders": spaceInvadersLogo,
-  "space invaders": spaceInvadersLogo,
-  "tetris": tetrisLogo,
-  "donkeykong": donkeyKongLogo,
-  "donkey kong": donkeyKongLogo,
+  // "pacman": pacmanLogo,
+  // "pac-man": pacmanLogo,
+  // "spaceinvaders": spaceInvadersLogo,
+  // "space invaders": spaceInvadersLogo,
+  // "tetris": tetrisLogo,
+  // "donkeykong": donkeyKongLogo,
+  // "donkey kong": donkeyKongLogo,
 };
 
 interface Game {
   id: string;
   name: string;
   logo_url: string | null;
-  is_active: boolean;
 }
 
 interface Score {
@@ -63,8 +63,9 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   const isMobile = useIsMobile();
   const { activeGames: games, gameScores, loading: gamesLoading, refetch } = useTournamentGameData();
 
-  // State for cached database logos
+  // State for cached database logos and clear logos
   const [databaseLogos, setDatabaseLogos] = useState<Record<string, string>>({});
+  const [clearLogos, setClearLogos] = useState<Record<string, string>>({});
 
   // Function to fetch logos from games_database with SQLite fallback
   const fetchDatabaseLogos = useCallback(async () => {
@@ -116,10 +117,29 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
     }
   }, [games]);
 
+  // Function to fetch clear logos from clear logo service
+  const fetchClearLogos = useCallback(async () => {
+    if (!games || games.length === 0) return;
+
+    try {
+      const gameNames = games.map(game => game.name);
+      const logoMap = await clearLogoService.getClearLogosForGames(gameNames);
+      console.log('🎯 Clear logos loaded:', Object.keys(logoMap).length, 'out of', gameNames.length, 'games');
+      setClearLogos(logoMap);
+    } catch (error) {
+      console.warn('Failed to load clear logos:', error);
+    }
+  }, [games]);
+
   // Fetch database logos when games change
   useEffect(() => {
     fetchDatabaseLogos();
   }, [fetchDatabaseLogos]);
+
+  // Fetch clear logos when games change
+  useEffect(() => {
+    fetchClearLogos();
+  }, [fetchClearLogos]);
 
   // Temporarily allow overflow during animations
   useEffect(() => {
@@ -315,10 +335,11 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
               gridTemplateColumns: isMobile ? 'none' : `repeat(${games?.length || 1}, 1fr)`
             }}>
               {games.map((game) => {
-                // Get logo URL with priority: database > tournament game logo > fallback map
+                // Get logo URL with priority: clear logos > database > tournament game logo > fallback map
+                const clearLogo = clearLogos[game.name];
                 const databaseLogo = databaseLogos[game.name];
                 const fallbackLogo = getGameLogoUrl(game.logo_url) || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
-                const logoUrl = databaseLogo || fallbackLogo;
+                const logoUrl = clearLogo || databaseLogo || fallbackLogo;
                 const storageRef = logoUrl && logoUrl.includes('supabase.co/storage/') ? parseStorageObjectUrl(logoUrl) : null;
                 const isPublicObject = !!(logoUrl && logoUrl.includes('/storage/v1/object/public/'));
 
@@ -384,7 +405,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                               />
                             ))}
                             {filtered.length === 0 && (
-                              <div className="text-center py-8 text-gray-400 text-lg md:text-base">
+                              <div className="text-center py-8 text-gray-400">
                                 No scores yet. Be the first to submit!
                               </div>
                             )}

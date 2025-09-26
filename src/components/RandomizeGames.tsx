@@ -6,7 +6,6 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import misterGames from '@/data/mister-games.json';
-import gameLogoMapping from '@/data/game-logo-mapping.json';
 
 interface RandomizeGamesProps {
   onGamesUpdated?: () => void;
@@ -163,18 +162,8 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
         const selectedGame = selectedGames[index];
         if (!selectedGame) return Promise.resolve();
         
-        // Try to find a local logo first
-        let logoUrl = null;
-        
-        // Look for game in the mapping
-        const logoData = gameLogoMapping[selectedGame.name];
-        
-        if (logoData) {
-          logoUrl = `/game-logos/${logoData.logoFile}`;
-          console.log(`Found local logo for ${selectedGame.name}: ${logoData.mameName} -> ${logoData.logoFile}`);
-        } else {
-          console.log(`No local logo found for ${selectedGame.name}, will use fallback UI`);
-        }
+        // No legacy logo handling - let the clear logo service handle this
+        const logoUrl = null;
         
         return supabase
           .from('games')
@@ -202,9 +191,6 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
       
       // Success!
       const newGameNames = selectedGames.map(game => game.name);
-      const localLogosCount = selectedGames.filter(game =>
-        gameLogoMapping[game.name]
-      ).length;
 
       const exclusionText = excludeUsedGames ? " (excluding previously used games)" : " (including all games)";
 

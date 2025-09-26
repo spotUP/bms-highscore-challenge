@@ -21,11 +21,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { deleteScoreWithAchievementCleanup } from "@/utils/achievementUtils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Plus, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy, Zap, RotateCcw, Maximize, Palette } from "lucide-react";
+import { Pencil, Trash2, Plus, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy, Zap, RotateCcw, Maximize, Palette, Search } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { isPlaceholderLogo, formatScore } from "@/lib/utils";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import GameLogoSuggestions, { GameLogoSuggestionsRef } from "@/components/GameLogoSuggestions";
+import { AutocompleteDropdown } from "@/components/ui/autocomplete-dropdown";
+import { AdvancedSearchField } from "@/components/ui/advanced-search-field";
+import { clearLogoService } from "@/services/clearLogoService";
 import WebhookConfig from "@/components/WebhookConfig";
 import UserManagement from "@/components/UserManagement";
 import ResetFunctions from "@/components/ResetFunctions";
@@ -53,8 +56,6 @@ interface Game {
   name: string;
   description: string | null;
   logo_url: string | null;
-  is_active: boolean;
-  include_in_challenge: boolean;
   tournament_id: string;
   created_at: string;
   updated_at: string;
@@ -93,10 +94,7 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
   const [games, setGames] = useState(initialGames);
   const [newGame, setNewGame] = useState({
     name: '',
-    description: '',
-    logo_url: '',
-    is_active: true,
-    include_in_challenge: true
+    logo_url: ''
   });
   const logoSuggestionsRef = useRef<GameLogoSuggestionsRef>(null);
 
@@ -137,6 +135,7 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
   };
 
   const addGameToList = () => {
+    console.log('🎮 Adding game to list:', newGame);
     if (!newGame.name.trim()) {
       toast({
         title: "Error",
@@ -146,26 +145,23 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
       return;
     }
 
-    setGames(prev => [...prev, {
+    const gameToAdd = {
       ...newGame,
       id: Date.now(), // temporary ID for UI
       name: newGame.name.trim(),
-      description: newGame.description.trim() || undefined,
-    }]);
+    };
+    console.log('🎯 Game being added:', gameToAdd);
+    setGames(prev => {
+      const updated = [...prev, gameToAdd];
+      console.log('📋 Updated games list:', updated);
+      return updated;
+    });
 
     // Reset new game form
     setNewGame({
       name: '',
-      description: '',
-      logo_url: '',
-      is_active: true,
-      include_in_challenge: true
+      logo_url: ''
     });
-
-    // Clear logo suggestions
-    if (logoSuggestionsRef.current) {
-      logoSuggestionsRef.current.clearSuggestions();
-    }
   };
 
   const removeGameFromList = (gameId: number) => {
@@ -206,14 +202,23 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
       // Add games to the newly created tournament
       for (const game of games) {
         try {
+          // Try to get clear logo if no logo is provided
+          let logoUrl = game.logo_url || null;
+          if (!logoUrl) {
+            try {
+              const clearLogos = await clearLogoService.getClearLogosForGames([game.name]);
+              logoUrl = clearLogos[game.name] || null;
+            } catch (error) {
+              console.warn('Failed to fetch clear logo for', game.name, error);
+            }
+          }
+
           const { error } = await supabase
             .from('games')
             .insert({
               name: game.name,
               description: game.description,
-              logo_url: game.logo_url || null,
-              is_active: true,
-              include_in_challenge: true,
+              logo_url: logoUrl,
               tournament_id: tournament.id,
             });
 
@@ -285,16 +290,6 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
           />
         </div>
 
-        <div>
-          <Label htmlFor="description" className="text-white">Description (Optional)</Label>
-          <Textarea
-            id="description"
-            value={createForm.description}
-            onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
-            placeholder="A brief description of your highscore tournament"
-            className="bg-black/50 border-gray-700 text-white"
-          />
-        </div>
 
         <div>
           <Label htmlFor="slug" className="text-white">Highscore Tournament Slug</Label>
@@ -485,59 +480,25 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
 
               <div>
                 <Label htmlFor="game-name" className="text-white">Game Name *</Label>
-                <Input
-                  id="game-name"
+                <AdvancedSearchField
                   value={newGame.name}
-                  onChange={(e) => setNewGame(prev => ({ ...prev, name: e.target.value }))}
+                  onChange={(value) => setNewGame(prev => ({ ...prev, name: value }))}
                   placeholder="Enter game name (logos search automatically as you type)"
+                  enableSuggestions={true}
+                  searchHint="💡 Tip: Try 'Street Fighter', 'Pac-Man', 'Metal Slug', or use abbreviations like 'SF'"
                   className="bg-black/50 border-white/20 text-white"
                 />
               </div>
 
-              <div>
-                <Label htmlFor="game-description" className="text-white">Description</Label>
-                <Textarea
-                  id="game-description"
-                  value={newGame.description}
-                  onChange={(e) => setNewGame(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Optional game description"
-                  className="bg-black/50 border-white/20 text-white"
-                />
-              </div>
 
-              <div>
-                <Label className="text-white">Game Logo</Label>
-                <ImagePasteUpload
-                  onImageSelect={(url) => setNewGame(prev => ({ ...prev, logo_url: url }))}
-                  currentImageUrl={newGame.logo_url}
-                  placeholder="Paste image or drag & drop"
-                />
-              </div>
 
               <GameLogoSuggestions
                 ref={logoSuggestionsRef}
                 gameName={newGame.name}
-                onLogoSelect={(url) => setNewGame(prev => ({ ...prev, logo_url: url }))}
+                selectedImageUrl={newGame.logo_url}
+                onSelectImage={(url) => setNewGame(prev => ({ ...prev, logo_url: url }))}
               />
 
-              <div className="flex items-center space-x-4">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="game-active"
-                    checked={newGame.is_active}
-                    onCheckedChange={(checked) => setNewGame(prev => ({ ...prev, is_active: !!checked }))}
-                  />
-                  <Label htmlFor="game-active" className="text-white">Active</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="game-include-challenge"
-                    checked={newGame.include_in_challenge}
-                    onCheckedChange={(checked) => setNewGame(prev => ({ ...prev, include_in_challenge: !!checked }))}
-                  />
-                  <Label htmlFor="game-include-challenge" className="text-white">Include in Challenge</Label>
-                </div>
-              </div>
 
               <Button
                 onClick={addGameToList}
@@ -614,6 +575,7 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
   const [loading, setLoading] = useState(false);
   const [games, setGames] = useState<any[]>([]);
   const [selectedLogos, setSelectedLogos] = useState<Record<number, string>>({});
+  const [clearLogos, setClearLogos] = useState<Record<string, string>>({});
   const [addingGames, setAddingGames] = useState(false);
   const [filters, setFilters] = useState({
     region: 'any',
@@ -644,9 +606,8 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
     try {
       const gamesToAdd = games.map((game, index) => ({
         name: game.name,
-        logo_url: selectedLogos[index] || '',
+        logo_url: selectedLogos[index] || clearLogos[game.name] || '',
         tournament_id: currentTournament.id,
-        include_in_challenge: true
       }));
 
       const { data, error } = await supabase
@@ -861,6 +822,20 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
     }
   };
 
+  // Function to load clear logos for games
+  const loadClearLogos = async (gameList: any[]) => {
+    if (gameList.length === 0) return;
+
+    try {
+      const gameNames = gameList.map(game => game.name);
+      const logos = await clearLogoService.getClearLogosForGames(gameNames);
+      setClearLogos(logos);
+      console.log('Loaded clear logos for', Object.keys(logos).length, 'games');
+    } catch (error) {
+      console.error('Error loading clear logos:', error);
+    }
+  };
+
   // Filter and select 5 random games based on current filters
   const updateRandomGames = () => {
     if (!gamesLoaded || allAvailableGames.length === 0) return;
@@ -899,6 +874,9 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
 
     setGames(selectedGames);
     setSelectedLogos({}); // Clear selected logos when games change
+
+    // Load clear logos for the new games
+    loadClearLogos(selectedGames);
   };
 
   // Load games when modal opens
@@ -916,6 +894,12 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
     }
   }, [filters, gamesLoaded]);
 
+  // Load clear logos whenever games change
+  useEffect(() => {
+    if (games.length > 0) {
+      loadClearLogos(games);
+    }
+  }, [games]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -1162,27 +1146,49 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
                           <div><strong>Platform:</strong> {game.platform || 'Arcade'}</div>
                         </div>
 
-                        {/* Logo suggestions for this game */}
-                        <div className="border-t border-white/10 pt-3">
-                          <div className="text-sm font-medium text-white mb-2">
-                            Available Logos:
-                            {selectedLogos[index] && (
-                              <span className="ml-2 text-xs text-arcade-neonCyan">✓ Selected</span>
-                            )}
+                        {/* Clear Logo Preview */}
+                        {clearLogos[game.name] && (
+                          <div className="border-t border-white/10 pt-3">
+                            <div className="text-sm font-medium text-white mb-2">
+                              Clear Logo Available:
+                              <span className="ml-2 text-xs text-green-400">✓ Auto-selected from S3</span>
+                            </div>
+                            <div className="flex items-center gap-3 p-2 bg-green-900/20 border border-green-400/20 rounded">
+                              <img
+                                src={clearLogos[game.name]}
+                                alt={`${game.name} clear logo`}
+                                className="w-12 h-12 object-contain bg-white/10 rounded"
+                              />
+                              <div className="text-xs text-green-300">
+                                High-quality clear logo will be used automatically
+                              </div>
+                            </div>
                           </div>
-                          <GameLogoSuggestions
-                            gameName={game.name}
-                            selectedImageUrl={selectedLogos[index]}
-                            onSelectImage={(imageUrl) => {
-                              // Set the selected logo for this game
-                              setSelectedLogos(prev => ({ ...prev, [index]: imageUrl }));
-                              toast({
-                                title: "Logo Selected",
-                                description: `Logo selected for "${game.name}"`,
-                              });
-                            }}
-                          />
-                        </div>
+                        )}
+
+                        {/* Logo suggestions for this game - only show if no clear logo */}
+                        {!clearLogos[game.name] && (
+                          <div className="border-t border-white/10 pt-3">
+                            <div className="text-sm font-medium text-white mb-2">
+                              Available Logos:
+                              {selectedLogos[index] && (
+                                <span className="ml-2 text-xs text-arcade-neonCyan">✓ Selected</span>
+                              )}
+                            </div>
+                            <GameLogoSuggestions
+                              gameName={game.name}
+                              selectedImageUrl={selectedLogos[index]}
+                              onSelectImage={(imageUrl) => {
+                                // Set the selected logo for this game
+                                setSelectedLogos(prev => ({ ...prev, [index]: imageUrl }));
+                                toast({
+                                  title: "Logo Selected",
+                                  description: `Logo selected for "${game.name}"`,
+                                });
+                              }}
+                            />
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -1226,10 +1232,11 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
   const [formData, setFormData] = useState({
     name: "",
     logo_url: "",
-    is_active: true,
-    include_in_challenge: true,
     tournament_id: currentTournament?.id || ""
   });
+
+  // Game search state (now handled by AdvancedSearchField)
+  const [gameSearchValue, setGameSearchValue] = useState('');
   const [tournamentFormData, setTournamentFormData] = useState({
     name: "",
     slug: "",
@@ -1433,11 +1440,10 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     setFormData({
       name: "",
       logo_url: "",
-      is_active: true,
-      include_in_challenge: true,
       tournament_id: currentTournament?.id || ""
     });
     setEditingGame(null);
+    setGameSearchValue('');
   };
 
   // Quick add game for a specific tournament (preselects tournament and opens dialog)
@@ -1446,8 +1452,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     setFormData({
       name: "",
       logo_url: "",
-      is_active: true,
-      include_in_challenge: true,
       tournament_id: tournamentId,
     });
     setIsDialogOpen(true);
@@ -1459,74 +1463,23 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     setFormData({
       name: game.name,
       logo_url: game.logo_url || "",
-      is_active: game.is_active,
-      include_in_challenge: game.include_in_challenge,
       tournament_id: game.tournament_id
     });
     setIsDialogOpen(true);
   };
 
-  // Toggle challenge inclusion
-  const toggleChallengeInclusion = async (gameId: string, currentValue: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('games')
-        .update({ include_in_challenge: !currentValue })
-        .eq('id', gameId);
-
-      if (error) throw error;
-
-      // Refresh the games list
-      loadGames();
-      
-      toast({
-        title: "Success",
-        description: `Game ${!currentValue ? 'included in' : 'removed from'} challenge`
-      });
-    } catch (error) {
-      console.error('Error updating challenge inclusion:', error);
-      const msg = `Failed to update challenge inclusion: ${String((error as any)?.message || error)}`;
-      toast({ title: 'Error', description: msg, variant: 'destructive', action: (<ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>) });
-    }
+  // Search enhancement functions
+  // Game search handlers for AdvancedSearchField
+  const handleGameSearchChange = (value: string) => {
+    setGameSearchValue(value);
+    setFormData(prev => ({ ...prev, name: value }));
   };
 
-  // Set a game as active (included in challenge)
-  const setGameActive = async (gameId: string) => {
-    try {
-      const { error } = await supabase
-        .from('games')
-        .update({ include_in_challenge: true })
-        .eq('id', gameId);
-
-      if (error) throw error;
-
-      await loadGames();
-      toast({ title: 'Success', description: 'Game marked as Active' });
-    } catch (error) {
-      console.error('Error setting game active:', error);
-      const msg = `Failed to make game active: ${String((error as any)?.message || error)}`;
-      toast({ title: 'Error', description: msg, variant: 'destructive', action: (<ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>) });
-    }
+  const handleGameSearchSubmit = (value: string) => {
+    // Optional: Could trigger additional actions on search submit
+    console.log('Game search submitted:', value);
   };
 
-  // Set a game as inactive (not included in challenge)
-  const setGameInactive = async (gameId: string) => {
-    try {
-      const { error } = await supabase
-        .from('games')
-        .update({ include_in_challenge: false })
-        .eq('id', gameId);
-
-      if (error) throw error;
-
-      await loadGames();
-      toast({ title: 'Success', description: 'Game marked as Inactive' });
-    } catch (error) {
-      console.error('Error setting game inactive:', error);
-      const msg = `Failed to make game inactive: ${String((error as any)?.message || error)}`;
-      toast({ title: 'Error', description: msg, variant: 'destructive', action: (<ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>) });
-    }
-  };
 
   // Save game (create or update)
   const saveGame = async () => {
@@ -1542,13 +1495,22 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     try {
       if (editingGame) {
         // Update existing game
+        // Try to get clear logo if no logo is provided
+        let logoUrl = formData.logo_url || null;
+        if (!logoUrl) {
+          try {
+            const clearLogos = await clearLogoService.getClearLogosForGames([formData.name]);
+            logoUrl = clearLogos[formData.name] || null;
+          } catch (error) {
+            console.warn('Failed to fetch clear logo for', formData.name, error);
+          }
+        }
+
         const { error } = await supabase
           .from('games')
           .update({
             name: formData.name,
-            logo_url: formData.logo_url || null,
-            is_active: formData.is_active,
-            include_in_challenge: formData.include_in_challenge
+            logo_url: logoUrl
           })
           .eq('id', editingGame.id);
 
@@ -1560,13 +1522,22 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
         });
       } else {
         // Create new game
+        // Try to get clear logo if no logo is provided
+        let logoUrl = formData.logo_url || null;
+        if (!logoUrl) {
+          try {
+            const clearLogos = await clearLogoService.getClearLogosForGames([formData.name]);
+            logoUrl = clearLogos[formData.name] || null;
+          } catch (error) {
+            console.warn('Failed to fetch clear logo for', formData.name, error);
+          }
+        }
+
         const { error } = await supabase
           .from('games')
           .insert({
             name: formData.name,
-            logo_url: formData.logo_url || null,
-            is_active: formData.is_active,
-            include_in_challenge: formData.include_in_challenge,
+            logo_url: logoUrl,
             tournament_id: formData.tournament_id
           });
 
@@ -1931,7 +1902,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     const formData = {
       name: tournament.name || "",
       slug: tournament.slug || "",
-      description: tournament.description || "",
       is_public: tournament.is_public || false,
       start_time: formatDateTimeForInput(tournament.start_time),
       end_time: formatDateTimeForInput(tournament.end_time),
@@ -1960,7 +1930,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       const success = await updateTournament(editingTournament.id, {
         name: tournamentFormData.name,
         slug: tournamentFormData.slug,
-        description: tournamentFormData.description,
         is_public: tournamentFormData.is_public,
         start_time: formatDateTimeForDatabase(tournamentFormData.start_time),
         end_time: formatDateTimeForDatabase(tournamentFormData.end_time),
@@ -2148,7 +2117,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                             <div className="flex items-start justify-between gap-4 mb-3">
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm text-gray-400 mb-1 truncate">Slug: /t/{tournament.slug}</p>
-                                {tournament.description && (<p className="text-sm text-gray-300 break-words">{tournament.description}</p>)}
                                 <p className="text-xs text-gray-500">Created: {new Date(tournament.created_at).toLocaleDateString()}</p>
                               </div>
                           <div className="flex gap-3 items-center shrink-0">
@@ -2187,7 +2155,14 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                           <div className="flex items-center justify-between mb-2">
                             <h5 className="text-sm font-semibold text-white">Games ({games.filter(g => g.tournament_id === tournament.id).length})</h5>
                             <div className="flex items-center gap-2">
-                              <Input placeholder="Search games..." value={tournamentFilters[tournament.id] || ''} onChange={(e) => setTournamentFilters(prev => ({ ...prev, [tournament.id]: e.target.value }))} className="h-7 w-40 bg-black/50 border-white/20 text-white text-xs" />
+                              <AdvancedSearchField
+                                value={tournamentFilters[tournament.id] || ''}
+                                onChange={(value) => setTournamentFilters(prev => ({ ...prev, [tournament.id]: value }))}
+                                placeholder="Search games..."
+                                enableSuggestions={false}
+                                enableRealTimeSearch={true}
+                                className="h-7 w-40 bg-black/50 border-white/20 text-white text-xs"
+                              />
                               <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handleAddGameForTournament(tournament.id)}><Plus className="w-3 h-3 mr-1" /> Add Game</Button>
                             </div>
                           </div>
@@ -2207,7 +2182,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                     const dir = cur.key === 'created_at' && cur.dir === 'asc' ? 'desc' : 'asc';
                                     setTournamentSort(prev => ({ ...prev, [tournament.id]: { key: 'created_at', dir } }));
                                   }} title="Sort by Created">Created{(() => { const s = tournamentSort[tournament.id]; return s?.key === 'created_at' ? (s.dir === 'asc' ? ' ▲' : ' ▼') : '' })()}</TableHead>
-                                  <TableHead className="text-white text-xs w-[14%]">Active</TableHead>
                                   <TableHead className="text-white text-xs w-[30%]">Top Scores (inline)</TableHead>
                                   <TableHead className="text-white text-xs w-[20%] min-w-[240px] text-right">Actions</TableHead>
                                 </TableRow>
@@ -2245,13 +2219,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                               </div>
                                             </TableCell>
                                           <TableCell className="text-xs text-gray-300">{new Date(game.created_at).toLocaleDateString()}</TableCell>
-                                          <TableCell className="text-xs">
-                                            {game.include_in_challenge ? (
-                                              <span className="px-2 py-1 rounded bg-green-600/20 text-green-400">Active</span>
-                                            ) : (
-                                              <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setGameActive(game.id)}>Make Active</Button>
-                                            )}
-                                          </TableCell>
                                           <TableCell className="text-xs text-gray-300 align-top relative z-0">
                                             {(() => {
                                               const arr = gameScores[game.id] || [];
@@ -2481,13 +2448,16 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
             </DialogHeader>
             <div className="space-y-4 px-1">
               <div className="w-full">
-                <Label htmlFor="name">Game Name *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                <AdvancedSearchField
+                  value={gameSearchValue}
+                  onChange={handleGameSearchChange}
+                  onSubmit={handleGameSearchSubmit}
+                  label="Game Name *"
                   placeholder="Enter game name (logos search automatically as you type)"
-                  className="bg-black/50 border-white/20 text-white w-full"
+                  className="[&_input]:bg-black/50 [&_input]:border-white/20 [&_input]:text-white"
+                  enableSuggestions={true}
+                  enableRealTimeSearch={true}
+                  searchHint="💡 Tip: Try 'Street Fighter', 'Pac-Man', 'Metal Slug', or use abbreviations like 'SF'"
                 />
               </div>
               <div className="w-full">
@@ -2517,6 +2487,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                 <GameLogoSuggestions
                   ref={gameLogoSuggestionsRef}
                   gameName={formData.name}
+                  selectedImageUrl={formData.logo_url}
                   onSelectImage={(url) => setFormData(prev => ({ ...prev, logo_url: url }))}
                 />
               </div>
@@ -2563,15 +2534,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                   onChange={(e) => setTournamentFormData(prev => ({ ...prev, slug: e.target.value }))}
                   className="bg-black/50 border-white/20 text-white"
                   placeholder="tournament-slug"
-                />
-              </div>
-              <div>
-                <Label className="text-white">Description</Label>
-                <Input
-                  value={tournamentFormData.description}
-                  onChange={(e) => setTournamentFormData(prev => ({ ...prev, description: e.target.value }))}
-                  className="bg-black/50 border-white/20 text-white"
-                  placeholder="Optional description"
                 />
               </div>
               <div className="space-y-4">

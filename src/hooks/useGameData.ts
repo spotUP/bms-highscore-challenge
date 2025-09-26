@@ -114,12 +114,11 @@ const loadOverallLeaders = async () => {
     const { data: scores, error } = await supabase
       .from('scores')
       .select(`
-        player_name, 
+        player_name,
         score,
         game_id,
-        games!inner(include_in_challenge, name)
+        games!inner(name)
       `)
-      .eq('games.include_in_challenge', true)
       .order('created_at', { ascending: false })
       .limit(500);
 
@@ -372,8 +371,8 @@ export const useGameData = () => {
   }, []);
 
   // Memoized values for performance
-  const activeGames = useMemo(() => 
-    state.games.filter(game => game.include_in_challenge), 
+  const activeGames = useMemo(() =>
+    state.games,
     [state.games]
   );
 

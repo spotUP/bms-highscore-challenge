@@ -32,13 +32,13 @@ const LeaderboardEntry = React.memo(({ rank, name, score, isNewScore }: Leaderbo
         {getRankIcon(rank)}
         <div className="flex-1 min-w-0">
           <div
-            className="font-arcade font-bold text-2xl md:text-lg animated-gradient-vertical truncate"
+            className="font-arcade font-bold text-lg animated-gradient-vertical truncate"
             style={{ '--wave-delay': `${waveDelay}s` } as React.CSSProperties}
           >
             {name}
           </div>
           <div
-            className="text-lg md:text-sm font-arcade animated-gradient-vertical mt-0.5"
+            className="text-sm font-arcade animated-gradient-vertical mt-0.5"
             style={{ '--wave-delay': `${waveDelay}s` } as React.CSSProperties}
           >
             {formatScore(score)}

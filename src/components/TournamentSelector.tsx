@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { usePageTransitions } from '@/hooks/usePageTransitions';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +13,8 @@ import { useTournament } from "@/contexts/TournamentContext";
 import { Trophy, Users, Settings, Plus, Globe, Lock, Crown, Shield, User } from "lucide-react";
 
 const TournamentSelector = () => {
+  const location = useLocation();
+  const { animatedNavigate } = usePageTransitions();
   const {
     currentTournament,
     userTournaments,
@@ -68,13 +72,25 @@ const TournamentSelector = () => {
 
   const handleSwitchTournament = async (tournament: any) => {
     console.log('Attempting to switch to tournament:', tournament);
+    console.log('Current location.pathname:', location.pathname);
     if (tournament.id !== currentTournament?.id) {
       try {
         await switchTournament(tournament);
         setIsDialogOpen(false);
+
+        // Navigate to index page if not already there
+        console.log('Checking if should navigate, current path:', location.pathname);
+        if (location.pathname !== '/') {
+          console.log('Navigation condition met, calling animatedNavigate');
+          animatedNavigate('/');
+        } else {
+          console.log('Already on index page, skipping navigation');
+        }
       } catch (error) {
         console.error('Error in handleSwitchTournament:', error);
       }
+    } else {
+      console.log('Same tournament selected, not switching');
     }
   };
 
@@ -222,16 +238,6 @@ const TournamentSelector = () => {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="description" className="text-white">Description (Optional)</Label>
-                <Input
-                  id="description"
-                  value={createForm.description}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="A brief description of your tournament"
-                  className="bg-black/50 border-gray-700 text-white"
-                />
-              </div>
 
               <div>
                 <Label htmlFor="slug" className="text-white">Tournament Slug</Label>

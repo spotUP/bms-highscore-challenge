@@ -121,6 +121,7 @@ export function getGameLogoUrl(logoUrl: string | null): string | null {
   return logoUrl;
 }
 
+
 // Check if a logo URL is a placeholder that should be treated as null
 export function isPlaceholderLogo(logoUrl: string | null): boolean {
   if (!logoUrl) return true;

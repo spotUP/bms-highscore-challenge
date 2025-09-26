@@ -80,7 +80,7 @@ const OverallLeaderboard = React.memo(() => {
         <span className="text-lg font-bold text-white mb-2 block">Overall Leaders</span>
         <div className="space-y-1 max-h-80 overflow-y-auto">
           {displayLeaders.map((player, index) => (
-              <div key={player.player_name} className="flex items-center gap-2 py-1 md:flex-row flex-col md:text-left text-center md:justify-start justify-center">
+              <div key={player.player_name} className="flex items-center gap-2 py-1 text-center md:text-left">
                 <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
                   {index === 0 ? <span className="text-2xl animate-gold-shine">🏆</span> :
                    index === 1 ? <span className="text-2xl animate-silver-shine">🥈</span> :
@@ -89,16 +89,16 @@ const OverallLeaderboard = React.memo(() => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div
-                      className="font-arcade font-bold text-lg md:text-sm animated-gradient-vertical truncate"
+                      className="font-arcade font-bold text-sm animated-gradient-vertical truncate"
                   >
                     {player.player_name}
                   </div>
-                  <div className="text-sm md:text-xs text-gray-400">
+                  <div className="text-xs text-gray-400">
                     {player.game_count}g
                 </div>
               </div>
               <div
-                    className="font-bold font-arcade text-sm md:text-xs animated-gradient-vertical flex-shrink-0"
+                    className="font-bold font-arcade text-xs animated-gradient-vertical flex-shrink-0"
               >
                 {formatScore(player.total_ranking_points)}
               </div>
@@ -117,7 +117,7 @@ const OverallLeaderboard = React.memo(() => {
         <span className="text-lg font-bold text-white mb-2 block">Achievement Hunters</span>
         <div className="space-y-1 max-h-80 overflow-y-auto">
             {displayAchievementHunters.map((hunter, index) => (
-              <div key={hunter.player_name} className="flex items-center gap-2 py-1 md:flex-row flex-col md:text-left text-center md:justify-start justify-center">
+              <div key={hunter.player_name} className="flex items-center gap-2 py-1 text-center md:text-left">
                 <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
                   {index === 0 ? <span className="text-2xl">🌟</span> :
                    index === 1 ? <span className="text-2xl">⭐</span> :
@@ -126,11 +126,11 @@ const OverallLeaderboard = React.memo(() => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div
-                    className="font-arcade font-bold text-lg md:text-sm animated-gradient-vertical truncate"
+                    className="font-arcade font-bold text-sm animated-gradient-vertical truncate"
                   >
                     {hunter.player_name}
                   </div>
-                  <div className="text-sm md:text-xs text-gray-400">
+                  <div className="text-xs text-gray-400">
                     {hunter.achievement_count}a
                   </div>
                 </div>

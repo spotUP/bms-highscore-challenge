@@ -9,8 +9,6 @@ interface Game {
   id: string;
   name: string;
   logo_url: string | null;
-  is_active: boolean;
-  include_in_challenge: boolean;
   tournament_id: string;
 }
 
@@ -72,9 +70,8 @@ export const useTournamentGameData = () => {
       // Load games with tournament_id filter
       const { data, error } = await supabase
         .from('games')
-        .select('id, name, logo_url, is_active, include_in_challenge, tournament_id')
+        .select('id, name, logo_url, tournament_id')
         .eq('tournament_id', currentTournament.id)
-        .eq('is_active', true)
         .order('name', { ascending: true });
 
       dlog('useTournamentGameData: Games query result:', { data, error });
@@ -128,13 +125,12 @@ export const useTournamentGameData = () => {
       const { data: scores, error } = await supabase
         .from('scores')
         .select(`
-          player_name, 
+          player_name,
           score,
           game_id,
-          games!inner(include_in_challenge, name)
+          games!inner(name)
         `)
         .eq('tournament_id', currentTournament.id)
-        .eq('games.include_in_challenge', true)
         .order('created_at', { ascending: false })
         .limit(500);
 
@@ -388,7 +384,7 @@ export const useTournamentGameData = () => {
 
   // Memoized derived data
   const activeGames = useMemo(() => {
-    return state.games.filter(game => game.is_active && game.include_in_challenge);
+    return state.games;
   }, [state.games]);
 
   const gameScores = useMemo(() => {
@@ -401,11 +397,11 @@ export const useTournamentGameData = () => {
       scoresByGame[score.game_id].push(score);
     });
 
-    // Sort scores for each game and keep only top 5
+    // Sort scores for each game and keep only top 10
     Object.keys(scoresByGame).forEach(gameId => {
       scoresByGame[gameId] = scoresByGame[gameId]
         .sort((a, b) => b.score - a.score)
-        .slice(0, 5);
+        .slice(0, 10);
     });
 
     return scoresByGame;

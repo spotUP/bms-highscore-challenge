@@ -10,22 +10,22 @@ import { getGameLogoUrl } from "@/lib/utils";
 import PlayerInsult from "@/components/PlayerInsult";
 import { useTournament } from "@/contexts/TournamentContext";
 import { reportSubmissionFailure } from "@/utils/submissionMonitoring";
-import pacmanLogo from "@/assets/pacman-logo.png";
-import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
-import tetrisLogo from "@/assets/tetris-logo.png";
-import donkeyKongLogo from "@/assets/donkey-kong-logo.png";
+// import pacmanLogo from "@/assets/pacman-logo.png";
+// import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
+// import tetrisLogo from "@/assets/tetris-logo.png";
+// import donkeyKongLogo from "@/assets/donkey-kong-logo.png";
 import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer } from "@/utils/designSystem";
 
 // Fallback logo mapping for backwards compatibility
-const LOGO_MAP: Record<string, string> = {
-  "pacman": pacmanLogo,
-  "pac-man": pacmanLogo,
-  "spaceinvaders": spaceInvadersLogo,
-  "space invaders": spaceInvadersLogo,
-  "tetris": tetrisLogo,
-  "donkeykong": donkeyKongLogo,
-  "donkey kong": donkeyKongLogo,
-};
+// const LOGO_MAP: Record<string, string> = {
+//   "pacman": pacmanLogo,
+//   "pac-man": pacmanLogo,
+//   "spaceinvaders": spaceInvadersLogo,
+//   "space invaders": spaceInvadersLogo,
+//   "tetris": tetrisLogo,
+//   "donkeykong": donkeyKongLogo,
+//   "donkey kong": donkeyKongLogo,
+// };
 
 interface Game {
   id: string;
@@ -60,8 +60,6 @@ const MobileEntry = () => {
           .from('games')
           .select('*')
           .eq('id', gameId)
-          .eq('is_active', true)
-          .eq('include_in_challenge', true)
           .single();
 
         if (error) throw error;
@@ -107,7 +105,7 @@ const MobileEntry = () => {
   }
 
   // Get logo URL - convert local paths to Supabase Storage URLs
-  const logoUrl = getGameLogoUrl(game.logo_url) || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
+  const logoUrl = getGameLogoUrl(game.logo_url);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

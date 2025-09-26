@@ -202,8 +202,8 @@ export const useOptimizedData = (options: UseOptimizedDataOptions = {}) => {
   }, [enabled, fetchGames, fetchScores, fetchAchievements, fetchPlayerAchievements]);
 
   // Memoized computed values
-  const activeGames = useMemo(() => 
-    games.filter(game => game.include_in_challenge), 
+  const activeGames = useMemo(() =>
+    games,
     [games]
   );
 

@@ -46,8 +46,7 @@ const CompetitionManager: React.FC = () => {
       // For now, we'll check if there are active games as a proxy for an active competition
       const { data: games, error } = await supabase
         .from('games')
-        .select('*')
-        .eq('include_in_challenge', true);
+        .select('*');
 
       if (error) {
         console.error('Error loading games:', error);
@@ -78,8 +77,7 @@ const CompetitionManager: React.FC = () => {
       // Check if there are games available
       const { data: games, error: gamesError } = await supabase
         .from('games')
-        .select('*')
-        .eq('include_in_challenge', true);
+        .select('*');
 
       if (gamesError) throw gamesError;
 
@@ -143,8 +141,7 @@ const CompetitionManager: React.FC = () => {
       const [gamesResult, scoresResult, winnerResult] = await Promise.all([
         supabase
           .from('games')
-          .select('id, name, logo_url')
-          .eq('include_in_challenge', true),
+          .select('id, name, logo_url'),
         supabase
           .from('scores')
           .select('player_name, score'),
@@ -365,16 +362,6 @@ const CompetitionManager: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="comp-desc">Description (Optional)</Label>
-                  <Input
-                    id="comp-desc"
-                    value={newCompetition.description}
-                    onChange={(e) => setNewCompetition(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Weekly high score challenge"
-                    className="bg-gray-800 border-gray-600"
-                  />
-                </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>

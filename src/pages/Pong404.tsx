@@ -59,8 +59,8 @@ const PANIC_VELOCITY_MULTIPLIER = 8; // Reduced panic speed multiplier
 const EXTREME_PANIC_CHANCE = 0.04; // Lower extreme panic chance
 const EXTREME_PANIC_MULTIPLIER = 20; // Reduced extreme panic speed
 
-// WebSocket server URL - direct connection for development
-const WS_SERVER_URL = 'ws://localhost:3002';
+// WebSocket server URL - only available in development
+const WS_SERVER_URL = import.meta.env.DEV ? 'ws://localhost:3002' : null;
 
 // Beautiful color palette inspired by retro gaming and synthwave aesthetics
 const COLOR_PALETTE = [
@@ -134,6 +134,12 @@ const Pong404: React.FC = () => {
 
   // WebSocket connection management
   const connectWebSocket = useCallback(() => {
+    if (!WS_SERVER_URL) {
+      console.log('⚠️ Multiplayer not available in production');
+      setConnectionStatus('error');
+      return;
+    }
+
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       return;
     }

@@ -75,8 +75,6 @@ const ScoreManager = () => {
       const { data: gamesData, error: gamesError } = await supabase
         .from('games')
         .select('id, name')
-        .eq('is_active', true)
-        .eq('include_in_challenge', true)
         .order('name');
 
       if (gamesError) throw gamesError;
@@ -97,11 +95,9 @@ const ScoreManager = () => {
         .select(`
           *,
           games!inner (
-            name,
-            include_in_challenge
+            name
           )
         `)
-        .eq('games.include_in_challenge', true)
         .order('score', { ascending: false });
 
       if (scoresError) throw scoresError;

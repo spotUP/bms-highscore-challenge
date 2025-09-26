@@ -16,6 +16,7 @@ import { GameDetailsModal } from "@/components/GameDetailsModal";
 import { CreateTournamentModal } from "@/components/CreateTournamentModal";
 import { useFavorites } from "@/hooks/useFavorites";
 import RAWGAPI from "@/utils/rawgApi";
+import { AdvancedSearchField } from "@/components/ui/advanced-search-field";
 
 // Utility function to clean HTML and truncate text
 const cleanDescription = (description: string | undefined, maxLength: number = 150): string => {
@@ -445,16 +446,14 @@ const RAWGGamesBrowser: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="text-sm font-medium mb-2 block">Search</label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search games..."
-                      value={filters.search}
-                      onChange={(e) => handleSearchChange(e.target.value)}
-                      className="pl-10"
-                      disabled={showFavoritesOnly}
-                    />
-                  </div>
+                  <AdvancedSearchField
+                    value={filters.search}
+                    onChange={handleSearchChange}
+                    placeholder="Search games..."
+                    enableSuggestions={false}
+                    enableRealTimeSearch={true}
+                    disabled={showFavoritesOnly}
+                  />
                 </div>
 
                 <div>

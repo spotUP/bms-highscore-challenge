@@ -47,7 +47,6 @@ const TournamentManagement = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [createForm, setCreateForm] = useState({
     name: '',
-    description: '',
     slug: '',
     is_public: false,
     demolition_man_active: false, // Default to inactive
@@ -111,7 +110,6 @@ const TournamentManagement = () => {
     setIsCreating(true);
     const success = await createTournament({
       name: createForm.name.trim(),
-      description: createForm.description.trim() || undefined,
       slug: createForm.slug.trim().toLowerCase(),
       is_public: createForm.is_public,
       demolition_man_active: createForm.demolition_man_active,
@@ -120,7 +118,6 @@ const TournamentManagement = () => {
     if (success) {
       setCreateForm({
         name: '',
-        description: '',
         slug: '',
         is_public: false,
         demolition_man_active: false,
@@ -523,16 +520,6 @@ const TournamentManagement = () => {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="description" className="text-white">Description (Optional)</Label>
-                <Textarea
-                  id="description"
-                  value={createForm.description}
-                  onChange={(e) => setCreateForm(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="A brief description of your tournament"
-                  className="bg-black/50 border-gray-700 text-white"
-                />
-              </div>
 
               <div>
                 <Label htmlFor="slug" className="text-white">Tournament Slug</Label>

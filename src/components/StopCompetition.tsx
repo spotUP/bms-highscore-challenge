@@ -26,7 +26,6 @@ const StopCompetition: React.FC<StopCompetitionProps> = ({ onCompetitionStopped,
         const { data, error } = await supabase
           .from('games')
           .select('id')
-          .eq('include_in_challenge', true)
           .limit(1);
 
         if (error) {
@@ -59,8 +58,7 @@ const StopCompetition: React.FC<StopCompetitionProps> = ({ onCompetitionStopped,
       const [gamesResult, scoresResult, winnerResult] = await Promise.all([
         supabase
           .from('games')
-          .select('id, name, logo_url')
-          .eq('include_in_challenge', true),
+          .select('id, name, logo_url'),
         supabase
           .from('scores')
           .select('player_name, score'),
