@@ -97,9 +97,13 @@ const Pong404: React.FC = () => {
   });
 
   // Enhanced console.log that works in production when debug mode is enabled
+  // Use a reference to the original console.log to bypass Vite's production stripping
+  const originalConsoleLog = useRef(window.console.log.bind(window.console));
+
   const debugLog = useCallback((...args: any[]) => {
     if (debugMode || import.meta.env.DEV) {
-      console.log(...args);
+      // Use the original console.log reference to bypass production optimizations
+      originalConsoleLog.current(...args);
     }
   }, [debugMode]);
 
