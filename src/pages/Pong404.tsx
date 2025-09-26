@@ -386,6 +386,7 @@ const Pong404: React.FC = () => {
         updateMultiplayerState(newMultiplayerState);
 
         if (message.data.gameState) {
+          debugLog('🎮 RECEIVED GAME STATE FROM SERVER:', message.data.gameState);
           setGameState(message.data.gameState);
         }
         break;
