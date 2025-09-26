@@ -607,14 +607,16 @@ const Pong404: React.FC = () => {
         }
       }
 
+      // SIMPLIFIED: Always allow paddle control regardless of mode
       // Auto-switch to player mode when keys are pressed (if not in multiplayer)
       if (newState.gameMode === 'auto' && (keys.w || keys.s || keys.up || keys.down)) {
-        debugLog('🎮 Switching from auto to player mode - keys pressed:', keys);
+        console.log('🎮 FORCED - Switching from auto to player mode - keys pressed:', keys);
         newState.gameMode = 'player';
       }
 
+      // SIMPLIFIED: Always allow paddle movement in any mode
       // Update paddle positions
-      if (newState.gameMode === 'player') {
+      if (newState.gameMode === 'player' || (keys.w || keys.s || keys.up || keys.down)) {
         // Single-player controls with smooth interpolation
         // Left paddle smooth movement
         if (keys.w && newState.paddles.left.y > 12) {
