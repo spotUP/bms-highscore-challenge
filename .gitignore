@@ -45,3 +45,4 @@ name-based-logs.db
 test-query.js
 test-puppeteer-*.ts
 .vercel
+websocket-server/
