@@ -105,7 +105,7 @@ const Pong404: React.FC = () => {
 
   // Test debug logging on mount
   useEffect(() => {
-    console.log('🚀 Component mounted. Debug mode:', debugMode, 'DEV mode:', import.meta.env.DEV);
+    debugLog('🚀 Component mounted. Debug mode:', debugMode, 'DEV mode:', import.meta.env.DEV);
     debugLog('🐛 DEBUG TEST: If you see this, debug logging is working!');
   }, [debugMode, debugLog]);
 
@@ -153,16 +153,73 @@ const Pong404: React.FC = () => {
   const [localTestMode, setLocalTestMode] = useState(false);
   const [crtEffect, setCrtEffect] = useState(true); // CRT shader enabled by default
 
-  // WebSocket connection management with server wake-up
+  // Local multiplayer using localStorage for cross-tab sync
+  const connectLocalMultiplayer = useCallback(() => {
+    debugLog('🏠 FORCED - Using local multiplayer (localStorage sync)');
+    setConnectionStatus('connected');
+
+    // Set up localStorage for cross-tab communication
+    const playerId = multiplayerState.playerId || 'player-' + Math.random().toString(36).substr(2, 9);
+    const roomId = multiplayerState.roomId || 'local-room';
+
+    // Check existing players in localStorage
+    const existingPlayers = JSON.parse(localStorage.getItem('pong-players') || '[]');
+    const leftPlayer = existingPlayers.find((p: any) => p.side === 'left');
+    const rightPlayer = existingPlayers.find((p: any) => p.side === 'right');
+
+    let playerSide: 'left' | 'right' | 'spectator' = 'spectator';
+    let isGameMaster = false;
+
+    if (!leftPlayer) {
+      playerSide = 'left';
+      isGameMaster = true;
+    } else if (!rightPlayer) {
+      playerSide = 'right';
+    }
+
+    const playerData = { id: playerId, side: playerSide, timestamp: Date.now() };
+    const updatedPlayers = existingPlayers.filter((p: any) => p.id !== playerId);
+    updatedPlayers.push(playerData);
+    localStorage.setItem('pong-players', JSON.stringify(updatedPlayers));
+
+    setMultiplayerState(prev => ({
+      ...prev,
+      playerId,
+      roomId,
+      playerSide,
+      isGameMaster,
+      isConnected: true,
+      playerCount: updatedPlayers.length
+    }));
+
+    debugLog(`✅ FORCED - Joined local room as ${playerSide} (${updatedPlayers.length} players)`);
+
+    // Set game to multiplayer mode
+    setGameState(prev => ({ ...prev, gameMode: 'multiplayer' }));
+
+    return; // Skip WebSocket connection
+  }, [multiplayerState.playerId, multiplayerState.roomId]);
+
+  // WebSocket connection management
   const connectWebSocket = useCallback(() => {
+
     if (!WS_SERVER_URL) {
       debugLog('⚠️ Multiplayer not available in production');
       setConnectionStatus('error');
       return;
     }
 
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
+    // Prevent duplicate connections
+    if (wsRef.current?.readyState === WebSocket.CONNECTING || wsRef.current?.readyState === WebSocket.OPEN) {
+      debugLog('🛡️ FORCED - Preventing duplicate WebSocket connection, current state:', wsRef.current?.readyState);
       return;
+    }
+
+    // Clean up any existing connection first
+    if (wsRef.current) {
+      debugLog('🧹 FORCED - Cleaning up existing WebSocket connection');
+      wsRef.current.close();
+      wsRef.current = null;
     }
 
     debugLog('🔌 Preparing WebSocket connection...');
@@ -179,14 +236,21 @@ const Pong404: React.FC = () => {
 
     const connectToWebSocket = () => {
       try {
-        debugLog('🔌 Connecting to WebSocket server...');
-        debugLog('📍 WebSocket URL:', WS_SERVER_URL);
-        debugLog('🌐 Current location:', window.location.origin);
+        debugLog('🔌 FORCED - Creating WebSocket connection...');
+        debugLog('📍 FORCED - WebSocket URL:', WS_SERVER_URL);
+        debugLog('🌐 FORCED - Current location:', window.location.origin);
+
         const ws = new WebSocket(WS_SERVER_URL);
+        (ws as any)._createTime = Date.now();
         wsRef.current = ws;
 
+        debugLog('🔌 FORCED - WebSocket created, readyState:', ws.readyState);
+
         ws.onopen = () => {
-          debugLog('✅ WebSocket connected');
+          const openTime = Date.now();
+          (ws as any)._openTime = openTime;
+          const connectionTime = openTime - (ws as any)._createTime;
+          debugLog('✅ FORCED - WebSocket connection opened after', connectionTime, 'ms');
           setConnectionStatus('connected');
 
           // Clear the connection timeout since we connected successfully
@@ -194,12 +258,20 @@ const Pong404: React.FC = () => {
             clearTimeout(connectionTimeout);
           }
 
-          // Join the multiplayer room
-          ws.send(JSON.stringify({
-            type: 'join_room',
-            playerId: multiplayerState.playerId,
-            roomId: multiplayerState.roomId
-          }));
+          // Add a small delay before sending join message to ensure connection is stable
+          setTimeout(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+              const joinMessage = {
+                type: 'join_room',
+                playerId: multiplayerState.playerId,
+                roomId: multiplayerState.roomId
+              };
+              debugLog('🏓 FORCED - Sending join_room message after delay:', joinMessage);
+              ws.send(JSON.stringify(joinMessage));
+            } else {
+              debugLog('❌ FORCED - WebSocket closed before join message could be sent');
+            }
+          }, 100); // 100ms delay
         };
 
         ws.onmessage = (event) => {
@@ -212,10 +284,15 @@ const Pong404: React.FC = () => {
         };
 
         ws.onclose = (event) => {
-          debugLog('🔌 WebSocket disconnected');
-          debugLog('🔌 Close code:', event.code);
-          debugLog('🔌 Close reason:', event.reason);
-          debugLog('🔌 Was clean:', event.wasClean);
+          const closeTime = Date.now();
+          const openDuration = (ws as any)._openTime ? closeTime - (ws as any)._openTime : 0;
+          const totalDuration = closeTime - (ws as any)._createTime;
+
+          debugLog('🔌 FORCED - WebSocket disconnected');
+          debugLog('🔌 FORCED - Close code:', event.code, 'Reason:', event.reason, 'Clean:', event.wasClean);
+          debugLog('🔌 FORCED - Total connection time:', totalDuration, 'ms');
+          debugLog('🔌 FORCED - Open duration:', openDuration, 'ms');
+
           setConnectionStatus('error');
           setMultiplayerState(prev => ({ ...prev, isConnected: false }));
 
@@ -316,6 +393,7 @@ const Pong404: React.FC = () => {
         break;
 
       case 'game_state_updated':
+        debugLog('🎮 FORCED - Received game state update:', message.data);
         if (message.data) {
           setGameState(message.data);
         }
@@ -341,7 +419,10 @@ const Pong404: React.FC = () => {
 
   // Send paddle update via WebSocket
   const updatePaddlePosition = useCallback((y: number, velocity = 0, targetY?: number) => {
+    debugLog('🏓 FORCED - updatePaddlePosition called:', { y, velocity, targetY, isConnected: multiplayerState.isConnected, playerSide: multiplayerState.playerSide });
+
     if (wsRef.current?.readyState === WebSocket.OPEN && multiplayerState.isConnected) {
+      debugLog('🏓 FORCED - Sending paddle update via WebSocket');
       wsRef.current.send(JSON.stringify({
         type: 'update_paddle',
         playerId: multiplayerState.playerId,
@@ -352,21 +433,30 @@ const Pong404: React.FC = () => {
         }
       }));
     }
-  }, [multiplayerState.playerId, multiplayerState.isConnected]);
+  }, [multiplayerState.playerId, multiplayerState.isConnected, multiplayerState.playerSide]);
 
-  // Send game state update via WebSocket (only for gamemaster)
+  // Send game state update via localStorage (only for gamemaster)
   const updateGameState = useCallback((newGameState: GameState) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN &&
-        multiplayerState.isConnected &&
-        multiplayerState.isGameMaster) {
-      wsRef.current.send(JSON.stringify({
-        type: 'update_game_state',
-        playerId: multiplayerState.playerId,
-        roomId: multiplayerState.roomId,
-        data: newGameState
+    debugLog('🔄 FORCED - updateGameState called (localStorage):', {
+      isConnected: multiplayerState.isConnected,
+      isGameMaster: multiplayerState.isGameMaster,
+      gameMode: newGameState.gameMode
+    });
+
+    if (multiplayerState.isConnected && multiplayerState.isGameMaster) {
+      debugLog('🔄 FORCED - Sending game state update via localStorage');
+      localStorage.setItem('pong-game-state', JSON.stringify({
+        ...newGameState,
+        timestamp: Date.now()
+      }));
+
+      // Trigger storage event for other tabs
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'pong-game-state',
+        newValue: JSON.stringify(newGameState)
       }));
     }
-  }, [multiplayerState.playerId, multiplayerState.roomId, multiplayerState.isConnected, multiplayerState.isGameMaster]);
+  }, [multiplayerState.isConnected, multiplayerState.isGameMaster]);
 
   // Reset game room
   const resetRoom = useCallback(() => {
@@ -610,7 +700,7 @@ const Pong404: React.FC = () => {
       // SIMPLIFIED: Always allow paddle control regardless of mode
       // Auto-switch to player mode when keys are pressed (if not in multiplayer)
       if (newState.gameMode === 'auto' && (keys.w || keys.s || keys.up || keys.down)) {
-        console.log('🎮 FORCED - Switching from auto to player mode - keys pressed:', keys);
+        debugLog('🎮 FORCED - Switching from auto to player mode - keys pressed:', keys);
         newState.gameMode = 'player';
       }
 
@@ -995,28 +1085,23 @@ const Pong404: React.FC = () => {
   // Handle keyboard input
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
-      console.log('🔑 FORCED LOG - Key down event:', e.key, 'from element:', e.target?.tagName);
-      debugLog('🔑 Key down event:', e.key, 'from element:', e.target?.tagName);
+      debugLog('🔑 FORCED LOG - Key down event:', e.key, 'from element:', e.target?.tagName);
 
       switch (e.key.toLowerCase()) {
         case 'w':
-          console.log('🔽 FORCED LOG - W key pressed');
-          debugLog('🔽 W key pressed');
+          debugLog('🔽 FORCED LOG - W key pressed');
           setKeys(prev => ({ ...prev, w: true }));
           break;
         case 's':
-          console.log('🔽 FORCED LOG - S key pressed');
-          debugLog('🔽 S key pressed');
+          debugLog('🔽 FORCED LOG - S key pressed');
           setKeys(prev => ({ ...prev, s: true }));
           break;
         case 'arrowup':
-          console.log('🔽 FORCED LOG - UP arrow pressed');
-          debugLog('🔽 UP arrow pressed');
+          debugLog('🔽 FORCED LOG - UP arrow pressed');
           setKeys(prev => ({ ...prev, up: true }));
           break;
         case 'arrowdown':
-          console.log('🔽 FORCED LOG - DOWN arrow pressed');
-          debugLog('🔽 DOWN arrow pressed');
+          debugLog('🔽 FORCED LOG - DOWN arrow pressed');
           setKeys(prev => ({ ...prev, down: true }));
           break;
         case 'a':
@@ -1032,6 +1117,7 @@ const Pong404: React.FC = () => {
             const newDebugMode = !debugMode;
             setDebugMode(newDebugMode);
             localStorage.setItem('pong-debug', newDebugMode.toString());
+            // Always use regular console.log for debug mode toggle confirmation so user can see it
             console.log('🐛 Debug Mode:', newDebugMode ? 'ENABLED (Console logs visible in production)' : 'DISABLED');
           }
           break;
@@ -1656,16 +1742,51 @@ const Pong404: React.FC = () => {
   }, [gameState.isPlaying, updateGame, render]);
 
 
+  // Prevent React strict mode from causing duplicate WebSocket connections
+  const hasInitialized = useRef(false);
+
+  // Listen for localStorage events from other tabs
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'pong-game-state' && e.newValue && !multiplayerState.isGameMaster) {
+        debugLog('📨 FORCED - Received game state from other tab');
+        try {
+          const gameState = JSON.parse(e.newValue);
+          setGameState(gameState);
+        } catch (error) {
+          debugLog('❌ Error parsing localStorage game state:', error);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [multiplayerState.isGameMaster]);
+
   // Focus canvas on mount and cleanup on unmount
   useEffect(() => {
+    // Prevent double initialization in React strict mode
+    if (hasInitialized.current) {
+      debugLog('🛡️ FORCED - Preventing duplicate initialization (React strict mode)');
+      return;
+    }
+    hasInitialized.current = true;
+
     if (canvasRef.current) {
       canvasRef.current.focus();
       debugLog('🎯 Canvas auto-focused on mount');
     }
 
+    // Clean up localStorage on unmount
     return () => {
+      debugLog('🧹 FORCED - Component unmounting, cleaning up localStorage');
+      const players = JSON.parse(localStorage.getItem('pong-players') || '[]');
+      const filteredPlayers = players.filter((p: any) => p.id !== multiplayerState.playerId);
+      localStorage.setItem('pong-players', JSON.stringify(filteredPlayers));
+
       if (wsRef.current) {
         wsRef.current.close();
+        wsRef.current = null;
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
@@ -1693,8 +1814,7 @@ const Pong404: React.FC = () => {
         onClick={() => {
           if (canvasRef.current) {
             canvasRef.current.focus();
-            console.log('🎯 Canvas clicked and focused - FORCED LOG');
-            debugLog('🎯 Canvas clicked and focused');
+            debugLog('🎯 Canvas clicked and focused - FORCED LOG');
           }
         }}
       />

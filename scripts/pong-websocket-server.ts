@@ -56,7 +56,11 @@ class PongWebSocketServer {
   constructor(port = 3002) {
     this.port = port;
     this.server = createServer();
-    this.wss = new WebSocketServer({ server: this.server });
+    this.wss = new WebSocketServer({
+      server: this.server,
+      perMessageDeflate: false,
+      maxPayload: 1024 * 1024 // 1MB
+    });
     this.setupWebSocketHandlers();
     this.startCleanupInterval();
   }
@@ -69,6 +73,7 @@ class PongWebSocketServer {
       ws.on('message', (message) => {
         try {
           const data = JSON.parse(message.toString());
+          console.log('📨 Received message:', data);
           this.handleMessage(ws, data);
           playerId = data.playerId || playerId;
         } catch (error) {
