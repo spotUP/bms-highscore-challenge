@@ -90,6 +90,19 @@ const Pong404: React.FC = () => {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Debug mode for production - enable with ?debug=true or press 'D' key
+  const [debugMode, setDebugMode] = useState(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('debug') === 'true' || localStorage.getItem('pong-debug') === 'true';
+  });
+
+  // Enhanced console.log that works in production when debug mode is enabled
+  const debugLog = useCallback((...args: any[]) => {
+    if (debugMode || import.meta.env.DEV) {
+      console.log(...args);
+    }
+  }, [debugMode]);
+
   // Dynamic canvas size state with proper aspect ratio
   const [canvasSize, setCanvasSize] = useState({
     width: 1200,
@@ -137,7 +150,7 @@ const Pong404: React.FC = () => {
   // WebSocket connection management with server wake-up
   const connectWebSocket = useCallback(() => {
     if (!WS_SERVER_URL) {
-      console.log('⚠️ Multiplayer not available in production');
+      debugLog('⚠️ Multiplayer not available in production');
       setConnectionStatus('error');
       return;
     }
@@ -146,7 +159,7 @@ const Pong404: React.FC = () => {
       return;
     }
 
-    console.log('🔌 Preparing WebSocket connection...');
+    debugLog('🔌 Preparing WebSocket connection...');
     setConnectionStatus('connecting');
 
     // Reset connection status after 30 seconds if still connecting
@@ -156,14 +169,14 @@ const Pong404: React.FC = () => {
 
     const connectToWebSocket = () => {
       try {
-        console.log('🔌 Connecting to WebSocket server...');
-        console.log('📍 WebSocket URL:', WS_SERVER_URL);
-        console.log('🌐 Current location:', window.location.origin);
+        debugLog('🔌 Connecting to WebSocket server...');
+        debugLog('📍 WebSocket URL:', WS_SERVER_URL);
+        debugLog('🌐 Current location:', window.location.origin);
         const ws = new WebSocket(WS_SERVER_URL);
         wsRef.current = ws;
 
         ws.onopen = () => {
-          console.log('✅ WebSocket connected');
+          debugLog('✅ WebSocket connected');
           setConnectionStatus('connected');
 
           // Join the multiplayer room
@@ -179,59 +192,59 @@ const Pong404: React.FC = () => {
             const message: WebSocketMessage = JSON.parse(event.data);
             handleWebSocketMessage(message);
           } catch (error) {
-            console.error('❌ Error parsing WebSocket message:', error);
+            debugLog('❌ Error parsing WebSocket message:', error);
           }
         };
 
         ws.onclose = (event) => {
-          console.log('🔌 WebSocket disconnected');
-          console.log('🔌 Close code:', event.code);
-          console.log('🔌 Close reason:', event.reason);
-          console.log('🔌 Was clean:', event.wasClean);
+          debugLog('🔌 WebSocket disconnected');
+          debugLog('🔌 Close code:', event.code);
+          debugLog('🔌 Close reason:', event.reason);
+          debugLog('🔌 Was clean:', event.wasClean);
           setConnectionStatus('error');
           setMultiplayerState(prev => ({ ...prev, isConnected: false }));
 
           // Attempt to reconnect after 3 seconds
           if (!event.wasClean) {
             reconnectTimeoutRef.current = setTimeout(() => {
-              console.log('🔄 Attempting to reconnect...');
+              debugLog('🔄 Attempting to reconnect...');
               connectWebSocket();
             }, 3000);
           }
         };
 
         ws.onerror = (error) => {
-          console.error('❌ WebSocket error:', error);
-          console.error('❌ WebSocket readyState:', ws.readyState);
-          console.error('❌ WebSocket URL was:', ws.url);
+          debugLog('❌ WebSocket error:', error);
+          debugLog('❌ WebSocket readyState:', ws.readyState);
+          debugLog('❌ WebSocket URL was:', ws.url);
           setConnectionStatus('error');
         };
 
       } catch (error) {
-        console.error('❌ Failed to create WebSocket connection:', error);
+        debugLog('❌ Failed to create WebSocket connection:', error);
         setConnectionStatus('error');
       }
     };
 
     // Skip server wake-up for localhost, wake up production server
     if (WS_SERVER_URL.includes('localhost')) {
-      console.log('🏠 Localhost detected, connecting directly...');
+      debugLog('🏠 Localhost detected, connecting directly...');
       connectToWebSocket();
     } else {
       // First, wake up the Render server by hitting the health endpoint
       const serverUrl = WS_SERVER_URL.replace('wss://', 'https://').replace('ws://', 'http://');
-      console.log('⏰ Waking up server...');
-      console.log('ℹ️ Note: Free server may take 50+ seconds to wake up if inactive');
+      debugLog('⏰ Waking up server...');
+      debugLog('ℹ️ Note: Free server may take 50+ seconds to wake up if inactive');
 
       fetch(`${serverUrl}/health`)
         .then(response => response.json())
         .then(healthData => {
-          console.log('✅ Server is awake:', healthData.status);
+          debugLog('✅ Server is awake:', healthData.status);
           // Server is ready, now connect WebSocket
           connectToWebSocket();
         })
         .catch(error => {
-          console.warn('⚠️ Could not wake server, attempting WebSocket anyway:', error);
+          debugLog('⚠️ Could not wake server, attempting WebSocket anyway:', error);
           // Try WebSocket anyway, might work
           connectToWebSocket();
         });
@@ -242,7 +255,7 @@ const Pong404: React.FC = () => {
   const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
     switch (message.type) {
       case 'joined_room':
-        console.log('🏓 Joined room successfully:', message.data);
+        debugLog('🏓 Joined room successfully:', message.data);
         setMultiplayerState(prev => ({
           ...prev,
           playerSide: message.data.playerSide,
@@ -257,7 +270,7 @@ const Pong404: React.FC = () => {
         break;
 
       case 'player_joined':
-        console.log('👋 Player joined:', message.data);
+        debugLog('👋 Player joined:', message.data);
         setMultiplayerState(prev => ({
           ...prev,
           playerCount: message.data.playerCount
@@ -265,7 +278,7 @@ const Pong404: React.FC = () => {
         break;
 
       case 'player_left':
-        console.log('👋 Player left:', message.data);
+        debugLog('👋 Player left:', message.data);
         setMultiplayerState(prev => ({
           ...prev,
           playerCount: message.data.playerCount
@@ -308,7 +321,7 @@ const Pong404: React.FC = () => {
         break;
 
       default:
-        console.log('❓ Unknown WebSocket message:', message);
+        debugLog('❓ Unknown WebSocket message:', message);
     }
   }, []);
 
@@ -977,23 +990,29 @@ const Pong404: React.FC = () => {
         case 'd':
           if (localTestMode) {
             setKeys(prev => ({ ...prev, s: true }));
+          } else {
+            e.preventDefault();
+            const newDebugMode = !debugMode;
+            setDebugMode(newDebugMode);
+            localStorage.setItem('pong-debug', newDebugMode.toString());
+            console.log('🐛 Debug Mode:', newDebugMode ? 'ENABLED (Console logs visible in production)' : 'DISABLED');
           }
           break;
         case 'l':
           e.preventDefault();
           setLocalTestMode(prev => !prev);
-          console.log('Local test mode:', !localTestMode ? 'ON (A/D = left paddle, ↑/↓ = right paddle)' : 'OFF');
+          debugLog('Local test mode:', !localTestMode ? 'ON (A/D = left paddle, ↑/↓ = right paddle)' : 'OFF');
           break;
         case 'c':
           e.preventDefault();
           setCrtEffect(prev => !prev);
-          console.log('CRT Effect:', !crtEffect ? 'ON (Vintage CRT monitor simulation)' : 'OFF (Clean modern display)');
+          debugLog('CRT Effect:', !crtEffect ? 'ON (Vintage CRT monitor simulation)' : 'OFF (Clean modern display)');
           break;
         case ' ':
           e.preventDefault();
 
-          console.log('🚀 Spacebar pressed - attempting multiplayer connection');
-          console.log('📊 Current states:', {
+          debugLog('🚀 Spacebar pressed - attempting multiplayer connection');
+          debugLog('📊 Current states:', {
             connectionStatus,
             isConnected: multiplayerState.isConnected,
             gameMode: gameState.gameMode
@@ -1002,7 +1021,7 @@ const Pong404: React.FC = () => {
 
           // Don't allow multiple connection attempts
           if (connectionStatus === 'connecting') {
-            console.log('⚠️ Already connecting, ignoring spacebar');
+            debugLog('⚠️ Already connecting, ignoring spacebar');
             return;
           }
 
@@ -1015,7 +1034,7 @@ const Pong404: React.FC = () => {
                 score: { left: 0, right: 0 }
               }));
             } catch (error) {
-              console.error('Failed to join multiplayer game:', error);
+              debugLog('Failed to join multiplayer game:', error);
             }
           } else if (connectionStatus === 'error') {
             setConnectionStatus('idle');
@@ -1027,7 +1046,7 @@ const Pong404: React.FC = () => {
                 score: { left: 0, right: 0 }
               }));
             } catch (error) {
-              console.error('Failed to join multiplayer game:', error);
+              debugLog('Failed to join multiplayer game:', error);
             }
           } else {
             if (gameState.gameMode !== 'multiplayer') {
@@ -1055,7 +1074,7 @@ const Pong404: React.FC = () => {
                 gameMode: 'auto'
               }));
             } catch (error) {
-              console.error('Failed to reset game room:', error);
+              debugLog('Failed to reset game room:', error);
             }
           }
           break;
