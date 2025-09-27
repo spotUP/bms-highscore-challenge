@@ -223,6 +223,20 @@ const COLOR_PALETTE = [
   { background: '#4338ca', foreground: '#fde047' }, // Indigo & Lime
 ];
 
+// Function to get a contrasting human player color from the palette
+const getHumanPlayerColor = (currentColorIndex: number): string => {
+  // Find a color that contrasts well with the current background
+  // We'll use a different palette entry that has good contrast
+  const alternativeIndexes = [
+    (currentColorIndex + 8) % COLOR_PALETTE.length,  // Half offset for maximum contrast
+    (currentColorIndex + 4) % COLOR_PALETTE.length,  // Quarter offset as backup
+    (currentColorIndex + 12) % COLOR_PALETTE.length, // Three-quarter offset as backup
+  ];
+
+  // Return the foreground color from the first alternative index
+  return COLOR_PALETTE[alternativeIndexes[0]].foreground;
+};
+
 // 🚀 PRECALCULATED PERFORMANCE OPTIMIZATIONS
 // Precalculate all expensive operations to eliminate runtime calculations
 
@@ -5401,7 +5415,6 @@ const Pong404: React.FC = () => {
     ctx.globalAlpha = 1;
 
     // Draw paddles - using dynamic color (with spacing from walls)
-    ctx.fillStyle = currentColors.foreground;
     const leftPaddleX = 30; // 30px spacing from left wall
     const rightPaddleX = canvasSize.width - 30 - gameState.paddles.right.width; // 30px spacing from right wall
     const topPaddleY = 30; // 30px spacing from top wall
@@ -5409,15 +5422,34 @@ const Pong404: React.FC = () => {
       canvasSize.height - 30 - gameState.paddles.bottom.height :
       canvasSize.height - 30 - 12; // 30px spacing from bottom wall, fallback to 12px height
 
-    // Draw left and right paddles (vertical)
+    // Get player side for color determination
+    const currentPlayerSide = multiplayerStateRef.current?.playerSide;
+    const humanPlayerColor = getHumanPlayerColor(gameState.colorIndex);
+
+    // Draw left paddle
+    ctx.fillStyle = (gameState.gameMode === 'multiplayer' && currentPlayerSide === 'left')
+      ? humanPlayerColor
+      : currentColors.foreground;
     ctx.fillRect(leftPaddleX, gameState.paddles.left.y, gameState.paddles.left.width, gameState.paddles.left.height);
+
+    // Draw right paddle - in player mode, right paddle is human-controlled
+    ctx.fillStyle = ((gameState.gameMode === 'multiplayer' && currentPlayerSide === 'right') ||
+                     (gameState.gameMode === 'player'))
+      ? humanPlayerColor
+      : currentColors.foreground;
     ctx.fillRect(rightPaddleX, gameState.paddles.right.y, gameState.paddles.right.width, gameState.paddles.right.height);
 
     // Draw top and bottom paddles (horizontal) - only if they exist
     if (gameState.paddles.top) {
+      ctx.fillStyle = (gameState.gameMode === 'multiplayer' && currentPlayerSide === 'top')
+        ? humanPlayerColor
+        : currentColors.foreground;
       ctx.fillRect(gameState.paddles.top.x, topPaddleY, gameState.paddles.top.width, gameState.paddles.top.height);
     }
     if (gameState.paddles.bottom) {
+      ctx.fillStyle = (gameState.gameMode === 'multiplayer' && currentPlayerSide === 'bottom')
+        ? humanPlayerColor
+        : currentColors.foreground;
       ctx.fillRect(gameState.paddles.bottom.x, bottomPaddleY, gameState.paddles.bottom.width, gameState.paddles.bottom.height);
     }
 
