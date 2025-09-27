@@ -148,10 +148,44 @@ const PADDLE_ACCELERATION = 0.2; // Reduced acceleration for smoother control
 const PADDLE_FRICTION = 0.88; // Slightly more friction for better control
 const HUMAN_REACTION_DELAY = 8; // Reduced delay for more responsive AI at 60fps
 const PANIC_MOVE_CHANCE = 0.08; // Lower chance for panic moves at 60fps
-const COLLISION_BUFFER = 5; // Extra pixels for collision detection tolerance (increased for reliability)
+const COLLISION_BUFFER = 20; // Extra pixels for collision detection tolerance (significantly increased for multiplayer reliability)
 const PANIC_VELOCITY_MULTIPLIER = 8; // Reduced panic speed multiplier
 const EXTREME_PANIC_CHANCE = 0.04; // Lower extreme panic chance
 const EXTREME_PANIC_MULTIPLIER = 20; // Reduced extreme panic speed
+
+// Continuous collision detection helper functions for catching fast-moving balls
+const lineIntersectsRect = (x1: number, y1: number, x2: number, y2: number,
+                           rectX: number, rectY: number, rectW: number, rectH: number): boolean => {
+  // Check if line segment from (x1,y1) to (x2,y2) intersects with rectangle
+  // Add buffer to rectangle for more reliable detection
+  const buffer = COLLISION_BUFFER;
+  const left = rectX - buffer;
+  const right = rectX + rectW + buffer;
+  const top = rectY - buffer;
+  const bottom = rectY + rectH + buffer;
+
+  // Check intersection with all four edges of the rectangle
+  return (
+    lineIntersectsLine(x1, y1, x2, y2, left, top, right, top) ||      // Top edge
+    lineIntersectsLine(x1, y1, x2, y2, right, top, right, bottom) ||  // Right edge
+    lineIntersectsLine(x1, y1, x2, y2, right, bottom, left, bottom) || // Bottom edge
+    lineIntersectsLine(x1, y1, x2, y2, left, bottom, left, top) ||    // Left edge
+    (x1 >= left && x1 <= right && y1 >= top && y1 <= bottom) ||       // Start point inside
+    (x2 >= left && x2 <= right && y2 >= top && y2 <= bottom)          // End point inside
+  );
+};
+
+const lineIntersectsLine = (x1: number, y1: number, x2: number, y2: number,
+                           x3: number, y3: number, x4: number, y4: number): boolean => {
+  // Check if line segment (x1,y1)-(x2,y2) intersects with line segment (x3,y3)-(x4,y4)
+  const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+  if (Math.abs(denom) < 0.0001) return false; // Lines are parallel
+
+  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+  const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+
+  return t >= 0 && t <= 1 && u >= 0 && u <= 1;
+};
 
 // Musical scales for dystopic outer space atmosphere
 const MUSICAL_SCALES = {
@@ -4216,8 +4250,17 @@ const Pong404: React.FC = () => {
           const newPickup = createPickupRef.current();
           if (newPickup) {
             newState.pickups.push(newPickup);
-            newState.nextPickupTime = Date.now() + Math.random() * 8000 + 4000; // 4-12 seconds
-            console.log('🎁 Pickup spawned:', newPickup.type, 'at', newPickup.x, newPickup.y);
+            // Progressive pickup frequency - starts slow, intensifies as game progresses
+            const totalScore = newState.score.left + newState.score.right + newState.score.top + newState.score.bottom;
+            const progressionFactor = Math.min(totalScore / 10, 1); // Max intensity at 10 total points
+            const baseDelay = 15000; // 15 seconds initially
+            const minDelay = 3000;   // 3 seconds minimum (intense late game)
+            const randomRange = 8000; // 8 second random variation
+
+            const delay = Math.max(minDelay, baseDelay * (1 - progressionFactor * 0.8)) + Math.random() * randomRange;
+            newState.nextPickupTime = Date.now() + delay;
+
+            console.log('🎁 Pickup spawned:', newPickup.type, `at ${newPickup.x},${newPickup.y}. Next in ${Math.round(delay/1000)}s (score: ${totalScore})`);
           }
         } else if (Math.floor(Date.now() / 10000) !== Math.floor((Date.now() - 16) / 10000)) { // Debug every 10 seconds
           console.log('🔍 Pickup spawn check:', {
@@ -4401,17 +4444,35 @@ const Pong404: React.FC = () => {
         const leftPaddleX = 30; // 30px spacing from left wall
         const leftPaddleRight = leftPaddleX + newState.paddles.left.width;
 
-        // Check if ball is intersecting with left paddle (with collision buffer)
+        // ENHANCED COLLISION DETECTION: Check both overlap and continuous collision
+        // Traditional overlap detection (with increased buffer)
         const ballIntersectsLeftPaddle =
           ballLeft <= leftPaddleRight + COLLISION_BUFFER &&
           ballRight >= leftPaddleX - COLLISION_BUFFER &&
           ballBottom >= newState.paddles.left.y - COLLISION_BUFFER &&
           ballTop <= newState.paddles.left.y + newState.paddles.left.height + COLLISION_BUFFER;
 
-        // Check if ball came from the right side (proper collision)
-        const ballCameFromRight = prevBallX > leftPaddleRight;
+        // Continuous collision detection - check if ball trajectory crossed paddle
+        const ballCenterX = newState.ball.x + newState.ball.size / 2;
+        const ballCenterY = newState.ball.y + newState.ball.size / 2;
+        const prevBallCenterX = prevBallX + newState.ball.size / 2;
+        const prevBallCenterY = prevBallY + newState.ball.size / 2;
 
-        if (ballIntersectsLeftPaddle && ballCameFromRight && newState.ball.dx < 0) {
+        const ballTrajectoryIntersectsLeftPaddle = lineIntersectsRect(
+          prevBallCenterX, prevBallCenterY,
+          ballCenterX, ballCenterY,
+          leftPaddleX, newState.paddles.left.y,
+          newState.paddles.left.width, newState.paddles.left.height
+        );
+
+        // Check if ball came from the right side (proper collision direction)
+        const ballCameFromRight = prevBallX > leftPaddleRight || prevBallCenterX > leftPaddleRight;
+
+        // Collision detected if EITHER overlap OR trajectory intersection occurs (and ball moving toward paddle)
+        const leftPaddleCollisionDetected = (ballIntersectsLeftPaddle || ballTrajectoryIntersectsLeftPaddle) &&
+                                           ballCameFromRight && newState.ball.dx < 0;
+
+        if (leftPaddleCollisionDetected) {
           // Calculate where on the paddle the ball hit (0 = top edge, 1 = bottom edge, 0.5 = center)
           const ballCenterY = newState.ball.y + newState.ball.size / 2;
           const paddleCenterY = newState.paddles.left.y + newState.paddles.left.height / 2;
@@ -4474,17 +4535,30 @@ const Pong404: React.FC = () => {
         const rightPaddleX = canvasSize.width - 30 - newState.paddles.right.width; // 30px spacing from right wall
         const rightPaddleLeft = rightPaddleX;
 
-        // Check if ball is intersecting with right paddle (with collision buffer)
+        // ENHANCED COLLISION DETECTION: Check both overlap and continuous collision
+        // Traditional overlap detection (with increased buffer)
         const ballIntersectsRightPaddle =
           ballRight >= rightPaddleLeft - COLLISION_BUFFER &&
           ballLeft <= rightPaddleX + newState.paddles.right.width + COLLISION_BUFFER &&
           ballBottom >= newState.paddles.right.y - COLLISION_BUFFER &&
           ballTop <= newState.paddles.right.y + newState.paddles.right.height + COLLISION_BUFFER;
 
-        // Check if ball came from the left side (proper collision)
-        const ballCameFromLeft = prevBallX < rightPaddleLeft;
+        // Continuous collision detection - check if ball trajectory crossed paddle
+        const ballTrajectoryIntersectsRightPaddle = lineIntersectsRect(
+          prevBallCenterX, prevBallCenterY,
+          ballCenterX, ballCenterY,
+          rightPaddleX, newState.paddles.right.y,
+          newState.paddles.right.width, newState.paddles.right.height
+        );
 
-        if (ballIntersectsRightPaddle && ballCameFromLeft && newState.ball.dx > 0) {
+        // Check if ball came from the left side (proper collision direction)
+        const ballCameFromLeft = prevBallX < rightPaddleLeft || prevBallCenterX < rightPaddleLeft;
+
+        // Collision detected if EITHER overlap OR trajectory intersection occurs (and ball moving toward paddle)
+        const rightPaddleCollisionDetected = (ballIntersectsRightPaddle || ballTrajectoryIntersectsRightPaddle) &&
+                                            ballCameFromLeft && newState.ball.dx > 0;
+
+        if (rightPaddleCollisionDetected) {
           // Calculate where on the paddle the ball hit (0 = top edge, 1 = bottom edge, 0.5 = center)
           const ballCenterY = newState.ball.y + newState.ball.size / 2;
           const paddleCenterY = newState.paddles.right.y + newState.paddles.right.height / 2;
@@ -4548,18 +4622,30 @@ const Pong404: React.FC = () => {
           const topPaddleY = 30; // 30px spacing from top wall only
           const topPaddleBottom = topPaddleY + newState.paddles.top.height;
 
-        // Check if ball is intersecting with top paddle (with collision buffer)
+        // ENHANCED COLLISION DETECTION: Check both overlap and continuous collision
+        // Traditional overlap detection (with increased buffer)
         const ballIntersectsTopPaddle =
           ballTop <= topPaddleBottom + COLLISION_BUFFER &&
           ballBottom >= topPaddleY - COLLISION_BUFFER &&
           ballRight >= newState.paddles.top.x - COLLISION_BUFFER &&
           ballLeft <= newState.paddles.top.x + newState.paddles.top.width + COLLISION_BUFFER;
 
-        // Check if ball came from below (proper collision)
-        const ballCameFromBelow = prevBallY > topPaddleBottom;
+        // Continuous collision detection - check if ball trajectory crossed paddle
+        const ballTrajectoryIntersectsTopPaddle = lineIntersectsRect(
+          prevBallCenterX, prevBallCenterY,
+          ballCenterX, ballCenterY,
+          newState.paddles.top.x, topPaddleY,
+          newState.paddles.top.width, newState.paddles.top.height
+        );
 
+        // Check if ball came from below (proper collision direction)
+        const ballCameFromBelow = prevBallY > topPaddleBottom || prevBallCenterY > topPaddleBottom;
 
-        if (ballIntersectsTopPaddle && ballCameFromBelow && newState.ball.dy < 0) {
+        // Collision detected if EITHER overlap OR trajectory intersection occurs (and ball moving toward paddle)
+        const topPaddleCollisionDetected = (ballIntersectsTopPaddle || ballTrajectoryIntersectsTopPaddle) &&
+                                          ballCameFromBelow && newState.ball.dy < 0;
+
+        if (topPaddleCollisionDetected) {
           // Calculate where on the paddle the ball hit (0 = left edge, 1 = right edge, 0.5 = center)
           const ballCenterX = newState.ball.x + newState.ball.size / 2;
           const paddleCenterX = newState.paddles.top.x + newState.paddles.top.width / 2;
@@ -4623,18 +4709,30 @@ const Pong404: React.FC = () => {
         const bottomPaddleY = canvasSize.height - 30 - newState.paddles.bottom.height; // 30px spacing from bottom wall only
         const bottomPaddleTop = bottomPaddleY;
 
-        // Check if ball is intersecting with bottom paddle (with collision buffer)
+        // ENHANCED COLLISION DETECTION: Check both overlap and continuous collision
+        // Traditional overlap detection (with increased buffer)
         const ballIntersectsBottomPaddle =
           ballBottom >= bottomPaddleTop - COLLISION_BUFFER &&
           ballTop <= bottomPaddleY + newState.paddles.bottom.height + COLLISION_BUFFER &&
           ballRight >= newState.paddles.bottom.x - COLLISION_BUFFER &&
           ballLeft <= newState.paddles.bottom.x + newState.paddles.bottom.width + COLLISION_BUFFER;
 
-        // Check if ball came from above (proper collision)
-        const ballCameFromAbove = prevBallY < bottomPaddleTop;
+        // Continuous collision detection - check if ball trajectory crossed paddle
+        const ballTrajectoryIntersectsBottomPaddle = lineIntersectsRect(
+          prevBallCenterX, prevBallCenterY,
+          ballCenterX, ballCenterY,
+          newState.paddles.bottom.x, bottomPaddleY,
+          newState.paddles.bottom.width, newState.paddles.bottom.height
+        );
 
+        // Check if ball came from above (proper collision direction)
+        const ballCameFromAbove = prevBallY < bottomPaddleTop || prevBallCenterY < bottomPaddleTop;
 
-        if (ballIntersectsBottomPaddle && ballCameFromAbove && newState.ball.dy > 0) {
+        // Collision detected if EITHER overlap OR trajectory intersection occurs (and ball moving toward paddle)
+        const bottomPaddleCollisionDetected = (ballIntersectsBottomPaddle || ballTrajectoryIntersectsBottomPaddle) &&
+                                             ballCameFromAbove && newState.ball.dy > 0;
+
+        if (bottomPaddleCollisionDetected) {
           // Calculate where on the paddle the ball hit (0 = left edge, 1 = right edge, 0.5 = center)
           const ballCenterX = newState.ball.x + newState.ball.size / 2;
           const paddleCenterX = newState.paddles.bottom.x + newState.paddles.bottom.width / 2;
@@ -4936,18 +5034,39 @@ const Pong404: React.FC = () => {
           break;
         case 'm':
           e.preventDefault();
-          // Toggle audio mute
+          console.log('🎵 M key pressed! Audio context state:', {
+            audioContext: !!audioContextRef.current,
+            ambienceGain: !!ambienceMasterGainRef.current,
+            speechGain: !!speechMasterGainRef.current,
+            beepsGain: !!beepsMasterGainRef.current
+          });
+
+          // Initialize audio if not already done (sync version)
+          if (!audioContextRef.current) {
+            console.log('🎵 Initializing audio context for M key...');
+            initializeAudio(); // Call without await since this is not an async function
+          }
+
+          // Toggle audio mute with corrected logic
           if (ambienceMasterGainRef.current && speechMasterGainRef.current && beepsMasterGainRef.current) {
             const isCurrentlyMuted = ambienceMasterGainRef.current.gain.value === 0;
-            const ambientLevel = isCurrentlyMuted ? 0.15 : 0;
-            const speechLevel = isCurrentlyMuted ? 0.8 : 0;
-            const beepsLevel = isCurrentlyMuted ? 0.15 : 0;
+
+            // FIXED LOGIC: When muted (value=0), set to normal levels. When unmuted, set to 0
+            const ambientLevel = isCurrentlyMuted ? 0.15 : 0;  // Normal: 0.15, Muted: 0
+            const speechLevel = isCurrentlyMuted ? 0.15 : 0;   // Normal: 0.15, Muted: 0
+            const beepsLevel = isCurrentlyMuted ? 0.15 : 0;    // Normal: 0.15, Muted: 0
 
             ambienceMasterGainRef.current.gain.setValueAtTime(ambientLevel, audioContextRef.current?.currentTime || 0);
             speechMasterGainRef.current.gain.setValueAtTime(speechLevel, audioContextRef.current?.currentTime || 0);
             beepsMasterGainRef.current.gain.setValueAtTime(beepsLevel, audioContextRef.current?.currentTime || 0);
 
-            console.log('🔊 Audio', isCurrentlyMuted ? 'UNMUTED' : 'MUTED');
+            console.log(`🔊 Audio ${isCurrentlyMuted ? 'UNMUTED' : 'MUTED'} - Levels: ambient=${ambientLevel}, speech=${speechLevel}, beeps=${beepsLevel}`);
+          } else {
+            console.log('❌ Audio gain nodes not available - trying to initialize them...');
+            // Force initialization of gain nodes
+            if (audioContextRef.current) {
+              initializeAudio();
+            }
           }
           break;
         case ' ':
@@ -5609,6 +5728,7 @@ const Pong404: React.FC = () => {
       // Check if ball should be invisible
       const invisibleEffect = gameState.activeEffects?.find(e => e.type === 'invisible_ball');
       if (!invisibleEffect) {
+        ctx.fillStyle = currentColors.foreground; // FIX: Set ball color before drawing
         ctx.fillRect(gameState.ball.x, gameState.ball.y, gameState.ball.size, gameState.ball.size);
       } else {
         // Draw faint outline for invisible ball
