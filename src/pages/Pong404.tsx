@@ -768,6 +768,11 @@ const Pong404: React.FC = () => {
   const speechMasterGainRef = useRef<GainNode | null>(null);
   const beepsMasterGainRef = useRef<GainNode | null>(null);
 
+  // Speech queue system to prevent overlapping robot speech
+  const speechQueueRef = useRef<string[]>([]);
+  const isSpeakingRef = useRef(false);
+  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Create impulse response for reverb effect
   const createImpulseResponse = useCallback((audioContext: AudioContext) => {
     const length = audioContext.sampleRate * 2; // 2 seconds of reverb
@@ -860,10 +865,10 @@ const Pong404: React.FC = () => {
     mainGain.gain.setValueAtTime(volume, now); // Immediate full volume, no fade-in
     mainGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
-    // Configure mix levels based on effect type (simplified - no effects for cleaner beeps)
-    const dryLevel = 1.0;
-    const reverbLevel = 0.0;
-    const echoLevel = 0.0;
+    // Configure mix levels based on effect type (restored advanced effects)
+    const dryLevel = effectType === 'reverb' || effectType === 'both' ? 0.6 : 1.0;
+    const reverbLevel = effectType === 'reverb' || effectType === 'both' ? 0.3 : 0.0;
+    const echoLevel = effectType === 'echo' || effectType === 'both' ? 0.25 : 0.0;
 
     dryGain.gain.setValueAtTime(dryLevel, now);
     wetGain.gain.setValueAtTime(reverbLevel, now);
@@ -876,7 +881,19 @@ const Pong404: React.FC = () => {
     mainGain.connect(dryGain);
     dryGain.connect(beepsMasterGainRef.current!);
 
-    // No wet/echo effects for cleaner beeps
+    // Wet signal (through reverb to beeps master gain)
+    if ((effectType === 'reverb' || effectType === 'both') && reverbNodeRef.current) {
+      mainGain.connect(reverbNodeRef.current);
+      reverbNodeRef.current.connect(wetGain);
+      wetGain.connect(beepsMasterGainRef.current!);
+    }
+
+    // Echo signal (through delay to beeps master gain)
+    if ((effectType === 'echo' || effectType === 'both') && delayNodeRef.current) {
+      mainGain.connect(delayNodeRef.current);
+      delayNodeRef.current.connect(echoWetGain);
+      echoWetGain.connect(beepsMasterGainRef.current!);
+    }
 
     // Start and stop
     oscillator.start(now);
@@ -1020,7 +1037,7 @@ const Pong404: React.FC = () => {
 
   // Subtle background ambience - very low volume, deep frequencies only
   const startAmbienceSound = useCallback(() => {
-    console.log('🎵 startAmbienceSound called - subtle background mode');
+    console.log('🎭 startAmbienceSound called - DRAMATIC CINEMATIC MODE');
 
     if (ambienceActiveRef.current || !audioContextRef.current) {
       console.log('🎵 Ambient sound start cancelled - already active or no audio context');
@@ -1031,11 +1048,29 @@ const Pong404: React.FC = () => {
     const ctx = audioContextRef.current;
     ambienceActiveRef.current = true;
 
-    // Create dedicated ambient audio bus to avoid interference with main audio
+    // Create dedicated ambient audio bus with DRAMATIC master control
     if (!ambienceMasterGainRef.current) {
       ambienceMasterGainRef.current = ctx.createGain();
-      ambienceMasterGainRef.current.gain.setValueAtTime(0.3, ctx.currentTime); // Master volume control
+      ambienceMasterGainRef.current.gain.setValueAtTime(0.15, ctx.currentTime); // Background level for drama
       ambienceMasterGainRef.current.connect(ctx.destination);
+
+      // Add DRAMATIC master volume swells every 15-30 seconds
+      const addMasterDrama = () => {
+        if (!ambienceMasterGainRef.current || !ambienceActiveRef.current) return;
+
+        const dramaticVolume = 0.08 + Math.random() * 0.12; // 0.08 to 0.2 - subtle background swells
+        const swellDuration = 8 + Math.random() * 12; // 8-20 second swells
+        const now = ctx.currentTime;
+
+        try {
+          ambienceMasterGainRef.current.gain.exponentialRampToValueAtTime(dramaticVolume, now + swellDuration);
+          console.log(`🎭 MASTER DRAMA SWELL: ${dramaticVolume.toFixed(2)} over ${swellDuration.toFixed(1)}s`);
+        } catch (e) {}
+
+        setTimeout(addMasterDrama, (15 + Math.random() * 15) * 1000); // 15-30 second intervals
+      };
+
+      setTimeout(addMasterDrama, 5000); // Start after 5 seconds
     }
 
     // Clear any existing oscillators
@@ -1046,15 +1081,37 @@ const Pong404: React.FC = () => {
     ambienceOscillatorsRef.current = [];
     ambienceGainsRef.current = [];
 
-    // Create multiple layers of ambient sounds using current musical scale for harmony
+    // Create dramatic, cinematic ambient layers with tension and dynamics
     const currentScale = MUSICAL_SCALES[melodyState.currentScale as keyof typeof MUSICAL_SCALES];
     const ambienceLayers = [
-      { freq: currentScale[0] * 0.5, volume: 0.4, type: 'sine' as OscillatorType }, // Warm bass foundation
-      { freq: currentScale[2] * 0.75, volume: 0.3, type: 'triangle' as OscillatorType }, // Gentle mid drone
-      { freq: currentScale[3] * 1.5, volume: 0.25, type: 'sine' as OscillatorType }, // Ethereal mid-high layer
-      { freq: currentScale[1] * 2, volume: 0.2, type: 'triangle' as OscillatorType }, // Subtle harmonic
-      { freq: currentScale[4] * 0.5, volume: 0.15, type: 'sine' as OscillatorType }, // Mysterious low whisper
-      { freq: currentScale[0] * 3, volume: 0.1, type: 'sine' as OscillatorType }, // Distant high overtone
+      // DRAMATIC SUB-BASS FOUNDATION - Ominous but subtle
+      { freq: currentScale[0] * 0.2, volume: 0.25, type: 'sine' as OscillatorType, modDepth: 0.08, modRate: 0.05, tension: 'ominous' },
+      { freq: currentScale[0] * 0.4, volume: 0.22, type: 'sawtooth' as OscillatorType, modDepth: 0.06, modRate: 0.08, tension: 'ominous' },
+      { freq: currentScale[4] * 0.25, volume: 0.2, type: 'triangle' as OscillatorType, modDepth: 0.07, modRate: 0.12, tension: 'ominous' },
+
+      // TENSION BUILDERS - Dissonant but background
+      { freq: currentScale[1] * 0.6, volume: 0.18, type: 'sawtooth' as OscillatorType, modDepth: 0.12, modRate: 0.18, tension: 'suspense' },
+      { freq: currentScale[2] * 0.8, volume: 0.16, type: 'square' as OscillatorType, modDepth: 0.1, modRate: 0.15, tension: 'suspense' },
+      { freq: currentScale[3] * 0.9, volume: 0.14, type: 'sawtooth' as OscillatorType, modDepth: 0.09, modRate: 0.22, tension: 'suspense' },
+
+      // CINEMATIC MID-RANGE - Epic but restrained
+      { freq: currentScale[0] * 1.2, volume: 0.12, type: 'triangle' as OscillatorType, modDepth: 0.15, modRate: 0.28, tension: 'epic' },
+      { freq: currentScale[2] * 1.5, volume: 0.11, type: 'sawtooth' as OscillatorType, modDepth: 0.18, modRate: 0.35, tension: 'epic' },
+      { freq: currentScale[4] * 1.8, volume: 0.1, type: 'square' as OscillatorType, modDepth: 0.2, modRate: 0.42, tension: 'epic' },
+
+      // DRAMATIC HARMONICS - Subtle intensity
+      { freq: currentScale[1] * 2.2, volume: 0.09, type: 'sawtooth' as OscillatorType, modDepth: 0.25, modRate: 0.48, tension: 'intense' },
+      { freq: currentScale[3] * 2.8, volume: 0.08, type: 'triangle' as OscillatorType, modDepth: 0.22, modRate: 0.55, tension: 'intense' },
+      { freq: currentScale[0] * 3.5, volume: 0.07, type: 'square' as OscillatorType, modDepth: 0.28, modRate: 0.62, tension: 'intense' },
+
+      // ETHEREAL DRAMA - Whisper-level tension
+      { freq: currentScale[2] * 4.2, volume: 0.06, type: 'sine' as OscillatorType, modDepth: 0.35, modRate: 0.75, tension: 'ethereal' },
+      { freq: currentScale[4] * 5.0, volume: 0.05, type: 'triangle' as OscillatorType, modDepth: 0.4, modRate: 0.88, tension: 'ethereal' },
+      { freq: currentScale[1] * 6.5, volume: 0.04, type: 'sine' as OscillatorType, modDepth: 0.45, modRate: 1.2, tension: 'ethereal' },
+
+      // DRAMATIC OVERTONES - Barely audible sparkle
+      { freq: currentScale[3] * 7.8, volume: 0.03, type: 'triangle' as OscillatorType, modDepth: 0.5, modRate: 1.5, tension: 'sparkle' },
+      { freq: currentScale[0] * 9.2, volume: 0.02, type: 'sine' as OscillatorType, modDepth: 0.6, modRate: 1.8, tension: 'sparkle' },
     ];
 
     ambienceLayers.forEach((layer, index) => {
@@ -1065,25 +1122,144 @@ const Pong404: React.FC = () => {
       oscillator.type = layer.type;
       oscillator.frequency.setValueAtTime(layer.freq, ctx.currentTime);
 
-      // Add subtle frequency modulation for organic feel
+      // DRAMATIC frequency modulation for cinematic tension
       const lfoGain = ctx.createGain();
       const lfo = ctx.createOscillator();
-      lfo.frequency.setValueAtTime(0.1 + index * 0.05, ctx.currentTime); // Very slow modulation
-      lfo.type = 'sine';
-      lfoGain.gain.setValueAtTime(layer.freq * 0.02, ctx.currentTime); // Subtle modulation depth
+
+      // Tension-based modulation characteristics
+      let modCharacter;
+      switch ((layer as any).tension) {
+        case 'ominous':
+          lfo.type = 'sawtooth'; // Harsh, threatening
+          modCharacter = { rate: layer.modRate * 0.3, depth: layer.modDepth * 2.5 };
+          break;
+        case 'suspense':
+          lfo.type = 'triangle'; // Building tension
+          modCharacter = { rate: layer.modRate * 1.8, depth: layer.modDepth * 4.0 };
+          break;
+        case 'epic':
+          lfo.type = 'sine'; // Heroic sweep
+          modCharacter = { rate: layer.modRate * 0.6, depth: layer.modDepth * 3.2 };
+          break;
+        case 'intense':
+          lfo.type = 'square'; // Chaotic energy
+          modCharacter = { rate: layer.modRate * 2.5, depth: layer.modDepth * 5.0 };
+          break;
+        case 'ethereal':
+          lfo.type = 'sine'; // Mystical waves
+          modCharacter = { rate: layer.modRate * 0.4, depth: layer.modDepth * 6.0 };
+          break;
+        case 'sparkle':
+          lfo.type = 'triangle'; // Glittering
+          modCharacter = { rate: layer.modRate * 3.2, depth: layer.modDepth * 8.0 };
+          break;
+        default:
+          lfo.type = 'sine';
+          modCharacter = { rate: layer.modRate, depth: layer.modDepth };
+      }
+
+      lfo.frequency.setValueAtTime(modCharacter.rate, ctx.currentTime);
+      lfoGain.gain.setValueAtTime(layer.freq * modCharacter.depth, ctx.currentTime);
 
       lfo.connect(lfoGain);
       lfoGain.connect(oscillator.frequency);
       lfo.start();
 
-      // Low-pass filter for muffled spaceship interior sound
-      filterNode.type = 'lowpass';
-      filterNode.frequency.setValueAtTime(800 - index * 100, ctx.currentTime);
-      filterNode.Q.setValueAtTime(0.5, ctx.currentTime);
+      // DRAMATIC amplitude tremolo for intensity
+      const ampLfoGain = ctx.createGain();
+      const ampLfo = ctx.createOscillator();
+      ampLfo.frequency.setValueAtTime(modCharacter.rate * 0.4, ctx.currentTime);
+      ampLfo.type = 'sine';
+      ampLfoGain.gain.setValueAtTime(layer.volume * 0.4, ctx.currentTime); // Much more dramatic amplitude variation
 
-      // Volume with faster ramp-up for immediate audibility
+      ampLfo.connect(ampLfoGain);
+      ampLfoGain.connect(gainNode.gain);
+      ampLfo.start();
+
+      // Add DRAMATIC filter sweeps for cinematic movement
+      const filterLfoGain = ctx.createGain();
+      const filterLfo = ctx.createOscillator();
+      filterLfo.frequency.setValueAtTime(modCharacter.rate * 0.25, ctx.currentTime);
+      filterLfo.type = 'triangle';
+      filterLfoGain.gain.setValueAtTime(filterNode.frequency.value * 0.3, ctx.currentTime);
+
+      filterLfo.connect(filterLfoGain);
+      filterLfoGain.connect(filterNode.frequency);
+      filterLfo.start();
+
+      // DRAMATIC filtering based on tension character
+      switch ((layer as any).tension) {
+        case 'ominous':
+          // Dark, brooding low-pass with high resonance
+          filterNode.type = 'lowpass';
+          filterNode.frequency.setValueAtTime(200 + index * 100, ctx.currentTime);
+          filterNode.Q.setValueAtTime(3.0 + index * 0.5, ctx.currentTime); // High Q for drama
+          break;
+        case 'suspense':
+          // Tense band-pass with sweeping frequency
+          filterNode.type = 'bandpass';
+          filterNode.frequency.setValueAtTime(300 + index * 150, ctx.currentTime);
+          filterNode.Q.setValueAtTime(4.0 + index * 0.8, ctx.currentTime); // Very focused
+          break;
+        case 'epic':
+          // Heroic notch filtering for character
+          filterNode.type = 'notch';
+          filterNode.frequency.setValueAtTime(500 + index * 200, ctx.currentTime);
+          filterNode.Q.setValueAtTime(2.5 + index * 0.6, ctx.currentTime);
+          break;
+        case 'intense':
+          // Aggressive high-pass with resonance
+          filterNode.type = 'highpass';
+          filterNode.frequency.setValueAtTime(150 + index * 80, ctx.currentTime);
+          filterNode.Q.setValueAtTime(5.0 + index, ctx.currentTime); // Extreme resonance
+          break;
+        case 'ethereal':
+          // Mystical peaking filter
+          filterNode.type = 'peaking';
+          filterNode.frequency.setValueAtTime(800 + index * 300, ctx.currentTime);
+          filterNode.Q.setValueAtTime(6.0 + index * 1.2, ctx.currentTime); // Very sharp peaks
+          filterNode.gain.setValueAtTime(12 + index * 2, ctx.currentTime); // Boost for drama
+          break;
+        case 'sparkle':
+          // Brilliant all-pass for shimmer
+          filterNode.type = 'allpass';
+          filterNode.frequency.setValueAtTime(1000 + index * 500, ctx.currentTime);
+          filterNode.Q.setValueAtTime(8.0 + index * 1.5, ctx.currentTime); // Maximum drama
+          break;
+        default:
+          filterNode.type = 'lowpass';
+          filterNode.frequency.setValueAtTime(400 + index * 100, ctx.currentTime);
+          filterNode.Q.setValueAtTime(1.0, ctx.currentTime);
+      }
+
+      // DRAMATIC entrance based on tension type
       gainNode.gain.setValueAtTime(0, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(layer.volume, ctx.currentTime + 0.5 + index * 0.1); // Much faster ramp-up
+
+      let entranceTime;
+      switch ((layer as any).tension) {
+        case 'ominous':
+          entranceTime = 3 + index * 0.8; // Slow, menacing build
+          break;
+        case 'suspense':
+          entranceTime = 0.2 + index * 0.1; // Quick, startling entrance
+          break;
+        case 'epic':
+          entranceTime = 5 + index * 1.2; // Grand, sweeping entrance
+          break;
+        case 'intense':
+          entranceTime = 0.05 + index * 0.05; // Immediate, aggressive
+          break;
+        case 'ethereal':
+          entranceTime = 8 + index * 2.0; // Mystical, gradual appearance
+          break;
+        case 'sparkle':
+          entranceTime = 0.01 + index * 0.02; // Instant, brilliant flash
+          break;
+        default:
+          entranceTime = 1 + index * 0.3;
+      }
+
+      gainNode.gain.exponentialRampToValueAtTime(layer.volume, ctx.currentTime + entranceTime);
 
       // Connect chain: oscillator -> filter -> gain -> reverb -> destination
       oscillator.connect(filterNode);
@@ -1102,18 +1278,78 @@ const Pong404: React.FC = () => {
           return;
         }
 
-        // Organic, mysterious volume fluctuations with wider variation
-        const randomVolume = layer.volume * (0.7 + Math.random() * 0.6); // 70%-130% for more mystery
-        const fluctuationDuration = Math.random() * 1.0 + 0.5; // 0.5-1.5 seconds for more organic feel
+          // DRAMATIC volume fluctuations based on tension type
+        let dramaDynamics;
+        switch ((layer as any).tension) {
+          case 'ominous':
+            dramaDynamics = {
+              variation: 0.4, // Subtle swells
+              minVolume: layer.volume * 0.6, // Stays audible
+              maxVolume: layer.volume * 1.2, // Gentle peaks
+              duration: Math.random() * 3 + 2, // 2-5 second swells
+            };
+            break;
+          case 'suspense':
+            dramaDynamics = {
+              variation: 0.5, // Moderate variation
+              minVolume: layer.volume * 0.5, // Subtle dips
+              maxVolume: layer.volume * 1.3, // Modest peaks
+              duration: Math.random() * 2 + 1, // 1-3 second tension builds
+            };
+            break;
+          case 'epic':
+            dramaDynamics = {
+              variation: 0.4, // Gentle swells
+              minVolume: layer.volume * 0.7, // Always present
+              maxVolume: layer.volume * 1.2, // Subtle heroic peaks
+              duration: Math.random() * 4 + 3, // 3-7 second epic builds
+            };
+            break;
+          case 'intense':
+            dramaDynamics = {
+              variation: 0.6, // Controlled intensity
+              minVolume: layer.volume * 0.4, // Noticeable but not gone
+              maxVolume: layer.volume * 1.4, // Moderate peaks
+              duration: Math.random() * 1.5 + 0.5, // 0.5-2 second bursts
+            };
+            break;
+          case 'ethereal':
+            dramaDynamics = {
+              variation: 0.7, // Mystical but subtle
+              minVolume: layer.volume * 0.3, // Whisper level
+              maxVolume: layer.volume * 1.5, // Gentle appearances
+              duration: Math.random() * 5 + 2, // 2-7 second mystery
+            };
+            break;
+          case 'sparkle':
+            dramaDynamics = {
+              variation: 0.8, // Controlled sparkle
+              minVolume: layer.volume * 0.2, // Faint but present
+              maxVolume: layer.volume * 1.6, // Modest flashes
+              duration: Math.random() * 0.8 + 0.2, // 0.2-1 second sparkles
+            };
+            break;
+          default:
+            dramaDynamics = {
+              variation: 0.6,
+              minVolume: layer.volume * 0.4,
+              maxVolume: layer.volume * 1.2,
+              duration: Math.random() * 2 + 1,
+            };
+        }
+
+        const randomVolume = Math.random() * (dramaDynamics.maxVolume - dramaDynamics.minVolume) + dramaDynamics.minVolume;
+        const fluctuationDuration = dramaDynamics.duration;
         const randomTime = ctx.currentTime + fluctuationDuration;
 
         try {
-          gainNode.gain.exponentialRampToValueAtTime(Math.max(layer.volume * 0.3, randomVolume), randomTime);
+          gainNode.gain.exponentialRampToValueAtTime(Math.max(0.001, randomVolume), randomTime);
         } catch (e) {}
 
-        // Schedule next fluctuation to start exactly when this one ends
-        setTimeout(addFluctuation, fluctuationDuration * 1000);
-        console.log('🎵 Fluctuation scheduled for', fluctuationDuration.toFixed(2), 'seconds, volume:', randomVolume.toFixed(3));
+        // Schedule next dramatic event with tension-specific timing
+        const nextDelay = fluctuationDuration + (Math.random() * 1 - 0.5); // ±500ms variation for drama
+        setTimeout(addFluctuation, nextDelay * 1000);
+        console.log(`🎭 DRAMA Layer ${index} (${(layer as any).tension}): ${fluctuationDuration.toFixed(2)}s, volume: ${randomVolume.toFixed(3)}`);
       };
 
       addFluctuation(); // Start fluctuation immediately
@@ -1153,9 +1389,19 @@ const Pong404: React.FC = () => {
     }, 2500);
   }, []);
 
-  // Vintage SAM speech synthesizer with deep reverb and echo effects
+  // Process speech queue to prevent overlapping speech
+
+  // Public speech function that adds to queue
+  // Simple speech function with overlap prevention
   const speakRobotic = useCallback((text: string) => {
-    console.log(`🤖 SAM Speaking with effects: "${text}"`);
+    // Skip if already speaking
+    if (isSpeakingRef.current) {
+      console.log(`🤖 Skipping speech (already speaking): "${text}"`);
+      return;
+    }
+
+    isSpeakingRef.current = true;
+    console.log(`🤖 SAM Speaking: "${text}"`);
 
     // Initialize audio context if needed
     if (!audioContextRef.current) {
@@ -1165,99 +1411,37 @@ const Pong404: React.FC = () => {
     // Create dedicated speech audio bus if it doesn't exist
     if (!speechMasterGainRef.current && audioContextRef.current) {
       speechMasterGainRef.current = audioContextRef.current.createGain();
-      speechMasterGainRef.current.gain.setValueAtTime(0.8, audioContextRef.current.currentTime); // Good level for speech
+      speechMasterGainRef.current.gain.setValueAtTime(0.8, audioContextRef.current.currentTime);
       speechMasterGainRef.current.connect(audioContextRef.current.destination);
     }
 
     try {
-      // Create SAM instance with user's optimal parameters
+      // Create SAM instance
       const sam = new SamJs({
-        pitch: 150,   // User-optimized pitch for perfect robot tone
-        speed: 96,    // User-optimized speed for ideal delivery
-        mouth: 108,   // User-optimized mouth setting
-        throat: 122   // User-optimized throat setting
+        pitch: 150,
+        speed: 96,
+        mouth: 108,
+        throat: 122
       });
 
-      // Get raw audio buffer from SAM
-      const buffer = sam.buf8(text);
+      // Simple direct speech
+      sam.speak(text);
 
-      if (audioContextRef.current && buffer && buffer.length > 0) {
-        // SAM outputs at 22050 Hz sample rate - use this to avoid pitch changes
-        const samSampleRate = 22050;
-        const audioBuffer = audioContextRef.current.createBuffer(1, buffer.length, samSampleRate);
-        const channelData = audioBuffer.getChannelData(0);
+      // Reset speaking flag after estimated duration
+      const speechDuration = 2500 + (text.length * 80);
+      setTimeout(() => {
+        isSpeakingRef.current = false;
+        console.log(`🤖 Speech finished: "${text}"`);
+      }, speechDuration);
 
-        // Convert 8-bit unsigned to float32 (-1 to 1) with proper scaling
-        for (let i = 0; i < buffer.length; i++) {
-          channelData[i] = (buffer[i] - 128) / 127.0; // Use 127 instead of 128 for proper scaling
-        }
+      console.log(`🤖 SAM voice speaking: "${text}"`);
 
-        // Create audio processing chain with reverb and echo
-        const source = audioContextRef.current.createBufferSource();
-        source.buffer = audioBuffer;
-
-        // Create convolution reverb with AudioContext's sample rate
-        const convolver = audioContextRef.current.createConvolver();
-        const reverbBuffer = audioContextRef.current.createBuffer(2, audioContextRef.current.sampleRate * 3, audioContextRef.current.sampleRate);
-
-        // Generate deep reverb impulse response
-        for (let channel = 0; channel < 2; channel++) {
-          const channelData = reverbBuffer.getChannelData(channel);
-          for (let i = 0; i < channelData.length; i++) {
-            const decay = Math.pow(1 - i / channelData.length, 2);
-            channelData[i] = (Math.random() * 2 - 1) * decay * 0.8;
-          }
-        }
-        convolver.buffer = reverbBuffer;
-
-        // Create delay for echo effect
-        const delay = audioContextRef.current.createDelay(1.0);
-        delay.delayTime.setValueAtTime(0.3, audioContextRef.current.currentTime);
-
-        const delayFeedback = audioContextRef.current.createGain();
-        delayFeedback.gain.setValueAtTime(0.4, audioContextRef.current.currentTime);
-
-        const delayOutput = audioContextRef.current.createGain();
-        delayOutput.gain.setValueAtTime(0.6, audioContextRef.current.currentTime);
-
-        // Create main gain for dry signal
-        const dryGain = audioContextRef.current.createGain();
-        dryGain.gain.setValueAtTime(0.7, audioContextRef.current.currentTime);
-
-        // Create reverb gain
-        const reverbGain = audioContextRef.current.createGain();
-        reverbGain.gain.setValueAtTime(0.8, audioContextRef.current.currentTime);
-
-        // Connect the audio processing chain through dedicated speech bus
-        // Dry signal
-        source.connect(dryGain);
-        dryGain.connect(speechMasterGainRef.current!);
-
-        // Reverb signal
-        source.connect(convolver);
-        convolver.connect(reverbGain);
-        reverbGain.connect(speechMasterGainRef.current!);
-
-        // Echo signal
-        source.connect(delay);
-        delay.connect(delayFeedback);
-        delay.connect(delayOutput);
-        delayFeedback.connect(delay);
-        delayOutput.connect(audioContextRef.current.destination);
-
-        // Start playback
-        source.start(0);
-
-        console.log(`🤖 SAM voice with effects: pitch=150, speed=96, mouth=108, throat=122 + Deep Reverb + Echo`);
-      } else {
-        // Fallback to direct SAM playback if audio processing fails
-        sam.speak(text);
-        console.log(`🤖 SAM voice (fallback): pitch=150, speed=96, mouth=108, throat=122`);
-      }
     } catch (error) {
       console.error('🤖 SAM speech error:', error);
+      isSpeakingRef.current = false;
     }
   }, [initializeAudio]);
+
 
   // Welcome message and ambient sound on start screen
   useEffect(() => {
@@ -1273,6 +1457,14 @@ const Pong404: React.FC = () => {
         speakRobotic('WELCOME TO SPACE BLAZERS');
       }, 1500);
       return () => clearTimeout(timer);
+    } else {
+      // Clear speech queue when leaving start screen
+      speechQueueRef.current = [];
+      isSpeakingRef.current = false;
+      if (speechTimeoutRef.current) {
+        clearTimeout(speechTimeoutRef.current);
+        speechTimeoutRef.current = null;
+      }
     }
   }, [gameState.showStartScreen, speakRobotic, startAmbienceSound]);
 
