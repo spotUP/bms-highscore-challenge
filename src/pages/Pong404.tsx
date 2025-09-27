@@ -997,10 +997,23 @@ const Pong404: React.FC = () => {
             const networkState = { ...prevState };
 
             if (messageData.ball) {
+              console.log(`🎮 RECEIVING BALL UPDATE:`, {
+                oldLastTouchedBy: prevState.ball.lastTouchedBy,
+                newLastTouchedBy: messageData.ball.lastTouchedBy,
+                ballPosition: messageData.ball.x + ',' + messageData.ball.y,
+                isGameMaster: multiplayerState.isGameMaster,
+                gameMode: multiplayerState.gameMode
+              });
               networkState.ball = { ...prevState.ball, ...messageData.ball };
             }
 
             if (messageData.score) {
+              console.log(`🎮 RECEIVING SCORE UPDATE:`, {
+                oldScore: JSON.stringify(prevState.score),
+                newScore: JSON.stringify(messageData.score),
+                isGameMaster: multiplayerState.isGameMaster,
+                gameMode: multiplayerState.gameMode
+              });
               networkState.score = messageData.score;
             }
 
@@ -1201,6 +1214,16 @@ const Pong404: React.FC = () => {
         current.score.right !== previous.score.right ||
         current.score.top !== previous.score.top ||
         current.score.bottom !== previous.score.bottom) {
+      console.log(`📤 SENDING SCORE DELTA:`, {
+        previousScore: JSON.stringify(previous.score),
+        currentScore: JSON.stringify(current.score),
+        changes: {
+          left: current.score.left !== previous.score.left ? `${previous.score.left} -> ${current.score.left}` : 'no change',
+          right: current.score.right !== previous.score.right ? `${previous.score.right} -> ${current.score.right}` : 'no change',
+          top: current.score.top !== previous.score.top ? `${previous.score.top} -> ${current.score.top}` : 'no change',
+          bottom: current.score.bottom !== previous.score.bottom ? `${previous.score.bottom} -> ${current.score.bottom}` : 'no change'
+        }
+      });
       delta.score = current.score;
       hasChanges = true;
     }
@@ -4324,6 +4347,8 @@ const Pong404: React.FC = () => {
           }
         }
 
+        } // End of game master paddle collision check
+
         // Update active effects
         updateEffectsRef.current?.(newState);
 
@@ -4331,10 +4356,12 @@ const Pong404: React.FC = () => {
         // The ball should pass through them to trigger scoring, not bounce off them.
 
         // Ball collision with paddles
-        const ballLeft = newState.ball.x;
-        const ballRight = newState.ball.x + newState.ball.size;
-        const ballTop = newState.ball.y;
-        const ballBottom = newState.ball.y + newState.ball.size;
+        // MULTIPLAYER FIX: Only game master should detect paddle collisions to ensure synchronized ball.lastTouchedBy
+        if (newState.gameMode !== 'multiplayer' || multiplayerState.isGameMaster) {
+          const ballLeft = newState.ball.x;
+          const ballRight = newState.ball.x + newState.ball.size;
+          const ballTop = newState.ball.y;
+          const ballBottom = newState.ball.y + newState.ball.size;
 
         // Advanced paddle collision with speed variation based on hit position
         // Store previous ball position for better collision detection
@@ -4382,6 +4409,13 @@ const Pong404: React.FC = () => {
           newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
 
           // Track ball touch for scoring system
+          console.log(`🏓 BALL TOUCHED BY LEFT PADDLE:`, {
+            previous: newState.ball.lastTouchedBy,
+            new: 'left',
+            isGameMaster: multiplayerState.isGameMaster,
+            gameMode: newState.gameMode,
+            ballPosition: { x: newState.ball.x, y: newState.ball.y }
+          });
           newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
           newState.ball.lastTouchedBy = 'left';
 
@@ -4445,6 +4479,13 @@ const Pong404: React.FC = () => {
           newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
 
           // Track ball touch for scoring system
+          console.log(`🏓 BALL TOUCHED BY RIGHT PADDLE:`, {
+            previous: newState.ball.lastTouchedBy,
+            new: 'right',
+            isGameMaster: multiplayerState.isGameMaster,
+            gameMode: newState.gameMode,
+            ballPosition: { x: newState.ball.x, y: newState.ball.y }
+          });
           newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
           newState.ball.lastTouchedBy = 'right';
 
@@ -4510,6 +4551,13 @@ const Pong404: React.FC = () => {
           newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
 
           // Track ball touch for scoring system
+          console.log(`🏓 BALL TOUCHED BY TOP PADDLE:`, {
+            previous: newState.ball.lastTouchedBy,
+            new: 'top',
+            isGameMaster: multiplayerState.isGameMaster,
+            gameMode: newState.gameMode,
+            ballPosition: { x: newState.ball.x, y: newState.ball.y }
+          });
           newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
           newState.ball.lastTouchedBy = 'top';
 
@@ -4575,6 +4623,13 @@ const Pong404: React.FC = () => {
           newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
 
           // Track ball touch for scoring system
+          console.log(`🏓 BALL TOUCHED BY BOTTOM PADDLE:`, {
+            previous: newState.ball.lastTouchedBy,
+            new: 'bottom',
+            isGameMaster: multiplayerState.isGameMaster,
+            gameMode: newState.gameMode,
+            ballPosition: { x: newState.ball.x, y: newState.ball.y }
+          });
           newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
           newState.ball.lastTouchedBy = 'bottom';
 
@@ -4626,7 +4681,14 @@ const Pong404: React.FC = () => {
           }
 
           // Award the score
+          console.log(`🏆 SCORING: ${scoringPlayer} scores! New scores:`, {
+            before: JSON.stringify(newState.score),
+            scoringPlayer,
+            isGameMaster: multiplayerState.isGameMaster,
+            gameMode: newState.gameMode
+          });
           newState.score[scoringPlayer]++;
+          console.log(`🏆 SCORE UPDATED: ${scoringPlayer} -> ${newState.score[scoringPlayer]}`, newState.score);
           clearAllPickupEffects(newState);
 
           // Robot taunt chance when someone scores - with player context
@@ -4702,20 +4764,22 @@ const Pong404: React.FC = () => {
         };
 
         // Handle scoring when ball goes off screen with last-touch system
-        if (newState.ball.x < -20) {
-          handleLastTouchScoring('left');
-        } else if (newState.ball.x > canvasSize.width + 20) {
-          handleLastTouchScoring('right');
-        } else if (newState.ball.y < -20) {
-          handleLastTouchScoring('top');
-        } else if (newState.ball.y > canvasSize.height + 20) {
-          handleLastTouchScoring('bottom');
+        // MULTIPLAYER FIX: Only game master should calculate and apply scoring
+        if (newState.gameMode !== 'multiplayer' || multiplayerState.isGameMaster) {
+          if (newState.ball.x < -20) {
+            handleLastTouchScoring('left');
+          } else if (newState.ball.x > canvasSize.width + 20) {
+            handleLastTouchScoring('right');
+          } else if (newState.ball.y < -20) {
+            handleLastTouchScoring('top');
+          } else if (newState.ball.y > canvasSize.height + 20) {
+            handleLastTouchScoring('bottom');
+          }
 
-        }
-
-        // In multiplayer mode, only sync ball/score changes if we're the gamemaster
-        if (newState.gameMode === 'multiplayer' && multiplayerState.isGameMaster) {
-          updateGameStateRef.current?.(newState);
+          // In multiplayer mode, sync ball/score changes after calculating scores
+          if (newState.gameMode === 'multiplayer' && multiplayerState.isGameMaster) {
+            updateGameStateRef.current?.(newState);
+          }
         }
       } // End of ball logic check - only runs when game is active
 
