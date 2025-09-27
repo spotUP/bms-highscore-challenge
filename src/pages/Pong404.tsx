@@ -179,10 +179,10 @@ const PICKUP_TYPES = [
   { type: 'teleport_ball', pattern: 'star', color: '#9966ff', description: 'Teleport Ball!', scale: 'diminished', note: 1 },
 ];
 
-// WebSocket server URL - only available in development
+// WebSocket server URL - using working Render service
 const WS_SERVER_URL = import.meta.env.DEV
   ? 'ws://localhost:3002'
-  : null; // No WebSocket server in production (Render suspended)
+  : 'wss://bms-highscore-challenge.onrender.com';
 
 const COLOR_PALETTE = [
   { background: '#1a0b3d', foreground: '#ff006e' }, // Deep Purple & Hot Pink
