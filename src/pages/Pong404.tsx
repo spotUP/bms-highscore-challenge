@@ -5049,7 +5049,7 @@ const Pong404: React.FC = () => {
           newState.ball.dy = boundaryHit === 'top' || boundaryHit === 'bottom'
               ? (boundaryHit === 'top' ? -BALL_SPEED : BALL_SPEED)
               : (Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED);
-        };
+        }
 
         // Handle scoring when ball goes off screen with last-touch system
         // MULTIPLAYER FIX: Only game master should calculate and apply scoring
@@ -5068,7 +5068,6 @@ const Pong404: React.FC = () => {
           if (newState.gameMode === 'multiplayer' && multiplayerState.isGameMaster) {
             updateGameStateRef.current?.(newState);
           }
-        }
       } // End of ball logic check - only runs when game is active
 
       return newState;
