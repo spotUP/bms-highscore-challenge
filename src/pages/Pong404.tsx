@@ -2906,13 +2906,8 @@ const Pong404: React.FC = () => {
       // 🕒 Frame-rate independent physics multiplier
       const deltaTimeMultiplier = deltaTimeRef.current / targetFrameTime;
 
-      // Server-side physics mode: Only render, don't run client-side game logic
-      if (multiplayerStateRef.current?.isConnected && multiplayerStateRef.current?.gameMode === 'multiplayer') {
-        // In multiplayer mode, the server handles all game logic
-        // Client only handles visual updates and local paddle control
-        // The server_game_update message handler will update game state
-        return prevState; // Early return - no client-side physics
-      }
+      // Server-side physics mode: Skip client-side game logic in multiplayer
+      const isServerMode = multiplayerStateRef.current?.isConnected && multiplayerStateRef.current?.gameMode === 'multiplayer';
 
       // Apply client-side prediction and interpolation for multiplayer non-gamemaster clients
       if (multiplayerStateRef.current?.gameMode === 'multiplayer' &&
@@ -4038,8 +4033,8 @@ const Pong404: React.FC = () => {
         }
       }
 
-      // Skip ball logic if game is paused, ended, or not playing (but allow paddle movement)
-      if (!newState.isPaused && newState.isPlaying && !newState.gameEnded) {
+      // Skip ball logic if game is paused, ended, not playing, or in server mode (but allow paddle movement)
+      if (!newState.isPaused && newState.isPlaying && !newState.gameEnded && !isServerMode) {
         // Start info text fade when game actually begins (ball starts moving)
         if (!infoTextFadeStart && (Math.abs(newState.ball.dx) > 0 || Math.abs(newState.ball.dy) > 0)) {
           setInfoTextFadeStart(Date.now());
