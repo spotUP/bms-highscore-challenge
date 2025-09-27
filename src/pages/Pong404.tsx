@@ -4444,8 +4444,14 @@ const Pong404: React.FC = () => {
         // The ball should pass through them to trigger scoring, not bounce off them.
 
         // Ball collision with paddles
-        // MULTIPLAYER FIX: Only game master should detect paddle collisions to ensure synchronized ball.lastTouchedBy
-        if (newState.gameMode !== 'multiplayer' || multiplayerState.isGameMaster) {
+        // CRITICAL FIX: Allow collision detection for responsive gameplay
+        // - Game master detects ALL paddle collisions (authoritative)
+        // - Non-game-master players detect collisions with their own paddle only (local feedback)
+        // - Network sync ensures consistency while maintaining responsiveness
+        const isGameMaster = multiplayerState.isGameMaster;
+        const shouldDetectCollisions = newState.gameMode !== 'multiplayer' || isGameMaster;
+
+        if (shouldDetectCollisions) { // Game master or single player - detect all collisions
           const ballLeft = newState.ball.x;
           const ballRight = newState.ball.x + newState.ball.size;
           const ballTop = newState.ball.y;
@@ -4806,6 +4812,114 @@ const Pong404: React.FC = () => {
           }
         }
         } // End bottom paddle collision check
+        } // End game master collision detection
+
+        // LOCAL COLLISION DETECTION for non-game-master players (their own paddle only)
+        // This provides immediate visual/audio feedback while game master handles authoritative collisions
+        else if (newState.gameMode === 'multiplayer' && !isGameMaster && multiplayerState.playerSide !== 'spectator') {
+          const playerSide = multiplayerState.playerSide;
+          const ballLeft = newState.ball.x;
+          const ballRight = newState.ball.x + newState.ball.size;
+          const ballTop = newState.ball.y;
+          const ballBottom = newState.ball.y + newState.ball.size;
+          const prevBallX = newState.ball.x - newState.ball.dx;
+          const prevBallY = newState.ball.y - newState.ball.dy;
+          const ballCenterX = newState.ball.x + newState.ball.size / 2;
+          const ballCenterY = newState.ball.y + newState.ball.size / 2;
+          const prevBallCenterX = prevBallX + newState.ball.size / 2;
+          const prevBallCenterY = prevBallY + newState.ball.size / 2;
+
+          // Only check collision with the player's own paddle for immediate feedback
+          if (playerSide === 'left') {
+            const leftPaddleX = 30;
+            const leftPaddleRight = leftPaddleX + newState.paddles.left.width;
+            const ballIntersectsLeftPaddle =
+              ballLeft <= leftPaddleRight + COLLISION_BUFFER &&
+              ballRight >= leftPaddleX - COLLISION_BUFFER &&
+              ballBottom >= newState.paddles.left.y - COLLISION_BUFFER &&
+              ballTop <= newState.paddles.left.y + newState.paddles.left.height + COLLISION_BUFFER;
+            const ballTrajectoryIntersectsLeftPaddle = lineIntersectsRect(
+              prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
+              leftPaddleX, newState.paddles.left.y, newState.paddles.left.width, newState.paddles.left.height
+            );
+            const ballCameFromRight = prevBallX > leftPaddleRight || prevBallCenterX > leftPaddleRight;
+            const leftPaddleCollisionDetected = (ballIntersectsLeftPaddle || ballTrajectoryIntersectsLeftPaddle) &&
+                                               ballCameFromRight && newState.ball.dx < 0;
+            if (leftPaddleCollisionDetected) {
+              // LOCAL FEEDBACK ONLY - don't modify ball state (game master will handle that)
+              playMelodyNoteRef.current?.('paddle', null, 'both'); // Immediate audio feedback
+              newState.rumbleEffect.isActive = true;
+              newState.rumbleEffect.startTime = Date.now();
+              newState.rumbleEffect.intensity = 8;
+            }
+          } else if (playerSide === 'right') {
+            const rightPaddleX = canvasSize.width - 30 - newState.paddles.right.width;
+            const rightPaddleLeft = rightPaddleX;
+            const ballIntersectsRightPaddle =
+              ballRight >= rightPaddleLeft - COLLISION_BUFFER &&
+              ballLeft <= rightPaddleX + newState.paddles.right.width + COLLISION_BUFFER &&
+              ballBottom >= newState.paddles.right.y - COLLISION_BUFFER &&
+              ballTop <= newState.paddles.right.y + newState.paddles.right.height + COLLISION_BUFFER;
+            const ballTrajectoryIntersectsRightPaddle = lineIntersectsRect(
+              prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
+              rightPaddleX, newState.paddles.right.y, newState.paddles.right.width, newState.paddles.right.height
+            );
+            const ballCameFromLeft = prevBallX < rightPaddleLeft || prevBallCenterX < rightPaddleLeft;
+            const rightPaddleCollisionDetected = (ballIntersectsRightPaddle || ballTrajectoryIntersectsRightPaddle) &&
+                                                ballCameFromLeft && newState.ball.dx > 0;
+            if (rightPaddleCollisionDetected) {
+              // LOCAL FEEDBACK ONLY - don't modify ball state (game master will handle that)
+              playMelodyNoteRef.current?.('paddle', null, 'both'); // Immediate audio feedback
+              newState.rumbleEffect.isActive = true;
+              newState.rumbleEffect.startTime = Date.now();
+              newState.rumbleEffect.intensity = 8;
+            }
+          } else if (playerSide === 'top' && newState.paddles.top) {
+            const topPaddleY = 30;
+            const topPaddleBottom = topPaddleY + newState.paddles.top.height;
+            const ballIntersectsTopPaddle =
+              ballTop <= topPaddleBottom + COLLISION_BUFFER &&
+              ballBottom >= topPaddleY - COLLISION_BUFFER &&
+              ballRight >= newState.paddles.top.x - COLLISION_BUFFER &&
+              ballLeft <= newState.paddles.top.x + newState.paddles.top.width + COLLISION_BUFFER;
+            const ballTrajectoryIntersectsTopPaddle = lineIntersectsRect(
+              prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
+              newState.paddles.top.x, topPaddleY, newState.paddles.top.width, newState.paddles.top.height
+            );
+            const ballCameFromBelow = prevBallY > topPaddleBottom || prevBallCenterY > topPaddleBottom;
+            const topPaddleCollisionDetected = (ballIntersectsTopPaddle || ballTrajectoryIntersectsTopPaddle) &&
+                                              ballCameFromBelow && newState.ball.dy < 0;
+            if (topPaddleCollisionDetected) {
+              // LOCAL FEEDBACK ONLY - don't modify ball state (game master will handle that)
+              playMelodyNoteRef.current?.('paddle', null, 'both'); // Immediate audio feedback
+              newState.rumbleEffect.isActive = true;
+              newState.rumbleEffect.startTime = Date.now();
+              newState.rumbleEffect.intensity = 8;
+            }
+          } else if (playerSide === 'bottom' && newState.paddles.bottom) {
+            const bottomPaddleY = canvasSize.height - 30 - newState.paddles.bottom.height;
+            const bottomPaddleTop = bottomPaddleY;
+            const ballIntersectsBottomPaddle =
+              ballBottom >= bottomPaddleTop - COLLISION_BUFFER &&
+              ballTop <= bottomPaddleY + newState.paddles.bottom.height + COLLISION_BUFFER &&
+              ballRight >= newState.paddles.bottom.x - COLLISION_BUFFER &&
+              ballLeft <= newState.paddles.bottom.x + newState.paddles.bottom.width + COLLISION_BUFFER;
+            const ballTrajectoryIntersectsBottomPaddle = lineIntersectsRect(
+              prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
+              newState.paddles.bottom.x, bottomPaddleY, newState.paddles.bottom.width, newState.paddles.bottom.height
+            );
+            const ballCameFromAbove = prevBallY < bottomPaddleTop || prevBallCenterY < bottomPaddleTop;
+            const bottomPaddleCollisionDetected = (ballIntersectsBottomPaddle || ballTrajectoryIntersectsBottomPaddle) &&
+                                                 ballCameFromAbove && newState.ball.dy > 0;
+            if (bottomPaddleCollisionDetected) {
+              // LOCAL FEEDBACK ONLY - don't modify ball state (game master will handle that)
+              playMelodyNoteRef.current?.('paddle', null, 'both'); // Immediate audio feedback
+              newState.rumbleEffect.isActive = true;
+              newState.rumbleEffect.startTime = Date.now();
+              newState.rumbleEffect.intensity = 8;
+            }
+          }
+        }
 
         // Helper function for last-touch scoring
         const handleLastTouchScoring = (boundaryHit: 'left' | 'right' | 'top' | 'bottom') => {
