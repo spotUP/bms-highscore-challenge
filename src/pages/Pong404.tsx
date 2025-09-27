@@ -1012,7 +1012,10 @@ const Pong404: React.FC = () => {
 
             if (messageData.pickups) networkState.pickups = messageData.pickups;
             if (messageData.coins) networkState.coins = messageData.coins;
-            if (messageData.nextPickupTime !== undefined) networkState.nextPickupTime = messageData.nextPickupTime;
+            // Only sync nextPickupTime if we're not the game master (game master controls pickup timing)
+            if (messageData.nextPickupTime !== undefined && !multiplayerState.isGameMaster) {
+              networkState.nextPickupTime = messageData.nextPickupTime;
+            }
 
             if (messageData.activeEffects) networkState.activeEffects = messageData.activeEffects;
 
@@ -4135,14 +4138,36 @@ const Pong404: React.FC = () => {
         const timeToSpawn = Date.now() >= newState.nextPickupTime;
         const hasSpace = newState.pickups && newState.pickups.length < 3;
 
-        if (hasSpace && timeToSpawn && canSpawnPickups && createPickupRef.current) {
+        // EMERGENCY FIX: nextPickupTime is corrupted, fix it immediately
+        if (isNaN(newState.nextPickupTime) || newState.nextPickupTime < Date.now() - 86400000) {
+          console.log('🚨 FIXING CORRUPTED nextPickupTime!');
+          newState.nextPickupTime = Date.now() + Math.random() * 5000 + 2000; // 2-7 seconds
+        }
+
+        // EMERGENCY FIX: Always allow game master OR single player to spawn pickups
+        const emergencyCanSpawn = (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer' || multiplayerState.playerId === Object.keys(multiplayerState.players || {})[0]);
+
+        if (Math.floor(Date.now() / 3000) !== Math.floor((Date.now() - 16) / 3000)) { // Debug every 3 seconds
+          console.log('🚨 EMERGENCY DEBUG:', {
+            nextPickupTime: new Date(newState.nextPickupTime).toLocaleTimeString(),
+            currentTime: new Date().toLocaleTimeString(),
+            timeDiff: newState.nextPickupTime - Date.now(),
+            isGameMaster: multiplayerState.isGameMaster,
+            emergencyCanSpawn: emergencyCanSpawn,
+            timeToSpawn: timeToSpawn,
+            playerId: multiplayerState.playerId,
+            players: Object.keys(multiplayerState.players || {})
+          });
+        }
+
+        if (hasSpace && timeToSpawn && emergencyCanSpawn && createPickupRef.current) {
           const newPickup = createPickupRef.current();
           if (newPickup) {
             newState.pickups.push(newPickup);
             newState.nextPickupTime = Date.now() + Math.random() * 8000 + 4000; // 4-12 seconds
             console.log('🎁 Pickup spawned:', newPickup.type, 'at', newPickup.x, newPickup.y);
           }
-        } else if (Math.floor(Date.now() / 5000) !== Math.floor((Date.now() - 16) / 5000)) { // Debug every 5 seconds
+        } else if (Math.floor(Date.now() / 10000) !== Math.floor((Date.now() - 16) / 10000)) { // Debug every 10 seconds
           console.log('🔍 Pickup spawn check:', {
             hasSpace,
             timeToSpawn,
@@ -4151,7 +4176,12 @@ const Pong404: React.FC = () => {
             gameMode: newState.gameMode,
             createPickupRef: !!createPickupRef.current,
             pickupsCount: newState.pickups?.length || 0,
-            nextPickupTime: new Date(newState.nextPickupTime).toLocaleTimeString()
+            nextPickupTime: new Date(newState.nextPickupTime).toLocaleTimeString(),
+            currentTime: new Date().toLocaleTimeString(),
+            isPlaying: newState.isPlaying,
+            nextPickupTimeMs: newState.nextPickupTime,
+            currentTimeMs: Date.now(),
+            timeDiff: newState.nextPickupTime - Date.now()
           });
         }
 
