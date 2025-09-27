@@ -10,20 +10,36 @@ interface GameState {
     dx: number;
     dy: number;
     size: number;
+    originalSize: number;
+    isDrunk: boolean;
+    drunkAngle: number;
+    isTeleporting: boolean;
+    lastTeleportTime: number;
+    stuckCheckStartTime: number;
+    stuckCheckStartX: number;
+    lastTouchedBy: 'left' | 'right' | 'top' | 'bottom' | null;
+    previousTouchedBy: 'left' | 'right' | 'top' | 'bottom' | null;
   };
   paddles: {
-    left: { y: number; height: number; width: number; speed: number; velocity: number; targetY: number };
-    right: { y: number; height: number; width: number; speed: number; velocity: number; targetY: number };
+    left: { y: number; height: number; width: number; speed: number; velocity: number; targetY: number; originalHeight: number };
+    right: { y: number; height: number; width: number; speed: number; velocity: number; targetY: number; originalHeight: number };
+    top: { x: number; height: number; width: number; speed: number; velocity: number; targetX: number; originalWidth: number };
+    bottom: { x: number; height: number; width: number; speed: number; velocity: number; targetX: number; originalWidth: number };
   };
   score: {
     left: number;
     right: number;
+    top: number;
+    bottom: number;
   };
   isPlaying: boolean;
+  showStartScreen: boolean;
   gameMode: 'auto' | 'player' | 'multiplayer';
   colorIndex: number;
   isPaused: boolean;
   pauseEndTime: number;
+  winner: 'left' | 'right' | 'top' | 'bottom' | null;
+  gameEnded: boolean;
   decrunchEffect: {
     isActive: boolean;
     startTime: number;
@@ -33,7 +49,7 @@ interface GameState {
 
 interface Player {
   id: string;
-  side: 'left' | 'right' | 'spectator';
+  side: 'left' | 'right' | 'top' | 'bottom' | 'spectator';
   ws: any;
   roomId: string;
   lastSeen: number;
@@ -115,7 +131,7 @@ class PongWebSocketServer {
 
     switch (type) {
       case 'join_room':
-        this.handleJoinRoom(ws, playerId, roomId);
+        this.handleJoinRoom(ws, playerId, roomId, data?.forceSpectator);
         break;
       case 'update_paddle':
         this.handlePaddleUpdate(playerId, data);
@@ -139,7 +155,7 @@ class PongWebSocketServer {
     }
   }
 
-  private handleJoinRoom(ws: any, playerId: string, roomId: string) {
+  private handleJoinRoom(ws: any, playerId: string, roomId: string, forceSpectator?: boolean) {
     console.log(`🏓 Player ${playerId} joining room ${roomId} (Instance: ${this.instanceId})`);
     console.log(`   ├─ Current rooms: ${this.rooms.size}`);
     console.log(`   ├─ Current players: ${this.players.size}`);
@@ -155,15 +171,27 @@ class PongWebSocketServer {
     }
 
     // Determine player side
-    let playerSide: 'left' | 'right' | 'spectator' = 'spectator';
-    const leftPlayer = Array.from(room.players.values()).find(p => p.side === 'left');
-    const rightPlayer = Array.from(room.players.values()).find(p => p.side === 'right');
+    let playerSide: 'left' | 'right' | 'top' | 'bottom' | 'spectator' = 'spectator';
 
-    if (!leftPlayer) {
-      playerSide = 'left';
-      if (!room.gamemaster) room.gamemaster = playerId;
-    } else if (!rightPlayer) {
-      playerSide = 'right';
+    if (forceSpectator) {
+      console.log(`   ├─ Player ${playerId} forced to spectator mode`);
+      playerSide = 'spectator';
+    } else {
+      const leftPlayer = Array.from(room.players.values()).find(p => p.side === 'left');
+      const rightPlayer = Array.from(room.players.values()).find(p => p.side === 'right');
+      const topPlayer = Array.from(room.players.values()).find(p => p.side === 'top');
+      const bottomPlayer = Array.from(room.players.values()).find(p => p.side === 'bottom');
+
+      if (!leftPlayer) {
+        playerSide = 'left';
+        if (!room.gamemaster) room.gamemaster = playerId;
+      } else if (!rightPlayer) {
+        playerSide = 'right';
+      } else if (!topPlayer) {
+        playerSide = 'top';
+      } else if (!bottomPlayer) {
+        playerSide = 'bottom';
+      }
     }
 
     // Create player
@@ -223,17 +251,34 @@ class PongWebSocketServer {
       room.gameState.paddles.right.y = data.y;
       room.gameState.paddles.right.velocity = data.velocity || 0;
       room.gameState.paddles.right.targetY = data.targetY || data.y;
+    } else if (player.side === 'top') {
+      room.gameState.paddles.top.x = data.x;
+      room.gameState.paddles.top.velocity = data.velocity || 0;
+      room.gameState.paddles.top.targetX = data.targetX || data.x;
+    } else if (player.side === 'bottom') {
+      room.gameState.paddles.bottom.x = data.x;
+      room.gameState.paddles.bottom.velocity = data.velocity || 0;
+      room.gameState.paddles.bottom.targetX = data.targetX || data.x;
     }
 
     // Broadcast paddle update to other players
+    const updateData: any = {
+      side: player.side,
+      velocity: data.velocity
+    };
+
+    // Add appropriate position data based on paddle side
+    if (player.side === 'left' || player.side === 'right') {
+      updateData.y = data.y;
+      updateData.targetY = data.targetY;
+    } else if (player.side === 'top' || player.side === 'bottom') {
+      updateData.x = data.x;
+      updateData.targetX = data.targetX;
+    }
+
     this.broadcastToRoom(player.roomId, {
       type: 'paddle_updated',
-      data: {
-        side: player.side,
-        y: data.y,
-        velocity: data.velocity,
-        targetY: data.targetY
-      }
+      data: updateData
     }, playerId);
   }
 
@@ -349,21 +394,37 @@ class PongWebSocketServer {
         y: 300,
         dx: 10,
         dy: Math.random() > 0.5 ? 10 : -10, // Random vertical direction
-        size: 12
+        size: 12,
+        originalSize: 12,
+        isDrunk: false,
+        drunkAngle: 0,
+        isTeleporting: false,
+        lastTeleportTime: 0,
+        stuckCheckStartTime: 0,
+        stuckCheckStartX: 0,
+        lastTouchedBy: null,
+        previousTouchedBy: null
       },
       paddles: {
-        left: { y: 250, height: 100, width: 12, speed: 32, velocity: 0, targetY: 250 },
-        right: { y: 250, height: 100, width: 12, speed: 32, velocity: 0, targetY: 250 }
+        left: { y: 250, height: 100, width: 12, speed: 32, velocity: 0, targetY: 250, originalHeight: 100 },
+        right: { y: 250, height: 100, width: 12, speed: 32, velocity: 0, targetY: 250, originalHeight: 100 },
+        top: { x: 360, height: 12, width: 80, speed: 32, velocity: 0, targetX: 360, originalWidth: 80 },
+        bottom: { x: 360, height: 12, width: 80, speed: 32, velocity: 0, targetX: 360, originalWidth: 80 }
       },
       score: {
         left: 0,
-        right: 0
+        right: 0,
+        top: 0,
+        bottom: 0
       },
-      isPlaying: true, // ✅ Start the game immediately
+      isPlaying: false, // Start with start screen
+      showStartScreen: true,
       gameMode: 'multiplayer' as const,
       colorIndex: 0,
       isPaused: false,
       pauseEndTime: 0,
+      winner: null,
+      gameEnded: false,
       decrunchEffect: {
         isActive: false,
         startTime: 0,

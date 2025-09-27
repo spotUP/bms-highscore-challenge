@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import SamJs from 'sam-js';
 
 interface Pickup {
   x: number;
@@ -65,6 +66,7 @@ interface GameState {
     bottom: number;
   };
   isPlaying: boolean;
+  showStartScreen: boolean;
   gameMode: 'auto' | 'player' | 'multiplayer';
   colorIndex: number;
   isPaused: boolean;
@@ -124,8 +126,9 @@ const MAX_BALL_SPEED = 10; // Slower maximum speed
 // Game runs at native refresh rate via requestAnimationFrame (typically 60fps)
 const PADDLE_ACCELERATION = 0.2; // Reduced acceleration for smoother control
 const PADDLE_FRICTION = 0.88; // Slightly more friction for better control
-const HUMAN_REACTION_DELAY = 12; // More frames of delay for realistic AI at 60fps
+const HUMAN_REACTION_DELAY = 8; // Reduced delay for more responsive AI at 60fps
 const PANIC_MOVE_CHANCE = 0.08; // Lower chance for panic moves at 60fps
+const COLLISION_BUFFER = 3; // Extra pixels for collision detection tolerance
 const PANIC_VELOCITY_MULTIPLIER = 8; // Reduced panic speed multiplier
 const EXTREME_PANIC_CHANCE = 0.04; // Lower extreme panic chance
 const EXTREME_PANIC_MULTIPLIER = 20; // Reduced extreme panic speed
@@ -220,6 +223,7 @@ const Pong404: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error' | 'retrying'>('idle');
   const [retryCount, setRetryCount] = useState(0);
   const [connectionMessage, setConnectionMessage] = useState('');
+  const [isCRTEnabled, setIsCRTEnabled] = useState(false);
 
   const [gameState, _setGameState] = useState<GameState>({
     ball: {
@@ -245,7 +249,8 @@ const Pong404: React.FC = () => {
       bottom: { x: Math.max(0, Math.min(canvasSize.width - 80, canvasSize.width / 2 - 40)), height: 12, width: 80, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(0, Math.min(canvasSize.width - 80, canvasSize.width / 2 - 40)), originalWidth: 80 },
     },
     score: { left: 0, right: 0, top: 0, bottom: 0 }, // 4-player scoring
-    isPlaying: true,
+    isPlaying: false,
+    showStartScreen: true,
     gameMode: 'auto',
     colorIndex: 0,
     isPaused: false,
@@ -798,7 +803,7 @@ const Pong404: React.FC = () => {
   }, [createImpulseResponse]);
 
   // Enhanced tone generation with custom volume
-  const playTone = useCallback((frequency: number, duration: number, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both', volume: number = 0.1) => {
+  const playTone = useCallback((frequency: number, duration: number, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both', volume: number = 0.03) => {
     // Only create AudioContext when actually trying to play a sound (user gesture)
     if (!audioContextRef.current && !audioInitAttempted.current) {
       audioInitAttempted.current = true;
@@ -1013,7 +1018,7 @@ const Pong404: React.FC = () => {
     // Play harmony notes with slight delay for richness
     harmony.forEach((harmonyFreq, index) => {
       setTimeout(() => {
-        playTone(harmonyFreq, duration * 0.8, effectType, 0.3); // Lower volume for harmony
+        playTone(harmonyFreq, duration * 0.8, effectType, 0.08); // Much lower volume for harmony
       }, index * 20); // Slight delay between harmony notes
     });
 
@@ -1133,6 +1138,116 @@ const Pong404: React.FC = () => {
     }, 2500);
   }, []);
 
+  // Vintage SAM speech synthesizer with deep reverb and echo effects
+  const speakRobotic = useCallback((text: string) => {
+    console.log(`🤖 SAM Speaking with effects: "${text}"`);
+
+    // Initialize audio context if needed
+    if (!audioContextRef.current) {
+      initializeAudio();
+    }
+
+    try {
+      // Create SAM instance with user's optimal parameters
+      const sam = new SamJs({
+        pitch: 150,   // User-optimized pitch for perfect robot tone
+        speed: 96,    // User-optimized speed for ideal delivery
+        mouth: 108,   // User-optimized mouth setting
+        throat: 122   // User-optimized throat setting
+      });
+
+      // Get raw audio buffer from SAM
+      const buffer = sam.buf8(text);
+
+      if (audioContextRef.current && buffer && buffer.length > 0) {
+        // SAM outputs at 22050 Hz sample rate - use this to avoid pitch changes
+        const samSampleRate = 22050;
+        const audioBuffer = audioContextRef.current.createBuffer(1, buffer.length, samSampleRate);
+        const channelData = audioBuffer.getChannelData(0);
+
+        // Convert 8-bit unsigned to float32 (-1 to 1) with proper scaling
+        for (let i = 0; i < buffer.length; i++) {
+          channelData[i] = (buffer[i] - 128) / 127.0; // Use 127 instead of 128 for proper scaling
+        }
+
+        // Create audio processing chain with reverb and echo
+        const source = audioContextRef.current.createBufferSource();
+        source.buffer = audioBuffer;
+
+        // Create convolution reverb with AudioContext's sample rate
+        const convolver = audioContextRef.current.createConvolver();
+        const reverbBuffer = audioContextRef.current.createBuffer(2, audioContextRef.current.sampleRate * 3, audioContextRef.current.sampleRate);
+
+        // Generate deep reverb impulse response
+        for (let channel = 0; channel < 2; channel++) {
+          const channelData = reverbBuffer.getChannelData(channel);
+          for (let i = 0; i < channelData.length; i++) {
+            const decay = Math.pow(1 - i / channelData.length, 2);
+            channelData[i] = (Math.random() * 2 - 1) * decay * 0.8;
+          }
+        }
+        convolver.buffer = reverbBuffer;
+
+        // Create delay for echo effect
+        const delay = audioContextRef.current.createDelay(1.0);
+        delay.delayTime.setValueAtTime(0.3, audioContextRef.current.currentTime);
+
+        const delayFeedback = audioContextRef.current.createGain();
+        delayFeedback.gain.setValueAtTime(0.4, audioContextRef.current.currentTime);
+
+        const delayOutput = audioContextRef.current.createGain();
+        delayOutput.gain.setValueAtTime(0.6, audioContextRef.current.currentTime);
+
+        // Create main gain for dry signal
+        const dryGain = audioContextRef.current.createGain();
+        dryGain.gain.setValueAtTime(0.7, audioContextRef.current.currentTime);
+
+        // Create reverb gain
+        const reverbGain = audioContextRef.current.createGain();
+        reverbGain.gain.setValueAtTime(0.8, audioContextRef.current.currentTime);
+
+        // Connect the audio processing chain
+        // Dry signal
+        source.connect(dryGain);
+        dryGain.connect(audioContextRef.current.destination);
+
+        // Reverb signal
+        source.connect(convolver);
+        convolver.connect(reverbGain);
+        reverbGain.connect(audioContextRef.current.destination);
+
+        // Echo signal
+        source.connect(delay);
+        delay.connect(delayFeedback);
+        delay.connect(delayOutput);
+        delayFeedback.connect(delay);
+        delayOutput.connect(audioContextRef.current.destination);
+
+        // Start playback
+        source.start(0);
+
+        console.log(`🤖 SAM voice with effects: pitch=150, speed=96, mouth=108, throat=122 + Deep Reverb + Echo`);
+      } else {
+        // Fallback to direct SAM playback if audio processing fails
+        sam.speak(text);
+        console.log(`🤖 SAM voice (fallback): pitch=150, speed=96, mouth=108, throat=122`);
+      }
+    } catch (error) {
+      console.error('🤖 SAM speech error:', error);
+    }
+  }, [initializeAudio]);
+
+  // Welcome message on start screen
+  useEffect(() => {
+    if (gameState.showStartScreen) {
+      // Delay the welcome message to ensure voices are loaded
+      const timer = setTimeout(() => {
+        speakRobotic('WELCOME TO SPACE BLAZERS');
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState.showStartScreen, speakRobotic]);
+
   // Auto-start ambient sounds when audio context is ready and game is active
   useEffect(() => {
     console.log('🎵 Ambient audio check:', {
@@ -1203,6 +1318,10 @@ const Pong404: React.FC = () => {
   const [cursorHidden, setCursorHidden] = useState(false);
 
   const [infoTextFadeStart, setInfoTextFadeStart] = useState<number | null>(null);
+
+  // Track previous countdown values for robot voice announcements
+  const [previousCountdowns, setPreviousCountdowns] = useState<{[effectType: string]: number}>({});
+
   const leftFrameCountRef = useRef<number>(0);
   const rightFrameCountRef = useRef<number>(0);
   const topFrameCountRef = useRef<number>(0);
@@ -1211,10 +1330,12 @@ const Pong404: React.FC = () => {
   // Pickup system functions
   const createPickup = useCallback(() => {
     const pickupType = PICKUP_TYPES[Math.floor(Math.random() * PICKUP_TYPES.length)];
-    const padding = 100; // Stay away from edges
+    // Stay well away from paddle zones and edges
+    const horizontalPadding = 150; // Keep away from left/right paddles
+    const verticalPadding = 120;   // Keep away from top/bottom paddles
     return {
-      x: padding + Math.random() * (canvasSize.width - padding * 2),
-      y: padding + Math.random() * (canvasSize.height - padding * 2),
+      x: horizontalPadding + Math.random() * (canvasSize.width - horizontalPadding * 2),
+      y: verticalPadding + Math.random() * (canvasSize.height - verticalPadding * 2),
       size: 144, // Much bigger to accommodate 12x12 pixel size (12x12 grid)
       type: pickupType.type,
       pattern: pickupType.pattern,
@@ -1457,6 +1578,18 @@ const Pong404: React.FC = () => {
           newState.paddles.right.velocity = deltaY;
 
           newState.paddles.right.y = clampedY;
+
+          // Add trail for mouse/touch controlled right paddle movement
+          if (Math.abs(newState.paddles.right.velocity) > 0.01) {
+            const now = Date.now();
+            newState.trails.rightPaddle.push({
+              x: canvasSize.width - 12 - newState.paddles.right.width / 2,
+              y: newState.paddles.right.y + newState.paddles.right.height / 2,
+              width: newState.paddles.right.width,
+              height: newState.paddles.right.height,
+              timestamp: now
+            });
+          }
         }
 
         // Arrow key controls (can work alongside mouse)
@@ -1509,13 +1642,14 @@ const Pong404: React.FC = () => {
 
         // In player mode, make the left paddle AI-controlled (always, since player controls right)
         if (newState.gameMode === 'player') {
+          const now = Date.now();
           leftFrameCountRef.current++;
           const ballCenterY = newState.ball.y + newState.ball.size / 2;
           const updatePaddleWithAI = (paddle: any, frameCount: number) => {
-            const reactionDelay = HUMAN_REACTION_DELAY + 3;
+            const reactionDelay = HUMAN_REACTION_DELAY + 1;
             if (frameCount % reactionDelay === 0) {
-              const inaccuracy = (Math.random() - 0.5) * 18;
-              const predictionError = Math.random() < 0.3 ? (Math.random() - 0.5) * 30 : 0;
+              const inaccuracy = (Math.random() - 0.5) * 8; // Reduced from 18 to 8
+              const predictionError = Math.random() < 0.15 ? (Math.random() - 0.5) * 12 : 0; // Reduced frequency and magnitude
               const targetY = Math.max(
                 paddle.height / 2,
                 Math.min(
@@ -1554,6 +1688,17 @@ const Pong404: React.FC = () => {
           };
 
           updatePaddleWithAI(newState.paddles.left, leftFrameCountRef.current);
+
+          // Add trail tracking for left paddle AI movement
+          if (Math.abs(newState.paddles.left.velocity) > 0.01) {
+            newState.trails.leftPaddle.push({
+              x: 12 + newState.paddles.left.width / 2, // Paddle center X
+              y: newState.paddles.left.y + newState.paddles.left.height / 2,
+              timestamp: now,
+              width: newState.paddles.left.width,
+              height: newState.paddles.left.height
+            });
+          }
         }
 
         // Always make top and bottom paddles AI-controlled when no players are assigned
@@ -1561,43 +1706,97 @@ const Pong404: React.FC = () => {
         bottomFrameCountRef.current++;
 
         const ballCenterX = newState.ball.x + newState.ball.size / 2;
-        const updateHorizontalPaddleWithAI = (paddle: any, frameCount: number) => {
-          const reactionDelay = HUMAN_REACTION_DELAY + 3;
+        const updateHorizontalPaddleWithAI = (paddle: any, frameCount: number, isTopPaddle: boolean) => {
+          const reactionDelay = HUMAN_REACTION_DELAY;
           if (frameCount % reactionDelay === 0) {
-            const inaccuracy = (Math.random() - 0.5) * 18;
-            const predictionError = Math.random() < 0.3 ? (Math.random() - 0.5) * 30 : 0;
+            // Calculate where ball will be when it reaches paddle's Y position
+            const paddleY = isTopPaddle ? 30 + paddle.height : canvasSize.height - 30 - paddle.height;
+            const ballToleranceY = isTopPaddle ? 100 : -100; // Give more prediction range
+            const targetY = paddleY + ballToleranceY;
+
+            // Calculate time for ball to reach paddle Y position
+            let predictedX = ballCenterX;
+
+            if (Math.abs(newState.ball.dy) > 0.1) {
+              const timeToReachPaddle = Math.abs((targetY - newState.ball.y) / newState.ball.dy);
+              predictedX = newState.ball.x + (newState.ball.dx * timeToReachPaddle);
+
+              // Account for ball bouncing off walls
+              if (predictedX < 0) {
+                predictedX = Math.abs(predictedX);
+              } else if (predictedX > canvasSize.width) {
+                predictedX = canvasSize.width - (predictedX - canvasSize.width);
+              }
+            }
+
+            const inaccuracy = (Math.random() - 0.5) * 8; // Slight inaccuracy
+            const predictionError = Math.random() < 0.05 ? (Math.random() - 0.5) * 15 : 0; // Rare prediction errors
+
             const targetX = Math.max(
               paddle.width / 2,
               Math.min(
                 canvasSize.width - paddle.width / 2,
-                ballCenterX - paddle.width / 2 + inaccuracy + predictionError
+                predictedX - paddle.width / 2 + inaccuracy + predictionError
               )
             );
             paddle.targetX = targetX;
           }
 
-          // Movement towards target with some acceleration/deceleration
-          const distanceToTarget = paddle.targetX - paddle.x;
-          const maxSpeed = paddle.speed;
+          // Smart AI logic adapted for horizontal movement
+          const distance = paddle.targetX - paddle.x;
+          const direction = Math.sign(distance);
+          const ballDistance = Math.abs(newState.ball.y - (isTopPaddle ? 0 : canvasSize.height)); // Distance from edge
+          const isPanicSituation = ballDistance < 300;
+          const currentPaddleCenter = paddle.x + paddle.width / 2;
+          const ballPaddleDistance = Math.abs(ballCenterX - currentPaddleCenter);
+          const ballHeadingTowardsPaddle = isTopPaddle ? newState.ball.dy < 0 : newState.ball.dy > 0; // Ball heading toward paddle
+          const isEmergencyPanic = ballHeadingTowardsPaddle && ballDistance < 150 && ballPaddleDistance > 30;
 
-          if (Math.abs(distanceToTarget) > 2) {
-            const acceleration = Math.sign(distanceToTarget) * 0.8;
-            paddle.velocity += acceleration;
+          if (isEmergencyPanic) {
+            const extremePanicDirection = Math.sign(ballCenterX - currentPaddleCenter);
+            paddle.velocity = extremePanicDirection * paddle.speed * EXTREME_PANIC_MULTIPLIER * 2;
+          } else if (Math.abs(distance) > 25) {
+            paddle.velocity += direction * PADDLE_ACCELERATION * 3.0;
+          } else if (Math.abs(distance) > 8) {
+            paddle.velocity += direction * PADDLE_ACCELERATION * 1.2;
           } else {
-            paddle.velocity *= 0.85; // Deceleration
+            paddle.velocity *= 0.5;
           }
 
-          // Apply speed limits and update position
+          paddle.velocity *= PADDLE_FRICTION * 0.95;
+          const maxSpeed = paddle.speed * 0.9;
           paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
           paddle.x += paddle.velocity;
           paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
         };
 
         if (newState.paddles.top) {
-          updateHorizontalPaddleWithAI(newState.paddles.top, topFrameCountRef.current);
+          updateHorizontalPaddleWithAI(newState.paddles.top, topFrameCountRef.current, true);
+
+          // Add trail tracking for top paddle AI movement
+          if (Math.abs(newState.paddles.top.velocity) > 0.01) {
+            newState.trails.topPaddle.push({
+              x: newState.paddles.top.x + newState.paddles.top.width / 2,
+              y: 30 + newState.paddles.top.height / 2, // 30px spacing from top wall
+              timestamp: now,
+              width: newState.paddles.top.width,
+              height: newState.paddles.top.height
+            });
+          }
         }
         if (newState.paddles.bottom) {
-          updateHorizontalPaddleWithAI(newState.paddles.bottom, bottomFrameCountRef.current);
+          updateHorizontalPaddleWithAI(newState.paddles.bottom, bottomFrameCountRef.current, false);
+
+          // Add trail tracking for bottom paddle AI movement
+          if (Math.abs(newState.paddles.bottom.velocity) > 0.01) {
+            newState.trails.bottomPaddle.push({
+              x: newState.paddles.bottom.x + newState.paddles.bottom.width / 2,
+              y: canvasSize.height - 30 - newState.paddles.bottom.height / 2, // 30px spacing from bottom wall
+              timestamp: now,
+              width: newState.paddles.bottom.width,
+              height: newState.paddles.bottom.height
+            });
+          }
         }
       } else if (newState.gameMode === 'multiplayer') {
         console.log('🎮 MULTIPLAYER MODE - Player side:', multiplayerState.playerSide);
@@ -1628,7 +1827,6 @@ const Pong404: React.FC = () => {
 
           // Add left paddle trail point
           if (Math.abs(newState.paddles.left.velocity) > 0.01) {
-            console.log('Adding left paddle trail:', newState.paddles.left.velocity);
             newState.trails.leftPaddle.push({
               x: 12 + newState.paddles.left.width / 2, // Paddle center X
               y: newState.paddles.left.y + newState.paddles.left.height / 2,
@@ -1765,40 +1963,71 @@ const Pong404: React.FC = () => {
         }
 
         // Add AI for top and bottom paddles when no players are assigned to them
-        console.log('🤖 Checking AI for top/bottom paddles in multiplayer mode');
-        console.log('  - Player side:', multiplayerState.playerSide);
-        console.log('  - Top paddle exists:', !!newState.paddles.top);
-        console.log('  - Bottom paddle exists:', !!newState.paddles.bottom);
 
         // AI logic for horizontal paddles (copied from auto mode)
         topFrameCountRef.current++;
         bottomFrameCountRef.current++;
         const ballCenterX = newState.ball.x + newState.ball.size / 2;
 
-        const updateHorizontalPaddleWithAI = (paddle: any, frameCount: number) => {
-          const reactionDelay = HUMAN_REACTION_DELAY + 3;
+        const updateHorizontalPaddleWithAI = (paddle: any, frameCount: number, isTopPaddle: boolean) => {
+          const reactionDelay = HUMAN_REACTION_DELAY;
           if (frameCount % reactionDelay === 0) {
-            const inaccuracy = (Math.random() - 0.5) * 18;
-            const predictionError = Math.random() < 0.3 ? (Math.random() - 0.5) * 30 : 0;
+            // Calculate where ball will be when it reaches paddle's Y position
+            const paddleY = isTopPaddle ? 30 + paddle.height : canvasSize.height - 30 - paddle.height;
+            const ballToleranceY = isTopPaddle ? 100 : -100; // Give more prediction range
+            const targetY = paddleY + ballToleranceY;
+
+            // Calculate time for ball to reach paddle Y position
+            let predictedX = ballCenterX;
+
+            if (Math.abs(newState.ball.dy) > 0.1) {
+              const timeToReachPaddle = Math.abs((targetY - newState.ball.y) / newState.ball.dy);
+              predictedX = newState.ball.x + (newState.ball.dx * timeToReachPaddle);
+
+              // Account for ball bouncing off walls
+              if (predictedX < 0) {
+                predictedX = Math.abs(predictedX);
+              } else if (predictedX > canvasSize.width) {
+                predictedX = canvasSize.width - (predictedX - canvasSize.width);
+              }
+            }
+
+            const inaccuracy = (Math.random() - 0.5) * 8; // Slight inaccuracy
+            const predictionError = Math.random() < 0.05 ? (Math.random() - 0.5) * 15 : 0; // Rare prediction errors
+
             const targetX = Math.max(
               paddle.width / 2,
               Math.min(
                 canvasSize.width - paddle.width / 2,
-                ballCenterX - paddle.width / 2 + inaccuracy + predictionError
+                predictedX - paddle.width / 2 + inaccuracy + predictionError
               )
             );
             paddle.targetX = targetX;
           }
-          // Movement towards target with some acceleration/deceleration
-          const distanceToTarget = paddle.targetX - paddle.x;
-          const maxSpeed = paddle.speed;
-          if (Math.abs(distanceToTarget) > 2) {
-            const acceleration = Math.sign(distanceToTarget) * 0.8;
-            paddle.velocity += acceleration;
+
+          // Smart AI logic adapted for horizontal movement
+          const distance = paddle.targetX - paddle.x;
+          const direction = Math.sign(distance);
+          const ballDistance = Math.abs(newState.ball.y - (isTopPaddle ? 0 : canvasSize.height)); // Distance from edge
+          const isPanicSituation = ballDistance < 300;
+          const currentPaddleCenter = paddle.x + paddle.width / 2;
+          const ballPaddleDistance = Math.abs(ballCenterX - currentPaddleCenter);
+          const ballHeadingTowardsPaddle = isTopPaddle ? newState.ball.dy < 0 : newState.ball.dy > 0; // Ball heading toward paddle
+          const isEmergencyPanic = ballHeadingTowardsPaddle && ballDistance < 150 && ballPaddleDistance > 30;
+
+          if (isEmergencyPanic) {
+            const extremePanicDirection = Math.sign(ballCenterX - currentPaddleCenter);
+            paddle.velocity = extremePanicDirection * paddle.speed * EXTREME_PANIC_MULTIPLIER * 2;
+          } else if (Math.abs(distance) > 25) {
+            paddle.velocity += direction * PADDLE_ACCELERATION * 3.0;
+          } else if (Math.abs(distance) > 8) {
+            paddle.velocity += direction * PADDLE_ACCELERATION * 1.2;
           } else {
-            paddle.velocity *= 0.85; // Deceleration
+            paddle.velocity *= 0.5;
           }
-          // Apply speed limits and update position
+
+          paddle.velocity *= PADDLE_FRICTION * 0.95;
+          const maxSpeed = paddle.speed * 0.9;
           paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
           paddle.x += paddle.velocity;
           paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
@@ -1806,12 +2035,10 @@ const Pong404: React.FC = () => {
 
         // Apply AI to top paddle (only if no player is controlling it)
         if (newState.paddles.top && multiplayerState.playerSide !== 'top') {
-          console.log('🤖 Running AI for TOP paddle');
-          updateHorizontalPaddleWithAI(newState.paddles.top, topFrameCountRef.current);
+          updateHorizontalPaddleWithAI(newState.paddles.top, topFrameCountRef.current, true);
 
           // Add trail tracking for top paddle AI movement
           if (Math.abs(newState.paddles.top.velocity) > 0.01) {
-            console.log('Adding top paddle trail from AI:', newState.paddles.top.velocity);
             newState.trails.topPaddle.push({
               x: newState.paddles.top.x + newState.paddles.top.width / 2,
               y: 30 + newState.paddles.top.height / 2, // 30px spacing from top wall
@@ -1824,12 +2051,10 @@ const Pong404: React.FC = () => {
 
         // Apply AI to bottom paddle (only if no player is controlling it)
         if (newState.paddles.bottom && multiplayerState.playerSide !== 'bottom') {
-          console.log('🤖 Running AI for BOTTOM paddle');
-          updateHorizontalPaddleWithAI(newState.paddles.bottom, bottomFrameCountRef.current);
+          updateHorizontalPaddleWithAI(newState.paddles.bottom, bottomFrameCountRef.current, false);
 
           // Add trail tracking for bottom paddle AI movement
           if (Math.abs(newState.paddles.bottom.velocity) > 0.01) {
-            console.log('Adding bottom paddle trail from AI:', newState.paddles.bottom.velocity);
             newState.trails.bottomPaddle.push({
               x: newState.paddles.bottom.x + newState.paddles.bottom.width / 2,
               y: canvasSize.height - 30 - newState.paddles.bottom.height / 2, // 30px spacing from bottom wall
@@ -2159,13 +2384,15 @@ const Pong404: React.FC = () => {
           timestamp: now
         });
 
-        // Clean old trail points (keep last 500ms)
+        // Clean old trail points (keep last 500ms for ball, 400ms for paddles)
         newState.trails.ball = newState.trails.ball.filter(point => now - point.timestamp < 500);
         newState.trails.leftPaddle = newState.trails.leftPaddle.filter(point => now - point.timestamp < 400);
         newState.trails.rightPaddle = newState.trails.rightPaddle.filter(point => now - point.timestamp < 400);
+        newState.trails.topPaddle = newState.trails.topPaddle.filter(point => now - point.timestamp < 400);
+        newState.trails.bottomPaddle = newState.trails.bottomPaddle.filter(point => now - point.timestamp < 400);
 
         // Handle pickup spawning (max 3 simultaneous pickups)
-        if (newState.pickups.length < 3 && Date.now() >= newState.nextPickupTime) {
+        if (newState.pickups && newState.pickups.length < 3 && Date.now() >= newState.nextPickupTime) {
           newState.pickups.push(createPickup());
           newState.nextPickupTime = Date.now() + Math.random() * 8000 + 4000; // 4-12 seconds
         }
@@ -2186,6 +2413,13 @@ const Pong404: React.FC = () => {
 
           if (distance < (newState.ball.size / 2 + pickup.size / 2)) {
             applyPickupEffect(pickup, newState);
+
+            // Announce the pickup with speech synthesis
+            const pickupData = PICKUP_TYPES.find(p => p.type === pickup.type);
+            if (pickupData) {
+              setTimeout(() => speakRobotic(pickupData.description), 100);
+            }
+
             newState.pickups.splice(i, 1); // Remove this pickup
 
             // Change colors on pickup!
@@ -2241,12 +2475,12 @@ const Pong404: React.FC = () => {
         const leftPaddleX = 30; // 30px spacing from left wall
         const leftPaddleRight = leftPaddleX + newState.paddles.left.width;
 
-        // Check if ball is intersecting with left paddle
+        // Check if ball is intersecting with left paddle (with collision buffer)
         const ballIntersectsLeftPaddle =
-          ballLeft <= leftPaddleRight &&
-          ballRight >= leftPaddleX &&
-          ballBottom >= newState.paddles.left.y &&
-          ballTop <= newState.paddles.left.y + newState.paddles.left.height;
+          ballLeft <= leftPaddleRight + COLLISION_BUFFER &&
+          ballRight >= leftPaddleX - COLLISION_BUFFER &&
+          ballBottom >= newState.paddles.left.y - COLLISION_BUFFER &&
+          ballTop <= newState.paddles.left.y + newState.paddles.left.height + COLLISION_BUFFER;
 
         // Check if ball came from the right side (proper collision)
         const ballCameFromRight = prevBallX > leftPaddleRight;
@@ -2354,15 +2588,16 @@ const Pong404: React.FC = () => {
           const topPaddleY = 30; // 30px spacing from top wall
           const topPaddleBottom = topPaddleY + newState.paddles.top.height;
 
-        // Check if ball is intersecting with top paddle
+        // Check if ball is intersecting with top paddle (with collision buffer)
         const ballIntersectsTopPaddle =
-          ballTop <= topPaddleBottom &&
-          ballBottom >= topPaddleY &&
-          ballRight >= newState.paddles.top.x &&
-          ballLeft <= newState.paddles.top.x + newState.paddles.top.width;
+          ballTop <= topPaddleBottom + COLLISION_BUFFER &&
+          ballBottom >= topPaddleY - COLLISION_BUFFER &&
+          ballRight >= newState.paddles.top.x - COLLISION_BUFFER &&
+          ballLeft <= newState.paddles.top.x + newState.paddles.top.width + COLLISION_BUFFER;
 
         // Check if ball came from below (proper collision)
         const ballCameFromBelow = prevBallY > topPaddleBottom;
+
 
         if (ballIntersectsTopPaddle && ballCameFromBelow && newState.ball.dy < 0) {
           // Calculate where on the paddle the ball hit (0 = left edge, 1 = right edge, 0.5 = center)
@@ -2411,15 +2646,16 @@ const Pong404: React.FC = () => {
         const bottomPaddleY = canvasSize.height - 30 - newState.paddles.bottom.height; // 30px spacing from bottom wall
         const bottomPaddleTop = bottomPaddleY;
 
-        // Check if ball is intersecting with bottom paddle
+        // Check if ball is intersecting with bottom paddle (with collision buffer)
         const ballIntersectsBottomPaddle =
-          ballBottom >= bottomPaddleTop &&
-          ballTop <= bottomPaddleY + newState.paddles.bottom.height &&
-          ballRight >= newState.paddles.bottom.x &&
-          ballLeft <= newState.paddles.bottom.x + newState.paddles.bottom.width;
+          ballBottom >= bottomPaddleTop - COLLISION_BUFFER &&
+          ballTop <= bottomPaddleY + newState.paddles.bottom.height + COLLISION_BUFFER &&
+          ballRight >= newState.paddles.bottom.x - COLLISION_BUFFER &&
+          ballLeft <= newState.paddles.bottom.x + newState.paddles.bottom.width + COLLISION_BUFFER;
 
         // Check if ball came from above (proper collision)
         const ballCameFromAbove = prevBallY < bottomPaddleTop;
+
 
         if (ballIntersectsBottomPaddle && ballCameFromAbove && newState.ball.dy > 0) {
           // Calculate where on the paddle the ball hit (0 = left edge, 1 = right edge, 0.5 = center)
@@ -2495,13 +2731,18 @@ const Pong404: React.FC = () => {
           newState.score[scoringPlayer]++;
           clearAllPickupEffects(newState);
 
-          // Check for winner (first to 3)
-          if (newState.score[scoringPlayer] >= 3) {
+          // Removed score announcements to reduce audio spam
+
+          // Check for winner (first to 11)
+          if (newState.score[scoringPlayer] >= 11) {
             console.log('🏆 WINNER DETECTED:', scoringPlayer, 'with score:', newState.score[scoringPlayer]);
             newState.winner = scoringPlayer;
             newState.gameEnded = true;
             newState.isPlaying = false;
             console.log('🏆 Game state after winner:', { winner: newState.winner, gameEnded: newState.gameEnded, isPlaying: newState.isPlaying });
+
+            // Classic Berzerk-style victory announcement
+            setTimeout(() => speakRobotic(`${scoringPlayer.toUpperCase()} PLAYER WINS THE GAME`), 800);
 
             // Epic victory rumble effect!
             newState.rumbleEffect.isActive = true;
@@ -2576,7 +2817,7 @@ const Pong404: React.FC = () => {
 
       return newState;
     });
-  }, [keys, playMelodyNote, canvasSize, multiplayerState.isGameMaster, updateGameState, localTestMode, multiplayerState.playerSide, updatePaddlePosition, multiplayerState, mouseY, touchY, controlSide, createPickup, applyPickupEffect, updateEffects, initializeAudio]);
+  }, [keys, playMelodyNote, canvasSize, multiplayerState.isGameMaster, updateGameState, localTestMode, multiplayerState.playerSide, updatePaddlePosition, multiplayerState, mouseY, touchY, controlSide, createPickup, applyPickupEffect, updateEffects, initializeAudio, speakRobotic]);
 
   // Handle keyboard input
   useEffect(() => {
@@ -2641,6 +2882,19 @@ const Pong404: React.FC = () => {
         case ' ':
           e.preventDefault();
 
+          // Check if showing start screen - transition to gameplay
+          if (gameState.showStartScreen) {
+            setGameState(prev => ({
+              ...prev,
+              showStartScreen: false,
+              isPlaying: true,
+              gameMode: 'player'
+            }));
+            // Classic Berzerk-style game start announcement
+            setTimeout(() => speakRobotic('GAME START'), 500);
+            return;
+          }
+
           // Check if game has ended - restart if so
           if (gameState.gameEnded) {
             // Reset game state for new game
@@ -2650,7 +2904,16 @@ const Pong404: React.FC = () => {
                 y: canvasSize.height / 2,
                 dx: BALL_SPEED * (Math.random() > 0.5 ? 1 : -1),
                 dy: BALL_SPEED * (Math.random() > 0.5 ? 1 : -1),
-                size: 12
+                size: 12,
+                originalSize: 12,
+                isDrunk: false,
+                drunkAngle: 0,
+                isTeleporting: false,
+                lastTeleportTime: 0,
+                stuckCheckStartTime: 0,
+                stuckCheckStartX: 0,
+                lastTouchedBy: null,
+                previousTouchedBy: null,
               },
               paddles: {
                 left: { y: 250, height: 100, width: 12, speed: 32, velocity: 0, targetY: 250, originalHeight: 100 },
@@ -2659,17 +2922,21 @@ const Pong404: React.FC = () => {
                 bottom: { x: 350, height: 12, width: 100, speed: 32, velocity: 0, targetX: 350, originalWidth: 100 }
               },
               score: { left: 0, right: 0, top: 0, bottom: 0 },
-              isPlaying: true,
+              isPlaying: false,
               gameMode: 'auto',
               colorIndex: 0,
               isPaused: false,
               pauseEndTime: 0,
               winner: null,
               gameEnded: false,
+              showStartScreen: true,
               rumbleEffect: { isActive: false, startTime: 0, intensity: 0 },
               pickupEffect: { isActive: false, startTime: 0, x: 0, y: 0 },
               decrunchEffect: { isActive: false, startTime: 0, duration: 0 },
               activeEffects: [],
+              pickups: [],
+              coins: [],
+              nextPickupTime: Date.now() + Math.random() * 10000 + 5000,
               trails: { ball: [], leftPaddle: [], rightPaddle: [], topPaddle: [], bottomPaddle: [] }
             });
 
@@ -2983,6 +3250,46 @@ const Pong404: React.FC = () => {
     ctx.fillStyle = currentColors.background;
     ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
+    // 🚀 START SCREEN
+    if (gameState.showStartScreen) {
+      // Main title
+      ctx.fillStyle = currentColors.foreground;
+      ctx.font = 'bold 48px "Press Start 2P", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('4-PLAYER PONG', canvasSize.width / 2, canvasSize.height / 2 - 200);
+
+      // Controls section
+      ctx.font = 'bold 24px "Press Start 2P", monospace';
+      ctx.fillText('CONTROLS', canvasSize.width / 2, canvasSize.height / 2 - 120);
+
+      ctx.font = '16px "Press Start 2P", monospace';
+      const controlsY = canvasSize.height / 2 - 80;
+
+      // Player controls
+      ctx.textAlign = 'left';
+      ctx.fillText('PLAYER 1 (LEFT): W/S KEYS', canvasSize.width / 2 - 300, controlsY);
+      ctx.fillText('PLAYER 2 (RIGHT): ↑/↓ KEYS', canvasSize.width / 2 - 300, controlsY + 30);
+      ctx.fillText('PLAYER 3 (TOP): A/D KEYS', canvasSize.width / 2 - 300, controlsY + 60);
+      ctx.fillText('PLAYER 4 (BOTTOM): ←/→ KEYS', canvasSize.width / 2 - 300, controlsY + 90);
+
+      // Options
+      ctx.fillText('OPTIONS:', canvasSize.width / 2 - 300, controlsY + 140);
+      ctx.fillText('C - TOGGLE CRT EFFECT', canvasSize.width / 2 - 300, controlsY + 170);
+      ctx.fillText('M - TOGGLE MUSIC', canvasSize.width / 2 - 300, controlsY + 200);
+
+      // Start instructions
+      ctx.font = 'bold 20px "Press Start 2P", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('PRESS SPACEBAR TO START', canvasSize.width / 2, canvasSize.height / 2 + 150);
+
+      // Footer with CRT status
+      ctx.font = '14px "Press Start 2P", monospace';
+      ctx.fillText(`CRT EFFECT: ${crtEffect ? 'ON' : 'OFF'}`, canvasSize.width / 2, canvasSize.height / 2 + 200);
+
+      return; // Don't render game elements when showing start screen
+    }
+
     // Draw playfield borders - thick as paddles - using dynamic color
     // Inset borders by half the line width so they're fully visible
     ctx.strokeStyle = currentColors.foreground;
@@ -3005,7 +3312,7 @@ const Pong404: React.FC = () => {
     ctx.stroke();
 
 
-    // Draw comet trails first (behind everything)
+    // Draw comet trails first (behind everything) - enhanced in spectator mode
     const currentTime = Date.now();
 
     // Draw ball trail
@@ -3016,7 +3323,9 @@ const Pong404: React.FC = () => {
         const alpha = Math.max(0, 1 - (age / 500)); // Fade over 500ms
 
         if (alpha > 0) {
-          ctx.globalAlpha = alpha * 0.6; // Make trails semi-transparent
+          // Ball trail visibility - hardly visible
+          const ballTrailOpacity = 0.04;
+          ctx.globalAlpha = alpha * ballTrailOpacity;
           ctx.fillStyle = currentColors.foreground;
 
           // Decrease size based on age for comet effect
@@ -3034,16 +3343,16 @@ const Pong404: React.FC = () => {
     // Draw paddle trails
     const renderVerticalPaddleTrail = (trail: TrailPoint[], paddleX: number) => {
       if (trail.length > 1) {
-        console.log('renderVerticalPaddleTrail: trail length =', trail.length);
         for (let i = 0; i < trail.length - 1; i++) {
           const point = trail[i];
           const age = currentTime - point.timestamp;
           const alpha = Math.max(0, 1 - (age / 1500)); // Fade over 1500ms
 
-          console.log('Trail point', i, '- age:', age, 'alpha:', alpha, 'point:', point);
 
           if (alpha > 0 && point.width && point.height) {
-            ctx.globalAlpha = alpha * 0.02; // Make paddle trails barely visible
+            // Paddle trail visibility - hardly visible
+            const paddleTrailOpacity = 0.03;
+            ctx.globalAlpha = alpha * paddleTrailOpacity;
             ctx.fillStyle = currentColors.foreground;
 
             // Keep full thickness for newer trails, then gradually thin out
@@ -3051,7 +3360,6 @@ const Pong404: React.FC = () => {
             const trailWidth = point.width * thicknessFactor;
             const trailHeight = point.height * thicknessFactor;
 
-            console.log('Drawing trail rect at:', paddleX - trailWidth / 2, point.y - trailHeight / 2, trailWidth, trailHeight);
 
             ctx.fillRect(
               paddleX - trailWidth / 2,
@@ -3072,7 +3380,9 @@ const Pong404: React.FC = () => {
           const alpha = Math.max(0, 1 - (age / 1500)); // Fade over 1500ms
 
           if (alpha > 0 && point.width && point.height) {
-            ctx.globalAlpha = alpha * 0.02; // Make paddle trails barely visible
+            // Paddle trail visibility - hardly visible
+            const paddleTrailOpacity = 0.03;
+            ctx.globalAlpha = alpha * paddleTrailOpacity;
             ctx.fillStyle = currentColors.foreground;
 
             // Keep full thickness for newer trails, then gradually thin out
@@ -3093,7 +3403,6 @@ const Pong404: React.FC = () => {
 
     // Render left and right paddle trails (vertical paddles)
     if (gameState.trails.leftPaddle.length > 0) {
-      console.log('Rendering left paddle trail with', gameState.trails.leftPaddle.length, 'points');
     }
     renderVerticalPaddleTrail(gameState.trails.leftPaddle, 30 + gameState.paddles.left.width / 2);
     renderVerticalPaddleTrail(gameState.trails.rightPaddle, canvasSize.width - 30 - gameState.paddles.right.width / 2);
@@ -3124,16 +3433,10 @@ const Pong404: React.FC = () => {
 
     // Draw top and bottom paddles (horizontal) - only if they exist
     if (gameState.paddles.top) {
-      console.log('🎾 Drawing TOP paddle:', { x: gameState.paddles.top.x, y: topPaddleY, width: gameState.paddles.top.width, height: gameState.paddles.top.height });
       ctx.fillRect(gameState.paddles.top.x, topPaddleY, gameState.paddles.top.width, gameState.paddles.top.height);
-    } else {
-      console.log('❌ TOP paddle does not exist in gameState', gameState.paddles);
     }
     if (gameState.paddles.bottom) {
-      console.log('🎾 Drawing BOTTOM paddle:', { x: gameState.paddles.bottom.x, y: bottomPaddleY, width: gameState.paddles.bottom.width, height: gameState.paddles.bottom.height });
       ctx.fillRect(gameState.paddles.bottom.x, bottomPaddleY, gameState.paddles.bottom.width, gameState.paddles.bottom.height);
-    } else {
-      console.log('❌ BOTTOM paddle does not exist in gameState', gameState.paddles);
     }
 
     // Draw ball - using dynamic color (hide during pause)
@@ -3153,7 +3456,7 @@ const Pong404: React.FC = () => {
     }
 
     // Draw pickups if they exist
-    gameState.pickups.forEach((pickup) => {
+    gameState.pickups?.forEach((pickup) => {
       const time = Date.now() * 0.005;
       const pulse = 0.8 + Math.sin(time) * 0.2; // Pulsing effect
 
@@ -3456,20 +3759,11 @@ const Pong404: React.FC = () => {
     // Bottom player score (center, bottom)
     ctx.fillText(bottomScore, canvasSize.width / 2, bottomScoreY);
 
-    // 🏆 EPIC WINNER ANNOUNCEMENT! 🏆
+    // 🏆 WINNER ANNOUNCEMENT 🏆
     if (gameState.gameEnded && gameState.winner) {
-      const now = Date.now();
-
-      // Animated background flash - monochrome white
-      const flashIntensity = Math.sin(now * 0.01) * 0.3 + 0.7; // Pulsing between 0.4 and 1.0
-      ctx.fillStyle = `rgba(255, 255, 255, ${flashIntensity * 0.15})`; // White flash
-      ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
-
-      // Main winner text with scaling animation
-      const scaleAnimation = Math.sin(now * 0.008) * 0.2 + 1.2; // Scale between 1.0 and 1.4
+      // Static winner display without animations
       ctx.save();
       ctx.translate(canvasSize.width / 2, canvasSize.height / 2);
-      ctx.scale(scaleAnimation, scaleAnimation);
 
       // Winner announcement - monochrome white, no outline
       ctx.fillStyle = '#ffffff';
@@ -3483,7 +3777,7 @@ const Pong404: React.FC = () => {
       // Victory subtitle - monochrome white, no outline
       ctx.font = 'bold 32px "Press Start 2P", monospace';
       ctx.fillStyle = '#ffffff';
-      ctx.fillText('FIRST TO 3!', 0, 20);
+      ctx.fillText('FIRST TO 11!', 0, 20);
 
       // Victory score display - monochrome white, no outline
       ctx.font = 'bold 24px "Press Start 2P", monospace';
@@ -3493,54 +3787,23 @@ const Pong404: React.FC = () => {
 
       ctx.restore();
 
-      // Retro pixel confetti around the winner text - monochrome
-      for (let i = 0; i < 30; i++) {
-        const angle = (now * 0.003 + i * 12) % 360;
-        const radius = 120 + Math.sin(now * 0.002 + i) * 60;
-        const confettiX = canvasSize.width / 2 + Math.cos(angle * Math.PI / 180) * radius;
-        const confettiY = canvasSize.height / 2 + Math.sin(angle * Math.PI / 180) * radius;
-
-        // Pixel-perfect confetti - use various square sizes
-        const pixelSize = 8 + (i % 3) * 4; // 8px, 12px, or 16px squares
-
-        // Monochrome confetti with varying opacity/brightness
-        const brightness = 70 + (i % 4) * 20; // Varying brightness: 70%, 90%, 110%, 130%
-
-        // Main square pixel - white with varying brightness
-        ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(brightness / 100, 1.0)})`;
-        ctx.fillRect(Math.floor(confettiX), Math.floor(confettiY), pixelSize, pixelSize);
-
-        // Add smaller accent pixels for 8-bit effect
-        if (pixelSize >= 12) {
-          ctx.fillStyle = `rgba(255, 255, 255, ${Math.min((brightness + 20) / 100, 1.0)})`;
-          ctx.fillRect(Math.floor(confettiX) + 2, Math.floor(confettiY) + 2, 4, 4);
-        }
-
-        // Falling pixel effect (slower, more controlled) - also monochrome
-        const fallOffset = (now * 0.001 + i) % 100;
-        const fallX = confettiX + Math.sin(now * 0.002 + i) * 20;
-        const fallY = (confettiY + fallOffset) % canvasSize.height;
-
-        ctx.fillStyle = `rgba(255, 255, 255, ${Math.min((brightness - 10) / 100, 0.8)})`;
-        ctx.fillRect(Math.floor(fallX), Math.floor(fallY), 6, 6);
-      }
 
       // Continue button prompt - monochrome
       ctx.font = 'bold 16px "Press Start 2P", monospace';
       ctx.fillStyle = '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
-      const blinkFactor = Math.sin(now * 0.005) > 0 ? 1 : 0.3;
-      ctx.globalAlpha = blinkFactor;
       ctx.fillText('PRESS SPACEBAR TO PLAY AGAIN', canvasSize.width / 2, canvasSize.height - 50);
-      ctx.globalAlpha = 1;
     }
 
-    // Draw active effects status
+    // Draw active effects status with live countdown and robot voice announcements
     if (gameState.activeEffects.length > 0) {
       ctx.font = 'bold 20px "Press Start 2P", monospace';
       ctx.fillStyle = currentColors.foreground;
       ctx.textAlign = 'center';
+
+      // Track countdown changes for robot voice announcements
+      const newCountdowns: {[effectType: string]: number} = {};
 
       gameState.activeEffects.forEach((effect, index) => {
         const remaining = Math.ceil((effect.duration - (Date.now() - effect.startTime)) / 1000);
@@ -3548,10 +3811,23 @@ const Pong404: React.FC = () => {
           const pickupData = PICKUP_TYPES.find(p => p.type === effect.type);
           if (pickupData) {
             const yPos = 150 + (index * 30);
-            ctx.fillText(`${pickupData.description} ${remaining}s`, canvasSize.width / 2, yPos);
+            ctx.fillText(`${pickupData.description} ${remaining}`, canvasSize.width / 2, yPos);
+
+            // Track this countdown
+            newCountdowns[effect.type] = remaining;
+
+            // Check if countdown changed and announce it
+            const previousValue = previousCountdowns[effect.type];
+            if (previousValue !== remaining && remaining <= 5 && remaining > 0) {
+              // Announce countdown for last 5 seconds
+              setTimeout(() => speakRobotic(remaining.toString()), 50);
+            }
           }
         }
       });
+
+      // Update previous countdowns
+      setPreviousCountdowns(newCountdowns);
     }
 
     // Add on-screen text overlays
@@ -3644,35 +3920,7 @@ const Pong404: React.FC = () => {
           ctx.fillText('❌ CONNECTION FAILED', canvasSize.width / 2, canvasSize.height - 80);
           ctx.fillText('Press SPACEBAR to retry', canvasSize.width / 2, canvasSize.height - 60);
         } else if (connectionStatus === 'connected' || multiplayerState.isConnected) {
-          // Use the latest state from ref to handle React timing issues
-          const currentMultiplayerState = latestMultiplayerStateRef.current;
-
-          // Only log if there's a state mismatch (debugging timing issues)
-          if (currentMultiplayerState.playerSide !== multiplayerState.playerSide) {
-          }
-
-          const playerSideText = currentMultiplayerState.playerSide === 'spectator'
-            ? 'SPECTATING'
-            : `YOU: ${currentMultiplayerState.playerSide.toUpperCase()} PADDLE`;
-
-          ctx.fillText('MULTIPLAYER MODE', canvasSize.width / 2, canvasSize.height - 100);
-          ctx.fillText(playerSideText, canvasSize.width / 2, canvasSize.height - 80);
-
-          if (currentMultiplayerState.playerSide !== 'spectator') {
-            const controls = localTestMode
-              ? 'A/D = left paddle, ↑/↓ = right paddle'
-              : currentMultiplayerState.playerSide === 'left'
-                ? 'W/S keys OR hover mouse'
-                : '↑/↓ arrows OR hover mouse';
-            ctx.fillText(`Controls: ${controls}`, canvasSize.width / 2, canvasSize.height - 60);
-          }
-
-          if (localTestMode) {
-            ctx.fillText('LOCAL TEST MODE - Press L to toggle', canvasSize.width / 2, canvasSize.height - 40);
-          } else {
-            ctx.fillText('Press L for local test mode', canvasSize.width / 2, canvasSize.height - 40);
-          }
-          ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
+          // Connection status display only
         } else {
           ctx.fillText('CONNECTING...', canvasSize.width / 2, canvasSize.height - 60);
         }
@@ -3681,29 +3929,20 @@ const Pong404: React.FC = () => {
         ctx.fillStyle = currentColors.foreground;
       }
 
-      // Spacebar instruction
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 10px "Press Start 2P", monospace';
-      ctx.fillText('Press SPACEBAR to return to auto-play', canvasSize.width / 2, canvasSize.height - 20);
-    } else {
-      // Player mode controls
-      ctx.textAlign = 'left';
-      ctx.font = 'bold 12px "Press Start 2P", monospace';
+      // Always show spectator/player status when connected (outside of fade)
+      if (connectionStatus === 'connected' || multiplayerState.isConnected) {
+        const currentMultiplayerState = latestMultiplayerStateRef.current;
+        const playerSideText = currentMultiplayerState.playerSide === 'spectator'
+          ? 'SPECTATING'
+          : `YOU: ${currentMultiplayerState.playerSide.toUpperCase()} PADDLE`;
 
-      // Left side controls (AI)
-      ctx.fillText('AI Opponent:', 30, canvasSize.height - 60);
-      ctx.fillText('Computer controlled', 30, canvasSize.height - 40);
+        ctx.fillStyle = currentColors.foreground;
+        ctx.textAlign = 'center';
+        ctx.font = 'bold 12px "Press Start 2P", monospace';
+        ctx.fillText('MULTIPLAYER MODE', canvasSize.width / 2, canvasSize.height - 100);
+        ctx.fillText(playerSideText, canvasSize.width / 2, canvasSize.height - 80);
+      }
 
-      // Right side controls (player)
-      ctx.textAlign = 'right';
-      ctx.fillText('Player:', canvasSize.width - 30, canvasSize.height - 60);
-      ctx.fillText('↑/↓ arrows OR mouse', canvasSize.width - 30, canvasSize.height - 40);
-
-      // Center instruction
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 10px "Press Start 2P", monospace';
-      ctx.fillText('Press SPACEBAR to return to auto-play', canvasSize.width / 2, canvasSize.height - 40);
-      ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
     }
 
     // Apply CRT shader effect (if enabled) - but only do expensive pixel distortion occasionally
@@ -3721,8 +3960,8 @@ const Pong404: React.FC = () => {
 
   // High-performance 60fps game loop
   useEffect(() => {
-    // Continue running if game is playing OR if there's a winner to display
-    if (!gameState.isPlaying && !(gameState.gameEnded && gameState.winner)) return;
+    // Continue running if game is playing OR if there's a winner to display OR showing start screen
+    if (!gameState.isPlaying && !(gameState.gameEnded && gameState.winner) && !gameState.showStartScreen) return;
 
     let lastTime = 0;
 
@@ -3751,7 +3990,7 @@ const Pong404: React.FC = () => {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [gameState.isPlaying, updateGame, render]);
+  }, [gameState.isPlaying, gameState.showStartScreen, updateGame, render]);
 
 
   // Prevent React strict mode from causing duplicate WebSocket connections
