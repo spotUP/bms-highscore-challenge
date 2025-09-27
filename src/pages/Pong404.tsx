@@ -243,10 +243,10 @@ const Pong404: React.FC = () => {
       previousTouchedBy: null,
     },
     paddles: {
-      left: { y: Math.max(0, Math.min(canvasSize.height - 80, canvasSize.height / 2 - 40)), height: 80, width: 12, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(0, Math.min(canvasSize.height - 80, canvasSize.height / 2 - 40)), originalHeight: 80 },
-      right: { y: Math.max(0, Math.min(canvasSize.height - 80, canvasSize.height / 2 - 40)), height: 80, width: 12, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(0, Math.min(canvasSize.height - 80, canvasSize.height / 2 - 40)), originalHeight: 80 },
-      top: { x: Math.max(0, Math.min(canvasSize.width - 80, canvasSize.width / 2 - 40)), height: 12, width: 80, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(0, Math.min(canvasSize.width - 80, canvasSize.width / 2 - 40)), originalWidth: 80 },
-      bottom: { x: Math.max(0, Math.min(canvasSize.width - 80, canvasSize.width / 2 - 40)), height: 12, width: 80, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(0, Math.min(canvasSize.width - 80, canvasSize.width / 2 - 40)), originalWidth: 80 },
+      left: { y: Math.max(0, Math.min(canvasSize.height - 120, canvasSize.height / 2 - 60)), height: 120, width: 12, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(0, Math.min(canvasSize.height - 120, canvasSize.height / 2 - 60)), originalHeight: 120 },
+      right: { y: Math.max(0, Math.min(canvasSize.height - 120, canvasSize.height / 2 - 60)), height: 120, width: 12, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(0, Math.min(canvasSize.height - 120, canvasSize.height / 2 - 60)), originalHeight: 120 },
+      top: { x: Math.max(0, Math.min(canvasSize.width - 120, canvasSize.width / 2 - 60)), height: 12, width: 120, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(0, Math.min(canvasSize.width - 120, canvasSize.width / 2 - 60)), originalWidth: 120 },
+      bottom: { x: Math.max(0, Math.min(canvasSize.width - 120, canvasSize.width / 2 - 60)), height: 12, width: 120, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(0, Math.min(canvasSize.width - 120, canvasSize.width / 2 - 60)), originalWidth: 120 },
     },
     score: { left: 0, right: 0, top: 0, bottom: 0 }, // 4-player scoring
     isPlaying: false,
@@ -764,6 +764,9 @@ const Pong404: React.FC = () => {
   const ambienceOscillatorsRef = useRef<OscillatorNode[]>([]);
   const ambienceGainsRef = useRef<GainNode[]>([]);
   const ambienceActiveRef = useRef(false);
+  const ambienceMasterGainRef = useRef<GainNode | null>(null);
+  const speechMasterGainRef = useRef<GainNode | null>(null);
+  const beepsMasterGainRef = useRef<GainNode | null>(null);
 
   // Create impulse response for reverb effect
   const createImpulseResponse = useCallback((audioContext: AudioContext) => {
@@ -802,8 +805,9 @@ const Pong404: React.FC = () => {
     echoGain.connect(delay);
   }, [createImpulseResponse]);
 
+
   // Enhanced tone generation with custom volume
-  const playTone = useCallback((frequency: number, duration: number, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both', volume: number = 0.03) => {
+  const playTone = useCallback((frequency: number, duration: number, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both', volume: number = 0.3) => {
     // Only create AudioContext when actually trying to play a sound (user gesture)
     if (!audioContextRef.current && !audioInitAttempted.current) {
       audioInitAttempted.current = true;
@@ -832,6 +836,13 @@ const Pong404: React.FC = () => {
     const ctx = audioContextRef.current;
     const now = ctx.currentTime;
 
+    // Create dedicated beeps audio bus if it doesn't exist
+    if (!beepsMasterGainRef.current) {
+      beepsMasterGainRef.current = ctx.createGain();
+      beepsMasterGainRef.current.gain.setValueAtTime(0.7, ctx.currentTime); // Good level for beeps
+      beepsMasterGainRef.current.connect(ctx.destination);
+    }
+
     // Create oscillator and main gain
     const oscillator = ctx.createOscillator();
     const mainGain = ctx.createGain();
@@ -846,39 +857,26 @@ const Pong404: React.FC = () => {
     oscillator.type = 'square'; // Classic arcade sound
 
     // Configure main envelope with custom volume
-    mainGain.gain.setValueAtTime(0, now);
-    mainGain.gain.linearRampToValueAtTime(volume, now + 0.01); // Quick attack with custom volume
+    mainGain.gain.setValueAtTime(volume, now); // Immediate full volume, no fade-in
     mainGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
-    // Configure mix levels based on effect type
-    const dryLevel = effectType === 'reverb' || effectType === 'both' ? 0.6 : 1.0;
-    const reverbLevel = effectType === 'reverb' || effectType === 'both' ? 0.3 : 0.0;
-    const echoLevel = effectType === 'echo' || effectType === 'both' ? 0.25 : 0.0;
+    // Configure mix levels based on effect type (simplified - no effects for cleaner beeps)
+    const dryLevel = 1.0;
+    const reverbLevel = 0.0;
+    const echoLevel = 0.0;
 
     dryGain.gain.setValueAtTime(dryLevel, now);
     wetGain.gain.setValueAtTime(reverbLevel, now);
     echoWetGain.gain.setValueAtTime(echoLevel, now);
 
-    // Connect the audio graph
+    // Connect the audio graph through dedicated beeps bus
     oscillator.connect(mainGain);
 
-    // Dry signal (direct to output)
+    // Dry signal (through beeps master gain)
     mainGain.connect(dryGain);
-    dryGain.connect(ctx.destination);
+    dryGain.connect(beepsMasterGainRef.current!);
 
-    // Wet signal (through reverb)
-    if ((effectType === 'reverb' || effectType === 'both') && reverbNodeRef.current) {
-      mainGain.connect(reverbNodeRef.current);
-      reverbNodeRef.current.connect(wetGain);
-      wetGain.connect(ctx.destination);
-    }
-
-    // Echo signal
-    if ((effectType === 'echo' || effectType === 'both') && delayNodeRef.current) {
-      mainGain.connect(delayNodeRef.current);
-      delayNodeRef.current.connect(echoWetGain);
-      echoWetGain.connect(ctx.destination);
-    }
+    // No wet/echo effects for cleaner beeps
 
     // Start and stop
     oscillator.start(now);
@@ -921,11 +919,7 @@ const Pong404: React.FC = () => {
       melodyState.lastScaleChange = now;
       console.log(`🎵 Scale changed to: ${melodyState.currentScale}`);
 
-      // Update ambient sounds to match new scale
-      if (ambienceActiveRef.current) {
-        stopAmbienceSound();
-        setTimeout(() => startAmbienceSound(), 500); // Restart with new scale
-      }
+      // Ambient sounds will automatically use the new scale on their next fluctuation
     }
 
     let frequency: number;
@@ -936,43 +930,43 @@ const Pong404: React.FC = () => {
 
     switch (eventType) {
       case 'paddle':
-        // Ascending melody pattern for paddle hits
+        // Ascending melody pattern for paddle hits - use higher octave to avoid drone masking
         const paddleNote = currentScale[melodyState.paddleHitIndex % currentScale.length];
-        frequency = paddleNote;
+        frequency = paddleNote * 4; // Two octaves higher than drone
         duration = 0.15;
 
         // Add harmony (fifth interval for space-like resonance)
         const fifthIndex = (melodyState.paddleHitIndex + 2) % currentScale.length;
-        harmony = [currentScale[fifthIndex] * 0.7]; // Lower octave fifth
+        harmony = [currentScale[fifthIndex] * 3]; // Match higher octave
 
         melodyState.paddleHitIndex = (melodyState.paddleHitIndex + 1) % currentScale.length;
         break;
 
       case 'wall':
-        // Descending pattern for wall hits (more ominous)
+        // Descending pattern for wall hits (more ominous) - use higher octave to avoid drone masking
         const wallNoteIndex = (currentScale.length - 1) - (melodyState.wallHitIndex % currentScale.length);
-        frequency = currentScale[wallNoteIndex];
+        frequency = currentScale[wallNoteIndex] * 3; // Higher octave than drone
         duration = 0.12;
 
         // Add dissonant harmony (minor second)
         const dissonantIndex = (wallNoteIndex + 1) % currentScale.length;
-        harmony = [currentScale[dissonantIndex] * 1.1]; // Slightly higher for tension
+        harmony = [currentScale[dissonantIndex] * 3.3]; // Match higher octave with slight dissonance
 
         melodyState.wallHitIndex = (melodyState.wallHitIndex + 1) % currentScale.length;
         break;
 
       case 'score':
-        // Dramatic chord progression for scoring
+        // Dramatic chord progression for scoring - use higher octave to avoid drone masking
         const scoreBase = currentScale[melodyState.scoreIndex % currentScale.length];
-        frequency = scoreBase;
+        frequency = scoreBase * 2; // One octave higher than drone
         duration = 0.8; // Much longer for impact
 
-        // Rich chord with multiple harmonies
+        // Rich chord with multiple harmonies - all in higher octave range
         harmony = [
-          scoreBase * 0.5,  // Octave below
-          scoreBase * 1.25, // Minor third
-          scoreBase * 1.5,  // Fifth
-          scoreBase * 2.0   // Octave above
+          scoreBase * 1.0,  // Same octave as drone (for bass)
+          scoreBase * 2.5,  // Minor third in higher octave
+          scoreBase * 3.0,  // Fifth in higher octave
+          scoreBase * 4.0   // Two octaves above
         ];
 
         melodyState.scoreIndex = (melodyState.scoreIndex + 2) % currentScale.length; // Jump by 2 for variety
@@ -1018,18 +1012,15 @@ const Pong404: React.FC = () => {
     // Play harmony notes with slight delay for richness
     harmony.forEach((harmonyFreq, index) => {
       setTimeout(() => {
-        playTone(harmonyFreq, duration * 0.8, effectType, 0.08); // Much lower volume for harmony
+        playTone(harmonyFreq, duration * 0.8, effectType, 0.025); // Much lower volume for harmony
       }, index * 20); // Slight delay between harmony notes
     });
 
   }, [playTone]);
 
-  // Ambient spaceship sound system
+  // Subtle background ambience - very low volume, deep frequencies only
   const startAmbienceSound = useCallback(() => {
-    console.log('🎵 startAmbienceSound called:', {
-      ambienceActive: ambienceActiveRef.current,
-      audioContext: !!audioContextRef.current
-    });
+    console.log('🎵 startAmbienceSound called - subtle background mode');
 
     if (ambienceActiveRef.current || !audioContextRef.current) {
       console.log('🎵 Ambient sound start cancelled - already active or no audio context');
@@ -1039,6 +1030,13 @@ const Pong404: React.FC = () => {
     console.log('🎵 Starting ambient sounds now!');
     const ctx = audioContextRef.current;
     ambienceActiveRef.current = true;
+
+    // Create dedicated ambient audio bus to avoid interference with main audio
+    if (!ambienceMasterGainRef.current) {
+      ambienceMasterGainRef.current = ctx.createGain();
+      ambienceMasterGainRef.current.gain.setValueAtTime(0.3, ctx.currentTime); // Master volume control
+      ambienceMasterGainRef.current.connect(ctx.destination);
+    }
 
     // Clear any existing oscillators
     ambienceOscillatorsRef.current.forEach(osc => {
@@ -1051,10 +1049,12 @@ const Pong404: React.FC = () => {
     // Create multiple layers of ambient sounds using current musical scale for harmony
     const currentScale = MUSICAL_SCALES[melodyState.currentScale as keyof typeof MUSICAL_SCALES];
     const ambienceLayers = [
-      { freq: currentScale[0] * 0.25, volume: 0.15, type: 'sine' as OscillatorType }, // Deep sub-bass drone (2x louder)
-      { freq: currentScale[1] * 0.5, volume: 0.12, type: 'triangle' as OscillatorType }, // Low engine hum (2x louder)
-      { freq: currentScale[2], volume: 0.08, type: 'sawtooth' as OscillatorType }, // Mid electrical hum (2x louder)
-      { freq: currentScale[4], volume: 0.05, type: 'sine' as OscillatorType }, // High frequency whistle (2.5x louder)
+      { freq: currentScale[0] * 0.5, volume: 0.4, type: 'sine' as OscillatorType }, // Warm bass foundation
+      { freq: currentScale[2] * 0.75, volume: 0.3, type: 'triangle' as OscillatorType }, // Gentle mid drone
+      { freq: currentScale[3] * 1.5, volume: 0.25, type: 'sine' as OscillatorType }, // Ethereal mid-high layer
+      { freq: currentScale[1] * 2, volume: 0.2, type: 'triangle' as OscillatorType }, // Subtle harmonic
+      { freq: currentScale[4] * 0.5, volume: 0.15, type: 'sine' as OscillatorType }, // Mysterious low whisper
+      { freq: currentScale[0] * 3, volume: 0.1, type: 'sine' as OscillatorType }, // Distant high overtone
     ];
 
     ambienceLayers.forEach((layer, index) => {
@@ -1081,14 +1081,14 @@ const Pong404: React.FC = () => {
       filterNode.frequency.setValueAtTime(800 - index * 100, ctx.currentTime);
       filterNode.Q.setValueAtTime(0.5, ctx.currentTime);
 
-      // Volume with slow random fluctuation
+      // Volume with faster ramp-up for immediate audibility
       gainNode.gain.setValueAtTime(0, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(layer.volume, ctx.currentTime + 2 + index * 0.5);
+      gainNode.gain.exponentialRampToValueAtTime(layer.volume, ctx.currentTime + 0.5 + index * 0.1); // Much faster ramp-up
 
       // Connect chain: oscillator -> filter -> gain -> reverb -> destination
       oscillator.connect(filterNode);
       filterNode.connect(gainNode);
-      gainNode.connect(reverbNodeRef.current || ctx.destination);
+      gainNode.connect(ambienceMasterGainRef.current!); // Connect to dedicated ambient bus, not main destination
 
       oscillator.start();
 
@@ -1097,23 +1097,38 @@ const Pong404: React.FC = () => {
 
       // Add subtle volume fluctuations (never silent)
       const addFluctuation = () => {
-        if (!ambienceActiveRef.current) return;
+        if (!ambienceActiveRef.current) {
+          console.log('🎵 Fluctuation stopped - ambienceActiveRef is false');
+          return;
+        }
 
-        // Keep volume between 90% and 110% of base volume (never drops below 90%)
-        const randomVolume = layer.volume * (0.9 + Math.random() * 0.2);
-        const randomTime = ctx.currentTime + Math.random() * 2 + 1; // 1-3 seconds (much shorter intervals)
+        // Organic, mysterious volume fluctuations with wider variation
+        const randomVolume = layer.volume * (0.7 + Math.random() * 0.6); // 70%-130% for more mystery
+        const fluctuationDuration = Math.random() * 1.0 + 0.5; // 0.5-1.5 seconds for more organic feel
+        const randomTime = ctx.currentTime + fluctuationDuration;
 
         try {
-          gainNode.gain.exponentialRampToValueAtTime(Math.max(layer.volume * 0.9, randomVolume), randomTime);
+          gainNode.gain.exponentialRampToValueAtTime(Math.max(layer.volume * 0.3, randomVolume), randomTime);
         } catch (e) {}
 
-        setTimeout(addFluctuation, (Math.random() * 2 + 1) * 1000);
+        // Schedule next fluctuation to start exactly when this one ends
+        setTimeout(addFluctuation, fluctuationDuration * 1000);
+        console.log('🎵 Fluctuation scheduled for', fluctuationDuration.toFixed(2), 'seconds, volume:', randomVolume.toFixed(3));
       };
 
-      setTimeout(() => addFluctuation(), (Math.random() * 2 + 1) * 1000);
+      addFluctuation(); // Start fluctuation immediately
     });
 
+    // Restart oscillators every 5 minutes to ensure they never end
+    const restartInterval = setInterval(() => {
+      if (ambienceActiveRef.current) {
+        console.log('🎵 Restarting ambient oscillators to ensure continuity');
+        stopAmbienceSound();
+        setTimeout(() => startAmbienceSound(), 100);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
 
+    return () => clearInterval(restartInterval);
   }, []);
 
   const stopAmbienceSound = useCallback(() => {
@@ -1145,6 +1160,13 @@ const Pong404: React.FC = () => {
     // Initialize audio context if needed
     if (!audioContextRef.current) {
       initializeAudio();
+    }
+
+    // Create dedicated speech audio bus if it doesn't exist
+    if (!speechMasterGainRef.current && audioContextRef.current) {
+      speechMasterGainRef.current = audioContextRef.current.createGain();
+      speechMasterGainRef.current.gain.setValueAtTime(0.8, audioContextRef.current.currentTime); // Good level for speech
+      speechMasterGainRef.current.connect(audioContextRef.current.destination);
     }
 
     try {
@@ -1206,15 +1228,15 @@ const Pong404: React.FC = () => {
         const reverbGain = audioContextRef.current.createGain();
         reverbGain.gain.setValueAtTime(0.8, audioContextRef.current.currentTime);
 
-        // Connect the audio processing chain
+        // Connect the audio processing chain through dedicated speech bus
         // Dry signal
         source.connect(dryGain);
-        dryGain.connect(audioContextRef.current.destination);
+        dryGain.connect(speechMasterGainRef.current!);
 
         // Reverb signal
         source.connect(convolver);
         convolver.connect(reverbGain);
-        reverbGain.connect(audioContextRef.current.destination);
+        reverbGain.connect(speechMasterGainRef.current!);
 
         // Echo signal
         source.connect(delay);
@@ -1237,16 +1259,22 @@ const Pong404: React.FC = () => {
     }
   }, [initializeAudio]);
 
-  // Welcome message on start screen
+  // Welcome message and ambient sound on start screen
   useEffect(() => {
     if (gameState.showStartScreen) {
+      // Start ambient sounds on title screen
+      if (audioContextRef.current && audioContextRef.current.state === 'running' && !ambienceActiveRef.current) {
+        console.log('🎵 Starting ambient sounds for title screen...');
+        setTimeout(() => startAmbienceSound(), 100);
+      }
+
       // Delay the welcome message to ensure voices are loaded
       const timer = setTimeout(() => {
         speakRobotic('WELCOME TO SPACE BLAZERS');
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [gameState.showStartScreen, speakRobotic]);
+  }, [gameState.showStartScreen, speakRobotic, startAmbienceSound]);
 
   // Auto-start ambient sounds when audio context is ready and game is active
   useEffect(() => {
@@ -1257,17 +1285,11 @@ const Pong404: React.FC = () => {
       ambienceActive: ambienceActiveRef.current
     });
 
+    // Start ambient sounds for ANY game mode (auto, player, multiplayer)
     if (audioContextRef.current && audioContextRef.current.state === 'running' &&
-        (gameState.gameMode === 'player' || gameState.gameMode === 'multiplayer') &&
         !ambienceActiveRef.current) {
-      console.log('🎵 Starting ambient sounds in 1 second...');
-      setTimeout(() => startAmbienceSound(), 1000); // Start after 1 second
-    }
-
-    // Stop ambient sounds when returning to auto mode
-    if (gameState.gameMode === 'auto' && ambienceActiveRef.current) {
-      console.log('🎵 Stopping ambient sounds (auto mode)');
-      stopAmbienceSound();
+      console.log('🎵 Starting ambient sounds for all game modes...');
+      setTimeout(() => startAmbienceSound(), 200); // Much shorter delay for better reliability
     }
   }, [gameState.gameMode, startAmbienceSound, stopAmbienceSound]);
 
@@ -1321,6 +1343,8 @@ const Pong404: React.FC = () => {
 
   // Track previous countdown values for robot voice announcements
   const [previousCountdowns, setPreviousCountdowns] = useState<{[effectType: string]: number}>({});
+  // Track when pickup announcements were made to delay countdown
+  const [pickupAnnouncementTimes, setPickupAnnouncementTimes] = useState<{[effectType: string]: number}>({});
 
   const leftFrameCountRef = useRef<number>(0);
   const rightFrameCountRef = useRef<number>(0);
@@ -2418,6 +2442,11 @@ const Pong404: React.FC = () => {
             const pickupData = PICKUP_TYPES.find(p => p.type === pickup.type);
             if (pickupData) {
               setTimeout(() => speakRobotic(pickupData.description), 100);
+              // Track when this announcement was made to delay countdown
+              setPickupAnnouncementTimes(prev => ({
+                ...prev,
+                [pickup.type]: Date.now()
+              }));
             }
 
             newState.pickups.splice(i, 1); // Remove this pickup
@@ -2831,11 +2860,16 @@ const Pong404: React.FC = () => {
       // Initialize audio on first user interaction
       await initializeAudio();
 
-      // Start ambient sounds immediately on first keyboard interaction if in gameplay
-      if ((gameState.gameMode === 'player' || gameState.gameMode === 'multiplayer') &&
-          !ambienceActiveRef.current && audioContextRef.current) {
-        console.log('🎵 Starting ambient sounds on keyboard interaction');
-        setTimeout(() => startAmbienceSound(), 100); // Much shorter delay
+      // Start ambient sounds immediately on first keyboard interaction (including title screen)
+      if (!ambienceActiveRef.current && audioContextRef.current) {
+        console.log('🎵 Starting ambient sounds on keyboard interaction', {
+          audioState: audioContextRef.current.state,
+          ambienceActive: ambienceActiveRef.current
+        });
+        setTimeout(() => {
+          console.log('🎵 Executing startAmbienceSound from keyboard');
+          startAmbienceSound();
+        }, 50); // Even shorter delay
       }
 
       switch (e.key.toLowerCase()) {
@@ -2916,10 +2950,10 @@ const Pong404: React.FC = () => {
                 previousTouchedBy: null,
               },
               paddles: {
-                left: { y: 250, height: 100, width: 12, speed: 32, velocity: 0, targetY: 250, originalHeight: 100 },
-                right: { y: 250, height: 100, width: 12, speed: 32, velocity: 0, targetY: 250, originalHeight: 100 },
-                top: { x: 350, height: 12, width: 100, speed: 32, velocity: 0, targetX: 350, originalWidth: 100 },
-                bottom: { x: 350, height: 12, width: 100, speed: 32, velocity: 0, targetX: 350, originalWidth: 100 }
+                left: { y: 250, height: 140, width: 12, speed: 32, velocity: 0, targetY: 250, originalHeight: 140 },
+                right: { y: 250, height: 140, width: 12, speed: 32, velocity: 0, targetY: 250, originalHeight: 140 },
+                top: { x: 350, height: 12, width: 140, speed: 32, velocity: 0, targetX: 350, originalWidth: 140 },
+                bottom: { x: 350, height: 12, width: 140, speed: 32, velocity: 0, targetX: 350, originalWidth: 140 }
               },
               score: { left: 0, right: 0, top: 0, bottom: 0 },
               isPlaying: false,
@@ -3819,8 +3853,15 @@ const Pong404: React.FC = () => {
             // Check if countdown changed and announce it
             const previousValue = previousCountdowns[effect.type];
             if (previousValue !== remaining && remaining <= 5 && remaining > 0) {
-              // Announce countdown for last 5 seconds
-              setTimeout(() => speakRobotic(remaining.toString()), 50);
+              // Check if enough time has passed since pickup announcement
+              const announcementTime = pickupAnnouncementTimes[effect.type];
+              const timeSinceAnnouncement = Date.now() - (announcementTime || 0);
+              const minimumDelay = 2500; // Wait 2.5 seconds after pickup announcement
+
+              if (!announcementTime || timeSinceAnnouncement >= minimumDelay) {
+                // Announce countdown for last 5 seconds
+                setTimeout(() => speakRobotic(remaining.toString()), 50);
+              }
             }
           }
         }
@@ -4063,11 +4104,10 @@ const Pong404: React.FC = () => {
       // Initialize audio on first mouse interaction
       await initializeAudio();
 
-      // Start ambient sounds immediately on first interaction if in gameplay
-      if ((gameState.gameMode === 'player' || gameState.gameMode === 'multiplayer') &&
-          !ambienceActiveRef.current && audioContextRef.current) {
+      // Start ambient sounds immediately on first interaction (including title screen)
+      if (!ambienceActiveRef.current && audioContextRef.current) {
         console.log('🎵 Starting ambient sounds on mouse interaction');
-        setTimeout(() => startAmbienceSound(), 100); // Much shorter delay
+        setTimeout(() => startAmbienceSound(), 50); // Even shorter delay
       }
 
       // Disable paddle controls in spectator mode (but allow audio initialization)
