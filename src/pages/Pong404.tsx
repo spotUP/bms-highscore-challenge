@@ -455,8 +455,8 @@ const Pong404: React.FC = () => {
     ball: {
       x: canvasSize.width / 2,
       y: canvasSize.height / 2,
-      dx: BALL_SPEED,
-      dy: BALL_SPEED,
+      dx: 0,
+      dy: 0,
       size: 12,
       originalSize: 12,
       isDrunk: false,
@@ -856,7 +856,12 @@ const Pong404: React.FC = () => {
           ...prev,
           showStartScreen: false,
           gameMode: 'multiplayer',
-          isPlaying: true
+          isPlaying: true,
+          ball: {
+            ...prev.ball,
+            dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+            dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+          }
         }));
         setTimeout(() => speakRobotic(`MULTIPLAYER GAME STARTING AS ${playerRole.toUpperCase()}`), 100);
         break;
@@ -890,7 +895,12 @@ const Pong404: React.FC = () => {
             isPaused: true,
             pauseEndTime: Date.now() + 2000, // 2 second pause before ball starts
             gameEnded: false,
-            isPlaying: true
+            isPlaying: true,
+            ball: {
+              ...prev.ball,
+              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+            }
           }));
 
           // Start ball movement after pause
@@ -2925,6 +2935,8 @@ const Pong404: React.FC = () => {
       // SIMPLIFIED: Always allow paddle movement in any mode
       // Update paddle positions with cleaner logic (keyboard, mouse, or touch)
       if (newState.gameMode === 'player' || hasInput) {
+        // PLAYER MODE: Left=AI, Right=Human, Top=AI, Bottom=AI
+
         // In player mode, left paddle is AI-controlled - no manual input allowed
         // (AI logic handles the left paddle automatically)
 
@@ -3020,11 +3032,21 @@ const Pong404: React.FC = () => {
           const now = Date.now();
           leftFrameCountRef.current++;
           const ballCenterY = newState.ball.y + newState.ball.size / 2;
-          const updatePaddleWithAI = (paddle: any, frameCount: number) => {
-            const reactionDelay = HUMAN_REACTION_DELAY + 1;
+
+          // Use the same spinner AI as auto mode for consistency
+          const updatePaddleWithSpinner = (paddle: any, isLeft: boolean, frameCount: number) => {
+            // Different reaction delays for each paddle to make them feel like different humans
+            const reactionDelay = isLeft ? HUMAN_REACTION_DELAY : HUMAN_REACTION_DELAY + 3;
+
+            // Add reaction delay - only update target every few frames
             if (frameCount % reactionDelay === 0) {
-              const inaccuracy = (Math.random() - 0.5) * 8; // Reduced from 18 to 8
-              const predictionError = Math.random() < 0.15 ? (Math.random() - 0.5) * 12 : 0; // Reduced frequency and magnitude
+              // Different inaccuracy levels for each paddle
+              const baseInaccuracy = isLeft ? 12 : 18; // Left player slightly more accurate
+              const inaccuracy = (Math.random() - 0.5) * baseInaccuracy;
+
+              // Add prediction error - sometimes aim where ball was, not where it's going
+              const predictionError = Math.random() < 0.3 ? (Math.random() - 0.5) * 30 : 0;
+
               const targetY = Math.max(
                 paddle.height / 2,
                 Math.min(
@@ -3032,37 +3054,72 @@ const Pong404: React.FC = () => {
                   ballCenterY - paddle.height / 2 + inaccuracy + predictionError
                 )
               );
+
               paddle.targetY = targetY;
             }
 
             const distance = paddle.targetY - paddle.y;
             const direction = Math.sign(distance);
-            const ballDistance = Math.abs(newState.ball.x - 0); // Distance from left side
-            const isPanicSituation = ballDistance < 300;
+
+            // Check for panic moves - sudden fast movements when ball is close or moving fast
+            const ballDistance = Math.abs(newState.ball.x - (isLeft ? 0 : canvasSize.width));
+            const ballSpeed = Math.abs(newState.ball.dx);
+            const isPanicSituation = ballDistance < 300; // Much more lenient distance
             const currentPaddleCenter = paddle.y + paddle.height / 2;
             const ballPaddleDistance = Math.abs(ballCenterY - currentPaddleCenter);
-            const ballHeadingTowardsPaddle = newState.ball.dx < 0; // Ball heading left
+
+            // Check if ball is heading towards this paddle
+            const ballHeadingTowardsPaddle = isLeft ? newState.ball.dx < 0 : newState.ball.dx > 0;
+
+            // Emergency panic mode - NEVER MISS THE BALL
             const isEmergencyPanic = ballHeadingTowardsPaddle && ballDistance < 150 && ballPaddleDistance > 30;
 
-            if (isEmergencyPanic) {
+            // Much more frequent panic moves - any time ball is coming and paddle isn't perfectly positioned
+            const panicChance = isPanicSituation ? 0.15 : 0.08; // Higher panic chance when ball is close
+            const isPanicMove = Math.random() < panicChance;
+            const isExtremePanicMove = Math.random() < 0.05; // 5% chance for extreme panic
+
+            if (isEmergencyPanic || isExtremePanicMove) {
+              // Emergency panic or extreme panic - JUMP TO BALL IMMEDIATELY
               const extremePanicDirection = Math.sign(ballCenterY - currentPaddleCenter);
-              paddle.velocity = extremePanicDirection * paddle.speed * EXTREME_PANIC_MULTIPLIER * 2;
+              const panicMultiplier = isEmergencyPanic ? EXTREME_PANIC_MULTIPLIER * 1.5 : EXTREME_PANIC_MULTIPLIER * 2;
+
+              // Completely replace velocity with extreme movement - MUCH FASTER
+              paddle.velocity = extremePanicDirection * paddle.speed * panicMultiplier;
+              // Add violent jitter to simulate frantic spinning
+              paddle.velocity += (Math.random() - 0.5) * 15;
+              // Override friction temporarily for this extreme move
+              return; // Skip normal physics for this frame
+            } else if (isPanicMove && ballHeadingTowardsPaddle) {
+              // Regular panic move - faster movement toward ball
+              paddle.velocity += direction * PADDLE_ACCELERATION * 5.0; // Much higher acceleration
             } else if (Math.abs(distance) > 25) {
-              paddle.velocity += direction * PADDLE_ACCELERATION * 3.0;
+              // Normal movement for far distances
+              paddle.velocity += direction * PADDLE_ACCELERATION * 2.0;
             } else if (Math.abs(distance) > 8) {
-              paddle.velocity += direction * PADDLE_ACCELERATION * 1.2;
+              // Fine adjustment for close distances
+              paddle.velocity += direction * PADDLE_ACCELERATION * 1.0;
             } else {
-              paddle.velocity *= 0.5;
+              // Very close to target - slow down
+              paddle.velocity *= 0.7;
             }
 
-            paddle.velocity *= PADDLE_FRICTION * 0.95;
-            const maxSpeed = paddle.speed * 0.9;
+            // Different friction rates for each paddle
+            const friction = isLeft ? PADDLE_FRICTION : PADDLE_FRICTION * 0.95;
+            paddle.velocity *= friction;
+
+            // Slightly different max speeds for each paddle
+            const maxSpeed = isLeft ? paddle.speed : paddle.speed * 0.9;
             paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
+
+            // Update position
             paddle.y += paddle.velocity;
+
+            // Keep paddle within bounds
             paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
           };
 
-          updatePaddleWithAI(newState.paddles.left, leftFrameCountRef.current);
+          updatePaddleWithSpinner(newState.paddles.left, true, leftFrameCountRef.current);
 
           // Add trail tracking for left paddle AI movement
           if (Math.abs(newState.paddles.left.velocity) > 0.01) {
@@ -3188,6 +3245,8 @@ const Pong404: React.FC = () => {
           }
         }
       } else if (newState.gameMode === 'multiplayer') {
+        // MULTIPLAYER MODE: Dynamic assignment based on player connections
+
         // Multiplayer mode active
         // Multiplayer controls (only the paddle assigned to this player, unless in local test mode)
         if (multiplayerStateRef.current?.playerSide === 'left' || localTestMode) {
@@ -3497,6 +3556,8 @@ const Pong404: React.FC = () => {
         }
 
       } else {
+        // AUTO MODE: All paddles AI-controlled (no human input detected)
+
         // Human-like spinner controls with momentum and reaction delay
         leftFrameCountRef.current++;
         rightFrameCountRef.current++;
@@ -3955,13 +4016,17 @@ const Pong404: React.FC = () => {
         });
 
         // Handle pickup spawning (max 3 simultaneous pickups)
-        if (newState.pickups && newState.pickups.length < 3 && Date.now() >= newState.nextPickupTime) {
+        // Only game master spawns pickups in multiplayer to avoid duplicates
+        if (newState.pickups && newState.pickups.length < 3 && Date.now() >= newState.nextPickupTime &&
+            (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer')) {
           newState.pickups.push(createPickupRef.current?.() || {});
           newState.nextPickupTime = Date.now() + Math.random() * 8000 + 4000; // 4-12 seconds
         }
 
         // 🌪️ Handle attractor/repulsor spawning (max 2 simultaneous, less frequent than pickups)
-        if (newState.attractors && newState.attractors.length < 2 && Date.now() >= newState.nextAttractorTime) {
+        // Only game master spawns attractors/repulsors in multiplayer to avoid duplicates
+        if (newState.attractors && newState.attractors.length < 2 && Date.now() >= newState.nextAttractorTime &&
+            (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer')) {
           const isAttractor = Math.random() > 0.5; // 50% chance for attractor vs repulsor
           const centerX = canvasSize.width / 2;
           const centerY = canvasSize.height / 2;
@@ -4503,30 +4568,12 @@ const Pong404: React.FC = () => {
       if (e.repeat) return;
 
 
-      // Handle audio prompt dismissal with spacebar - dismiss AND start game immediately
+      // Handle audio prompt dismissal with spacebar - dismiss and show start screen
       if (showAudioPrompt && !audioPromptDismissedRef.current && e.key === ' ') {
         audioPromptDismissedRef.current = true;
         setShowAudioPrompt(false);
+        setGameState(prev => ({ ...prev, showStartScreen: true }));
         await initializeAudio();
-
-        // Start game immediately after audio dismissal
-        if (WS_SERVER_URL) {
-          setGameState(prev => ({
-            ...prev,
-            showStartScreen: false,
-            gameMode: 'multiplayer',
-            isPlaying: true
-          }));
-          connectWebSocket();
-        } else {
-          setGameState(prev => ({
-            ...prev,
-            showStartScreen: false,
-            gameMode: 'player',
-            isPlaying: true
-          }));
-          setTimeout(() => speakRobotic('STARTING SINGLE PLAYER MODE'), 100);
-        }
         return;
       }
 
@@ -4614,7 +4661,12 @@ const Pong404: React.FC = () => {
               ...prev,
               showStartScreen: false,
               gameMode: 'player',
-              isPlaying: true
+              isPlaying: true,
+            ball: {
+              ...prev.ball,
+              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+            }
             }));
             setTimeout(() => speakRobotic('CONNECTION FAILED, STARTING SINGLE PLAYER'), 100);
           }
@@ -4624,7 +4676,12 @@ const Pong404: React.FC = () => {
             ...prev,
             showStartScreen: false,
             gameMode: 'multiplayer',
-            isPlaying: true
+            isPlaying: true,
+            ball: {
+              ...prev.ball,
+              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+            }
           }));
           setTimeout(() => speakRobotic('MULTIPLAYER GAME STARTING'), 100);
         } else {
@@ -4634,65 +4691,18 @@ const Pong404: React.FC = () => {
             ...prev,
             showStartScreen: false,
             gameMode: 'player',
-            isPlaying: true
+            isPlaying: true,
+            ball: {
+              ...prev.ball,
+              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+            }
           }));
           setTimeout(() => speakRobotic('STARTING SINGLE PLAYER MODE'), 100);
         }
         return;
       }
 
-      // Check if game has ended - restart if so
-          if (gameState.gameEnded && gameState.winner) { // Only reset if there's actually a winner
-            console.log('🔄 Game ended detected, resetting to start screen');
-            // Reset game state for new game
-            setGameState({
-              ball: {
-                x: canvasSize.width / 2,
-                y: canvasSize.height / 2,
-                dx: BALL_SPEED * (Math.random() > 0.5 ? 1 : -1),
-                dy: BALL_SPEED * (Math.random() > 0.5 ? 1 : -1),
-                size: 12,
-                originalSize: 12,
-                isDrunk: false,
-                drunkAngle: 0,
-                isTeleporting: false,
-                lastTeleportTime: 0,
-                stuckCheckStartTime: 0,
-                stuckCheckStartX: 0,
-                lastTouchedBy: null,
-                previousTouchedBy: null,
-              },
-              paddles: {
-                left: { y: 250, height: 140, width: 12, speed: 32, velocity: 0, targetY: 250, originalHeight: 140 },
-                right: { y: 250, height: 140, width: 12, speed: 32, velocity: 0, targetY: 250, originalHeight: 140 },
-                top: { x: 350, height: 12, width: 140, speed: 32, velocity: 0, targetX: 350, originalWidth: 140 },
-                bottom: { x: 350, height: 12, width: 140, speed: 32, velocity: 0, targetX: 350, originalWidth: 140 }
-              },
-              score: { left: 0, right: 0, top: 0, bottom: 0 },
-              isPlaying: false,
-              gameMode: 'auto',
-              colorIndex: 0,
-              isPaused: false,
-              pauseEndTime: 0,
-              winner: null,
-              gameEnded: false,
-              showStartScreen: true,
-              rumbleEffect: { isActive: false, startTime: 0, intensity: 0 },
-              pickupEffect: { isActive: false, startTime: 0, x: 0, y: 0 },
-              decrunchEffect: { isActive: false, startTime: 0, duration: 0 },
-              activeEffects: [],
-              pickups: [],
-              coins: [],
-              nextPickupTime: Date.now() + Math.random() * 10000 + 5000,
-              trails: { ball: [], leftPaddle: [], rightPaddle: [], topPaddle: [], bottomPaddle: [] }
-            });
-
-            // Play restart sound
-            if (multiplayerState.isGameMaster || gameState.gameMode !== 'multiplayer') {
-              playMelodyNote('score', null, 'both');
-            }
-            return;
-          }
 
     };
 
@@ -5118,7 +5128,7 @@ const Pong404: React.FC = () => {
     const currentTime = Date.now();
 
     // Draw ball trail
-    if (gameState.trails.ball.length > 1) {
+    if (gameState.trails?.ball?.length > 1) {
       for (let i = 0; i < gameState.trails.ball.length - 1; i++) {
         const point = gameState.trails.ball[i];
         const age = currentTime - point.timestamp;
@@ -5204,16 +5214,20 @@ const Pong404: React.FC = () => {
     };
 
     // Render left and right paddle trails (vertical paddles)
-    if (gameState.trails.leftPaddle.length > 0) {
+    if (gameState.trails?.leftPaddle?.length > 0) {
     }
-    renderVerticalPaddleTrail(gameState.trails.leftPaddle, 30 + gameState.paddles.left.width / 2);
-    renderVerticalPaddleTrail(gameState.trails.rightPaddle, canvasSize.width - 30 - gameState.paddles.right.width / 2);
+    if (gameState.trails?.leftPaddle) {
+      renderVerticalPaddleTrail(gameState.trails.leftPaddle, 30 + gameState.paddles.left.width / 2);
+    }
+    if (gameState.trails?.rightPaddle) {
+      renderVerticalPaddleTrail(gameState.trails.rightPaddle, canvasSize.width - 30 - gameState.paddles.right.width / 2);
+    }
 
     // Render top and bottom paddle trails (horizontal paddles)
-    if (gameState.paddles.top) {
+    if (gameState.paddles.top && gameState.trails?.topPaddle) {
       renderHorizontalPaddleTrail(gameState.trails.topPaddle, 30 + gameState.paddles.top.height / 2);
     }
-    if (gameState.paddles.bottom) {
+    if (gameState.paddles.bottom && gameState.trails?.bottomPaddle) {
       renderHorizontalPaddleTrail(gameState.trails.bottomPaddle, canvasSize.height - 30 - gameState.paddles.bottom.height / 2);
     }
 
@@ -6195,7 +6209,12 @@ const Pong404: React.FC = () => {
                   ...prev,
                   showStartScreen: false,
                   gameMode: 'multiplayer',
-                  isPlaying: true
+                  isPlaying: true,
+            ball: {
+              ...prev.ball,
+              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+            }
                 }));
                 setTimeout(() => speakRobotic('CONNECTING TO SERVER'), 100);
               } catch (error) {
@@ -6205,7 +6224,12 @@ const Pong404: React.FC = () => {
                   ...prev,
                   showStartScreen: false,
                   gameMode: 'player',
-                  isPlaying: true
+                  isPlaying: true,
+            ball: {
+              ...prev.ball,
+              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+            }
                 }));
                 setTimeout(() => speakRobotic('CONNECTION FAILED, STARTING SINGLE PLAYER'), 100);
               }
@@ -6215,7 +6239,12 @@ const Pong404: React.FC = () => {
                 ...prev,
                 showStartScreen: false,
                 gameMode: 'multiplayer',
-                isPlaying: true
+                isPlaying: true,
+            ball: {
+              ...prev.ball,
+              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+            }
               }));
               setTimeout(() => speakRobotic('MULTIPLAYER GAME STARTING'), 100);
             } else {
@@ -6225,7 +6254,12 @@ const Pong404: React.FC = () => {
                 ...prev,
                 showStartScreen: false,
                 gameMode: 'player',
-                isPlaying: true
+                isPlaying: true,
+            ball: {
+              ...prev.ball,
+              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+            }
               }));
               setTimeout(() => speakRobotic('STARTING SINGLE PLAYER MODE'), 100);
             }
@@ -6277,7 +6311,12 @@ const Pong404: React.FC = () => {
                   ...prev,
                   showStartScreen: false,
                   gameMode: 'multiplayer',
-                  isPlaying: true
+                  isPlaying: true,
+            ball: {
+              ...prev.ball,
+              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+            }
                 }));
                 setTimeout(() => speakRobotic('CONNECTING TO SERVER'), 100);
               } catch (error) {
@@ -6287,7 +6326,12 @@ const Pong404: React.FC = () => {
                   ...prev,
                   showStartScreen: false,
                   gameMode: 'player',
-                  isPlaying: true
+                  isPlaying: true,
+            ball: {
+              ...prev.ball,
+              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+            }
                 }));
                 setTimeout(() => speakRobotic('CONNECTION FAILED, STARTING SINGLE PLAYER'), 100);
               }
@@ -6297,7 +6341,12 @@ const Pong404: React.FC = () => {
                 ...prev,
                 showStartScreen: false,
                 gameMode: 'multiplayer',
-                isPlaying: true
+                isPlaying: true,
+            ball: {
+              ...prev.ball,
+              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+            }
               }));
               setTimeout(() => speakRobotic('MULTIPLAYER GAME STARTING'), 100);
             } else {
@@ -6307,7 +6356,12 @@ const Pong404: React.FC = () => {
                 ...prev,
                 showStartScreen: false,
                 gameMode: 'player',
-                isPlaying: true
+                isPlaying: true,
+            ball: {
+              ...prev.ball,
+              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+            }
               }));
               setTimeout(() => speakRobotic('STARTING SINGLE PLAYER MODE'), 100);
             }
