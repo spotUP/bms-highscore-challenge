@@ -501,8 +501,8 @@ class PongWebSocketServer {
   }
 
   public start() {
-    this.server.listen(this.port, () => {
-      console.log(`🚀 Pong WebSocket server running on http://localhost:${this.port}`);
+    this.server.listen(this.port, '0.0.0.0', () => {
+      console.log(`🚀 Pong WebSocket server running on http://0.0.0.0:${this.port}`);
       console.log(`🎮 Ready for Pong multiplayer connections!`);
       console.log(`🆔 Server Instance ID: ${this.instanceId}`);
     });
