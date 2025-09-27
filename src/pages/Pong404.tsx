@@ -179,10 +179,8 @@ const PICKUP_TYPES = [
   { type: 'teleport_ball', pattern: 'star', color: '#9966ff', description: 'Teleport Ball!', scale: 'diminished', note: 1 },
 ];
 
-// WebSocket server URL - production server on Render
-const WS_SERVER_URL = import.meta.env.DEV
-  ? 'ws://localhost:3002'
-  : 'wss://bms-highscore-challenge.onrender.com';
+// WebSocket server URL - always use local server for development
+const WS_SERVER_URL = 'ws://localhost:3002';
 
 const COLOR_PALETTE = [
   { background: '#1a0b3d', foreground: '#ff006e' }, // Deep Purple & Hot Pink
@@ -210,6 +208,7 @@ const Pong404: React.FC = () => {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const heartbeatTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastHeartbeatRef = useRef<number>(0);
+  const isMountedRef = useRef(true);
 
   // Check URL parameters for spectator mode
   const urlParams = new URLSearchParams(window.location.search);
@@ -409,7 +408,9 @@ const Pong404: React.FC = () => {
 
     // Clean up any existing connection first
     if (wsRef.current) {
-      wsRef.current.close();
+      if (wsRef.current.readyState !== WebSocket.CLOSED) {
+        wsRef.current.close();
+      }
       wsRef.current = null;
     }
 
@@ -428,17 +429,31 @@ const Pong404: React.FC = () => {
 
     const connectToWebSocket = () => {
       try {
-
+        console.log('🎮 Attempting to connect to WebSocket:', WS_SERVER_URL);
         const ws = new WebSocket(WS_SERVER_URL);
         (ws as any)._createTime = Date.now();
         wsRef.current = ws;
+        console.log('🎮 WebSocket instance created, readyState:', ws.readyState);
 
 
         ws.onopen = () => {
+          console.log('🎮 WebSocket connection opened successfully');
           const openTime = Date.now();
           (ws as any)._openTime = openTime;
           const connectionTime = openTime - (ws as any)._createTime;
           setConnectionStatus('connected');
+          setMultiplayerState(prev => ({ ...prev, isConnected: true }));
+
+          // Ensure game starts in multiplayer mode
+          setGameState(prev => ({
+            ...prev,
+            showStartScreen: false,
+            gameMode: 'multiplayer',
+            isPlaying: true
+          }));
+
+          console.log('🎮 Connection status set to connected');
+          console.log('🎮 Game state updated to multiplayer mode');
 
           // Clear the connection timeout since we connected successfully
           if (connectionTimeout) {
@@ -511,7 +526,7 @@ const Pong404: React.FC = () => {
         };
 
         ws.onerror = (error) => {
-
+          console.error('🚨 WebSocket error:', error);
           // Clear the connection timeout since we got an error
           if (connectionTimeout) {
             clearTimeout(connectionTimeout);
@@ -577,6 +592,46 @@ const Pong404: React.FC = () => {
           ...prev,
           playerCount: message.data.playerCount
         }));
+
+        // Robot announcement for new player
+        const { playerSide } = message.data;
+        if (playerSide === 'spectator') {
+          setTimeout(() => speakRobotic('NEW SPECTATOR JOINS'), 100);
+          // Don't reset scores for spectators
+        } else {
+          setTimeout(() => speakRobotic('NEW PLAYER ENTERS THE GAME'), 100);
+          // Reset scores and restart game only for active players
+          setGameState(prev => ({
+            ...prev,
+            score: { left: 0, right: 0, top: 0, bottom: 0 }, // Reset all scores
+            ball: {
+              ...prev.ball,
+              x: canvasSize.width / 2,
+              y: canvasSize.height / 2,
+              dx: 0,
+              dy: 0,
+              lastTouchedBy: null,
+              previousTouchedBy: null
+            },
+            isPaused: true,
+            pauseEndTime: Date.now() + 2000, // 2 second pause before ball starts
+            gameEnded: false,
+            isPlaying: true
+          }));
+
+          // Start ball movement after pause
+          setTimeout(() => {
+            setGameState(current => ({
+              ...current,
+              ball: {
+                ...current.ball,
+                dx: Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED,
+                dy: Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED
+              },
+              isPaused: false
+            }));
+          }, 2000);
+        }
         break;
 
       case 'player_left':
@@ -584,6 +639,21 @@ const Pong404: React.FC = () => {
           ...prev,
           playerCount: message.data.playerCount
         }));
+
+        // Robot announcement for player leaving
+        const { playerSide: leavingPlayerSide, replacementType } = message.data;
+        const sideNames = {
+          'left': 'LEFT PLAYER',
+          'right': 'RIGHT PLAYER',
+          'top': 'TOP PLAYER',
+          'bottom': 'BOTTOM PLAYER'
+        };
+
+        const sideName = sideNames[leavingPlayerSide as keyof typeof sideNames] || 'PLAYER';
+        const replacementMessage = replacementType === 'spectator'
+          ? `${sideName} LEAVES, REPLACING HIM WITH SPECTATOR`
+          : `${sideName} LEAVES, REPLACING HIM WITH ROBOT PLAYER`;
+        setTimeout(() => speakRobotic(replacementMessage), 100);
         break;
 
       case 'paddle_updated':
@@ -1060,14 +1130,14 @@ const Pong404: React.FC = () => {
     // Create dedicated ambient audio bus with DRAMATIC master control
     if (!ambienceMasterGainRef.current) {
       ambienceMasterGainRef.current = ctx.createGain();
-      ambienceMasterGainRef.current.gain.setValueAtTime(0.15, ctx.currentTime); // Background level for drama
+      ambienceMasterGainRef.current.gain.setValueAtTime(0.3, ctx.currentTime); // Increased background music level
       ambienceMasterGainRef.current.connect(ctx.destination);
 
       // Add DRAMATIC master volume swells every 15-30 seconds
       const addMasterDrama = () => {
         if (!ambienceMasterGainRef.current || !ambienceActiveRef.current) return;
 
-        const dramaticVolume = 0.08 + Math.random() * 0.12; // 0.08 to 0.2 - subtle background swells
+        const dramaticVolume = 0.25 + Math.random() * 0.15; // 0.25 to 0.4 - subtle background swells
         const swellDuration = 8 + Math.random() * 12; // 8-20 second swells
         const now = ctx.currentTime;
 
@@ -1096,28 +1166,28 @@ const Pong404: React.FC = () => {
       { freq: 60, volume: 0.35, type: 'sine' as OscillatorType, modDepth: 0.02, modRate: 0.08, tension: 'humming' }, // Deep engine hum
       { freq: 120, volume: 0.25, type: 'triangle' as OscillatorType, modDepth: 0.015, modRate: 0.12, tension: 'humming' }, // Ventilation system
       { freq: 180, volume: 0.2, type: 'sine' as OscillatorType, modDepth: 0.01, modRate: 0.06, tension: 'humming' }, // Generator harmonics
-      { freq: 90, volume: 0.15, type: 'sawtooth' as OscillatorType, modDepth: 0.008, modRate: 0.04, tension: 'humming' }, // Low machinery
+      { freq: 90, volume: 0.15, type: 'triangle' as OscillatorType, modDepth: 0.008, modRate: 0.04, tension: 'humming' }, // Low machinery
       { freq: 240, volume: 0.12, type: 'triangle' as OscillatorType, modDepth: 0.012, modRate: 0.09, tension: 'humming' }, // High systems
 
       // DRAMATIC SUB-BASS FOUNDATION - Ominous but subtle
       { freq: currentScale[0] * 0.2, volume: 0.25, type: 'sine' as OscillatorType, modDepth: 0.08, modRate: 0.05, tension: 'ominous' },
-      { freq: currentScale[0] * 0.4, volume: 0.22, type: 'sawtooth' as OscillatorType, modDepth: 0.06, modRate: 0.08, tension: 'ominous' },
+      { freq: currentScale[0] * 0.4, volume: 0.22, type: 'sine' as OscillatorType, modDepth: 0.06, modRate: 0.08, tension: 'ominous' },
       { freq: currentScale[4] * 0.25, volume: 0.2, type: 'triangle' as OscillatorType, modDepth: 0.07, modRate: 0.12, tension: 'ominous' },
 
       // TENSION BUILDERS - Dissonant but background
-      { freq: currentScale[1] * 0.6, volume: 0.18, type: 'sawtooth' as OscillatorType, modDepth: 0.12, modRate: 0.18, tension: 'suspense' },
-      { freq: currentScale[2] * 0.8, volume: 0.16, type: 'square' as OscillatorType, modDepth: 0.1, modRate: 0.15, tension: 'suspense' },
-      { freq: currentScale[3] * 0.9, volume: 0.14, type: 'sawtooth' as OscillatorType, modDepth: 0.09, modRate: 0.22, tension: 'suspense' },
+      { freq: currentScale[1] * 0.6, volume: 0.18, type: 'triangle' as OscillatorType, modDepth: 0.12, modRate: 0.18, tension: 'suspense' },
+      { freq: currentScale[2] * 0.8, volume: 0.16, type: 'triangle' as OscillatorType, modDepth: 0.1, modRate: 0.15, tension: 'suspense' },
+      { freq: currentScale[3] * 0.9, volume: 0.14, type: 'sine' as OscillatorType, modDepth: 0.09, modRate: 0.22, tension: 'suspense' },
 
       // CINEMATIC MID-RANGE - Epic but restrained
       { freq: currentScale[0] * 1.2, volume: 0.12, type: 'triangle' as OscillatorType, modDepth: 0.15, modRate: 0.28, tension: 'epic' },
-      { freq: currentScale[2] * 1.5, volume: 0.11, type: 'sawtooth' as OscillatorType, modDepth: 0.18, modRate: 0.35, tension: 'epic' },
-      { freq: currentScale[4] * 1.8, volume: 0.1, type: 'square' as OscillatorType, modDepth: 0.2, modRate: 0.42, tension: 'epic' },
+      { freq: currentScale[2] * 1.5, volume: 0.11, type: 'triangle' as OscillatorType, modDepth: 0.18, modRate: 0.35, tension: 'epic' },
+      { freq: currentScale[4] * 1.8, volume: 0.1, type: 'sine' as OscillatorType, modDepth: 0.2, modRate: 0.42, tension: 'epic' },
 
       // DRAMATIC HARMONICS - Subtle intensity
-      { freq: currentScale[1] * 2.2, volume: 0.09, type: 'sawtooth' as OscillatorType, modDepth: 0.25, modRate: 0.48, tension: 'intense' },
+      { freq: currentScale[1] * 2.2, volume: 0.09, type: 'sine' as OscillatorType, modDepth: 0.25, modRate: 0.48, tension: 'intense' },
       { freq: currentScale[3] * 2.8, volume: 0.08, type: 'triangle' as OscillatorType, modDepth: 0.22, modRate: 0.55, tension: 'intense' },
-      { freq: currentScale[0] * 3.5, volume: 0.07, type: 'square' as OscillatorType, modDepth: 0.28, modRate: 0.62, tension: 'intense' },
+      { freq: currentScale[0] * 3.5, volume: 0.07, type: 'sine' as OscillatorType, modDepth: 0.28, modRate: 0.62, tension: 'intense' },
 
       // ETHEREAL DRAMA - Whisper-level tension
       { freq: currentScale[2] * 4.2, volume: 0.06, type: 'sine' as OscillatorType, modDepth: 0.35, modRate: 0.75, tension: 'ethereal' },
@@ -1149,8 +1219,8 @@ const Pong404: React.FC = () => {
           modCharacter = { rate: layer.modRate, depth: layer.modDepth }; // Minimal modulation for stability
           break;
         case 'ominous':
-          lfo.type = 'sawtooth'; // Harsh, threatening
-          modCharacter = { rate: layer.modRate * 0.3, depth: layer.modDepth * 2.5 };
+          lfo.type = 'sine'; // Smooth, mysterious
+          modCharacter = { rate: layer.modRate * 0.3, depth: layer.modDepth * 1.5 };
           break;
         case 'suspense':
           lfo.type = 'triangle'; // Building tension
@@ -1161,8 +1231,8 @@ const Pong404: React.FC = () => {
           modCharacter = { rate: layer.modRate * 0.6, depth: layer.modDepth * 3.2 };
           break;
         case 'intense':
-          lfo.type = 'square'; // Chaotic energy
-          modCharacter = { rate: layer.modRate * 2.5, depth: layer.modDepth * 5.0 };
+          lfo.type = 'triangle'; // Smooth intensity
+          modCharacter = { rate: layer.modRate * 2.0, depth: layer.modDepth * 3.0 };
           break;
         case 'ethereal':
           lfo.type = 'sine'; // Mystical waves
@@ -1506,8 +1576,15 @@ const Pong404: React.FC = () => {
           echoGain.connect(outputGain);
         }
 
-        // Connect to final output
-        outputGain.connect(audioContextRef.current!.destination);
+        // Create and connect speech master gain if not exists
+        if (!speechMasterGainRef.current) {
+          speechMasterGainRef.current = audioContextRef.current!.createGain();
+          speechMasterGainRef.current.gain.setValueAtTime(0.4, audioContextRef.current!.currentTime); // Balanced speech level
+          speechMasterGainRef.current.connect(audioContextRef.current!.destination);
+        }
+
+        // Connect to speech master gain instead of direct destination
+        outputGain.connect(speechMasterGainRef.current);
 
         // Play the processed audio
         source.start();
@@ -1610,8 +1687,15 @@ const Pong404: React.FC = () => {
           echoGain.connect(outputGain);
         }
 
-        // Connect to final output
-        outputGain.connect(audioContextRef.current!.destination);
+        // Create and connect speech master gain if not exists
+        if (!speechMasterGainRef.current) {
+          speechMasterGainRef.current = audioContextRef.current!.createGain();
+          speechMasterGainRef.current.gain.setValueAtTime(0.4, audioContextRef.current!.currentTime); // Balanced speech level
+          speechMasterGainRef.current.connect(audioContextRef.current!.destination);
+        }
+
+        // Connect to speech master gain instead of direct destination
+        outputGain.connect(speechMasterGainRef.current);
 
         // Play the processed audio (force speech)
         source.start();
@@ -1676,13 +1760,18 @@ const Pong404: React.FC = () => {
 
   // Separate cleanup effect that only runs on unmount
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
+      isMountedRef.current = false;
+      // Delay cleanup to avoid React development mode double-mounting issues
+      setTimeout(() => {
+        if (!isMountedRef.current && wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+          wsRef.current.close();
+        }
+        if (reconnectTimeoutRef.current) {
+          clearTimeout(reconnectTimeoutRef.current);
+        }
+      }, 100);
     };
   }, []); // Empty dependency array = only on mount/unmount
 
@@ -1699,8 +1788,9 @@ const Pong404: React.FC = () => {
 
   // Mouse and touch control state
   const [mouseY, setMouseY] = useState<number | null>(null);
+  const [mouseX, setMouseX] = useState<number | null>(null);
   const [touchY, setTouchY] = useState<number | null>(null);
-  const [controlSide, setControlSide] = useState<'left' | 'right' | null>(null);
+  const [controlSide, setControlSide] = useState<'left' | 'right' | 'top' | 'bottom' | null>(null);
   const [cursorHidden, setCursorHidden] = useState(false);
 
   const [infoTextFadeStart, setInfoTextFadeStart] = useState<number | null>(null);
@@ -1901,6 +1991,7 @@ const Pong404: React.FC = () => {
   const updateGame = useCallback(() => {
     setGameState(prevState => {
       const newState = { ...prevState };
+      const now = Date.now();
 
       // Ensure trails object exists to prevent crashes
       if (!newState.trails) {
@@ -1911,6 +2002,29 @@ const Pong404: React.FC = () => {
           topPaddle: [],
           bottomPaddle: []
         };
+      }
+
+      // Ensure all trail arrays exist
+      if (!newState.trails.ball) newState.trails.ball = [];
+      if (!newState.trails.leftPaddle) newState.trails.leftPaddle = [];
+      if (!newState.trails.rightPaddle) newState.trails.rightPaddle = [];
+      if (!newState.trails.topPaddle) newState.trails.topPaddle = [];
+      if (!newState.trails.bottomPaddle) newState.trails.bottomPaddle = [];
+
+      // Ensure other arrays exist
+      if (!newState.pickups) newState.pickups = [];
+      if (!newState.coins) newState.coins = [];
+      if (!newState.activeEffects) newState.activeEffects = [];
+
+      // Ensure effect objects exist
+      if (!newState.pickupEffect) {
+        newState.pickupEffect = { isActive: false, startTime: 0, x: 0, y: 0 };
+      }
+      if (!newState.rumbleEffect) {
+        newState.rumbleEffect = { isActive: false, startTime: 0, intensity: 0 };
+      }
+      if (!newState.decrunchEffect) {
+        newState.decrunchEffect = { isActive: false, startTime: 0, duration: 0 };
       }
 
       // Debug: Check if paddles are being lost in the game loop
@@ -1990,6 +2104,10 @@ const Pong404: React.FC = () => {
                 topPaddle: [],
                 bottomPaddle: []
               };
+            }
+            // Ensure rightPaddle array exists
+            if (!newState.trails.rightPaddle) {
+              newState.trails.rightPaddle = [];
             }
             newState.trails.rightPaddle.push({
               x: canvasSize.width - 12 - newState.paddles.right.width / 2,
@@ -2100,6 +2218,20 @@ const Pong404: React.FC = () => {
 
           // Add trail tracking for left paddle AI movement
           if (Math.abs(newState.paddles.left.velocity) > 0.01) {
+            // Ensure trails object exists
+            if (!newState.trails) {
+              newState.trails = {
+                ball: [],
+                leftPaddle: [],
+                rightPaddle: [],
+                topPaddle: [],
+                bottomPaddle: []
+              };
+            }
+            // Ensure leftPaddle array exists
+            if (!newState.trails.leftPaddle) {
+              newState.trails.leftPaddle = [];
+            }
             newState.trails.leftPaddle.push({
               x: 12 + newState.paddles.left.width / 2, // Paddle center X
               y: newState.paddles.left.y + newState.paddles.left.height / 2,
@@ -2213,8 +2345,15 @@ const Pong404: React.FC = () => {
         if (multiplayerState.playerSide === 'left' || localTestMode) {
           const oldY = newState.paddles.left.y;
 
+          // Handle mouse control for left paddle
+          if (controlSide === 'left' && mouseY !== null) {
+            const targetY = mouseY - newState.paddles.left.height / 2;
+            const clampedY = Math.max(12, Math.min(canvasSize.height - 12 - newState.paddles.left.height, targetY));
+            newState.paddles.left.velocity = clampedY - newState.paddles.left.y;
+            newState.paddles.left.y = clampedY;
+          }
           // Left paddle - W/S keys (W = UP, S = DOWN) - with acceleration
-          if (keys.w) {
+          else if (keys.w) {
             // W key moves UP (decrease Y) - with acceleration
             newState.paddles.left.velocity -= 1.2; // Reduced acceleration
             newState.paddles.left.velocity = Math.max(-newState.paddles.left.speed * 1.5, newState.paddles.left.velocity);
@@ -2252,8 +2391,15 @@ const Pong404: React.FC = () => {
         if (multiplayerState.playerSide === 'right' || localTestMode) {
           const oldY = newState.paddles.right.y;
 
+          // Handle mouse control for right paddle
+          if (controlSide === 'right' && mouseY !== null) {
+            const targetY = mouseY - newState.paddles.right.height / 2;
+            const clampedY = Math.max(12, Math.min(canvasSize.height - 12 - newState.paddles.right.height, targetY));
+            newState.paddles.right.velocity = clampedY - newState.paddles.right.y;
+            newState.paddles.right.y = clampedY;
+          }
           // Right paddle - Arrow keys (UP = UP, DOWN = DOWN) - with acceleration
-          if (keys.up) {
+          else if (keys.up) {
             // UP arrow moves UP (decrease Y) - with acceleration
             newState.paddles.right.velocity -= 1.2; // Reduced acceleration
             newState.paddles.right.velocity = Math.max(-newState.paddles.right.speed * 1.5, newState.paddles.right.velocity);
@@ -2293,7 +2439,14 @@ const Pong404: React.FC = () => {
         if ((multiplayerState.playerSide === 'top' || localTestMode) && newState.paddles.top) {
           const oldX = newState.paddles.top.x;
 
-          if (keys.a) {
+          // Handle mouse control for top paddle
+          if (controlSide === 'top' && mouseX !== null) {
+            const targetX = mouseX - newState.paddles.top.width / 2;
+            const clampedX = Math.max(12, Math.min(canvasSize.width - 12 - newState.paddles.top.width, targetX));
+            newState.paddles.top.velocity = clampedX - newState.paddles.top.x;
+            newState.paddles.top.x = clampedX;
+          }
+          else if (keys.a) {
             // A key moves LEFT (decrease X) - with acceleration
             newState.paddles.top.velocity -= 1.2; // Reduced acceleration
             newState.paddles.top.velocity = Math.max(-newState.paddles.top.speed * 1.5, newState.paddles.top.velocity);
@@ -2334,7 +2487,14 @@ const Pong404: React.FC = () => {
         if ((multiplayerState.playerSide === 'bottom' || localTestMode) && newState.paddles.bottom) {
           const oldX = newState.paddles.bottom.x;
 
-          if (keys.left) {
+          // Handle mouse control for bottom paddle
+          if (controlSide === 'bottom' && mouseX !== null) {
+            const targetX = mouseX - newState.paddles.bottom.width / 2;
+            const clampedX = Math.max(12, Math.min(canvasSize.width - 12 - newState.paddles.bottom.width, targetX));
+            newState.paddles.bottom.velocity = clampedX - newState.paddles.bottom.x;
+            newState.paddles.bottom.x = clampedX;
+          }
+          else if (keys.left) {
             // Left arrow moves LEFT (decrease X) - with acceleration
             newState.paddles.bottom.velocity -= 1.2; // Reduced acceleration
             newState.paddles.bottom.velocity = Math.max(-newState.paddles.bottom.speed * 1.5, newState.paddles.bottom.velocity);
@@ -3231,7 +3391,7 @@ const Pong404: React.FC = () => {
 
       return newState;
     });
-  }, [keys, playMelodyNote, canvasSize, multiplayerState.isGameMaster, updateGameState, localTestMode, multiplayerState.playerSide, updatePaddlePosition, multiplayerState, mouseY, touchY, controlSide, createPickup, applyPickupEffect, updateEffects, initializeAudio, speakRobotic]);
+  }, [keys, playMelodyNote, canvasSize, multiplayerState.isGameMaster, updateGameState, localTestMode, multiplayerState.playerSide, updatePaddlePosition, multiplayerState, mouseY, mouseX, touchY, controlSide, createPickup, applyPickupEffect, updateEffects, initializeAudio, speakRobotic]);
 
   // Handle keyboard input
   useEffect(() => {
@@ -3241,81 +3401,41 @@ const Pong404: React.FC = () => {
 
       console.log('🔍 Key pressed:', e.key, 'audioPromptDismissedRef:', audioPromptDismissedRef.current, 'showAudioPrompt:', showAudioPrompt);
 
-      // Handle audio prompt dismissal - any key dismisses it (but only once)
-      if (showAudioPrompt && !audioPromptDismissedRef.current) {
-        console.log('🔊 Dismissing audio prompt, showing title screen - showAudioPrompt:', showAudioPrompt, 'showStartScreen:', gameState.showStartScreen);
+      // Handle audio prompt dismissal with spacebar - dismiss AND start game immediately
+      if (showAudioPrompt && !audioPromptDismissedRef.current && e.key === ' ') {
+        console.log('🔊 Dismissing audio prompt and starting game immediately');
+        audioPromptDismissedRef.current = true;
+        setShowAudioPrompt(false);
+        await initializeAudio();
+
+        // Start multiplayer game immediately after audio dismissal
+        console.log('✅ Starting multiplayer game after audio dismissal!');
+        console.log('🔗 Connecting to WebSocket server...');
+        setGameState(prev => ({
+          ...prev,
+          showStartScreen: false,
+          gameMode: 'multiplayer',
+          isPlaying: true
+        }));
+
+        // Connect to WebSocket
+        connectWebSocket();
+        return;
+      }
+
+      // Handle non-spacebar audio prompt dismissal (other keys just dismiss, don't start game)
+      if (showAudioPrompt && !audioPromptDismissedRef.current && e.key !== ' ') {
+        console.log('🔊 Dismissing audio prompt with non-spacebar key');
         audioPromptDismissedRef.current = true;
         setShowAudioPrompt(false);
         setGameState(prev => ({ ...prev, showStartScreen: true }));
         await initializeAudio();
-
-        // Force progression after a short delay if user presses spacebar again quickly
-        setTimeout(() => {
-          if (audioPromptDismissedRef.current) {
-            console.log('🚀 Force enabling title screen after audio dismissal');
-          }
-        }, 100);
         return;
       }
 
-      // If ref says dismissed, treat as if we're on title screen regardless of state
-      if (audioPromptDismissedRef.current && e.key === ' ') {
-        console.log('🎮 Audio dismissed via ref - proceeding to game start logic');
-
-        // Copy the game start logic here
-        console.log('✅ Starting multiplayer game!');
-
-        // Try to connect to multiplayer WebSocket
-        if (!multiplayerState.isConnected && connectionStatus !== 'error') {
-          console.log('🔗 Connecting to WebSocket server...');
-          try {
-            connectWebSocket();
-            setGameState(prev => ({
-              ...prev,
-              showStartScreen: false,
-              gameMode: 'multiplayer',
-              isPlaying: true
-            }));
-            setTimeout(() => speakRobotic('CONNECTING TO SERVER'), 100);
-          } catch (error) {
-            console.error('❌ Failed to connect to multiplayer:', error);
-            // Fallback to single player if connection fails
-            setGameState(prev => ({
-              ...prev,
-              showStartScreen: false,
-              gameMode: 'player',
-              isPlaying: true
-            }));
-            setTimeout(() => speakRobotic('CONNECTION FAILED, STARTING SINGLE PLAYER'), 100);
-          }
-        } else if (multiplayerState.isConnected) {
-          // Already connected, just start the game
-          console.log('🎮 Already connected, starting multiplayer game!');
-          setGameState(prev => ({
-            ...prev,
-            showStartScreen: false,
-            gameMode: 'multiplayer',
-            isPlaying: true
-          }));
-          setTimeout(() => speakRobotic('MULTIPLAYER GAME STARTING'), 100);
-        } else {
-          // Connection error, fallback to single player
-          console.log('⚠️ Connection error, starting single player');
-          setGameState(prev => ({
-            ...prev,
-            showStartScreen: false,
-            gameMode: 'player',
-            isPlaying: true
-          }));
-          setTimeout(() => speakRobotic('STARTING SINGLE PLAYER MODE'), 100);
-        }
-        return;
-      }
 
       console.log('🔍 State check - showAudioPrompt:', showAudioPrompt, 'showStartScreen:', gameState.showStartScreen);
 
-      // Disable all game controls in spectator mode (except space for audio)
-      if (isSpectatorMode && e.key !== ' ') return;
 
       // Initialize audio on first user interaction
       await initializeAudio();
@@ -3424,7 +3544,9 @@ const Pong404: React.FC = () => {
           }
 
           // Check if game has ended - restart if so
-          if (gameState.gameEnded) {
+          console.log('🎮 Checking gameEnded:', gameState.gameEnded, 'winner:', gameState.winner);
+          if (gameState.gameEnded && gameState.winner) { // Only reset if there's actually a winner
+            console.log('🔄 Game ended detected, resetting to start screen');
             // Reset game state for new game
             setGameState({
               ball: {
@@ -3534,8 +3656,6 @@ const Pong404: React.FC = () => {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      // Disable all game controls in spectator mode
-      if (isSpectatorMode) return;
 
       switch (e.key.toLowerCase()) {
         case 'w':
@@ -3812,6 +3932,7 @@ const Pong404: React.FC = () => {
     }
 
     // 🚀 START SCREEN
+    console.log('🎮 Render check - showStartScreen:', gameState.showStartScreen, 'gameMode:', gameState.gameMode, 'isPlaying:', gameState.isPlaying);
     if (gameState.showStartScreen) {
       // Main title
       ctx.fillStyle = currentColors.foreground;
@@ -4322,22 +4443,17 @@ const Pong404: React.FC = () => {
 
     // 🏆 WINNER ANNOUNCEMENT 🏆
     if (gameState.gameEnded && gameState.winner) {
-      // Animated winner display with pulsing and glow effects
+      // Animated winner display with pulsing effects
       ctx.save();
       ctx.translate(canvasSize.width / 2, canvasSize.height / 2);
 
       // Pulsing animation effect
       const time = Date.now() * 0.001;
       const pulseScale = 1 + Math.sin(time * 8) * 0.1; // Pulse between 0.9 and 1.1
-      const glowIntensity = (Math.sin(time * 6) + 1) * 0.5; // Glow between 0 and 1
 
       ctx.scale(pulseScale, pulseScale);
 
-      // Glowing effect with shadow
-      ctx.shadowColor = '#ffffff';
-      ctx.shadowBlur = 20 + glowIntensity * 10;
-
-      // Winner announcement - animated white with glow
+      // Winner announcement - animated white
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 64px "Press Start 2P", monospace';
       ctx.textAlign = 'center';
@@ -4647,16 +4763,16 @@ const Pong404: React.FC = () => {
         setTimeout(() => startAmbienceSound(), 50); // Even shorter delay
       }
 
-      // Disable paddle controls in spectator mode (but allow audio initialization)
-      if (isSpectatorMode) return;
 
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
-        // Calculate mouse Y position relative to canvas, clamping to canvas bounds
+        // Calculate mouse position relative to canvas, clamping to canvas bounds
         const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+        const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
         setMouseY(y);
+        setMouseX(x);
 
-        // In multiplayer, only control your assigned paddle
+        // Always enable mouse control for your assigned paddle
         if (gameState.gameMode === 'multiplayer') {
           setControlSide(multiplayerState.playerSide === 'spectator' ? null : multiplayerState.playerSide);
         } else {
@@ -4747,6 +4863,7 @@ const Pong404: React.FC = () => {
         onMouseLeave={() => {
           // Disable mouse control when leaving canvas
           setMouseY(null);
+          setMouseX(null);
           setControlSide(null);
           setCursorHidden(false);
         }}
@@ -4755,8 +4872,6 @@ const Pong404: React.FC = () => {
           // Initialize audio on first touch
           await initializeAudio();
 
-          // Disable touch controls in spectator mode
-          if (isSpectatorMode) return;
 
           const rect = canvasRef.current?.getBoundingClientRect();
           if (rect && e.touches.length > 0) {
@@ -4775,8 +4890,6 @@ const Pong404: React.FC = () => {
         }}
         onTouchMove={(e) => {
           e.preventDefault();
-          // Disable touch controls in spectator mode
-          if (isSpectatorMode) return;
 
           const rect = canvasRef.current?.getBoundingClientRect();
           if (rect && e.touches.length > 0) {
@@ -4787,8 +4900,6 @@ const Pong404: React.FC = () => {
         }}
         onTouchEnd={(e) => {
           e.preventDefault();
-          // Disable touch controls in spectator mode
-          if (isSpectatorMode) return;
 
           setTouchY(null);
           setControlSide(null);

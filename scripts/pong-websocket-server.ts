@@ -82,6 +82,7 @@ class PongWebSocketServer {
       maxPayload: 1024 * 1024 // 1MB
     });
     this.setupWebSocketHandlers();
+    this.createPersistentMainRoom();
     this.startCleanupInterval();
   }
 
@@ -191,6 +192,10 @@ class PongWebSocketServer {
         playerSide = 'top';
       } else if (!bottomPlayer) {
         playerSide = 'bottom';
+      } else {
+        // All 4 positions are taken, join as spectator
+        playerSide = 'spectator';
+        console.log(`   ├─ All 4 positions taken, player ${playerId} joining as spectator`);
       }
     }
 
@@ -340,17 +345,49 @@ class PongWebSocketServer {
         }
       }
 
-      // Clean up empty rooms
-      if (room.players.size === 0) {
+      // Check if we need to promote a spectator to fill the leaving player's position
+      let promotedSpectator = false;
+      let replacementType = 'ai';
+
+      if (player.side !== 'spectator') {
+        // Find a spectator to promote to the leaving player's position
+        const spectators = Array.from(room.players.values()).filter(p => p.side === 'spectator');
+        if (spectators.length > 0) {
+          const spectator = spectators[0];
+          spectator.side = player.side;
+          promotedSpectator = true;
+          replacementType = 'spectator';
+
+          // Notify the promoted spectator
+          spectator.ws.send(JSON.stringify({
+            type: 'joined_room',
+            data: {
+              playerSide: player.side,
+              isGameMaster: false,
+              playerCount: room.players.size
+            }
+          }));
+
+          console.log(`🔄 Spectator ${spectator.id} promoted to ${player.side} position`);
+        }
+      }
+
+      // Clean up empty rooms (except main room which is persistent)
+      if (room.players.size === 0 && player.roomId !== 'main') {
         this.rooms.delete(player.roomId);
         console.log(`🗑️ Empty room ${player.roomId} deleted`);
+      } else if (room.players.size === 0 && player.roomId === 'main') {
+        console.log(`🏠 Main room kept alive (empty but persistent)`);
       } else {
         // Notify remaining players
         this.broadcastToRoom(player.roomId, {
           type: 'player_left',
           data: {
             playerId,
-            playerCount: room.players.size
+            playerSide: player.side,
+            playerCount: room.players.size,
+            replacementType,
+            promotedSpectator
           }
         });
       }
@@ -454,6 +491,13 @@ class PongWebSocketServer {
         }
       });
     }, 10000); // Check every 10 seconds
+  }
+
+  private createPersistentMainRoom() {
+    // Create the main room that persists even when empty
+    const mainRoom = this.createNewRoom('main');
+    this.rooms.set('main', mainRoom);
+    console.log(`🏠 Persistent main room created`);
   }
 
   public start() {
