@@ -148,7 +148,7 @@ const PADDLE_ACCELERATION = 0.2; // Reduced acceleration for smoother control
 const PADDLE_FRICTION = 0.88; // Slightly more friction for better control
 const HUMAN_REACTION_DELAY = 8; // Reduced delay for more responsive AI at 60fps
 const PANIC_MOVE_CHANCE = 0.08; // Lower chance for panic moves at 60fps
-const COLLISION_BUFFER = 3; // Extra pixels for collision detection tolerance
+const COLLISION_BUFFER = 5; // Extra pixels for collision detection tolerance (increased for reliability)
 const PANIC_VELOCITY_MULTIPLIER = 8; // Reduced panic speed multiplier
 const EXTREME_PANIC_CHANCE = 0.04; // Lower extreme panic chance
 const EXTREME_PANIC_MULTIPLIER = 20; // Reduced extreme panic speed
@@ -958,14 +958,29 @@ const Pong404: React.FC = () => {
       case 'paddle_updated':
         setGameState(prev => {
           const newState = { ...prev };
-          if (message.data.side === 'left') {
-            newState.paddles.left.y = message.data.y;
-            newState.paddles.left.velocity = message.data.velocity || 0;
-            newState.paddles.left.targetY = message.data.targetY || message.data.y;
-          } else if (message.data.side === 'right') {
-            newState.paddles.right.y = message.data.y;
-            newState.paddles.right.velocity = message.data.velocity || 0;
-            newState.paddles.right.targetY = message.data.targetY || message.data.y;
+          const now = Date.now();
+          const data = message.data;
+
+          // Calculate lag compensation if timestamp is provided
+          let compensatedY = data.y;
+          if (data.ts && data.velocity) {
+            const networkDelay = now - data.ts;
+            // Predict where paddle should be now based on velocity and network delay
+            compensatedY = data.y + (data.velocity * networkDelay / 1000);
+          }
+
+          if (data.side === 'left') {
+            newState.paddles.left.y = compensatedY;
+            newState.paddles.left.velocity = data.velocity || 0;
+            newState.paddles.left.targetY = data.targetY || compensatedY;
+            // Clamp to bounds (using fixed canvas size)
+            newState.paddles.left.y = Math.max(0, Math.min(newState.paddles.left.y, 800 - newState.paddles.left.height));
+          } else if (data.side === 'right') {
+            newState.paddles.right.y = compensatedY;
+            newState.paddles.right.velocity = data.velocity || 0;
+            newState.paddles.right.targetY = data.targetY || compensatedY;
+            // Clamp to bounds (using fixed canvas size)
+            newState.paddles.right.y = Math.max(0, Math.min(newState.paddles.right.y, 800 - newState.paddles.right.height));
           }
           return newState;
         });
@@ -1097,8 +1112,8 @@ const Pong404: React.FC = () => {
     }
   }, [multiplayerState.playerId, multiplayerState.roomId]);
 
-  // Paddle update throttling
-  const PADDLE_UPDATE_RATE = 1000 / 20; // 20Hz for paddle updates (50ms)
+  // Paddle update throttling - 60Hz for smooth multiplayer
+  const PADDLE_UPDATE_RATE = 1000 / 60; // 60Hz for paddle updates (16.67ms)
   const lastPaddleUpdateRef = useRef<number>(0);
   const pendingPaddleUpdateRef = useRef<NodeJS.Timeout | null>(null);
   const lastPaddlePositionRef = useRef<number>(0);
@@ -1110,8 +1125,8 @@ const Pong404: React.FC = () => {
       const timeSinceLastUpdate = now - lastPaddleUpdateRef.current;
       const positionChange = Math.abs(y - lastPaddlePositionRef.current);
 
-      // Send immediately if significant movement or enough time has passed
-      if (positionChange > 2 || timeSinceLastUpdate >= PADDLE_UPDATE_RATE) {
+      // Send immediately if ANY movement or enough time has passed (0.5px threshold for maximum responsiveness)
+      if (positionChange > 0.5 || timeSinceLastUpdate >= PADDLE_UPDATE_RATE) {
         // Cancel pending update
         if (pendingPaddleUpdateRef.current) {
           clearTimeout(pendingPaddleUpdateRef.current);
@@ -1124,7 +1139,8 @@ const Pong404: React.FC = () => {
           d: {
             y,
             v: velocity, // shortened velocity
-            tY: targetY || y // shortened targetY
+            tY: targetY || y, // shortened targetY
+            ts: now // timestamp for lag compensation
           }
         }));
 
@@ -1144,7 +1160,8 @@ const Pong404: React.FC = () => {
                 d: {
                   y,
                   v: velocity, // shortened velocity
-                  tY: targetY || y // shortened targetY
+                  tY: targetY || y, // shortened targetY
+                  ts: Date.now() // timestamp for lag compensation
                 }
               }));
 
@@ -1160,8 +1177,8 @@ const Pong404: React.FC = () => {
   // Track previous game state for delta compression
   const previousGameStateRef = useRef<GameState | null>(null);
 
-  // Network update throttling - 15Hz for optimal network performance
-  const NETWORK_UPDATE_RATE = 1000 / 15; // 66.67ms between updates
+  // Network update throttling - 30Hz for responsive multiplayer
+  const NETWORK_UPDATE_RATE = 1000 / 30; // 33.33ms between updates
   const lastNetworkUpdateRef = useRef<number>(0);
   const pendingNetworkUpdateRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -2816,7 +2833,7 @@ const Pong404: React.FC = () => {
 
         // Interpolate smoothly towards the predicted state (but preserve local paddle control)
         const interpolationFactor = Math.min(timeSinceNetworkUpdate / NETWORK_UPDATE_RATE, 1.0);
-        const interpolatedState = interpolateGameStateRef.current?.(prevState, predictedState, interpolationFactor * 0.3); // Gentle interpolation
+        const interpolatedState = interpolateGameStateRef.current?.(prevState, predictedState, interpolationFactor * 0.7); // Stronger interpolation for smoothness
 
         // Use interpolated state as base, but preserve local paddle control
         newState = {
@@ -2964,6 +2981,13 @@ const Pong404: React.FC = () => {
           // End pause and resume game
           newState.isPaused = false;
           newState.pauseEndTime = 0;
+
+          // Restart ball movement if it's not moving (fix ball respawn issue)
+          if (Math.abs(newState.ball.dx) < 0.1 && Math.abs(newState.ball.dy) < 0.1) {
+            newState.ball.dx = Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED;
+            newState.ball.dy = (Math.random() - 0.5) * BALL_SPEED * 0.8; // Random vertical component
+            console.log('🏓 Ball movement restarted after pause:', { dx: newState.ball.dx, dy: newState.ball.dy });
+          }
         } else {
           // Still paused - allow paddle movement but skip ball logic
           // Don't return early, just skip ball/collision logic later
@@ -2990,7 +3014,7 @@ const Pong404: React.FC = () => {
         if (controlSide === 'right' && (mouseY !== null || touchY !== null)) {
           // Mouse/touch control for right paddle (player)
           const targetY = (touchY !== null ? touchY : mouseY!) - newState.paddles.right.height / 2;
-          const clampedY = Math.max(30, Math.min(canvasSize.height - 30 - newState.paddles.right.height, targetY));
+          const clampedY = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, targetY));
 
           // Calculate velocity based on movement delta for trail effects
           const deltaY = clampedY - newState.paddles.right.y;
@@ -3071,7 +3095,7 @@ const Pong404: React.FC = () => {
         }
 
         // Clamp right paddle position
-        newState.paddles.right.y = Math.max(30, Math.min(canvasSize.height - 30 - newState.paddles.right.height, newState.paddles.right.y));
+        newState.paddles.right.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, newState.paddles.right.y));
 
         // In player mode, make the left paddle AI-controlled (always, since player controls right)
         if (newState.gameMode === 'player') {
@@ -3301,7 +3325,7 @@ const Pong404: React.FC = () => {
           // Handle mouse control for left paddle (always enabled)
           if (mouseY !== null) {
             const targetY = mouseY - newState.paddles.left.height / 2;
-            const clampedY = Math.max(30, Math.min(canvasSize.height - 30 - newState.paddles.left.height, targetY));
+            const clampedY = Math.max(0, Math.min(canvasSize.height - newState.paddles.left.height,targetY));
             newState.paddles.left.velocity = clampedY - newState.paddles.left.y;
             newState.paddles.left.y = clampedY;
           }
@@ -3327,7 +3351,7 @@ const Pong404: React.FC = () => {
           }
 
           // Clamp left paddle position
-          newState.paddles.left.y = Math.max(30, Math.min(canvasSize.height - 30 - newState.paddles.left.height, newState.paddles.left.y));
+          newState.paddles.left.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.left.height,newState.paddles.left.y));
 
           // Add left paddle trail point
           if (Math.abs(newState.paddles.left.velocity) > 0.01) {
@@ -3350,7 +3374,7 @@ const Pong404: React.FC = () => {
           // Handle mouse control for right paddle (always enabled)
           if (mouseY !== null) {
             const targetY = mouseY - newState.paddles.right.height / 2;
-            const clampedY = Math.max(30, Math.min(canvasSize.height - 30 - newState.paddles.right.height, targetY));
+            const clampedY = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, targetY));
             newState.paddles.right.velocity = clampedY - newState.paddles.right.y;
             newState.paddles.right.y = clampedY;
           }
@@ -3376,7 +3400,7 @@ const Pong404: React.FC = () => {
           }
 
           // Clamp right paddle position
-          newState.paddles.right.y = Math.max(30, Math.min(canvasSize.height - 30 - newState.paddles.right.height, newState.paddles.right.y));
+          newState.paddles.right.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, newState.paddles.right.y));
 
           // Add right paddle trail point
           if (Math.abs(newState.paddles.right.velocity) > 0.01) {
@@ -3401,7 +3425,7 @@ const Pong404: React.FC = () => {
           // Handle mouse control for top paddle (always enabled)
           if (mouseX !== null) {
             const targetX = mouseX - newState.paddles.top.width / 2;
-            const clampedX = Math.max(30, Math.min(canvasSize.width - 30 - newState.paddles.top.width, targetX));
+            const clampedX = Math.max(0, Math.min(canvasSize.width - newState.paddles.top.width, targetX));
             newState.paddles.top.velocity = clampedX - newState.paddles.top.x;
             newState.paddles.top.x = clampedX;
           }
@@ -3427,7 +3451,7 @@ const Pong404: React.FC = () => {
           }
 
           // Clamp top paddle position
-          newState.paddles.top.x = Math.max(30, Math.min(canvasSize.width - 30 - newState.paddles.top.width, newState.paddles.top.x));
+          newState.paddles.top.x = Math.max(0, Math.min(canvasSize.width - newState.paddles.top.width, newState.paddles.top.x));
 
           // Add top paddle trail point
           const now = Date.now();
@@ -3453,7 +3477,7 @@ const Pong404: React.FC = () => {
           // Handle mouse control for bottom paddle (always enabled)
           if (mouseX !== null) {
             const targetX = mouseX - newState.paddles.bottom.width / 2;
-            const clampedX = Math.max(30, Math.min(canvasSize.width - 30 - newState.paddles.bottom.width, targetX));
+            const clampedX = Math.max(0, Math.min(canvasSize.width - newState.paddles.bottom.width, targetX));
             newState.paddles.bottom.velocity = clampedX - newState.paddles.bottom.x;
             newState.paddles.bottom.x = clampedX;
           }
@@ -3479,7 +3503,7 @@ const Pong404: React.FC = () => {
           }
 
           // Clamp bottom paddle position
-          newState.paddles.bottom.x = Math.max(30, Math.min(canvasSize.width - 30 - newState.paddles.bottom.width, newState.paddles.bottom.x));
+          newState.paddles.bottom.x = Math.max(0, Math.min(canvasSize.width - newState.paddles.bottom.width, newState.paddles.bottom.x));
 
           // Add bottom paddle trail point
           const now = Date.now();
@@ -4373,7 +4397,7 @@ const Pong404: React.FC = () => {
         const prevBallX = newState.ball.x - newState.ball.dx;
         const prevBallY = newState.ball.y - newState.ball.dy;
 
-        // Left paddle collision (with spacing from wall)
+        // Left paddle collision (30px spacing from left wall only)
         const leftPaddleX = 30; // 30px spacing from left wall
         const leftPaddleRight = leftPaddleX + newState.paddles.left.width;
 
@@ -4424,6 +4448,9 @@ const Pong404: React.FC = () => {
           newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
           newState.ball.lastTouchedBy = 'left';
 
+          // DEFENSIVE: Position ball safely outside paddle to prevent pass-through
+          newState.ball.x = leftPaddleRight + COLLISION_BUFFER;
+
           // Trigger rumble effect on left paddle hit
           newState.rumbleEffect.isActive = true;
           newState.rumbleEffect.startTime = Date.now();
@@ -4443,16 +4470,16 @@ const Pong404: React.FC = () => {
           }
         }
 
-        // Right paddle collision (with spacing from wall)
+        // Right paddle collision (30px spacing from right wall only)
         const rightPaddleX = canvasSize.width - 30 - newState.paddles.right.width; // 30px spacing from right wall
         const rightPaddleLeft = rightPaddleX;
 
-        // Check if ball is intersecting with right paddle
+        // Check if ball is intersecting with right paddle (with collision buffer)
         const ballIntersectsRightPaddle =
-          ballRight >= rightPaddleLeft &&
-          ballLeft <= rightPaddleX + newState.paddles.right.width &&
-          ballBottom >= newState.paddles.right.y &&
-          ballTop <= newState.paddles.right.y + newState.paddles.right.height;
+          ballRight >= rightPaddleLeft - COLLISION_BUFFER &&
+          ballLeft <= rightPaddleX + newState.paddles.right.width + COLLISION_BUFFER &&
+          ballBottom >= newState.paddles.right.y - COLLISION_BUFFER &&
+          ballTop <= newState.paddles.right.y + newState.paddles.right.height + COLLISION_BUFFER;
 
         // Check if ball came from the left side (proper collision)
         const ballCameFromLeft = prevBallX < rightPaddleLeft;
@@ -4494,6 +4521,9 @@ const Pong404: React.FC = () => {
           newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
           newState.ball.lastTouchedBy = 'right';
 
+          // DEFENSIVE: Position ball safely outside paddle to prevent pass-through
+          newState.ball.x = rightPaddleX - newState.ball.size - COLLISION_BUFFER;
+
           // Trigger rumble effect on right paddle hit
           newState.rumbleEffect.isActive = true;
           newState.rumbleEffect.startTime = Date.now();
@@ -4515,7 +4545,7 @@ const Pong404: React.FC = () => {
 
         // Top paddle collision (with spacing from wall) - only if top paddle exists
         if (newState.paddles.top) {
-          const topPaddleY = 30; // 30px spacing from top wall
+          const topPaddleY = 30; // 30px spacing from top wall only
           const topPaddleBottom = topPaddleY + newState.paddles.top.height;
 
         // Check if ball is intersecting with top paddle (with collision buffer)
@@ -4566,6 +4596,9 @@ const Pong404: React.FC = () => {
           newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
           newState.ball.lastTouchedBy = 'top';
 
+          // DEFENSIVE: Position ball safely outside paddle to prevent pass-through
+          newState.ball.y = topPaddleBottom + COLLISION_BUFFER;
+
           // Trigger rumble effect on top paddle hit
           newState.rumbleEffect.isActive = true;
           newState.rumbleEffect.startTime = Date.now();
@@ -4587,7 +4620,7 @@ const Pong404: React.FC = () => {
 
         // Bottom paddle collision (with spacing from wall) - only if bottom paddle exists
         if (newState.paddles.bottom) {
-        const bottomPaddleY = canvasSize.height - 30 - newState.paddles.bottom.height; // 30px spacing from bottom wall
+        const bottomPaddleY = canvasSize.height - 30 - newState.paddles.bottom.height; // 30px spacing from bottom wall only
         const bottomPaddleTop = bottomPaddleY;
 
         // Check if ball is intersecting with bottom paddle (with collision buffer)
@@ -4637,6 +4670,9 @@ const Pong404: React.FC = () => {
           });
           newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
           newState.ball.lastTouchedBy = 'bottom';
+
+          // DEFENSIVE: Position ball safely outside paddle to prevent pass-through
+          newState.ball.y = bottomPaddleY - newState.ball.size - COLLISION_BUFFER;
 
           // Trigger rumble effect on bottom paddle hit
           newState.rumbleEffect.isActive = true;
@@ -4897,6 +4933,22 @@ const Pong404: React.FC = () => {
         case 'c':
           e.preventDefault();
           setCrtEffect(prev => !prev);
+          break;
+        case 'm':
+          e.preventDefault();
+          // Toggle audio mute
+          if (ambienceMasterGainRef.current && speechMasterGainRef.current && beepsMasterGainRef.current) {
+            const isCurrentlyMuted = ambienceMasterGainRef.current.gain.value === 0;
+            const ambientLevel = isCurrentlyMuted ? 0.15 : 0;
+            const speechLevel = isCurrentlyMuted ? 0.8 : 0;
+            const beepsLevel = isCurrentlyMuted ? 0.15 : 0;
+
+            ambienceMasterGainRef.current.gain.setValueAtTime(ambientLevel, audioContextRef.current?.currentTime || 0);
+            speechMasterGainRef.current.gain.setValueAtTime(speechLevel, audioContextRef.current?.currentTime || 0);
+            beepsMasterGainRef.current.gain.setValueAtTime(beepsLevel, audioContextRef.current?.currentTime || 0);
+
+            console.log('🔊 Audio', isCurrentlyMuted ? 'UNMUTED' : 'MUTED');
+          }
           break;
         case ' ':
           e.preventDefault();
@@ -5513,13 +5565,13 @@ const Pong404: React.FC = () => {
     // Reset alpha for normal rendering
     ctx.globalAlpha = 1;
 
-    // Draw paddles - using dynamic color (with spacing from walls)
-    const leftPaddleX = 30; // 30px spacing from left wall
-    const rightPaddleX = canvasSize.width - 30 - gameState.paddles.right.width; // 30px spacing from right wall
-    const topPaddleY = 30; // 30px spacing from top wall
+    // Draw paddles - using dynamic color (spacing only from own wall)
+    const leftPaddleX = 30; // 30px spacing from left wall only
+    const rightPaddleX = canvasSize.width - 30 - gameState.paddles.right.width; // 30px spacing from right wall only
+    const topPaddleY = 30; // 30px spacing from top wall only
     const bottomPaddleY = gameState.paddles.bottom ?
       canvasSize.height - 30 - gameState.paddles.bottom.height :
-      canvasSize.height - 30 - 12; // 30px spacing from bottom wall, fallback to 12px height
+      canvasSize.height - 30 - 12; // 30px spacing from bottom wall only, fallback to 12px height
 
     // Get player side for color determination
     const currentPlayerSide = multiplayerStateRef.current?.playerSide;
