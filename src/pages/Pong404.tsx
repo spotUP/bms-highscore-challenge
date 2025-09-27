@@ -593,11 +593,12 @@ const Pong404: React.FC = () => {
     let playerSide: 'left' | 'right' | 'spectator' = 'spectator';
     let isGameMaster = false;
 
-    if (!leftPlayer) {
-      playerSide = 'left';
-      isGameMaster = true;
-    } else if (!rightPlayer) {
+    // FIXED: Assign right paddle first (matches arrow key controls)
+    if (!rightPlayer) {
       playerSide = 'right';
+      isGameMaster = true;
+    } else if (!leftPlayer) {
+      playerSide = 'left';
     }
 
     const playerData = { id: playerId, side: playerSide, timestamp: Date.now() };
@@ -2665,7 +2666,7 @@ const Pong404: React.FC = () => {
 
   const updateEffects = useCallback((gameState: GameState) => {
     const now = Date.now();
-    gameState.activeEffects = gameState.activeEffects.filter(effect => {
+    gameState.activeEffects = (gameState.activeEffects || []).filter(effect => {
       if (now - effect.startTime >= effect.duration) {
         // Remove effect and restore original values
         switch (effect.type) {
@@ -3452,6 +3453,105 @@ const Pong404: React.FC = () => {
           }
         }
 
+        // AI CONTROL FOR NON-HUMAN PADDLES IN MULTIPLAYER
+        const currentPlayerSide = multiplayerStateRef.current?.playerSide;
+
+        // If player controls right paddle, make left paddle AI-controlled
+        if (currentPlayerSide === 'right' && !localTestMode) {
+          const now = Date.now();
+          leftFrameCountRef.current++;
+
+          // Use AI logic for left paddle
+          const ballCenterY = newState.ball.y + newState.ball.size / 2;
+          const paddle = newState.paddles.left;
+          const reactionDelay = HUMAN_REACTION_DELAY;
+
+          if (leftFrameCountRef.current % reactionDelay === 0) {
+            const inaccuracy = (Math.random() - 0.5) * 12;
+            const targetY = Math.max(
+              paddle.height / 2,
+              Math.min(
+                canvasSize.height - paddle.height / 2,
+                ballCenterY - paddle.height / 2 + inaccuracy
+              )
+            );
+            paddle.targetY = targetY;
+          }
+
+          // Move towards target
+          const distance = paddle.targetY - paddle.y;
+          if (Math.abs(distance) > 2) {
+            const moveSpeed = Math.min(Math.abs(distance) * 0.15, paddle.speed);
+            paddle.velocity = distance > 0 ? moveSpeed : -moveSpeed;
+            paddle.y += paddle.velocity;
+          } else {
+            paddle.velocity *= 0.8;
+            paddle.y += paddle.velocity;
+          }
+
+          // Keep within bounds
+          paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
+
+          // Add trail for AI left paddle
+          if (Math.abs(newState.paddles.left.velocity) > 0.01) {
+            newState.trails.leftPaddle.push({
+              x: 12 + newState.paddles.left.width / 2,
+              y: newState.paddles.left.y + newState.paddles.left.height / 2,
+              width: newState.paddles.left.width,
+              height: newState.paddles.left.height,
+              timestamp: now
+            });
+          }
+        }
+
+        // If player controls left paddle, make right paddle AI-controlled
+        if (currentPlayerSide === 'left' && !localTestMode) {
+          const now = Date.now();
+          rightFrameCountRef.current++;
+
+          // Use AI logic for right paddle
+          const ballCenterY = newState.ball.y + newState.ball.size / 2;
+          const paddle = newState.paddles.right;
+          const reactionDelay = HUMAN_REACTION_DELAY + 3;
+
+          if (rightFrameCountRef.current % reactionDelay === 0) {
+            const inaccuracy = (Math.random() - 0.5) * 18;
+            const targetY = Math.max(
+              paddle.height / 2,
+              Math.min(
+                canvasSize.height - paddle.height / 2,
+                ballCenterY - paddle.height / 2 + inaccuracy
+              )
+            );
+            paddle.targetY = targetY;
+          }
+
+          // Move towards target
+          const distance = paddle.targetY - paddle.y;
+          if (Math.abs(distance) > 2) {
+            const moveSpeed = Math.min(Math.abs(distance) * 0.15, paddle.speed);
+            paddle.velocity = distance > 0 ? moveSpeed : -moveSpeed;
+            paddle.y += paddle.velocity;
+          } else {
+            paddle.velocity *= 0.8;
+            paddle.y += paddle.velocity;
+          }
+
+          // Keep within bounds
+          paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
+
+          // Add trail for AI right paddle
+          if (Math.abs(newState.paddles.right.velocity) > 0.01) {
+            newState.trails.rightPaddle.push({
+              x: canvasSize.width - 12 - newState.paddles.right.width / 2,
+              y: newState.paddles.right.y + newState.paddles.right.height / 2,
+              width: newState.paddles.right.width,
+              height: newState.paddles.right.height,
+              timestamp: now
+            });
+          }
+        }
+
         // Add AI for top and bottom paddles when no players are assigned to them
 
         // AI logic for horizontal paddles (copied from auto mode)
@@ -4017,10 +4117,28 @@ const Pong404: React.FC = () => {
 
         // Handle pickup spawning (max 3 simultaneous pickups)
         // Only game master spawns pickups in multiplayer to avoid duplicates
-        if (newState.pickups && newState.pickups.length < 3 && Date.now() >= newState.nextPickupTime &&
-            (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer')) {
-          newState.pickups.push(createPickupRef.current?.() || {});
-          newState.nextPickupTime = Date.now() + Math.random() * 8000 + 4000; // 4-12 seconds
+        const canSpawnPickups = (multiplayerState.isGameMaster || newState.gameMode !== 'multiplayer');
+        const timeToSpawn = Date.now() >= newState.nextPickupTime;
+        const hasSpace = newState.pickups && newState.pickups.length < 3;
+
+        if (hasSpace && timeToSpawn && canSpawnPickups && createPickupRef.current) {
+          const newPickup = createPickupRef.current();
+          if (newPickup) {
+            newState.pickups.push(newPickup);
+            newState.nextPickupTime = Date.now() + Math.random() * 8000 + 4000; // 4-12 seconds
+            console.log('🎁 Pickup spawned:', newPickup.type, 'at', newPickup.x, newPickup.y);
+          }
+        } else if (Math.floor(Date.now() / 5000) !== Math.floor((Date.now() - 16) / 5000)) { // Debug every 5 seconds
+          console.log('🔍 Pickup spawn check:', {
+            hasSpace,
+            timeToSpawn,
+            canSpawnPickups,
+            isGameMaster: multiplayerState.isGameMaster,
+            gameMode: newState.gameMode,
+            createPickupRef: !!createPickupRef.current,
+            pickupsCount: newState.pickups?.length || 0,
+            nextPickupTime: new Date(newState.nextPickupTime).toLocaleTimeString()
+          });
         }
 
         // 🌪️ Handle attractor/repulsor spawning (max 2 simultaneous, less frequent than pickups)
@@ -4567,13 +4685,32 @@ const Pong404: React.FC = () => {
       // Ignore key repeat events
       if (e.repeat) return;
 
+      console.log('🎮 KEY PRESSED:', {
+        key: e.key,
+        showAudioPrompt,
+        showStartScreen: gameState.showStartScreen,
+        isConnected: multiplayerState.isConnected,
+        connectionStatus,
+        audioPromptDismissed: audioPromptDismissedRef.current
+      });
 
       // Handle audio prompt dismissal with spacebar - dismiss and show start screen
       if (showAudioPrompt && !audioPromptDismissedRef.current && e.key === ' ') {
+        console.log('🎵 DISMISSING AUDIO PROMPT WITH SPACEBAR');
         audioPromptDismissedRef.current = true;
         setShowAudioPrompt(false);
         setGameState(prev => ({ ...prev, showStartScreen: true }));
         await initializeAudio();
+
+        // Ensure canvas gets focus for keyboard events
+        setTimeout(() => {
+          const canvas = canvasRef.current;
+          if (canvas) {
+            canvas.focus();
+            console.log('🎯 CANVAS FOCUSED FOR START SCREEN');
+          }
+        }, 100);
+
         return;
       }
 
@@ -4583,6 +4720,16 @@ const Pong404: React.FC = () => {
         setShowAudioPrompt(false);
         setGameState(prev => ({ ...prev, showStartScreen: true }));
         await initializeAudio();
+
+        // Ensure canvas gets focus for keyboard events
+        setTimeout(() => {
+          const canvas = canvasRef.current;
+          if (canvas) {
+            canvas.focus();
+            console.log('🎯 CANVAS FOCUSED FOR START SCREEN');
+          }
+        }, 100);
+
         return;
       }
 
@@ -4644,15 +4791,34 @@ const Pong404: React.FC = () => {
           break;
       }
 
-      // Check if showing start screen - start game with any key
-      if (gameState.showStartScreen) {
+      // Check if showing start screen OR if audio prompt was just dismissed - start game with any key
+      const audioJustDismissed = audioPromptDismissedRef.current && showAudioPrompt;
+      const shouldStartGame = gameState.showStartScreen || audioJustDismissed;
+
+      console.log('🚀 START SCREEN CHECK:', {
+        showStartScreen: gameState.showStartScreen,
+        audioJustDismissed,
+        shouldStartGame,
+        about_to_enter: shouldStartGame ? 'YES - ENTERING START LOGIC' : 'NO - SKIPPING START LOGIC'
+      });
+
+      if (shouldStartGame) {
+        console.log('🚀 STARTING GAME FROM START SCREEN!');
         // Try to connect to multiplayer WebSocket
         if (!multiplayerState.isConnected && connectionStatus !== 'error') {
           try {
-            console.log('🔄 Starting connection attempt...');
             connectWebSocket();
-            // DON'T start the game yet - wait for connection to be established
-            // The game will start automatically when WebSocket connects successfully
+            setGameState(prev => ({
+              ...prev,
+              showStartScreen: false,
+              gameMode: 'multiplayer',
+              isPlaying: true,
+              ball: {
+                ...prev.ball,
+                dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+                dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
+              }
+            }));
             setTimeout(() => speakRobotic('CONNECTING TO SERVER'), 100);
           } catch (error) {
             console.error('❌ Failed to connect to multiplayer:', error);
@@ -5258,7 +5424,7 @@ const Pong404: React.FC = () => {
     // Draw ball - using dynamic color (hide during pause)
     if (!gameState.isPaused) {
       // Check if ball should be invisible
-      const invisibleEffect = gameState.activeEffects.find(e => e.type === 'invisible_ball');
+      const invisibleEffect = gameState.activeEffects?.find(e => e.type === 'invisible_ball');
       if (!invisibleEffect) {
         ctx.fillRect(gameState.ball.x, gameState.ball.y, gameState.ball.size, gameState.ball.size);
       } else {

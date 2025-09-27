@@ -205,11 +205,11 @@ class PongWebSocketServer {
       const topPlayer = Array.from(room.players.values()).find(p => p.side === 'top');
       const bottomPlayer = Array.from(room.players.values()).find(p => p.side === 'bottom');
 
-      if (!leftPlayer) {
-        playerSide = 'left';
-        if (!room.gamemaster) room.gamemaster = playerId;
-      } else if (!rightPlayer) {
+      if (!rightPlayer) {
         playerSide = 'right';
+        if (!room.gamemaster) room.gamemaster = playerId;
+      } else if (!leftPlayer) {
+        playerSide = 'left';
       } else if (!topPlayer) {
         playerSide = 'top';
       } else if (!bottomPlayer) {
