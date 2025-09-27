@@ -2869,15 +2869,31 @@ const Pong404: React.FC = () => {
         const interpolationFactor = Math.min(timeSinceNetworkUpdate / NETWORK_UPDATE_RATE, 1.0);
         const interpolatedState = interpolateGameStateRef.current?.(prevState, predictedState, interpolationFactor * 0.7); // Stronger interpolation for smoothness
 
-        // Use interpolated state as base, but preserve local paddle control
-        newState = {
-          ...interpolatedState,
-          paddles: {
-            ...interpolatedState.paddles,
-            // Keep local control of player's paddle
-            [multiplayerState.playerSide]: prevState.paddles[multiplayerState.playerSide as keyof typeof prevState.paddles]
-          }
-        };
+        // CRITICAL FIX: Use interpolated state if available, otherwise use network state directly
+        if (interpolatedState) {
+          // Use interpolated state as base, but preserve local paddle control
+          newState = {
+            ...interpolatedState,
+            // FORCE AUTHORITATIVE NETWORK STATE for critical game elements
+            score: networkGameStateRef.current.score, // Always use server scores
+            ball: networkGameStateRef.current.ball,   // Always use server ball state
+            paddles: {
+              ...interpolatedState.paddles,
+              // Keep local control of player's paddle
+              [multiplayerState.playerSide]: prevState.paddles[multiplayerState.playerSide as keyof typeof prevState.paddles]
+            }
+          };
+        } else {
+          // Fallback: Use network state directly if interpolation fails
+          newState = {
+            ...networkGameStateRef.current,
+            paddles: {
+              ...networkGameStateRef.current.paddles,
+              // Keep local control of player's paddle
+              [multiplayerState.playerSide]: prevState.paddles[multiplayerState.playerSide as keyof typeof prevState.paddles]
+            }
+          };
+        }
 
         // Store predicted state for next frame
         predictedGameStateRef.current = predictedState;
@@ -5041,32 +5057,77 @@ const Pong404: React.FC = () => {
             beepsGain: !!beepsMasterGainRef.current
           });
 
-          // Initialize audio if not already done (sync version)
+          // COMPREHENSIVE AUDIO INITIALIZATION AND MUTE TOGGLE
+          console.log('🎵 M key pressed - initializing audio system...');
+
+          // Initialize audio context if needed
           if (!audioContextRef.current) {
-            console.log('🎵 Initializing audio context for M key...');
-            initializeAudio(); // Call without await since this is not an async function
+            try {
+              audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+              console.log('🎵 Created new AudioContext');
+            } catch (error) {
+              console.error('❌ Failed to create AudioContext:', error);
+              break;
+            }
           }
 
-          // Toggle audio mute with corrected logic
-          if (ambienceMasterGainRef.current && speechMasterGainRef.current && beepsMasterGainRef.current) {
+          // Resume audio context if suspended (required by browser autoplay policies)
+          if (audioContextRef.current.state === 'suspended') {
+            audioContextRef.current.resume().then(() => {
+              console.log('🎵 Resumed AudioContext');
+            }).catch((error) => {
+              console.error('❌ Failed to resume AudioContext:', error);
+            });
+          }
+
+          // Create gain nodes if they don't exist
+          if (!ambienceMasterGainRef.current && audioContextRef.current) {
+            ambienceMasterGainRef.current = audioContextRef.current.createGain();
+            ambienceMasterGainRef.current.gain.setValueAtTime(0.15, audioContextRef.current.currentTime);
+            ambienceMasterGainRef.current.connect(audioContextRef.current.destination);
+            console.log('🎵 Created ambience gain node');
+          }
+
+          if (!speechMasterGainRef.current && audioContextRef.current) {
+            speechMasterGainRef.current = audioContextRef.current.createGain();
+            speechMasterGainRef.current.gain.setValueAtTime(0.15, audioContextRef.current.currentTime);
+            speechMasterGainRef.current.connect(audioContextRef.current.destination);
+            console.log('🎵 Created speech gain node');
+          }
+
+          if (!beepsMasterGainRef.current && audioContextRef.current) {
+            beepsMasterGainRef.current = audioContextRef.current.createGain();
+            beepsMasterGainRef.current.gain.setValueAtTime(0.15, audioContextRef.current.currentTime);
+            beepsMasterGainRef.current.connect(audioContextRef.current.destination);
+            console.log('🎵 Created beeps gain node');
+          }
+
+          // Now toggle mute with all gain nodes available
+          if (ambienceMasterGainRef.current && speechMasterGainRef.current && beepsMasterGainRef.current && audioContextRef.current) {
             const isCurrentlyMuted = ambienceMasterGainRef.current.gain.value === 0;
 
-            // FIXED LOGIC: When muted (value=0), set to normal levels. When unmuted, set to 0
-            const ambientLevel = isCurrentlyMuted ? 0.15 : 0;  // Normal: 0.15, Muted: 0
-            const speechLevel = isCurrentlyMuted ? 0.15 : 0;   // Normal: 0.15, Muted: 0
-            const beepsLevel = isCurrentlyMuted ? 0.15 : 0;    // Normal: 0.15, Muted: 0
+            // Toggle logic: if muted (0), restore levels; if unmuted, set to 0
+            const ambientLevel = isCurrentlyMuted ? 0.15 : 0;
+            const speechLevel = isCurrentlyMuted ? 0.15 : 0;
+            const beepsLevel = isCurrentlyMuted ? 0.15 : 0;
 
-            ambienceMasterGainRef.current.gain.setValueAtTime(ambientLevel, audioContextRef.current?.currentTime || 0);
-            speechMasterGainRef.current.gain.setValueAtTime(speechLevel, audioContextRef.current?.currentTime || 0);
-            beepsMasterGainRef.current.gain.setValueAtTime(beepsLevel, audioContextRef.current?.currentTime || 0);
+            const currentTime = audioContextRef.current.currentTime;
+            ambienceMasterGainRef.current.gain.setValueAtTime(ambientLevel, currentTime);
+            speechMasterGainRef.current.gain.setValueAtTime(speechLevel, currentTime);
+            beepsMasterGainRef.current.gain.setValueAtTime(beepsLevel, currentTime);
 
             console.log(`🔊 Audio ${isCurrentlyMuted ? 'UNMUTED' : 'MUTED'} - Levels: ambient=${ambientLevel}, speech=${speechLevel}, beeps=${beepsLevel}`);
-          } else {
-            console.log('❌ Audio gain nodes not available - trying to initialize them...');
-            // Force initialization of gain nodes
-            if (audioContextRef.current) {
-              initializeAudio();
+
+            // Visual feedback
+            if (isCurrentlyMuted) {
+              // Show unmuted message on screen briefly
+              console.log('🔊 AUDIO ENABLED');
+            } else {
+              // Show muted message on screen briefly
+              console.log('🔇 AUDIO MUTED');
             }
+          } else {
+            console.log('❌ Failed to create or access audio gain nodes');
           }
           break;
         case ' ':
