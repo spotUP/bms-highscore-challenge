@@ -1142,6 +1142,58 @@ const Pong404: React.FC = () => {
         lastHeartbeatRef.current = Date.now();
         break;
 
+      case 'server_game_update':
+        // Receive authoritative game state from server
+        if (data.gameState && multiplayerState.isConnected) {
+          // Apply server's authoritative game state
+          setBallPos({ x: data.gameState.ball.x, y: data.gameState.ball.y });
+          setBallVel({ x: data.gameState.ball.vx, y: data.gameState.ball.vy });
+
+          // Update scores from server
+          setLeftScore(data.gameState.scores.left);
+          setRightScore(data.gameState.scores.right);
+
+          // Update pickups from server
+          if (data.gameState.pickups) {
+            setCoins(data.gameState.pickups.map((pickup: any) => ({
+              x: pickup.x,
+              y: pickup.y,
+              type: pickup.type,
+              value: pickup.value,
+              collected: false
+            })));
+          }
+
+          // Update active effects from server
+          if (data.gameState.activeEffects) {
+            setActiveEffects(data.gameState.activeEffects);
+          }
+
+          // Update player positions from server (for non-local players)
+          if (data.gameState.players) {
+            Object.entries(data.gameState.players).forEach(([playerId, player]: [string, any]) => {
+              if (playerId !== multiplayerState.playerId) {
+                // Update other players' paddle positions
+                switch (player.position) {
+                  case 'left':
+                    setLeftPaddleY(player.paddleY);
+                    break;
+                  case 'right':
+                    setRightPaddleY(player.paddleY);
+                    break;
+                  case 'top':
+                    setTopPaddleX(player.paddleY); // Note: paddleY is actually X for horizontal paddles
+                    break;
+                  case 'bottom':
+                    setBottomPaddleX(player.paddleY); // Note: paddleY is actually X for horizontal paddles
+                    break;
+                }
+              }
+            });
+          }
+        }
+        break;
+
       default:
     }
   }, [multiplayerState.playerId, multiplayerState.roomId]);
@@ -2853,6 +2905,14 @@ const Pong404: React.FC = () => {
 
       // 🕒 Frame-rate independent physics multiplier
       const deltaTimeMultiplier = deltaTimeRef.current / targetFrameTime;
+
+      // Server-side physics mode: Only render, don't run client-side game logic
+      if (multiplayerStateRef.current?.isConnected && multiplayerStateRef.current?.gameMode === 'multiplayer') {
+        // In multiplayer mode, the server handles all game logic
+        // Client only handles visual updates and local paddle control
+        // The server_game_update message handler will update game state
+        return prevState; // Early return - no client-side physics
+      }
 
       // Apply client-side prediction and interpolation for multiplayer non-gamemaster clients
       if (multiplayerStateRef.current?.gameMode === 'multiplayer' &&

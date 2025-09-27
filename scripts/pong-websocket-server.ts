@@ -3,6 +3,30 @@ import { createServer } from 'http';
 
 // Force redeploy - 2025-09-26T16:47:00Z - Root directory already empty, forcing webhook
 
+// Types for game entities
+interface Pickup {
+  id: string;
+  x: number;
+  y: number;
+  type: 'speed' | 'size' | 'reverse' | 'drunk' | 'teleport' | 'paddle' | 'freeze' | 'coins';
+  createdAt: number;
+  size?: number;
+}
+
+interface Coin {
+  id: string;
+  x: number;
+  y: number;
+  createdAt: number;
+  size: number;
+}
+
+interface ActiveEffect {
+  type: 'speed' | 'size' | 'reverse' | 'drunk' | 'teleport' | 'paddle' | 'freeze';
+  startTime: number;
+  duration: number;
+}
+
 interface GameState {
   ball: {
     x: number;
@@ -45,6 +69,21 @@ interface GameState {
     startTime: number;
     duration: number;
   };
+  pickups: Pickup[];
+  coins: Coin[];
+  nextPickupTime: number;
+  activeEffects: ActiveEffect[];
+  pickupEffect: {
+    isActive: boolean;
+    startTime: number;
+    x: number;
+    y: number;
+  };
+  rumbleEffect: {
+    isActive: boolean;
+    startTime: number;
+    intensity: number;
+  };
 }
 
 interface Player {
@@ -62,6 +101,7 @@ interface GameRoom {
   gamemaster: string | null;
   lastUpdate: number;
   isActive: boolean;
+  canvasSize: { width: number; height: number };
 }
 
 class PongWebSocketServer {
@@ -84,6 +124,7 @@ class PongWebSocketServer {
     this.setupWebSocketHandlers();
     this.createPersistentMainRoom();
     this.startCleanupInterval();
+    this.startGameLoop();
   }
 
   private setupWebSocketHandlers() {
@@ -482,7 +523,8 @@ class PongWebSocketServer {
       players: new Map(),
       gamemaster: null,
       lastUpdate: Date.now(),
-      isActive: true
+      isActive: true,
+      canvasSize: { width: 800, height: 600 }
     };
   }
 
@@ -528,6 +570,21 @@ class PongWebSocketServer {
         isActive: false,
         startTime: 0,
         duration: 0
+      },
+      pickups: [],
+      coins: [],
+      nextPickupTime: Date.now() + 5000, // First pickup in 5 seconds
+      activeEffects: [],
+      pickupEffect: {
+        isActive: false,
+        startTime: 0,
+        x: 0,
+        y: 0
+      },
+      rumbleEffect: {
+        isActive: false,
+        startTime: 0,
+        intensity: 0
       }
     };
   }
@@ -560,6 +617,454 @@ class PongWebSocketServer {
     const mainRoom = this.createNewRoom('main');
     this.rooms.set('main', mainRoom);
     console.log(`🏠 Persistent main room created`);
+  }
+
+  private startGameLoop() {
+    // Server-side game loop running at 60 FPS for smooth physics
+    const GAME_LOOP_FPS = 60;
+    const GAME_LOOP_INTERVAL = 1000 / GAME_LOOP_FPS;
+
+    setInterval(() => {
+      this.updateGameLogic();
+    }, GAME_LOOP_INTERVAL);
+
+    console.log(`🔄 Server game loop started at ${GAME_LOOP_FPS} FPS`);
+  }
+
+  private updateGameLogic() {
+    const now = Date.now();
+
+    this.rooms.forEach((room, roomId) => {
+      // Only update active game rooms with players
+      if (!room.isActive || room.players.size === 0) return;
+
+      const gameState = room.gameState;
+      const canvasSize = room.canvasSize;
+
+      // Only update game logic if game is playing and not paused
+      if (!gameState.isPlaying || gameState.isPaused || gameState.gameEnded) return;
+
+      let gameStateChanged = false;
+
+      // Update ball physics
+      if (this.updateBallPhysics(gameState, canvasSize)) {
+        gameStateChanged = true;
+      }
+
+      // Handle pickups generation and collision
+      if (this.updatePickups(gameState, canvasSize, now)) {
+        gameStateChanged = true;
+      }
+
+      // Update active effects
+      if (this.updateActiveEffects(gameState, now)) {
+        gameStateChanged = true;
+      }
+
+      // Broadcast game state updates to all players if changed
+      if (gameStateChanged) {
+        this.broadcastToRoom(roomId, {
+          type: 'server_game_update',
+          data: {
+            ball: gameState.ball,
+            score: gameState.score,
+            pickups: gameState.pickups,
+            coins: gameState.coins,
+            activeEffects: gameState.activeEffects,
+            pickupEffect: gameState.pickupEffect,
+            rumbleEffect: gameState.rumbleEffect,
+            winner: gameState.winner,
+            gameEnded: gameState.gameEnded
+          }
+        });
+
+        room.lastUpdate = now;
+      }
+    });
+  }
+
+  private updateBallPhysics(gameState: GameState, canvasSize: { width: number; height: number }): boolean {
+    const COLLISION_BUFFER = 20;
+    let ballChanged = false;
+
+    // Update ball position
+    gameState.ball.x += gameState.ball.dx;
+    gameState.ball.y += gameState.ball.dy;
+    ballChanged = true;
+
+    // Ball collision with paddles (server-side authoritative)
+    const ballLeft = gameState.ball.x;
+    const ballRight = gameState.ball.x + gameState.ball.size;
+    const ballTop = gameState.ball.y;
+    const ballBottom = gameState.ball.y + gameState.ball.size;
+    const prevBallX = gameState.ball.x - gameState.ball.dx;
+    const prevBallY = gameState.ball.y - gameState.ball.dy;
+    const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
+    const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
+    const prevBallCenterX = prevBallX + gameState.ball.size / 2;
+    const prevBallCenterY = prevBallY + gameState.ball.size / 2;
+
+    // Left paddle collision (30px spacing from left wall only)
+    const leftPaddleX = 30;
+    const leftPaddleRight = leftPaddleX + gameState.paddles.left.width;
+    const ballIntersectsLeftPaddle =
+      ballLeft <= leftPaddleRight + COLLISION_BUFFER &&
+      ballRight >= leftPaddleX - COLLISION_BUFFER &&
+      ballBottom >= gameState.paddles.left.y - COLLISION_BUFFER &&
+      ballTop <= gameState.paddles.left.y + gameState.paddles.left.height + COLLISION_BUFFER;
+    const ballTrajectoryIntersectsLeftPaddle = this.lineIntersectsRect(
+      prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
+      leftPaddleX, gameState.paddles.left.y, gameState.paddles.left.width, gameState.paddles.left.height
+    );
+    const ballCameFromRight = prevBallX > leftPaddleRight || prevBallCenterX > leftPaddleRight;
+
+    if ((ballIntersectsLeftPaddle || ballTrajectoryIntersectsLeftPaddle) && ballCameFromRight && gameState.ball.dx < 0) {
+      const hitPosition = (ballCenterY - gameState.paddles.left.y) / gameState.paddles.left.height;
+      const normalizedHit = (hitPosition - 0.5) * 2;
+      const maxSpeedVariation = 10;
+      const newDx = Math.abs(gameState.ball.dx) + Math.random() * 2;
+      const newDy = normalizedHit * maxSpeedVariation + (Math.random() - 0.5) * 2;
+
+      gameState.ball.dx = newDx;
+      gameState.ball.dy = newDy;
+      gameState.ball.x = leftPaddleRight + 1;
+      gameState.ball.previousTouchedBy = gameState.ball.lastTouchedBy;
+      gameState.ball.lastTouchedBy = 'left';
+      ballChanged = true;
+    }
+
+    // Right paddle collision
+    const rightPaddleX = canvasSize.width - 30 - gameState.paddles.right.width;
+    const rightPaddleLeft = rightPaddleX;
+    const ballIntersectsRightPaddle =
+      ballRight >= rightPaddleLeft - COLLISION_BUFFER &&
+      ballLeft <= rightPaddleX + gameState.paddles.right.width + COLLISION_BUFFER &&
+      ballBottom >= gameState.paddles.right.y - COLLISION_BUFFER &&
+      ballTop <= gameState.paddles.right.y + gameState.paddles.right.height + COLLISION_BUFFER;
+    const ballTrajectoryIntersectsRightPaddle = this.lineIntersectsRect(
+      prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
+      rightPaddleX, gameState.paddles.right.y, gameState.paddles.right.width, gameState.paddles.right.height
+    );
+    const ballCameFromLeft = prevBallX < rightPaddleLeft || prevBallCenterX < rightPaddleLeft;
+
+    if ((ballIntersectsRightPaddle || ballTrajectoryIntersectsRightPaddle) && ballCameFromLeft && gameState.ball.dx > 0) {
+      const hitPosition = (ballCenterY - gameState.paddles.right.y) / gameState.paddles.right.height;
+      const normalizedHit = (hitPosition - 0.5) * 2;
+      const maxSpeedVariation = 10;
+      const newDx = -(Math.abs(gameState.ball.dx) + Math.random() * 2);
+      const newDy = normalizedHit * maxSpeedVariation + (Math.random() - 0.5) * 2;
+
+      gameState.ball.dx = newDx;
+      gameState.ball.dy = newDy;
+      gameState.ball.x = rightPaddleLeft - gameState.ball.size - 1;
+      gameState.ball.previousTouchedBy = gameState.ball.lastTouchedBy;
+      gameState.ball.lastTouchedBy = 'right';
+      ballChanged = true;
+    }
+
+    // Top paddle collision
+    const topPaddleY = 30;
+    const topPaddleBottom = topPaddleY + gameState.paddles.top.height;
+    const ballIntersectsTopPaddle =
+      ballTop <= topPaddleBottom + COLLISION_BUFFER &&
+      ballBottom >= topPaddleY - COLLISION_BUFFER &&
+      ballRight >= gameState.paddles.top.x - COLLISION_BUFFER &&
+      ballLeft <= gameState.paddles.top.x + gameState.paddles.top.width + COLLISION_BUFFER;
+    const ballTrajectoryIntersectsTopPaddle = this.lineIntersectsRect(
+      prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
+      gameState.paddles.top.x, topPaddleY, gameState.paddles.top.width, gameState.paddles.top.height
+    );
+    const ballCameFromBelow = prevBallY > topPaddleBottom || prevBallCenterY > topPaddleBottom;
+
+    if ((ballIntersectsTopPaddle || ballTrajectoryIntersectsTopPaddle) && ballCameFromBelow && gameState.ball.dy < 0) {
+      const hitPosition = (ballCenterX - gameState.paddles.top.x) / gameState.paddles.top.width;
+      const normalizedHit = (hitPosition - 0.5) * 2;
+      const maxSpeedVariation = 10;
+      const newDy = Math.abs(gameState.ball.dy) + Math.random() * 2;
+      const newDx = normalizedHit * maxSpeedVariation + (Math.random() - 0.5) * 2;
+
+      gameState.ball.dx = newDx;
+      gameState.ball.dy = newDy;
+      gameState.ball.y = topPaddleBottom + 1;
+      gameState.ball.previousTouchedBy = gameState.ball.lastTouchedBy;
+      gameState.ball.lastTouchedBy = 'top';
+      ballChanged = true;
+    }
+
+    // Bottom paddle collision
+    const bottomPaddleY = canvasSize.height - 30 - gameState.paddles.bottom.height;
+    const bottomPaddleTop = bottomPaddleY;
+    const ballIntersectsBottomPaddle =
+      ballBottom >= bottomPaddleTop - COLLISION_BUFFER &&
+      ballTop <= bottomPaddleY + gameState.paddles.bottom.height + COLLISION_BUFFER &&
+      ballRight >= gameState.paddles.bottom.x - COLLISION_BUFFER &&
+      ballLeft <= gameState.paddles.bottom.x + gameState.paddles.bottom.width + COLLISION_BUFFER;
+    const ballTrajectoryIntersectsBottomPaddle = this.lineIntersectsRect(
+      prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
+      gameState.paddles.bottom.x, bottomPaddleY, gameState.paddles.bottom.width, gameState.paddles.bottom.height
+    );
+    const ballCameFromAbove = prevBallY < bottomPaddleTop || prevBallCenterY < bottomPaddleTop;
+
+    if ((ballIntersectsBottomPaddle || ballTrajectoryIntersectsBottomPaddle) && ballCameFromAbove && gameState.ball.dy > 0) {
+      const hitPosition = (ballCenterX - gameState.paddles.bottom.x) / gameState.paddles.bottom.width;
+      const normalizedHit = (hitPosition - 0.5) * 2;
+      const maxSpeedVariation = 10;
+      const newDy = -(Math.abs(gameState.ball.dy) + Math.random() * 2);
+      const newDx = normalizedHit * maxSpeedVariation + (Math.random() - 0.5) * 2;
+
+      gameState.ball.dx = newDx;
+      gameState.ball.dy = newDy;
+      gameState.ball.y = bottomPaddleTop - gameState.ball.size - 1;
+      gameState.ball.previousTouchedBy = gameState.ball.lastTouchedBy;
+      gameState.ball.lastTouchedBy = 'bottom';
+      ballChanged = true;
+    }
+
+    // Scoring boundaries - ball goes off screen
+    if (gameState.ball.x < -20) {
+      this.handleScoring(gameState, 'left');
+      ballChanged = true;
+    } else if (gameState.ball.x > canvasSize.width + 20) {
+      this.handleScoring(gameState, 'right');
+      ballChanged = true;
+    } else if (gameState.ball.y < -20) {
+      this.handleScoring(gameState, 'top');
+      ballChanged = true;
+    } else if (gameState.ball.y > canvasSize.height + 20) {
+      this.handleScoring(gameState, 'bottom');
+      ballChanged = true;
+    }
+
+    return ballChanged;
+  }
+
+  private handleScoring(gameState: GameState, boundaryHit: 'left' | 'right' | 'top' | 'bottom'): void {
+    let scoringPlayer: 'left' | 'right' | 'top' | 'bottom';
+
+    // Determine who gets the score based on last touch
+    if (gameState.ball.lastTouchedBy) {
+      // Check for self-goal (player hit ball into their own wall)
+      const isSelfGoal = gameState.ball.lastTouchedBy === boundaryHit;
+      if (isSelfGoal && gameState.ball.previousTouchedBy) {
+        // Self-goal: previous player gets the score
+        scoringPlayer = gameState.ball.previousTouchedBy;
+      } else if (!isSelfGoal) {
+        // Normal goal: last toucher gets the score
+        scoringPlayer = gameState.ball.lastTouchedBy;
+      } else {
+        // Self-goal with no previous player - default opposite wall
+        scoringPlayer = boundaryHit === 'left' ? 'right' :
+                      boundaryHit === 'right' ? 'left' :
+                      boundaryHit === 'top' ? 'bottom' : 'top';
+      }
+    } else {
+      // No one touched the ball - default opposite wall scoring
+      scoringPlayer = boundaryHit === 'left' ? 'right' :
+                    boundaryHit === 'right' ? 'left' :
+                    boundaryHit === 'top' ? 'bottom' : 'top';
+    }
+
+    // Award the score
+    gameState.score[scoringPlayer]++;
+    console.log(`🏆 SERVER SCORING: ${scoringPlayer} scores! New scores:`, gameState.score);
+
+    // Check for winner (first to 3 points)
+    if (gameState.score[scoringPlayer] >= 3) {
+      gameState.winner = scoringPlayer;
+      gameState.gameEnded = true;
+      gameState.isPlaying = false;
+      console.log(`🎉 Game Over! Winner: ${scoringPlayer}`);
+    }
+
+    // Reset ball position
+    this.resetBall(gameState);
+  }
+
+  private resetBall(gameState: GameState): void {
+    gameState.ball.x = 400;
+    gameState.ball.y = 300;
+    gameState.ball.dx = Math.random() > 0.5 ? 10 : -10;
+    gameState.ball.dy = Math.random() > 0.5 ? 10 : -10;
+    gameState.ball.lastTouchedBy = null;
+    gameState.ball.previousTouchedBy = null;
+  }
+
+  private updatePickups(gameState: GameState, canvasSize: { width: number; height: number }, now: number): boolean {
+    let pickupsChanged = false;
+
+    // Generate new pickups
+    if (now >= gameState.nextPickupTime && gameState.pickups.length < 3) {
+      this.generatePickup(gameState, canvasSize);
+
+      // Progressive pickup frequency (starts at 8s, decreases to 4s)
+      const gameTime = now - (gameState.nextPickupTime - 5000); // Game start time estimation
+      const baseInterval = 8000; // 8 seconds
+      const minInterval = 4000; // 4 seconds minimum
+      const progressionRate = gameTime / 60000; // Over 1 minute
+      const currentInterval = Math.max(minInterval, baseInterval - (progressionRate * 4000));
+
+      gameState.nextPickupTime = now + currentInterval;
+      pickupsChanged = true;
+    }
+
+    // Check ball collision with pickups
+    gameState.pickups.forEach((pickup, index) => {
+      const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
+      const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
+      const pickupCenterX = pickup.x + (pickup.size || 24) / 2;
+      const pickupCenterY = pickup.y + (pickup.size || 24) / 2;
+      const distance = Math.sqrt(
+        Math.pow(ballCenterX - pickupCenterX, 2) + Math.pow(ballCenterY - pickupCenterY, 2)
+      );
+
+      if (distance < (gameState.ball.size + (pickup.size || 24)) / 2) {
+        // Pickup collected!
+        this.applyPickupEffect(gameState, pickup);
+        gameState.pickups.splice(index, 1);
+
+        // Create pickup effect animation
+        gameState.pickupEffect = {
+          isActive: true,
+          startTime: now,
+          x: pickup.x,
+          y: pickup.y
+        };
+
+        pickupsChanged = true;
+      }
+    });
+
+    return pickupsChanged;
+  }
+
+  private generatePickup(gameState: GameState, canvasSize: { width: number; height: number }): void {
+    const pickupTypes: Pickup['type'][] = ['speed', 'size', 'reverse', 'drunk', 'teleport', 'paddle', 'freeze'];
+    const type = pickupTypes[Math.floor(Math.random() * pickupTypes.length)];
+
+    const pickup: Pickup = {
+      id: Math.random().toString(36).substr(2, 9),
+      x: Math.random() * (canvasSize.width - 100) + 50,
+      y: Math.random() * (canvasSize.height - 100) + 50,
+      type,
+      createdAt: Date.now(),
+      size: 24
+    };
+
+    gameState.pickups.push(pickup);
+  }
+
+  private applyPickupEffect(gameState: GameState, pickup: Pickup): void {
+    const effect: ActiveEffect = {
+      type: pickup.type,
+      startTime: Date.now(),
+      duration: 5000 // 5 seconds
+    };
+
+    gameState.activeEffects.push(effect);
+
+    // Apply immediate effects based on pickup type
+    switch (pickup.type) {
+      case 'speed':
+        const speedMultiplier = 1.5;
+        gameState.ball.dx *= speedMultiplier;
+        gameState.ball.dy *= speedMultiplier;
+        break;
+
+      case 'size':
+        gameState.ball.size = Math.min(gameState.ball.size * 1.5, 40);
+        break;
+
+      case 'reverse':
+        gameState.ball.dx *= -1;
+        gameState.ball.dy *= -1;
+        break;
+
+      case 'drunk':
+        gameState.ball.isDrunk = true;
+        break;
+
+      case 'freeze':
+        // Freeze all paddle movement for 3 seconds
+        gameState.paddles.left.velocity = 0;
+        gameState.paddles.right.velocity = 0;
+        gameState.paddles.top.velocity = 0;
+        gameState.paddles.bottom.velocity = 0;
+        break;
+    }
+  }
+
+  private updateActiveEffects(gameState: GameState, now: number): boolean {
+    let effectsChanged = false;
+
+    // Remove expired effects
+    const initialLength = gameState.activeEffects.length;
+    gameState.activeEffects = gameState.activeEffects.filter(effect => {
+      const isExpired = now - effect.startTime > effect.duration;
+
+      if (isExpired) {
+        // Reverse effect when it expires
+        this.reversePickupEffect(gameState, effect);
+      }
+
+      return !isExpired;
+    });
+
+    if (gameState.activeEffects.length !== initialLength) {
+      effectsChanged = true;
+    }
+
+    // Update pickup effect animation
+    if (gameState.pickupEffect.isActive && now - gameState.pickupEffect.startTime > 1000) {
+      gameState.pickupEffect.isActive = false;
+      effectsChanged = true;
+    }
+
+    // Update rumble effect
+    if (gameState.rumbleEffect.isActive && now - gameState.rumbleEffect.startTime > 500) {
+      gameState.rumbleEffect.isActive = false;
+      effectsChanged = true;
+    }
+
+    return effectsChanged;
+  }
+
+  private reversePickupEffect(gameState: GameState, effect: ActiveEffect): void {
+    switch (effect.type) {
+      case 'size':
+        gameState.ball.size = gameState.ball.originalSize;
+        break;
+
+      case 'drunk':
+        gameState.ball.isDrunk = false;
+        gameState.ball.drunkAngle = 0;
+        break;
+    }
+  }
+
+  private lineIntersectsRect(x1: number, y1: number, x2: number, y2: number, rx: number, ry: number, rw: number, rh: number): boolean {
+    // Check if line intersects with rectangle
+    const left = rx;
+    const right = rx + rw;
+    const top = ry;
+    const bottom = ry + rh;
+
+    // Check intersection with each edge of the rectangle
+    return (
+      this.lineIntersectsLine(x1, y1, x2, y2, left, top, right, top) ||    // Top edge
+      this.lineIntersectsLine(x1, y1, x2, y2, right, top, right, bottom) || // Right edge
+      this.lineIntersectsLine(x1, y1, x2, y2, right, bottom, left, bottom) || // Bottom edge
+      this.lineIntersectsLine(x1, y1, x2, y2, left, bottom, left, top)       // Left edge
+    );
+  }
+
+  private lineIntersectsLine(x1: number, y1: number, x2: number, y2: number, x3: number, y3: number, x4: number, y4: number): boolean {
+    const denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+    if (denominator === 0) return false;
+
+    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denominator;
+    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denominator;
+
+    return t >= 0 && t <= 1 && u >= 0 && u <= 1;
   }
 
   public start() {
