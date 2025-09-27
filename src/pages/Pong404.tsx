@@ -179,8 +179,10 @@ const PICKUP_TYPES = [
   { type: 'teleport_ball', pattern: 'star', color: '#9966ff', description: 'Teleport Ball!', scale: 'diminished', note: 1 },
 ];
 
-// WebSocket server URL - always use local server for development
-const WS_SERVER_URL = 'ws://localhost:3002';
+// WebSocket server URL - only available in development
+const WS_SERVER_URL = import.meta.env.DEV
+  ? 'ws://localhost:3002'
+  : null; // No WebSocket server in production (Render suspended)
 
 const COLOR_PALETTE = [
   { background: '#1a0b3d', foreground: '#ff006e' }, // Deep Purple & Hot Pink
@@ -3408,18 +3410,27 @@ const Pong404: React.FC = () => {
         setShowAudioPrompt(false);
         await initializeAudio();
 
-        // Start multiplayer game immediately after audio dismissal
-        console.log('✅ Starting multiplayer game after audio dismissal!');
-        console.log('🔗 Connecting to WebSocket server...');
-        setGameState(prev => ({
-          ...prev,
-          showStartScreen: false,
-          gameMode: 'multiplayer',
-          isPlaying: true
-        }));
-
-        // Connect to WebSocket
-        connectWebSocket();
+        // Start game immediately after audio dismissal
+        if (WS_SERVER_URL) {
+          console.log('✅ Starting multiplayer game after audio dismissal!');
+          console.log('🔗 Connecting to WebSocket server...');
+          setGameState(prev => ({
+            ...prev,
+            showStartScreen: false,
+            gameMode: 'multiplayer',
+            isPlaying: true
+          }));
+          connectWebSocket();
+        } else {
+          console.log('✅ Starting single-player game (WebSocket not available in production)');
+          setGameState(prev => ({
+            ...prev,
+            showStartScreen: false,
+            gameMode: 'player',
+            isPlaying: true
+          }));
+          setTimeout(() => speakRobotic('STARTING SINGLE PLAYER MODE'), 100);
+        }
         return;
       }
 
