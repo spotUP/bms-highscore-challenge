@@ -2935,7 +2935,7 @@ const Pong404: React.FC = () => {
 
       // SIMPLIFIED: Always allow paddle movement in any mode
       // Update paddle positions with cleaner logic (keyboard, mouse, or touch)
-      if (newState.gameMode === 'player' || hasInput) {
+      if (newState.gameMode === 'player' || (hasInput && newState.gameMode !== 'multiplayer')) {
         // PLAYER MODE: Left=AI, Right=Human, Top=AI, Bottom=AI
 
         // In player mode, left paddle is AI-controlled - no manual input allowed
