@@ -12,3 +12,4 @@
 - remember the rendoer deploy hook key: https://api.render.com/deploy/srv-d3b6ku6r433s738fn32g?key=geHuFzc6DF0
 - remember the pixel size in pong is 12x12
 - remember the pixel size in pong404 is the same as in the scores use this for every pickup etc that you draw
+- remember always check the console after adding/updating a new feature and fix all console errors

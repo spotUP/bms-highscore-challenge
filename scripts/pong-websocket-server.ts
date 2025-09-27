@@ -78,7 +78,7 @@ class PongWebSocketServer {
     this.server = createServer();
     this.wss = new WebSocketServer({
       server: this.server,
-      perMessageDeflate: false,
+      perMessageDeflate: true, // Enable compression for better network performance
       maxPayload: 1024 * 1024 // 1MB
     });
     this.setupWebSocketHandlers();
@@ -128,17 +128,39 @@ class PongWebSocketServer {
   }
 
   private handleMessage(ws: any, message: any) {
-    const { type, playerId, roomId, data } = message;
+    // Support both old and new compact message formats
+    const type = message.type || message.t;
+    const playerId = message.playerId || message.p;
+    const roomId = message.roomId || message.r;
+    const data = message.data || message.d;
 
-    switch (type) {
+    // Map compact types to full types
+    const fullType = {
+      'up': 'update_paddle',
+      'ugsd': 'update_game_state_delta',
+      'jr': 'join_room',
+      'ugs': 'update_game_state',
+      'rr': 'reset_room'
+    }[type] || type;
+
+    switch (fullType) {
       case 'join_room':
         this.handleJoinRoom(ws, playerId, roomId, data?.forceSpectator);
         break;
       case 'update_paddle':
-        this.handlePaddleUpdate(playerId, data);
+        // Handle compact paddle data format
+        const paddleData = data?.v !== undefined ? {
+          y: data.y,
+          velocity: data.v,
+          targetY: data.tY
+        } : data;
+        this.handlePaddleUpdate(playerId, paddleData);
         break;
       case 'update_game_state':
         this.handleGameStateUpdate(playerId, roomId, data);
+        break;
+      case 'update_game_state_delta':
+        this.handleGameStateDeltaUpdate(playerId, roomId, data);
         break;
       case 'reset_room':
         this.handleResetRoom(playerId, roomId);
@@ -152,7 +174,7 @@ class PongWebSocketServer {
         }
         break;
       default:
-        console.log('❓ Unknown message type:', type);
+        console.log('❓ Unknown message type:', fullType, 'original:', type);
     }
   }
 
@@ -302,6 +324,46 @@ class PongWebSocketServer {
     this.broadcastToRoom(roomId, {
       type: 'game_state_updated',
       data: gameState
+    }, playerId);
+  }
+
+  private handleGameStateDeltaUpdate(playerId: string, roomId: string, deltaData: any) {
+    const room = this.rooms.get(roomId);
+    if (!room || room.gamemaster !== playerId) return;
+
+    const player = this.players.get(playerId);
+    if (player) player.lastSeen = Date.now();
+
+    // Apply delta to room game state
+    if (deltaData.ball) {
+      room.gameState.ball = { ...room.gameState.ball, ...deltaData.ball };
+    }
+
+    if (deltaData.score) {
+      room.gameState.score = deltaData.score;
+    }
+
+    if (deltaData.isPlaying !== undefined) room.gameState.isPlaying = deltaData.isPlaying;
+    if (deltaData.showStartScreen !== undefined) room.gameState.showStartScreen = deltaData.showStartScreen;
+    if (deltaData.isPaused !== undefined) room.gameState.isPaused = deltaData.isPaused;
+    if (deltaData.winner !== undefined) room.gameState.winner = deltaData.winner;
+    if (deltaData.gameEnded !== undefined) room.gameState.gameEnded = deltaData.gameEnded;
+
+    if (deltaData.pickups) room.gameState.pickups = deltaData.pickups;
+    if (deltaData.coins) room.gameState.coins = deltaData.coins;
+    if (deltaData.nextPickupTime !== undefined) room.gameState.nextPickupTime = deltaData.nextPickupTime;
+
+    if (deltaData.activeEffects) room.gameState.activeEffects = deltaData.activeEffects;
+
+    if (deltaData.pickupEffect) room.gameState.pickupEffect = deltaData.pickupEffect;
+    if (deltaData.decrunchEffect) room.gameState.decrunchEffect = deltaData.decrunchEffect;
+
+    room.lastUpdate = Date.now();
+
+    // Broadcast delta to all other players
+    this.broadcastToRoom(roomId, {
+      type: 'update_game_state_delta',
+      data: deltaData
     }, playerId);
   }
 
