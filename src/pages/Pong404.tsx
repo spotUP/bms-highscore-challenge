@@ -932,24 +932,19 @@ const Pong404: React.FC = () => {
           setGameState(prev => ({
             ...prev,
             score: { left: 0, right: 0, top: 0, bottom: 0 }, // Reset all scores
-              ball: {
+            ball: {
               ...prev.ball,
               x: canvasSize.width / 2,
               y: canvasSize.height / 2,
-              dx: 0,
-              dy: 0,
+              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
+              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8,
               lastTouchedBy: null,
               previousTouchedBy: null
             },
             isPaused: true,
             pauseEndTime: Date.now() + 2000, // 2 second pause before ball starts
             gameEnded: false,
-            isPlaying: true,
-              ball: {
-              ...prev.ball,
-              dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
-              dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
-            }
+            isPlaying: true
           }));
 
           // Start ball movement after pause
@@ -1142,59 +1137,37 @@ const Pong404: React.FC = () => {
         lastHeartbeatRef.current = Date.now();
         break;
 
-      // case 'server_game_update':
-      //   // Receive authoritative game state from server
-      //   if (data.gameState && multiplayerState.isConnected) {
-      //     // Apply server's authoritative game state
-      //     setBallPos({ x: data.gameState.ball.x, y: data.gameState.ball.y });
-      //     setBallVel({ x: data.gameState.ball.vx, y: data.gameState.ball.vy });
+      case 'server_game_update':
+        // Receive authoritative game state from server
+        if (data.data && multiplayerState.isConnected) {
+          // Apply server's authoritative game state
+          setBallPos({ x: data.data.ball.x, y: data.data.ball.y });
+          setBallVel({ x: data.data.ball.dx, y: data.data.ball.dy });
 
-      //     // Update scores from server
-      //     setLeftScore(data.gameState.scores.left);
-      //     setRightScore(data.gameState.scores.right);
+          // Update scores from server
+          setLeftScore(data.data.score.left);
+          setRightScore(data.data.score.right);
 
-      //     // Update pickups from server
-      //     if (data.gameState.pickups) {
-      //       setCoins(data.gameState.pickups.map((pickup: any) => ({
-      //         x: pickup.x,
-      //         y: pickup.y,
-      //         type: pickup.type,
-      //         value: pickup.value,
-      //         collected: false
-      //       })));
-      //     }
+          // Update pickups from server
+          if (data.data.pickups) {
+            setCoins(data.data.pickups.map((pickup: any) => ({
+              x: pickup.x,
+              y: pickup.y,
+              type: pickup.type,
+              value: pickup.value || 1,
+              collected: false
+            })));
+          }
 
-      //     // Update active effects from server
-      //     if (data.gameState.activeEffects) {
-      //       setActiveEffects(data.gameState.activeEffects);
-      //     }
-
-      //     // Update player positions from server (for non-local players)
-      //     if (data.gameState.players) {
-      //       Object.entries(data.gameState.players).forEach(([playerId, player]: [string, any]) => {
-      //         if (playerId !== multiplayerState.playerId) {
-      //           // Update other players' paddle positions
-      //           switch (player.position) {
-      //             case 'left':
-      //               setLeftPaddleY(player.paddleY);
-      //               break;
-      //             case 'right':
-      //               setRightPaddleY(player.paddleY);
-      //               break;
-      //             case 'top':
-      //               setTopPaddleX(player.paddleY); // Note: paddleY is actually X for horizontal paddles
-      //               break;
-      //             case 'bottom':
-      //               setBottomPaddleX(player.paddleY); // Note: paddleY is actually X for horizontal paddles
-      //               break;
-      //           }
-      //         }
-      //       });
-      //     }
-      //   }
-      //   break;
+          // Update active effects from server
+          if (data.data.activeEffects) {
+            setActiveEffects(data.data.activeEffects);
+          }
+        }
+        break;
 
       default:
+        break;
     }
   }, [multiplayerState.playerId, multiplayerState.roomId]);
 
@@ -5069,21 +5042,13 @@ const Pong404: React.FC = () => {
           newState.isPaused = true;
           newState.pauseEndTime = Date.now() + 2000; // 2 seconds
 
-          // Store next ball direction for after pause
-          setTimeout(() => {
-            setGameState(current => ({
-              ...current,
-                ball: {
-                ...current.ball,
-                dx: boundaryHit === 'left' || boundaryHit === 'right'
-                    ? (boundaryHit === 'left' ? BALL_SPEED : -BALL_SPEED)
-                    : (Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED),
-                dy: boundaryHit === 'top' || boundaryHit === 'bottom'
-                    ? (boundaryHit === 'top' ? -BALL_SPEED : BALL_SPEED)
-                    : (Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED)
-              }
-            }));
-          }, 2000);
+          // Set ball direction for after pause (will be applied when pause ends)
+          newState.ball.dx = boundaryHit === 'left' || boundaryHit === 'right'
+              ? (boundaryHit === 'left' ? BALL_SPEED : -BALL_SPEED)
+              : (Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED);
+          newState.ball.dy = boundaryHit === 'top' || boundaryHit === 'bottom'
+              ? (boundaryHit === 'top' ? -BALL_SPEED : BALL_SPEED)
+              : (Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED);
         };
 
         // Handle scoring when ball goes off screen with last-touch system
