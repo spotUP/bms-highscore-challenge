@@ -844,9 +844,12 @@ const Pong404: React.FC = () => {
     // Create dedicated beeps audio bus if it doesn't exist
     if (!beepsMasterGainRef.current) {
       beepsMasterGainRef.current = ctx.createGain();
-      beepsMasterGainRef.current.gain.setValueAtTime(0.7, ctx.currentTime); // Good level for beeps
+      beepsMasterGainRef.current.gain.setValueAtTime(0.15, ctx.currentTime); // Much lower level for beeps
       beepsMasterGainRef.current.connect(ctx.destination);
     }
+
+    // Ensure beeps master gain stays at correct level
+    beepsMasterGainRef.current.gain.setValueAtTime(0.15, ctx.currentTime);
 
     // Create oscillator and main gain
     const oscillator = ctx.createOscillator();
@@ -1081,9 +1084,16 @@ const Pong404: React.FC = () => {
     ambienceOscillatorsRef.current = [];
     ambienceGainsRef.current = [];
 
-    // Create dramatic, cinematic ambient layers with tension and dynamics
+    // Create dramatic, cinematic ambient layers with spaceship humming
     const currentScale = MUSICAL_SCALES[melodyState.currentScale as keyof typeof MUSICAL_SCALES];
     const ambienceLayers = [
+      // SPACESHIP HUMMING - Continuous lonely space atmosphere
+      { freq: 60, volume: 0.35, type: 'sine' as OscillatorType, modDepth: 0.02, modRate: 0.08, tension: 'humming' }, // Deep engine hum
+      { freq: 120, volume: 0.25, type: 'triangle' as OscillatorType, modDepth: 0.015, modRate: 0.12, tension: 'humming' }, // Ventilation system
+      { freq: 180, volume: 0.2, type: 'sine' as OscillatorType, modDepth: 0.01, modRate: 0.06, tension: 'humming' }, // Generator harmonics
+      { freq: 90, volume: 0.15, type: 'sawtooth' as OscillatorType, modDepth: 0.008, modRate: 0.04, tension: 'humming' }, // Low machinery
+      { freq: 240, volume: 0.12, type: 'triangle' as OscillatorType, modDepth: 0.012, modRate: 0.09, tension: 'humming' }, // High systems
+
       // DRAMATIC SUB-BASS FOUNDATION - Ominous but subtle
       { freq: currentScale[0] * 0.2, volume: 0.25, type: 'sine' as OscillatorType, modDepth: 0.08, modRate: 0.05, tension: 'ominous' },
       { freq: currentScale[0] * 0.4, volume: 0.22, type: 'sawtooth' as OscillatorType, modDepth: 0.06, modRate: 0.08, tension: 'ominous' },
@@ -1129,6 +1139,10 @@ const Pong404: React.FC = () => {
       // Tension-based modulation characteristics
       let modCharacter;
       switch ((layer as any).tension) {
+        case 'humming':
+          lfo.type = 'sine'; // Smooth, continuous hum
+          modCharacter = { rate: layer.modRate, depth: layer.modDepth }; // Minimal modulation for stability
+          break;
         case 'ominous':
           lfo.type = 'sawtooth'; // Harsh, threatening
           modCharacter = { rate: layer.modRate * 0.3, depth: layer.modDepth * 2.5 };
@@ -1189,6 +1203,12 @@ const Pong404: React.FC = () => {
 
       // DRAMATIC filtering based on tension character
       switch ((layer as any).tension) {
+        case 'humming':
+          // Spaceship system filtering - warm, muffled like inside a ship
+          filterNode.type = 'lowpass';
+          filterNode.frequency.setValueAtTime(400 + index * 200, ctx.currentTime); // Gentle rolloff
+          filterNode.Q.setValueAtTime(0.8, ctx.currentTime); // Smooth, non-resonant
+          break;
         case 'ominous':
           // Dark, brooding low-pass with high resonance
           filterNode.type = 'lowpass';
@@ -1237,6 +1257,9 @@ const Pong404: React.FC = () => {
 
       let entranceTime;
       switch ((layer as any).tension) {
+        case 'humming':
+          entranceTime = 0.5 + index * 0.2; // Quick, steady build like systems coming online
+          break;
         case 'ominous':
           entranceTime = 3 + index * 0.8; // Slow, menacing build
           break;
@@ -1281,6 +1304,14 @@ const Pong404: React.FC = () => {
           // DRAMATIC volume fluctuations based on tension type
         let dramaDynamics;
         switch ((layer as any).tension) {
+          case 'humming':
+            dramaDynamics = {
+              variation: 0.15, // Very stable for continuous hum
+              minVolume: layer.volume * 0.9, // Almost constant
+              maxVolume: layer.volume * 1.1, // Tiny fluctuations
+              duration: Math.random() * 8 + 5, // 5-13 second slow changes
+            };
+            break;
           case 'ominous':
             dramaDynamics = {
               variation: 0.4, // Subtle swells
@@ -3987,11 +4018,21 @@ const Pong404: React.FC = () => {
 
     // 🏆 WINNER ANNOUNCEMENT 🏆
     if (gameState.gameEnded && gameState.winner) {
-      // Static winner display without animations
+      // Animated winner display with pulsing and glow effects
       ctx.save();
       ctx.translate(canvasSize.width / 2, canvasSize.height / 2);
 
-      // Winner announcement - monochrome white, no outline
+      // Pulsing animation effect
+      const pulseScale = 1 + Math.sin(time * 8) * 0.1; // Pulse between 0.9 and 1.1
+      const glowIntensity = (Math.sin(time * 6) + 1) * 0.5; // Glow between 0 and 1
+
+      ctx.scale(pulseScale, pulseScale);
+
+      // Glowing effect with shadow
+      ctx.shadowColor = '#ffffff';
+      ctx.shadowBlur = 20 + glowIntensity * 10;
+
+      // Winner announcement - animated white with glow
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 64px "Press Start 2P", monospace';
       ctx.textAlign = 'center';
@@ -4044,13 +4085,15 @@ const Pong404: React.FC = () => {
 
             // Check if countdown changed and announce it
             const previousValue = previousCountdowns[effect.type];
-            if (previousValue !== remaining && remaining <= 5 && remaining > 0) {
+            if (previousValue !== remaining && remaining <= 5 && remaining >= 0) {
               // Check if enough time has passed since pickup announcement
               const announcementTime = pickupAnnouncementTimes[effect.type];
               const timeSinceAnnouncement = Date.now() - (announcementTime || 0);
-              const minimumDelay = 2500; // Wait 2.5 seconds after pickup announcement
+              const minimumDelay = 3500; // Wait 3.5 seconds after pickup announcement
 
               if (!announcementTime || timeSinceAnnouncement >= minimumDelay) {
+                // Force interrupt current speech for countdown numbers
+                isSpeakingRef.current = false;
                 // Announce countdown for last 5 seconds
                 setTimeout(() => speakRobotic(remaining.toString()), 50);
               }
