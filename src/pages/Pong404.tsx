@@ -250,7 +250,7 @@ const Pong404: React.FC = () => {
     },
     score: { left: 0, right: 0, top: 0, bottom: 0 }, // 4-player scoring
     isPlaying: false,
-    showStartScreen: true,
+    showStartScreen: false,
     gameMode: 'auto',
     colorIndex: 0,
     isPaused: false,
@@ -294,11 +294,11 @@ const Pong404: React.FC = () => {
 
         // Always ensure top and bottom paddles exist
         if (!newState.paddles.top && prevState.paddles.top) {
-          console.log('🔧 Restoring missing TOP paddle');
+          // Restoring missing TOP paddle
           newState.paddles.top = prevState.paddles.top;
         }
         if (!newState.paddles.bottom && prevState.paddles.bottom) {
-          console.log('🔧 Restoring missing BOTTOM paddle');
+          // Restoring missing BOTTOM paddle
           newState.paddles.bottom = prevState.paddles.bottom;
         }
 
@@ -311,11 +311,11 @@ const Pong404: React.FC = () => {
 
         // Always preserve top and bottom paddles from previous state
         if (!finalState.paddles.top && prevState?.paddles.top) {
-          console.log('🔧 Restoring missing TOP paddle from direct replacement');
+          // Restoring missing TOP paddle from direct replacement
           finalState.paddles.top = prevState.paddles.top;
         }
         if (!finalState.paddles.bottom && prevState?.paddles.bottom) {
-          console.log('🔧 Restoring missing BOTTOM paddle from direct replacement');
+          // Restoring missing BOTTOM paddle from direct replacement
           finalState.paddles.bottom = prevState.paddles.bottom;
         }
 
@@ -345,6 +345,8 @@ const Pong404: React.FC = () => {
 
   const [localTestMode, setLocalTestMode] = useState(false);
   const [crtEffect, setCrtEffect] = useState(true); // CRT shader enabled by default
+  const [showAudioPrompt, setShowAudioPrompt] = useState(true); // Show audio interaction prompt on first load
+  const audioPromptDismissedRef = useRef(false); // Track if audio prompt was dismissed
 
 
   // Local multiplayer using localStorage for cross-tab sync
@@ -552,8 +554,7 @@ const Pong404: React.FC = () => {
         updateMultiplayerState(newMultiplayerState);
 
         if (message.data.gameState) {
-          console.log('🔍 Server sent gameState with paddles:', message.data.gameState.paddles);
-          console.log('🔍 Client prevState has paddles:', Object.keys(prevState.paddles));
+          // Server sent gameState with paddles
           setGameState(prevState => ({
             ...message.data.gameState,
             // Use server's paddles if they exist, otherwise preserve client paddles
@@ -848,9 +849,6 @@ const Pong404: React.FC = () => {
       beepsMasterGainRef.current.connect(ctx.destination);
     }
 
-    // Ensure beeps master gain stays at correct level
-    beepsMasterGainRef.current.gain.setValueAtTime(0.15, ctx.currentTime);
-
     // Create oscillator and main gain
     const oscillator = ctx.createOscillator();
     const mainGain = ctx.createGain();
@@ -901,6 +899,18 @@ const Pong404: React.FC = () => {
     // Start and stop
     oscillator.start(now);
     oscillator.stop(now + duration);
+
+    // Clean up nodes after oscillator stops to prevent accumulation
+    setTimeout(() => {
+      try {
+        mainGain.disconnect();
+        dryGain.disconnect();
+        wetGain.disconnect();
+        echoWetGain.disconnect();
+      } catch (e) {
+        // Nodes may already be disconnected
+      }
+    }, (duration * 1000) + 100); // Add small buffer
   }, [initializeAudioEffects]);
 
   // Initialize audio on user interaction
@@ -937,7 +947,6 @@ const Pong404: React.FC = () => {
         melodyState.currentScale = scales[Math.floor(Math.random() * scales.length)] as keyof typeof MUSICAL_SCALES;
       } while (melodyState.currentScale === oldScale);
       melodyState.lastScaleChange = now;
-      console.log(`🎵 Scale changed to: ${melodyState.currentScale}`);
 
       // Ambient sounds will automatically use the new scale on their next fluctuation
     }
@@ -1040,14 +1049,11 @@ const Pong404: React.FC = () => {
 
   // Subtle background ambience - very low volume, deep frequencies only
   const startAmbienceSound = useCallback(() => {
-    console.log('🎭 startAmbienceSound called - DRAMATIC CINEMATIC MODE');
 
     if (ambienceActiveRef.current || !audioContextRef.current) {
-      console.log('🎵 Ambient sound start cancelled - already active or no audio context');
       return;
     }
 
-    console.log('🎵 Starting ambient sounds now!');
     const ctx = audioContextRef.current;
     ambienceActiveRef.current = true;
 
@@ -1067,7 +1073,6 @@ const Pong404: React.FC = () => {
 
         try {
           ambienceMasterGainRef.current.gain.exponentialRampToValueAtTime(dramaticVolume, now + swellDuration);
-          console.log(`🎭 MASTER DRAMA SWELL: ${dramaticVolume.toFixed(2)} over ${swellDuration.toFixed(1)}s`);
         } catch (e) {}
 
         setTimeout(addMasterDrama, (15 + Math.random() * 15) * 1000); // 15-30 second intervals
@@ -1297,7 +1302,6 @@ const Pong404: React.FC = () => {
       // Add subtle volume fluctuations (never silent)
       const addFluctuation = () => {
         if (!ambienceActiveRef.current) {
-          console.log('🎵 Fluctuation stopped - ambienceActiveRef is false');
           return;
         }
 
@@ -1380,7 +1384,6 @@ const Pong404: React.FC = () => {
         // Schedule next dramatic event with tension-specific timing
         const nextDelay = fluctuationDuration + (Math.random() * 1 - 0.5); // ±500ms variation for drama
         setTimeout(addFluctuation, nextDelay * 1000);
-        console.log(`🎭 DRAMA Layer ${index} (${(layer as any).tension}): ${fluctuationDuration.toFixed(2)}s, volume: ${randomVolume.toFixed(3)}`);
       };
 
       addFluctuation(); // Start fluctuation immediately
@@ -1389,7 +1392,6 @@ const Pong404: React.FC = () => {
     // Restart oscillators every 5 minutes to ensure they never end
     const restartInterval = setInterval(() => {
       if (ambienceActiveRef.current) {
-        console.log('🎵 Restarting ambient oscillators to ensure continuity');
         stopAmbienceSound();
         setTimeout(() => startAmbienceSound(), 100);
       }
@@ -1423,49 +1425,109 @@ const Pong404: React.FC = () => {
   // Process speech queue to prevent overlapping speech
 
   // Public speech function that adds to queue
-  // Simple speech function with overlap prevention
+  // Simple speech function with overlap prevention and effects
   const speakRobotic = useCallback((text: string) => {
+    // Validate text input
+    if (!text || typeof text !== 'string' || text.trim() === '') {
+      console.error('🤖 SAM speech error: Invalid text input:', text);
+      return;
+    }
+
     // Skip if already speaking
     if (isSpeakingRef.current) {
-      console.log(`🤖 Skipping speech (already speaking): "${text}"`);
       return;
     }
 
     isSpeakingRef.current = true;
-    console.log(`🤖 SAM Speaking: "${text}"`);
 
     // Initialize audio context if needed
     if (!audioContextRef.current) {
       initializeAudio();
     }
 
-    // Create dedicated speech audio bus if it doesn't exist
-    if (!speechMasterGainRef.current && audioContextRef.current) {
-      speechMasterGainRef.current = audioContextRef.current.createGain();
-      speechMasterGainRef.current.gain.setValueAtTime(0.8, audioContextRef.current.currentTime);
-      speechMasterGainRef.current.connect(audioContextRef.current.destination);
-    }
-
     try {
-      // Create SAM instance
+      if (!audioContextRef.current) return;
+
+      // Create SAM instance with classic Berzerk-style robotic settings
+      const cleanText = text.trim().toUpperCase();
       const sam = new SamJs({
-        pitch: 150,
-        speed: 96,
-        mouth: 108,
-        throat: 122
+        pitch: 64,     // Classic robotic pitch (not too low or high)
+        speed: 72,     // Moderate speech speed for clarity
+        mouth: 110,    // Mouth setting for robotic character
+        throat: 130    // Throat setting for classic arcade robot sound
       });
 
-      // Simple direct speech
-      sam.speak(text);
+      // Get SAM audio buffer and create proper Web Audio source
+      const audioBuffer = sam.buf8(cleanText);
+
+      // Create a proper Web Audio buffer from SAM's output
+      const sampleRate = 22050; // SAM's default sample rate
+      const webAudioBuffer = audioContextRef.current.createBuffer(1, audioBuffer.length, sampleRate);
+      const channelData = webAudioBuffer.getChannelData(0);
+
+      // Convert SAM's 8-bit unsigned audio to Web Audio's float format
+      for (let i = 0; i < audioBuffer.length; i++) {
+        channelData[i] = (audioBuffer[i] - 128) / 128.0; // Convert to -1.0 to 1.0 range
+      }
+
+      // Create audio source and setup effects chain
+      try {
+        // Create audio source
+        const source = audioContextRef.current!.createBufferSource();
+        source.buffer = webAudioBuffer;
+
+        // Create effects chain with deep reverb and echo
+        const dryGain = audioContextRef.current!.createGain();
+        const wetGain = audioContextRef.current!.createGain();
+        const echoGain = audioContextRef.current!.createGain();
+        const outputGain = audioContextRef.current!.createGain();
+
+        // Set mixing levels for dramatic reverb and echo
+        dryGain.gain.setValueAtTime(0.2, audioContextRef.current!.currentTime);  // 20% dry
+        wetGain.gain.setValueAtTime(0.9, audioContextRef.current!.currentTime);  // 90% reverb
+        echoGain.gain.setValueAtTime(0.6, audioContextRef.current!.currentTime); // 60% echo
+        outputGain.gain.setValueAtTime(1.5, audioContextRef.current!.currentTime); // Boost for dramatic effect
+
+        // Connect dry signal
+        source.connect(dryGain);
+        dryGain.connect(outputGain);
+
+        // Connect reverb effect
+        if (reverbNodeRef.current) {
+          source.connect(reverbNodeRef.current);
+          reverbNodeRef.current.connect(wetGain);
+          wetGain.connect(outputGain);
+        }
+
+        // Connect echo/delay effect
+        if (delayNodeRef.current) {
+          source.connect(delayNodeRef.current);
+          delayNodeRef.current.connect(echoGain);
+          echoGain.connect(outputGain);
+        }
+
+        // Connect to final output
+        outputGain.connect(audioContextRef.current!.destination);
+
+        // Play the processed audio
+        source.start();
+
+        // Clean up when finished
+        source.onended = () => {
+          isSpeakingRef.current = false;
+        };
+      } catch (error) {
+        console.error('🤖 SAM Web Audio error:', error);
+        isSpeakingRef.current = false;
+        // Fallback to basic SAM without effects if Web Audio fails
+        sam.speak(cleanText);
+      }
 
       // Reset speaking flag after estimated duration
-      const speechDuration = 2500 + (text.length * 80);
+      const speechDuration = 2500 + (cleanText.length * 80);
       setTimeout(() => {
         isSpeakingRef.current = false;
-        console.log(`🤖 Speech finished: "${text}"`);
       }, speechDuration);
-
-      console.log(`🤖 SAM voice speaking: "${text}"`);
 
     } catch (error) {
       console.error('🤖 SAM speech error:', error);
@@ -1473,21 +1535,107 @@ const Pong404: React.FC = () => {
     }
   }, [initializeAudio]);
 
+  // Force speech function for countdown numbers that bypasses speaking check with effects
+  const forceSpeak = useCallback((text: string) => {
+    // Validate text input
+    if (!text || typeof text !== 'string' || text.trim() === '') {
+      console.error('🤖 SAM force speech error: Invalid text input:', text);
+      return;
+    }
+
+    // Initialize audio context if needed
+    if (!audioContextRef.current) {
+      initializeAudio();
+    }
+
+    try {
+      if (!audioContextRef.current) return;
+
+      // Create SAM instance with classic Berzerk-style robotic settings
+      const cleanText = text.trim().toUpperCase();
+      const sam = new SamJs({
+        debug: false,
+        pitch: 64,     // Classic robotic pitch (not too low or high)
+        speed: 72,     // Moderate speech speed for clarity
+        mouth: 110,    // Mouth setting for robotic character
+        throat: 130    // Throat setting for classic arcade robot sound
+      });
+
+      // Get SAM audio buffer and create proper Web Audio source (force speech)
+      const audioBuffer = sam.buf8(cleanText);
+
+      // Create a proper Web Audio buffer from SAM's output
+      const sampleRate = 22050; // SAM's default sample rate
+      const webAudioBuffer = audioContextRef.current.createBuffer(1, audioBuffer.length, sampleRate);
+      const channelData = webAudioBuffer.getChannelData(0);
+
+      // Convert SAM's 8-bit unsigned audio to Web Audio's float format
+      for (let i = 0; i < audioBuffer.length; i++) {
+        channelData[i] = (audioBuffer[i] - 128) / 128.0; // Convert to -1.0 to 1.0 range
+      }
+
+      // Create audio source and setup effects chain (force speech)
+      try {
+        // Create audio source
+        const source = audioContextRef.current!.createBufferSource();
+        source.buffer = webAudioBuffer;
+
+        // Create effects chain with deep reverb and echo
+        const dryGain = audioContextRef.current!.createGain();
+        const wetGain = audioContextRef.current!.createGain();
+        const echoGain = audioContextRef.current!.createGain();
+        const outputGain = audioContextRef.current!.createGain();
+
+        // Set mixing levels for dramatic reverb and echo
+        dryGain.gain.setValueAtTime(0.2, audioContextRef.current!.currentTime);  // 20% dry
+        wetGain.gain.setValueAtTime(0.9, audioContextRef.current!.currentTime);  // 90% reverb
+        echoGain.gain.setValueAtTime(0.6, audioContextRef.current!.currentTime); // 60% echo
+        outputGain.gain.setValueAtTime(1.5, audioContextRef.current!.currentTime); // Boost for dramatic effect
+
+        // Connect dry signal
+        source.connect(dryGain);
+        dryGain.connect(outputGain);
+
+        // Connect reverb effect
+        if (reverbNodeRef.current) {
+          source.connect(reverbNodeRef.current);
+          reverbNodeRef.current.connect(wetGain);
+          wetGain.connect(outputGain);
+        }
+
+        // Connect echo/delay effect
+        if (delayNodeRef.current) {
+          source.connect(delayNodeRef.current);
+          delayNodeRef.current.connect(echoGain);
+          echoGain.connect(outputGain);
+        }
+
+        // Connect to final output
+        outputGain.connect(audioContextRef.current!.destination);
+
+        // Play the processed audio (force speech)
+        source.start();
+      } catch (error) {
+        console.error('🤖 SAM force Web Audio error:', error);
+        // Fallback to basic SAM without effects if Web Audio fails
+        sam.speak(cleanText);
+      }
+
+    } catch (error) {
+      console.error('🤖 SAM force speech error:', error);
+    }
+  }, [initializeAudio]);
 
   // Welcome message and ambient sound on start screen
   useEffect(() => {
     if (gameState.showStartScreen) {
       // Start ambient sounds on title screen
       if (audioContextRef.current && audioContextRef.current.state === 'running' && !ambienceActiveRef.current) {
-        console.log('🎵 Starting ambient sounds for title screen...');
         setTimeout(() => startAmbienceSound(), 100);
       }
 
-      // Delay the welcome message to ensure voices are loaded
-      const timer = setTimeout(() => {
-        speakRobotic('WELCOME TO SPACE BLAZERS');
-      }, 1500);
-      return () => clearTimeout(timer);
+      // Instant welcome message on title screen
+      speakRobotic('WELCOME TO SPACE BLAZERS');
     } else {
       // Clear speech queue when leaving start screen
       speechQueueRef.current = [];
@@ -1501,17 +1649,10 @@ const Pong404: React.FC = () => {
 
   // Auto-start ambient sounds when audio context is ready and game is active
   useEffect(() => {
-    console.log('🎵 Ambient audio check:', {
-      audioContext: !!audioContextRef.current,
-      audioState: audioContextRef.current?.state,
-      gameMode: gameState.gameMode,
-      ambienceActive: ambienceActiveRef.current
-    });
 
     // Start ambient sounds for ANY game mode (auto, player, multiplayer)
     if (audioContextRef.current && audioContextRef.current.state === 'running' &&
         !ambienceActiveRef.current) {
-      console.log('🎵 Starting ambient sounds for all game modes...');
       setTimeout(() => startAmbienceSound(), 200); // Much shorter delay for better reliability
     }
   }, [gameState.gameMode, startAmbienceSound, stopAmbienceSound]);
@@ -1761,6 +1902,17 @@ const Pong404: React.FC = () => {
     setGameState(prevState => {
       const newState = { ...prevState };
 
+      // Ensure trails object exists to prevent crashes
+      if (!newState.trails) {
+        newState.trails = {
+          ball: [],
+          leftPaddle: [],
+          rightPaddle: [],
+          topPaddle: [],
+          bottomPaddle: []
+        };
+      }
+
       // Debug: Check if paddles are being lost in the game loop
       if (!newState.paddles.top || !newState.paddles.bottom) {
         console.log('🚨 PADDLES LOST IN GAME LOOP!', {
@@ -1773,7 +1925,7 @@ const Pong404: React.FC = () => {
 
 
       // Check rumble effect timeout (should work even when paused)
-      if (newState.rumbleEffect.isActive) {
+      if (newState.rumbleEffect && newState.rumbleEffect.isActive) {
         const currentTime = Date.now();
         const elapsed = currentTime - newState.rumbleEffect.startTime;
 
@@ -1829,6 +1981,16 @@ const Pong404: React.FC = () => {
           // Add trail for mouse/touch controlled right paddle movement
           if (Math.abs(newState.paddles.right.velocity) > 0.01) {
             const now = Date.now();
+            // Ensure trails object exists
+            if (!newState.trails) {
+              newState.trails = {
+                ball: [],
+                leftPaddle: [],
+                rightPaddle: [],
+                topPaddle: [],
+                bottomPaddle: []
+              };
+            }
             newState.trails.rightPaddle.push({
               x: canvasSize.width - 12 - newState.paddles.right.width / 2,
               y: newState.paddles.right.y + newState.paddles.right.height / 2,
@@ -3077,6 +3239,81 @@ const Pong404: React.FC = () => {
       // Ignore key repeat events
       if (e.repeat) return;
 
+      console.log('🔍 Key pressed:', e.key, 'audioPromptDismissedRef:', audioPromptDismissedRef.current, 'showAudioPrompt:', showAudioPrompt);
+
+      // Handle audio prompt dismissal - any key dismisses it (but only once)
+      if (showAudioPrompt && !audioPromptDismissedRef.current) {
+        console.log('🔊 Dismissing audio prompt, showing title screen - showAudioPrompt:', showAudioPrompt, 'showStartScreen:', gameState.showStartScreen);
+        audioPromptDismissedRef.current = true;
+        setShowAudioPrompt(false);
+        setGameState(prev => ({ ...prev, showStartScreen: true }));
+        await initializeAudio();
+
+        // Force progression after a short delay if user presses spacebar again quickly
+        setTimeout(() => {
+          if (audioPromptDismissedRef.current) {
+            console.log('🚀 Force enabling title screen after audio dismissal');
+          }
+        }, 100);
+        return;
+      }
+
+      // If ref says dismissed, treat as if we're on title screen regardless of state
+      if (audioPromptDismissedRef.current && e.key === ' ') {
+        console.log('🎮 Audio dismissed via ref - proceeding to game start logic');
+
+        // Copy the game start logic here
+        console.log('✅ Starting multiplayer game!');
+
+        // Try to connect to multiplayer WebSocket
+        if (!multiplayerState.isConnected && connectionStatus !== 'error') {
+          console.log('🔗 Connecting to WebSocket server...');
+          try {
+            connectWebSocket();
+            setGameState(prev => ({
+              ...prev,
+              showStartScreen: false,
+              gameMode: 'multiplayer',
+              isPlaying: true
+            }));
+            setTimeout(() => speakRobotic('CONNECTING TO SERVER'), 100);
+          } catch (error) {
+            console.error('❌ Failed to connect to multiplayer:', error);
+            // Fallback to single player if connection fails
+            setGameState(prev => ({
+              ...prev,
+              showStartScreen: false,
+              gameMode: 'player',
+              isPlaying: true
+            }));
+            setTimeout(() => speakRobotic('CONNECTION FAILED, STARTING SINGLE PLAYER'), 100);
+          }
+        } else if (multiplayerState.isConnected) {
+          // Already connected, just start the game
+          console.log('🎮 Already connected, starting multiplayer game!');
+          setGameState(prev => ({
+            ...prev,
+            showStartScreen: false,
+            gameMode: 'multiplayer',
+            isPlaying: true
+          }));
+          setTimeout(() => speakRobotic('MULTIPLAYER GAME STARTING'), 100);
+        } else {
+          // Connection error, fallback to single player
+          console.log('⚠️ Connection error, starting single player');
+          setGameState(prev => ({
+            ...prev,
+            showStartScreen: false,
+            gameMode: 'player',
+            isPlaying: true
+          }));
+          setTimeout(() => speakRobotic('STARTING SINGLE PLAYER MODE'), 100);
+        }
+        return;
+      }
+
+      console.log('🔍 State check - showAudioPrompt:', showAudioPrompt, 'showStartScreen:', gameState.showStartScreen);
+
       // Disable all game controls in spectator mode (except space for audio)
       if (isSpectatorMode && e.key !== ' ') return;
 
@@ -3085,12 +3322,7 @@ const Pong404: React.FC = () => {
 
       // Start ambient sounds immediately on first keyboard interaction (including title screen)
       if (!ambienceActiveRef.current && audioContextRef.current) {
-        console.log('🎵 Starting ambient sounds on keyboard interaction', {
-          audioState: audioContextRef.current.state,
-          ambienceActive: ambienceActiveRef.current
-        });
         setTimeout(() => {
-          console.log('🎵 Executing startAmbienceSound from keyboard');
           startAmbienceSound();
         }, 50); // Even shorter delay
       }
@@ -3138,17 +3370,56 @@ const Pong404: React.FC = () => {
           break;
         case ' ':
           e.preventDefault();
+          console.log('🎮 Spacebar pressed! showStartScreen:', gameState.showStartScreen, 'connectionStatus:', connectionStatus, 'isConnected:', multiplayerState.isConnected);
 
-          // Check if showing start screen - transition to gameplay
+          // Check if showing start screen - start multiplayer game
           if (gameState.showStartScreen) {
-            setGameState(prev => ({
-              ...prev,
-              showStartScreen: false,
-              isPlaying: true,
-              gameMode: 'player'
-            }));
-            // Classic Berzerk-style game start announcement
-            setTimeout(() => speakRobotic('GAME START'), 500);
+            console.log('✅ Starting multiplayer game!');
+
+            // Try to connect to multiplayer WebSocket
+            if (!multiplayerState.isConnected && connectionStatus !== 'error') {
+              console.log('🔗 Connecting to WebSocket server...');
+              try {
+                connectWebSocket();
+                setGameState(prev => ({
+                  ...prev,
+                  showStartScreen: false,
+                  gameMode: 'multiplayer',
+                  isPlaying: true
+                }));
+                setTimeout(() => speakRobotic('CONNECTING TO SERVER'), 100);
+              } catch (error) {
+                console.error('❌ Failed to connect to multiplayer:', error);
+                // Fallback to single player if connection fails
+                setGameState(prev => ({
+                  ...prev,
+                  showStartScreen: false,
+                  gameMode: 'player',
+                  isPlaying: true
+                }));
+                setTimeout(() => speakRobotic('CONNECTION FAILED, STARTING SINGLE PLAYER'), 100);
+              }
+            } else if (multiplayerState.isConnected) {
+              // Already connected, just start the game
+              console.log('🎮 Already connected, starting multiplayer game!');
+              setGameState(prev => ({
+                ...prev,
+                showStartScreen: false,
+                gameMode: 'multiplayer',
+                isPlaying: true
+              }));
+              setTimeout(() => speakRobotic('MULTIPLAYER GAME STARTING'), 100);
+            } else {
+              // Connection error, fallback to single player
+              console.log('⚠️ Connection error, starting single player');
+              setGameState(prev => ({
+                ...prev,
+                showStartScreen: false,
+                gameMode: 'player',
+                isPlaying: true
+              }));
+              setTimeout(() => speakRobotic('STARTING SINGLE PLAYER MODE'), 100);
+            }
             return;
           }
 
@@ -3474,7 +3745,7 @@ const Pong404: React.FC = () => {
     // Apply rumble effect by offsetting the entire canvas content
     let rumbleOffsetX = 0;
     let rumbleOffsetY = 0;
-    if (gameState.rumbleEffect.isActive) {
+    if (gameState.rumbleEffect && gameState.rumbleEffect.isActive) {
       const elapsed = Date.now() - gameState.rumbleEffect.startTime;
       const isScoreRumble = gameState.rumbleEffect.intensity > 20;
       const duration = isScoreRumble ? 800 : 300; // Longer for scores
@@ -3497,8 +3768,16 @@ const Pong404: React.FC = () => {
       ctx.translate(rumbleOffsetX, rumbleOffsetY);
     }
 
-    // Optimize canvas for performance
+    // Optimize canvas for performance and pixel-perfect rendering
     ctx.imageSmoothingEnabled = false; // Disable anti-aliasing for pixel-perfect rendering
+
+    // Disable text smoothing and antialiasing for pixelated text
+    ctx.textRenderingOptimization = 'optimizeSpeed';
+    ctx.fontKerning = 'none';
+    (ctx as any).textRenderingOptimization = 'geometricPrecision';
+    (ctx as any).fontSmooth = 'never';
+    (ctx as any).webkitFontSmoothing = 'none';
+    (ctx as any).mozOsxFontSmoothing = 'unset';
 
     // Get current color scheme
     const currentColors = COLOR_PALETTE[gameState.colorIndex];
@@ -3506,6 +3785,31 @@ const Pong404: React.FC = () => {
     // Clear canvas with dynamic background color
     ctx.fillStyle = currentColors.background;
     ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+
+    // 🔊 AUDIO INTERACTION PROMPT (first load only)
+    if (showAudioPrompt) {
+      // Main prompt
+      ctx.fillStyle = currentColors.foreground;
+      ctx.font = 'bold 32px "Press Start 2P", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('AUDIO REQUIRED', canvasSize.width / 2, canvasSize.height / 2 - 80);
+
+      // Instructions
+      ctx.font = 'bold 16px "Press Start 2P", monospace';
+      ctx.fillText('This game uses sound effects', canvasSize.width / 2, canvasSize.height / 2 - 20);
+      ctx.fillText('and speech synthesis', canvasSize.width / 2, canvasSize.height / 2 + 10);
+
+      // Interaction prompt
+      ctx.font = 'bold 20px "Press Start 2P", monospace';
+      ctx.fillText('CLICK ANYWHERE TO CONTINUE', canvasSize.width / 2, canvasSize.height / 2 + 80);
+
+      // Small footer
+      ctx.font = 'bold 12px "Press Start 2P", monospace';
+      ctx.fillText('Required for browser audio policy compliance', canvasSize.width / 2, canvasSize.height / 2 + 120);
+
+      return; // Don't render anything else when showing audio prompt
+    }
 
     // 🚀 START SCREEN
     if (gameState.showStartScreen) {
@@ -4023,6 +4327,7 @@ const Pong404: React.FC = () => {
       ctx.translate(canvasSize.width / 2, canvasSize.height / 2);
 
       // Pulsing animation effect
+      const time = Date.now() * 0.001;
       const pulseScale = 1 + Math.sin(time * 8) * 0.1; // Pulse between 0.9 and 1.1
       const glowIntensity = (Math.sin(time * 6) + 1) * 0.5; // Glow between 0 and 1
 
@@ -4092,10 +4397,8 @@ const Pong404: React.FC = () => {
               const minimumDelay = 3500; // Wait 3.5 seconds after pickup announcement
 
               if (!announcementTime || timeSinceAnnouncement >= minimumDelay) {
-                // Force interrupt current speech for countdown numbers
-                isSpeakingRef.current = false;
-                // Announce countdown for last 5 seconds
-                setTimeout(() => speakRobotic(remaining.toString()), 50);
+                // Use force speech for countdown numbers to ensure they're always heard
+                setTimeout(() => forceSpeak(remaining.toString()), 50);
               }
             }
           }
@@ -4232,12 +4535,12 @@ const Pong404: React.FC = () => {
       ctx.setTransform(1, 0, 0, 1, 0, 0); // Reset to identity matrix
     }
 
-  }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, crtEffect, applyCRTEffect]);
+  }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, crtEffect, applyCRTEffect, showAudioPrompt]);
 
   // High-performance 60fps game loop
   useEffect(() => {
-    // Continue running if game is playing OR if there's a winner to display OR showing start screen
-    if (!gameState.isPlaying && !(gameState.gameEnded && gameState.winner) && !gameState.showStartScreen) return;
+    // Continue running if game is playing OR if there's a winner to display OR showing start screen OR showing audio prompt
+    if (!gameState.isPlaying && !(gameState.gameEnded && gameState.winner) && !gameState.showStartScreen && !showAudioPrompt) return;
 
     let lastTime = 0;
 
@@ -4266,7 +4569,7 @@ const Pong404: React.FC = () => {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [gameState.isPlaying, gameState.showStartScreen, updateGame, render]);
+  }, [gameState.isPlaying, gameState.showStartScreen, showAudioPrompt, updateGame, render]);
 
 
   // Prevent React strict mode from causing duplicate WebSocket connections
@@ -4278,7 +4581,7 @@ const Pong404: React.FC = () => {
       if (e.key === 'pong-game-state' && e.newValue && !multiplayerState.isGameMaster) {
         try {
           const incomingGameState = JSON.parse(e.newValue);
-          console.log('🔍 LocalStorage received gameState with paddles:', incomingGameState.paddles);
+          // LocalStorage received gameState with paddles
           setGameState(prevState => ({
             ...incomingGameState,
             // Preserve client-only paddles and trails like WebSocket handlers do
@@ -4341,7 +4644,6 @@ const Pong404: React.FC = () => {
 
       // Start ambient sounds immediately on first interaction (including title screen)
       if (!ambienceActiveRef.current && audioContextRef.current) {
-        console.log('🎵 Starting ambient sounds on mouse interaction');
         setTimeout(() => startAmbienceSound(), 50); // Even shorter delay
       }
 
@@ -4413,10 +4715,27 @@ const Pong404: React.FC = () => {
         style={{
           background: COLOR_PALETTE[gameState.colorIndex].background,
           outline: 'none',
-          cursor: cursorHidden ? 'none' : 'default'
-        }}
+          cursor: cursorHidden ? 'none' : 'default',
+          // Disable text smoothing and antialiasing for pixelated text
+          fontSmooth: 'never',
+          WebkitFontSmoothing: 'none',
+          MozOsxFontSmoothing: 'unset',
+          textRendering: 'geometricPrecision',
+          imageRendering: 'pixelated',
+          imageRendering: 'crisp-edges'
+        } as React.CSSProperties}
         tabIndex={0}
         onClick={() => {
+          // Handle audio prompt dismissal
+          if (showAudioPrompt) {
+            audioPromptDismissedRef.current = true; // Set ref like keyboard handler
+            setShowAudioPrompt(false);
+            setGameState(prev => ({ ...prev, showStartScreen: true }));
+            // Initialize audio context on user interaction
+            initializeAudio();
+            return;
+          }
+
           if (canvasRef.current) {
             canvasRef.current.focus();
           }
