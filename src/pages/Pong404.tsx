@@ -898,7 +898,7 @@ const Pong404: React.FC = () => {
           setGameState(prev => ({
             ...prev,
             score: { left: 0, right: 0, top: 0, bottom: 0 }, // Reset all scores
-            ball: {
+              ball: {
               ...prev.ball,
               x: canvasSize.width / 2,
               y: canvasSize.height / 2,
@@ -911,7 +911,7 @@ const Pong404: React.FC = () => {
             pauseEndTime: Date.now() + 2000, // 2 second pause before ball starts
             gameEnded: false,
             isPlaying: true,
-            ball: {
+              ball: {
               ...prev.ball,
               dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
               dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
@@ -922,7 +922,7 @@ const Pong404: React.FC = () => {
           setTimeout(() => {
             setGameState(current => ({
               ...current,
-              ball: {
+                ball: {
                 ...current.ball,
                 dx: Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED,
                 dy: Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED
@@ -1034,6 +1034,7 @@ const Pong404: React.FC = () => {
 
             if (messageData.pickupEffect) networkState.pickupEffect = messageData.pickupEffect;
             if (messageData.decrunchEffect) networkState.decrunchEffect = messageData.decrunchEffect;
+            if (messageData.rumbleEffect) networkState.rumbleEffect = messageData.rumbleEffect;
 
             // Store network state and timing for interpolation
             networkGameStateRef.current = networkState;
@@ -1264,12 +1265,16 @@ const Pong404: React.FC = () => {
 
     // Check special effects
     if (current.pickupEffect.isActive !== previous.pickupEffect.isActive ||
-        current.decrunchEffect.isActive !== previous.decrunchEffect.isActive) {
+        current.decrunchEffect.isActive !== previous.decrunchEffect.isActive ||
+        current.rumbleEffect.isActive !== previous.rumbleEffect.isActive) {
       if (current.pickupEffect.isActive !== previous.pickupEffect.isActive) {
         delta.pickupEffect = current.pickupEffect;
       }
       if (current.decrunchEffect.isActive !== previous.decrunchEffect.isActive) {
         delta.decrunchEffect = current.decrunchEffect;
+      }
+      if (current.rumbleEffect.isActive !== previous.rumbleEffect.isActive) {
+        delta.rumbleEffect = current.rumbleEffect;
       }
       hasChanges = true;
     }
@@ -4750,7 +4755,7 @@ const Pong404: React.FC = () => {
           setTimeout(() => {
             setGameState(current => ({
               ...current,
-              ball: {
+                ball: {
                 ...current.ball,
                 dx: boundaryHit === 'left' || boundaryHit === 'right'
                     ? (boundaryHit === 'left' ? BALL_SPEED : -BALL_SPEED)
@@ -4921,7 +4926,7 @@ const Pong404: React.FC = () => {
               showStartScreen: false,
               gameMode: 'multiplayer',
               isPlaying: true,
-              ball: {
+                ball: {
                 ...prev.ball,
                 dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
                 dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
@@ -4936,7 +4941,7 @@ const Pong404: React.FC = () => {
               showStartScreen: false,
               gameMode: 'player',
               isPlaying: true,
-            ball: {
+              ball: {
               ...prev.ball,
               dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
               dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
@@ -4951,7 +4956,7 @@ const Pong404: React.FC = () => {
             showStartScreen: false,
             gameMode: 'multiplayer',
             isPlaying: true,
-            ball: {
+              ball: {
               ...prev.ball,
               dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
               dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
@@ -4966,7 +4971,7 @@ const Pong404: React.FC = () => {
             showStartScreen: false,
             gameMode: 'player',
             isPlaying: true,
-            ball: {
+              ball: {
               ...prev.ball,
               dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
               dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
@@ -5218,7 +5223,7 @@ const Pong404: React.FC = () => {
     // Apply rumble effect by offsetting the entire canvas content
     let rumbleOffsetX = 0;
     let rumbleOffsetY = 0;
-    if (gameState.rumbleEffect && gameState.rumbleEffect.isActive) {
+    if (gameState.rumbleEffect?.isActive) {
       const elapsed = Date.now() - gameState.rumbleEffect.startTime;
       const isScoreRumble = gameState.rumbleEffect.intensity > 20;
       const duration = isScoreRumble ? 800 : 300; // Longer for scores
@@ -6502,7 +6507,7 @@ const Pong404: React.FC = () => {
                   showStartScreen: false,
                   gameMode: 'multiplayer',
                   isPlaying: true,
-            ball: {
+              ball: {
               ...prev.ball,
               dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
               dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
@@ -6517,7 +6522,7 @@ const Pong404: React.FC = () => {
                   showStartScreen: false,
                   gameMode: 'player',
                   isPlaying: true,
-            ball: {
+              ball: {
               ...prev.ball,
               dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
               dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
@@ -6532,7 +6537,7 @@ const Pong404: React.FC = () => {
                 showStartScreen: false,
                 gameMode: 'multiplayer',
                 isPlaying: true,
-            ball: {
+              ball: {
               ...prev.ball,
               dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
               dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
@@ -6547,7 +6552,7 @@ const Pong404: React.FC = () => {
                 showStartScreen: false,
                 gameMode: 'player',
                 isPlaying: true,
-            ball: {
+              ball: {
               ...prev.ball,
               dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
               dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
@@ -6604,7 +6609,7 @@ const Pong404: React.FC = () => {
                   showStartScreen: false,
                   gameMode: 'multiplayer',
                   isPlaying: true,
-            ball: {
+              ball: {
               ...prev.ball,
               dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
               dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
@@ -6619,7 +6624,7 @@ const Pong404: React.FC = () => {
                   showStartScreen: false,
                   gameMode: 'player',
                   isPlaying: true,
-            ball: {
+              ball: {
               ...prev.ball,
               dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
               dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
@@ -6634,7 +6639,7 @@ const Pong404: React.FC = () => {
                 showStartScreen: false,
                 gameMode: 'multiplayer',
                 isPlaying: true,
-            ball: {
+              ball: {
               ...prev.ball,
               dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
               dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
@@ -6649,7 +6654,7 @@ const Pong404: React.FC = () => {
                 showStartScreen: false,
                 gameMode: 'player',
                 isPlaying: true,
-            ball: {
+              ball: {
               ...prev.ball,
               dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
               dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
