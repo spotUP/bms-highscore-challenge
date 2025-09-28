@@ -5510,25 +5510,36 @@ const Pong404: React.FC = () => {
         if (leftPaddleCollisionDetected) {
           // Calculate where on the paddle the ball hit (0 = top edge, 1 = bottom edge, 0.5 = center)
           const ballCenterY = newState.ball.y + newState.ball.size / 2;
-          const paddleCenterY = newState.paddles.left.y + newState.paddles.left.height / 2;
           const hitPosition = (ballCenterY - newState.paddles.left.y) / newState.paddles.left.height;
 
-          // Calculate distance from center (0 = center, 1 = edge)
-          const distanceFromCenter = Math.abs(hitPosition - 0.5) * 2;
+          // Clamp hit position to valid range [0, 1]
+          const clampedHitPosition = Math.max(0, Math.min(1, hitPosition));
 
-          // Calculate new speed based on hit position (edge hits = faster, center hits = slower)
-          const speedMultiplier = MIN_BALL_SPEED + (MAX_BALL_SPEED - MIN_BALL_SPEED) * distanceFromCenter;
+          // 🎯 ENHANCED AIMING SYSTEM
+          // Map hit position to angle with smooth curve
+          // Top (0) = upward angle, Center (0.5) = straight, Bottom (1) = downward angle
+          const normalizedPosition = (clampedHitPosition - 0.5) * 2; // Convert to range [-1, 1]
 
-          // Calculate current ball speed magnitude
-          const currentSpeed = Math.sqrt(newState.ball.dx * newState.ball.dx + newState.ball.dy * newState.ball.dy);
+          // Apply smooth curve for natural aiming feel
+          // Use sine function for smooth acceleration at edges
+          const aimingCurve = Math.sin(normalizedPosition * Math.PI * 0.4); // 0.4 limits max angle
 
-          // Preserve direction but apply new speed
-          newState.ball.dx = -newState.ball.dx * (speedMultiplier / currentSpeed);
-          newState.ball.dy = newState.ball.dy * (speedMultiplier / currentSpeed);
+          // Calculate base speed - consistent ball speed
+          const baseSpeed = BALL_SPEED;
 
-          // Add slight angle variation based on hit position (like real Pong)
-          const angleVariation = (hitPosition - 0.5) * 2; // -1 to 1
-          newState.ball.dy += angleVariation * 2;
+          // Calculate new velocity components with enhanced aiming
+          const maxAngle = Math.PI / 3; // 60 degrees maximum deflection
+          const deflectionAngle = aimingCurve * maxAngle;
+
+          // Reverse horizontal direction (bouncing off left paddle)
+          newState.ball.dx = Math.cos(deflectionAngle) * baseSpeed;
+          newState.ball.dy = Math.sin(deflectionAngle) * baseSpeed;
+
+          // Add subtle speed variation based on distance from center for dynamic gameplay
+          const distanceFromCenter = Math.abs(clampedHitPosition - 0.5) * 2;
+          const speedVariation = 1 + (distanceFromCenter * 0.2); // 0-20% speed increase
+          newState.ball.dx *= speedVariation;
+          newState.ball.dy *= speedVariation;
 
           // Change colors on paddle hit!
           newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
@@ -5596,25 +5607,36 @@ const Pong404: React.FC = () => {
         if (rightPaddleCollisionDetected) {
           // Calculate where on the paddle the ball hit (0 = top edge, 1 = bottom edge, 0.5 = center)
           const ballCenterY = newState.ball.y + newState.ball.size / 2;
-          const paddleCenterY = newState.paddles.right.y + newState.paddles.right.height / 2;
           const hitPosition = (ballCenterY - newState.paddles.right.y) / newState.paddles.right.height;
 
-          // Calculate distance from center (0 = center, 1 = edge)
-          const distanceFromCenter = Math.abs(hitPosition - 0.5) * 2;
+          // Clamp hit position to valid range [0, 1]
+          const clampedHitPosition = Math.max(0, Math.min(1, hitPosition));
 
-          // Calculate new speed based on hit position (edge hits = faster, center hits = slower)
-          const speedMultiplier = MIN_BALL_SPEED + (MAX_BALL_SPEED - MIN_BALL_SPEED) * distanceFromCenter;
+          // 🎯 ENHANCED AIMING SYSTEM
+          // Map hit position to angle with smooth curve
+          // Top (0) = upward angle, Center (0.5) = straight, Bottom (1) = downward angle
+          const normalizedPosition = (clampedHitPosition - 0.5) * 2; // Convert to range [-1, 1]
 
-          // Calculate current ball speed magnitude
-          const currentSpeed = Math.sqrt(newState.ball.dx * newState.ball.dx + newState.ball.dy * newState.ball.dy);
+          // Apply smooth curve for natural aiming feel
+          // Use sine function for smooth acceleration at edges
+          const aimingCurve = Math.sin(normalizedPosition * Math.PI * 0.4); // 0.4 limits max angle
 
-          // Preserve direction but apply new speed
-          newState.ball.dx = -newState.ball.dx * (speedMultiplier / currentSpeed);
-          newState.ball.dy = newState.ball.dy * (speedMultiplier / currentSpeed);
+          // Calculate base speed - consistent ball speed
+          const baseSpeed = BALL_SPEED;
 
-          // Add slight angle variation based on hit position (like real Pong)
-          const angleVariation = (hitPosition - 0.5) * 2; // -1 to 1
-          newState.ball.dy += angleVariation * 2;
+          // Calculate new velocity components with enhanced aiming
+          const maxAngle = Math.PI / 3; // 60 degrees maximum deflection
+          const deflectionAngle = aimingCurve * maxAngle;
+
+          // Reverse horizontal direction (bouncing off right paddle)
+          newState.ball.dx = -Math.cos(deflectionAngle) * baseSpeed;
+          newState.ball.dy = Math.sin(deflectionAngle) * baseSpeed;
+
+          // Add subtle speed variation based on distance from center for dynamic gameplay
+          const distanceFromCenter = Math.abs(clampedHitPosition - 0.5) * 2;
+          const speedVariation = 1 + (distanceFromCenter * 0.2); // 0-20% speed increase
+          newState.ball.dx *= speedVariation;
+          newState.ball.dy *= speedVariation;
 
           // Change colors on paddle hit!
           newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
@@ -5683,25 +5705,36 @@ const Pong404: React.FC = () => {
         if (topPaddleCollisionDetected) {
           // Calculate where on the paddle the ball hit (0 = left edge, 1 = right edge, 0.5 = center)
           const ballCenterX = newState.ball.x + newState.ball.size / 2;
-          const paddleCenterX = newState.paddles.top.x + newState.paddles.top.width / 2;
           const hitPosition = (ballCenterX - newState.paddles.top.x) / newState.paddles.top.width;
 
-          // Calculate distance from center (0 = center, 1 = edge)
-          const distanceFromCenter = Math.abs(hitPosition - 0.5) * 2;
+          // Clamp hit position to valid range [0, 1]
+          const clampedHitPosition = Math.max(0, Math.min(1, hitPosition));
 
-          // Calculate new speed based on hit position (edge hits = faster, center hits = slower)
-          const speedMultiplier = MIN_BALL_SPEED + (MAX_BALL_SPEED - MIN_BALL_SPEED) * distanceFromCenter;
+          // 🎯 ENHANCED AIMING SYSTEM (HORIZONTAL PADDLE)
+          // Map hit position to angle with smooth curve
+          // Left (0) = leftward angle, Center (0.5) = straight, Right (1) = rightward angle
+          const normalizedPosition = (clampedHitPosition - 0.5) * 2; // Convert to range [-1, 1]
 
-          // Calculate current ball speed magnitude
-          const currentSpeed = Math.sqrt(newState.ball.dx * newState.ball.dx + newState.ball.dy * newState.ball.dy);
+          // Apply smooth curve for natural aiming feel
+          // Use sine function for smooth acceleration at edges
+          const aimingCurve = Math.sin(normalizedPosition * Math.PI * 0.4); // 0.4 limits max angle
 
-          // Preserve direction but apply new speed
-          newState.ball.dx = newState.ball.dx * (speedMultiplier / currentSpeed);
-          newState.ball.dy = -newState.ball.dy * (speedMultiplier / currentSpeed);
+          // Calculate base speed - consistent ball speed
+          const baseSpeed = BALL_SPEED;
 
-          // Add slight angle variation based on hit position (like real Pong)
-          const angleVariation = (hitPosition - 0.5) * 2; // -1 to 1
-          newState.ball.dx += angleVariation * 2;
+          // Calculate new velocity components with enhanced aiming
+          const maxAngle = Math.PI / 3; // 60 degrees maximum deflection
+          const deflectionAngle = aimingCurve * maxAngle;
+
+          // Reverse vertical direction (bouncing off top paddle)
+          newState.ball.dx = Math.sin(deflectionAngle) * baseSpeed;
+          newState.ball.dy = Math.cos(deflectionAngle) * baseSpeed;
+
+          // Add subtle speed variation based on distance from center for dynamic gameplay
+          const distanceFromCenter = Math.abs(clampedHitPosition - 0.5) * 2;
+          const speedVariation = 1 + (distanceFromCenter * 0.2); // 0-20% speed increase
+          newState.ball.dx *= speedVariation;
+          newState.ball.dy *= speedVariation;
 
           // Change colors on paddle hit!
           newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
@@ -5770,25 +5803,36 @@ const Pong404: React.FC = () => {
         if (bottomPaddleCollisionDetected) {
           // Calculate where on the paddle the ball hit (0 = left edge, 1 = right edge, 0.5 = center)
           const ballCenterX = newState.ball.x + newState.ball.size / 2;
-          const paddleCenterX = newState.paddles.bottom.x + newState.paddles.bottom.width / 2;
           const hitPosition = (ballCenterX - newState.paddles.bottom.x) / newState.paddles.bottom.width;
 
-          // Calculate distance from center (0 = center, 1 = edge)
-          const distanceFromCenter = Math.abs(hitPosition - 0.5) * 2;
+          // Clamp hit position to valid range [0, 1]
+          const clampedHitPosition = Math.max(0, Math.min(1, hitPosition));
 
-          // Calculate new speed based on hit position (edge hits = faster, center hits = slower)
-          const speedMultiplier = MIN_BALL_SPEED + (MAX_BALL_SPEED - MIN_BALL_SPEED) * distanceFromCenter;
+          // 🎯 ENHANCED AIMING SYSTEM (HORIZONTAL PADDLE)
+          // Map hit position to angle with smooth curve
+          // Left (0) = leftward angle, Center (0.5) = straight, Right (1) = rightward angle
+          const normalizedPosition = (clampedHitPosition - 0.5) * 2; // Convert to range [-1, 1]
 
-          // Calculate current ball speed magnitude
-          const currentSpeed = Math.sqrt(newState.ball.dx * newState.ball.dx + newState.ball.dy * newState.ball.dy);
+          // Apply smooth curve for natural aiming feel
+          // Use sine function for smooth acceleration at edges
+          const aimingCurve = Math.sin(normalizedPosition * Math.PI * 0.4); // 0.4 limits max angle
 
-          // Preserve direction but apply new speed
-          newState.ball.dx = newState.ball.dx * (speedMultiplier / currentSpeed);
-          newState.ball.dy = -newState.ball.dy * (speedMultiplier / currentSpeed);
+          // Calculate base speed - consistent ball speed
+          const baseSpeed = BALL_SPEED;
 
-          // Add slight angle variation based on hit position (like real Pong)
-          const angleVariation = (hitPosition - 0.5) * 2; // -1 to 1
-          newState.ball.dx += angleVariation * 2;
+          // Calculate new velocity components with enhanced aiming
+          const maxAngle = Math.PI / 3; // 60 degrees maximum deflection
+          const deflectionAngle = aimingCurve * maxAngle;
+
+          // Reverse vertical direction (bouncing off bottom paddle)
+          newState.ball.dx = Math.sin(deflectionAngle) * baseSpeed;
+          newState.ball.dy = -Math.cos(deflectionAngle) * baseSpeed;
+
+          // Add subtle speed variation based on distance from center for dynamic gameplay
+          const distanceFromCenter = Math.abs(clampedHitPosition - 0.5) * 2;
+          const speedVariation = 1 + (distanceFromCenter * 0.2); // 0-20% speed increase
+          newState.ball.dx *= speedVariation;
+          newState.ball.dy *= speedVariation;
 
           // Change colors on paddle hit!
           newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
