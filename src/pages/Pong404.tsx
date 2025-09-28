@@ -2662,6 +2662,8 @@ const Pong404: React.FC = () => {
   const [previousCountdowns, setPreviousCountdowns] = useState<{[effectType: string]: number}>({});
   // Track when pickup announcements were made to delay countdown
   const [pickupAnnouncementTimes, setPickupAnnouncementTimes] = useState<{[effectType: string]: number}>({});
+  // Track which countdown numbers have been announced to ensure none are missed
+  const [announcedCountdowns, setAnnouncedCountdowns] = useState<{[effectType: string]: Set<number>}>({});
 
   const leftFrameCountRef = useRef<number>(0);
   const rightFrameCountRef = useRef<number>(0);
@@ -6517,17 +6519,52 @@ const Pong404: React.FC = () => {
             // Track this countdown
             newCountdowns[effect.type] = remaining;
 
+            // Initialize announced countdown tracking for this effect type if needed
+            if (!announcedCountdowns[effect.type]) {
+              setAnnouncedCountdowns(prev => ({
+                ...prev,
+                [effect.type]: new Set<number>()
+              }));
+            }
+
             // Check if countdown changed and announce it
             const previousValue = previousCountdowns[effect.type];
-            if (previousValue !== remaining && remaining <= 5 && remaining >= 0) {
+            const hasBeenAnnounced = announcedCountdowns[effect.type]?.has(remaining) || false;
+
+            if (remaining <= 5 && remaining >= 0 && !hasBeenAnnounced) {
               // Check if enough time has passed since pickup announcement
               const announcementTime = pickupAnnouncementTimes[effect.type];
               const timeSinceAnnouncement = Date.now() - (announcementTime || 0);
               const minimumDelay = 3500; // Wait 3.5 seconds after pickup announcement
 
               if (!announcementTime || timeSinceAnnouncement >= minimumDelay) {
+                // Mark this number as announced immediately to prevent duplicates
+                setAnnouncedCountdowns(prev => ({
+                  ...prev,
+                  [effect.type]: new Set([...(prev[effect.type] || []), remaining])
+                }));
+
                 // Use force speech for countdown numbers to ensure they're always heard
-                setTimeout(() => forceSpeak(remaining.toString()), 50);
+                // Add unique delay based on effect type to prevent voice conflicts
+                const delayOffset = index * 100; // Stagger announcements by effect index
+                setTimeout(() => forceSpeak(remaining.toString()), 50 + delayOffset);
+              } else {
+                // If we can't announce due to delay, schedule it for later
+                const remainingDelay = minimumDelay - timeSinceAnnouncement;
+                setTimeout(() => {
+                  // Double-check that this number wasn't already announced while we waited
+                  if (!announcedCountdowns[effect.type]?.has(remaining)) {
+                    const currentRemaining = Math.ceil((effect.duration - (Date.now() - effect.startTime)) / 1000);
+                    if (currentRemaining === remaining && currentRemaining <= 5 && currentRemaining >= 0) {
+                      // Mark as announced and speak it
+                      setAnnouncedCountdowns(prev => ({
+                        ...prev,
+                        [effect.type]: new Set([...(prev[effect.type] || []), remaining])
+                      }));
+                      forceSpeak(remaining.toString());
+                    }
+                  }
+                }, remainingDelay + 100);
               }
             }
           }
@@ -6536,6 +6573,16 @@ const Pong404: React.FC = () => {
 
       // Update previous countdowns
       setPreviousCountdowns(newCountdowns);
+
+      // Clean up announced countdowns for effects that no longer exist
+      const activeEffectTypes = new Set(Object.keys(newCountdowns));
+      setAnnouncedCountdowns(prev => {
+        const cleaned: {[effectType: string]: Set<number>} = {};
+        for (const effectType of activeEffectTypes) {
+          cleaned[effectType] = prev[effectType] || new Set<number>();
+        }
+        return cleaned;
+      });
     }
 
     // Add on-screen text overlays
