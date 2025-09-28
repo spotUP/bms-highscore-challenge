@@ -8611,8 +8611,42 @@ const Pong404: React.FC = () => {
     };
   }, []);
 
+  // Prevent mobile scrolling globally
+  useEffect(() => {
+    // Prevent scrolling on mobile devices
+    const preventDefault = (e: Event) => e.preventDefault();
+
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+    document.body.style.height = '100%';
+
+    // Prevent scroll on touch devices
+    document.addEventListener('touchmove', preventDefault, { passive: false });
+    document.addEventListener('wheel', preventDefault, { passive: false });
+
+    return () => {
+      document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.width = '';
+      document.body.style.height = '';
+      document.removeEventListener('touchmove', preventDefault);
+      document.removeEventListener('wheel', preventDefault);
+    };
+  }, []);
+
   return (
-    <div className="w-screen h-screen overflow-hidden bg-black flex items-center justify-center p-1">
+    <div
+      className="w-screen h-screen overflow-hidden bg-black flex items-center justify-center p-1"
+      style={{
+        touchAction: 'none',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        position: 'fixed',
+        top: 0,
+        left: 0
+      }}
+    >
       <canvas
         ref={canvasRef}
         width={canvasSize.width}
@@ -8828,39 +8862,38 @@ const Pong404: React.FC = () => {
             const x = touch.clientX - rect.left;
             const y = touch.clientY - rect.top;
 
-            // Determine which quadrant was touched for 4-paddle control
-            const centerX = canvasSize.width / 2;
-            const centerY = canvasSize.height / 2;
-
-            // Calculate distance from center for each edge
-            const distToLeft = x;
-            const distToRight = canvasSize.width - x;
-            const distToTop = y;
-            const distToBottom = canvasSize.height - y;
-
-            // Find the closest edge
-            const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
-
-            if (minDist === distToLeft) {
-              // Left paddle (vertical movement)
+            // For single player, always control left paddle with Y movement
+            // For multiplayer, use smart paddle selection based on game mode
+            if (gameState.gameMode === 'player' || gameState.gameMode === 'auto') {
+              // Single player - always control left paddle with vertical movement
               setControlSide('left');
               setTouchY(y);
               setTouchX(null);
-            } else if (minDist === distToRight) {
-              // Right paddle (vertical movement)
-              setControlSide('right');
-              setTouchY(y);
-              setTouchX(null);
-            } else if (minDist === distToTop) {
-              // Top paddle (horizontal movement)
-              setControlSide('top');
-              setTouchX(x);
-              setTouchY(null);
             } else {
-              // Bottom paddle (horizontal movement)
-              setControlSide('bottom');
-              setTouchX(x);
-              setTouchY(null);
+              // Multiplayer mode - determine which paddle to control based on touch position
+              const distToLeft = x;
+              const distToRight = canvasSize.width - x;
+              const distToTop = y;
+              const distToBottom = canvasSize.height - y;
+              const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+
+              if (minDist === distToLeft) {
+                setControlSide('left');
+                setTouchY(y);
+                setTouchX(null);
+              } else if (minDist === distToRight) {
+                setControlSide('right');
+                setTouchY(y);
+                setTouchX(null);
+              } else if (minDist === distToTop) {
+                setControlSide('top');
+                setTouchX(x);
+                setTouchY(null);
+              } else {
+                setControlSide('bottom');
+                setTouchX(x);
+                setTouchY(null);
+              }
             }
           }
         }}
