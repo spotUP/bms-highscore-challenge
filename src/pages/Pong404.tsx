@@ -119,6 +119,7 @@ interface GameState {
   };
   physicsForces: PhysicsForce[];
   nextForceSpawnTime: number;
+  gravityStartTime: number;
 }
 
 interface MultiplayerState {
@@ -902,6 +903,7 @@ const Pong404: React.FC = () => {
     },
     physicsForces: [],
     nextForceSpawnTime: Date.now() + Math.random() * 60000 + 60000, // 60-120 seconds for first force
+    gravityStartTime: 0,
     machineGunBalls: [],
     machineGunActive: false,
     machineGunStartTime: 0,
@@ -3207,7 +3209,8 @@ const Pong404: React.FC = () => {
         break;
       case 'gravity_in_space':
         gameState.ball.hasGravity = true;
-        effect.duration = 10000; // 10 seconds of gravity
+        gameState.gravityStartTime = Date.now(); // Track when gravity challenge started
+        effect.duration = 6000; // 6 seconds of gravity challenge
         break;
       case 'super_striker':
         // Pause the ball and enter aiming mode
@@ -3538,7 +3541,26 @@ const Pong404: React.FC = () => {
             gameState.extraBalls = [];
             break;
           case 'gravity_in_space':
+            // Check if player survived the full gravity challenge
+            const gravityDuration = Date.now() - gameState.gravityStartTime;
+            const survivedFullChallenge = gravityDuration >= 5800; // Close to 6 seconds (allow small margin)
+
+            if (survivedFullChallenge && gameState.gravityStartTime > 0) {
+              // Award 2 points for surviving gravity challenge!
+              if (gameState.gameMode === 'player' || gameState.gameMode === 'auto') {
+                // Single player - award to left paddle
+                gameState.score.left += 2;
+                setTimeout(() => speakRobotic('GRAVITY CHALLENGE SURVIVED, BONUS TWO POINTS'), 500);
+              } else {
+                // Multiplayer - award to last player who touched the ball
+                const lastPlayer = gameState.ball.lastTouchedBy || 'left';
+                gameState.score[lastPlayer] += 2;
+                setTimeout(() => speakRobotic(`${lastPlayer.toUpperCase()} PLAYER SURVIVES GRAVITY, BONUS TWO POINTS`), 500);
+              }
+            }
+
             gameState.ball.hasGravity = false;
+            gameState.gravityStartTime = 0; // Reset tracking
             break;
           case 'super_striker':
             gameState.ball.isAiming = false;
@@ -5031,7 +5053,7 @@ const Pong404: React.FC = () => {
 
         // 🌌 Apply gravity effects
         if (newState.ball.hasGravity) {
-          const gravity = 0.3; // Gravity acceleration
+          const gravity = 0.15; // Reduced gravity for higher bounces
           newState.ball.dy += gravity; // Apply downward gravity
         }
 
@@ -6540,6 +6562,12 @@ const Pong404: React.FC = () => {
           });
           newState.score[scoringPlayer]++;
           console.log(`🏆 SCORE UPDATED: ${scoringPlayer} -> ${newState.score[scoringPlayer]}`, newState.score);
+
+          // Reset gravity challenge tracking if ball was lost during gravity
+          if (newState.ball.hasGravity && newState.gravityStartTime > 0) {
+            newState.gravityStartTime = 0; // Forfeit gravity bonus - ball was lost
+          }
+
           clearAllPickupEffects(newState);
 
           // Robot taunt chance when someone scores - with player context
