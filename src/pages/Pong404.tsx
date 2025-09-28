@@ -494,7 +494,7 @@ const Pong404: React.FC = () => {
     const FIXED_SQUARE_SIZE = 800; // Fixed 800x800 square
     return { width: FIXED_SQUARE_SIZE, height: FIXED_SQUARE_SIZE };
   });
-  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error' | 'retrying'>('idle');
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'warming' | 'connected' | 'error' | 'retrying'>('idle');
   const [retryCount, setRetryCount] = useState(0);
   const [connectionMessage, setConnectionMessage] = useState('');
   const [isCRTEnabled, setIsCRTEnabled] = useState(false);
@@ -695,19 +695,40 @@ const Pong404: React.FC = () => {
     setConnectionStatus('connecting');
     setConnectionMessage('Initializing connection to multiplayer server...');
 
-    // Shorter timeout with better user feedback
+    // Progressive timeout stages for better user feedback
+    const warmingTimeout = setTimeout(() => {
+      if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+        setConnectionStatus('warming');
+        setConnectionMessage('🔥 Server is warming up... This may take 30-60 seconds');
+        setTimeout(() => speakRobotic('SERVER IS WARMING UP PLEASE WAIT'), 500);
+      }
+    }, 8000); // Switch to warming state after 8 seconds
+
     const connectionTimeout = setTimeout(() => {
       if (wsRef.current?.readyState === WebSocket.CONNECTING) {
-        setConnectionMessage('Connection timeout - server may be sleeping, retrying...');
+        setConnectionMessage('⏰ Still warming up... Almost ready!');
+        setTimeout(() => speakRobotic('STILL WARMING UP ALMOST READY'), 500);
+      }
+    }, 25000); // Additional encouragement at 25 seconds
+
+    const encouragementTimeout = setTimeout(() => {
+      if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+        setConnectionMessage('🚀 Servers booting up... Worth the wait!');
+      }
+    }, 35000); // Final encouragement at 35 seconds
+
+    const finalTimeout = setTimeout(() => {
+      if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+        setConnectionMessage('Connection timeout - retrying...');
         wsRef.current.close();
         setConnectionStatus('retrying');
         setRetryCount(prev => prev + 1);
         // Auto-retry after short delay
         setTimeout(() => {
           connectWebSocket();
-        }, 2000);
+        }, 3000);
       }
-    }, 15000); // Reduced from 60s to 15s
+    }, 45000); // Final timeout at 45 seconds
 
     const connectToWebSocket = () => {
       try {
@@ -734,10 +755,13 @@ const Pong404: React.FC = () => {
           console.log('🎮 Connection status set to connected');
           console.log('🎮 Game state updated to multiplayer mode');
 
-          // Clear the connection timeout since we connected successfully
-          if (connectionTimeout) {
-            clearTimeout(connectionTimeout);
-          }
+          // Clear all connection timeouts since we connected successfully
+          if (warmingTimeout) clearTimeout(warmingTimeout);
+          if (connectionTimeout) clearTimeout(connectionTimeout);
+          if (encouragementTimeout) clearTimeout(encouragementTimeout);
+          if (finalTimeout) clearTimeout(finalTimeout);
+
+          setTimeout(() => speakRobotic('CONNECTION ESTABLISHED ENTERING MULTIPLAYER'), 300);
 
           // Start heartbeat monitoring
           lastHeartbeatRef.current = Date.now();
@@ -823,10 +847,11 @@ const Pong404: React.FC = () => {
 
         ws.onerror = (error) => {
           console.error('🚨 WebSocket error:', error);
-          // Clear the connection timeout since we got an error
-          if (connectionTimeout) {
-            clearTimeout(connectionTimeout);
-          }
+          // Clear all connection timeouts since we got an error
+          if (warmingTimeout) clearTimeout(warmingTimeout);
+          if (connectionTimeout) clearTimeout(connectionTimeout);
+          if (encouragementTimeout) clearTimeout(encouragementTimeout);
+          if (finalTimeout) clearTimeout(finalTimeout);
 
           setConnectionStatus('error');
           setConnectionMessage('Failed to connect to server - server may be sleeping or unreachable');
@@ -6550,6 +6575,32 @@ const Pong404: React.FC = () => {
         ctx.fillText(connectionMessage || 'Connecting to multiplayer server...', canvasSize.width / 2, canvasSize.height - 60);
         ctx.fillText('Press D for debug mode to see connection logs', canvasSize.width / 2, canvasSize.height - 40);
         ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
+      } else if (connectionStatus === 'warming') {
+        // Animated fire emoji effect for server warming
+        const fireFrames = ['🔥', '🔴', '🟠', '🟡'];
+        const fireEmoji = fireFrames[Math.floor(Date.now() / 400) % fireFrames.length];
+        ctx.fillText(`${fireEmoji} SERVER WARMING UP ${fireEmoji}`, canvasSize.width / 2, canvasSize.height - 80);
+        ctx.fillText(connectionMessage, canvasSize.width / 2, canvasSize.height - 60);
+
+        // Warming progress bar
+        const progressWidth = 200;
+        const progressHeight = 4;
+        const progressX = canvasSize.width / 2 - progressWidth / 2;
+        const progressY = canvasSize.height - 50;
+
+        // Background bar
+        ctx.fillStyle = '#333';
+        ctx.fillRect(progressX, progressY, progressWidth, progressHeight);
+
+        // Animated progress
+        const progress = (Math.sin(Date.now() / 1000) + 1) / 2; // 0-1 sine wave
+        ctx.fillStyle = '#ff6600';
+        ctx.fillRect(progressX, progressY, progressWidth * progress, progressHeight);
+
+        // Restore text color
+        ctx.fillStyle = currentColors.foreground;
+        ctx.fillText('Free servers take time to boot up - please be patient!', canvasSize.width / 2, canvasSize.height - 30);
+        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 10);
       } else if (connectionStatus === 'retrying') {
         const dots = '.'.repeat((Math.floor(Date.now() / 300) % 4) + 1);
         ctx.fillText(`RETRYING${dots}`, canvasSize.width / 2, canvasSize.height - 80);
@@ -6594,6 +6645,11 @@ const Pong404: React.FC = () => {
           const dots = '.'.repeat((Math.floor(Date.now() / 500) % 3) + 1);
           ctx.fillText(`CONNECTING TO MULTIPLAYER${dots}`, canvasSize.width / 2, canvasSize.height - 80);
           ctx.fillText(connectionMessage || 'Establishing connection...', canvasSize.width / 2, canvasSize.height - 60);
+        } else if (connectionStatus === 'warming') {
+          const fireFrames = ['🔥', '🔴', '🟠', '🟡'];
+          const fireEmoji = fireFrames[Math.floor(Date.now() / 400) % fireFrames.length];
+          ctx.fillText(`${fireEmoji} SERVER WARMING UP ${fireEmoji}`, canvasSize.width / 2, canvasSize.height - 80);
+          ctx.fillText(connectionMessage, canvasSize.width / 2, canvasSize.height - 60);
         } else if (connectionStatus === 'retrying') {
           const dots = '.'.repeat((Math.floor(Date.now() / 300) % 4) + 1);
           ctx.fillText(`RETRYING CONNECTION${dots}`, canvasSize.width / 2, canvasSize.height - 80);
