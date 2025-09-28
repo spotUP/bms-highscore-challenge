@@ -259,6 +259,7 @@ const PICKUP_TYPES = [
   { type: 'confetti_cannon', pattern: 'confetti', color: '#ff6347', description: 'Confetti Cannon!', scale: 'phrygian', note: 7 },
   { type: 'hypno_ball', pattern: 'hypno', color: '#9932cc', description: 'Hypno Ball!', scale: 'hungarian', note: 2 },
   { type: 'conga_line', pattern: 'conga', color: '#ffa500', description: 'Conga Line!', scale: 'diminished', note: 6 },
+  { type: 'arkanoid', pattern: 'bricks', color: '#ff4500', description: 'Arkanoid Mode!', scale: 'wholetone', note: 5 },
 ];
 
 // WebSocket server URL - using working Render service
@@ -714,6 +715,14 @@ const PRECALC_PICKUP_PATTERNS = {
       // Dancing figures in a line
       return (row >= 4 && row <= 8) &&
              ((col >= 2 && col <= 3) || (col >= 5 && col <= 6) || (col >= 8 && col <= 9));
+    })
+  ),
+
+  bricks: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Arkanoid brick pattern - classic brick layout
+      return (row >= 2 && row <= 9 && col >= 2 && col <= 9) &&
+             ((row % 2 === 0 && col % 3 === 1) || (row % 2 === 1 && col % 3 === 0));
     })
   )
 };
@@ -3370,6 +3379,51 @@ const Pong404: React.FC = () => {
         }
         effect.duration = 10000; // 10 seconds
         break;
+
+      case 'arkanoid':
+        // 🧱 ARKANOID MODE: Add 16 bricks in + formation
+        gameState.arkanoidBricks = [];
+        gameState.arkanoidActive = true;
+        gameState.arkanoidBricksHit = 0;
+        gameState.arkanoidMode = true;
+
+        // Create + formation with 16 bricks
+        const centerX = canvasSize.width / 2;
+        const centerY = canvasSize.height / 2;
+        const brickWidth = 40;
+        const brickHeight = 20;
+        const spacing = 5;
+
+        // Horizontal line of the + (7 bricks)
+        for (let i = -3; i <= 3; i++) {
+          gameState.arkanoidBricks.push({
+            x: centerX + i * (brickWidth + spacing) - brickWidth / 2,
+            y: centerY - brickHeight / 2,
+            width: brickWidth,
+            height: brickHeight,
+            id: `h_${i}`,
+            color: `hsl(${(i + 3) * 51}, 70%, 60%)`, // Different colors
+            hits: 0
+          });
+        }
+
+        // Vertical line of the + (9 bricks, excluding center overlap)
+        for (let i = -4; i <= 4; i++) {
+          if (i !== 0) { // Skip center to avoid overlap
+            gameState.arkanoidBricks.push({
+              x: centerX - brickWidth / 2,
+              y: centerY + i * (brickHeight + spacing) - brickHeight / 2,
+              width: brickWidth,
+              height: brickHeight,
+              id: `v_${i}`,
+              color: `hsl(${(i + 4) * 40}, 70%, 60%)`, // Different colors
+              hits: 0
+            });
+          }
+        }
+
+        effect.duration = 0; // Runs until all bricks are cleared
+        break;
     }
 
     gameState.activeEffects.push(effect);
@@ -3535,6 +3589,13 @@ const Pong404: React.FC = () => {
 
           case 'conga_line':
             gameState.congaBalls = [];
+            break;
+
+          case 'arkanoid':
+            gameState.arkanoidBricks = [];
+            gameState.arkanoidActive = false;
+            gameState.arkanoidMode = false;
+            gameState.arkanoidBricksHit = 0;
             break;
         }
         return false; // Remove effect
@@ -5157,6 +5218,78 @@ const Pong404: React.FC = () => {
             piece.life -= 16;
             return piece.life > 0;
           });
+        }
+
+        // 🧱 ARKANOID BRICK COLLISION SYSTEM
+        if (newState.arkanoidActive && newState.arkanoidBricks && newState.arkanoidBricks.length > 0) {
+          const ballLeft = newState.ball.x;
+          const ballRight = newState.ball.x + newState.ball.size;
+          const ballTop = newState.ball.y;
+          const ballBottom = newState.ball.y + newState.ball.size;
+
+          for (let i = newState.arkanoidBricks.length - 1; i >= 0; i--) {
+            const brick = newState.arkanoidBricks[i];
+
+            // Check collision with brick
+            const brickCollision = ballRight >= brick.x &&
+                                  ballLeft <= brick.x + brick.width &&
+                                  ballBottom >= brick.y &&
+                                  ballTop <= brick.y + brick.height;
+
+            if (brickCollision) {
+              // Remove the brick
+              newState.arkanoidBricks.splice(i, 1);
+              newState.arkanoidBricksHit++;
+
+              // Score every 4th brick hit
+              if (newState.arkanoidBricksHit % 4 === 0) {
+                // Award point to the player who last touched the ball
+                if (newState.ball.lastTouchedBy) {
+                  newState.score[newState.ball.lastTouchedBy]++;
+                }
+              }
+
+              // Determine bounce direction based on collision side
+              const ballCenterX = newState.ball.x + newState.ball.size / 2;
+              const ballCenterY = newState.ball.y + newState.ball.size / 2;
+              const brickCenterX = brick.x + brick.width / 2;
+              const brickCenterY = brick.y + brick.height / 2;
+
+              const deltaX = ballCenterX - brickCenterX;
+              const deltaY = ballCenterY - brickCenterY;
+
+              // Determine which side was hit based on overlap
+              if (Math.abs(deltaX / brick.width) > Math.abs(deltaY / brick.height)) {
+                // Hit from left or right side
+                newState.ball.dx = -newState.ball.dx;
+              } else {
+                // Hit from top or bottom
+                newState.ball.dy = -newState.ball.dy;
+              }
+
+              // Play brick hit sound
+              playMelodyNoteRef.current?.('paddle', null, 'both');
+
+              // Check if all bricks are cleared
+              if (newState.arkanoidBricks.length === 0) {
+                // End Arkanoid mode
+                newState.arkanoidActive = false;
+                newState.arkanoidMode = false;
+
+                // Remove the effect
+                newState.activeEffects = newState.activeEffects.filter(
+                  effect => effect.type !== 'arkanoid'
+                );
+
+                // Bonus points for clearing all bricks
+                if (newState.ball.lastTouchedBy) {
+                  newState.score[newState.ball.lastTouchedBy] += 2; // 2 bonus points
+                }
+              }
+
+              break; // Only hit one brick per frame
+            }
+          }
         }
 
         // Add ball trail point
@@ -7194,7 +7327,8 @@ const Pong404: React.FC = () => {
           'shake': 'shake',
           'confetti': 'confetti',
           'hypno': 'hypno',
-          'conga': 'conga'
+          'conga': 'conga',
+          'bricks': 'bricks'
         };
 
         const precalcPattern = PRECALC_PICKUP_PATTERNS[patternMap[pattern] as keyof typeof PRECALC_PICKUP_PATTERNS];
