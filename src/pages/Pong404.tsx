@@ -149,7 +149,7 @@ const PADDLE_ACCELERATION = 0.2; // Reduced acceleration for smoother control
 const PADDLE_FRICTION = 0.88; // Slightly more friction for better control
 const HUMAN_REACTION_DELAY = 8; // Reduced delay for more responsive AI at 60fps
 const PANIC_MOVE_CHANCE = 0.08; // Lower chance for panic moves at 60fps
-const COLLISION_BUFFER = 20; // Extra pixels for collision detection tolerance (significantly increased for multiplayer reliability)
+const COLLISION_BUFFER = 0; // Precise collision detection - hitbox matches paddle size exactly
 const PANIC_VELOCITY_MULTIPLIER = 8; // Reduced panic speed multiplier
 const EXTREME_PANIC_CHANCE = 0.04; // Lower extreme panic chance
 const EXTREME_PANIC_MULTIPLIER = 20; // Reduced extreme panic speed
@@ -4584,8 +4584,8 @@ const Pong404: React.FC = () => {
           newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
           newState.ball.lastTouchedBy = 'left';
 
-          // DEFENSIVE: Position ball safely outside paddle to prevent pass-through
-          newState.ball.x = leftPaddleRight + COLLISION_BUFFER;
+          // DEFENSIVE: Position ball exactly at paddle edge to prevent pass-through
+          newState.ball.x = leftPaddleRight;
 
           // Trigger rumble effect on left paddle hit
           newState.rumbleEffect.isActive = true;
@@ -4671,7 +4671,7 @@ const Pong404: React.FC = () => {
           newState.ball.lastTouchedBy = 'right';
 
           // DEFENSIVE: Position ball safely outside paddle to prevent pass-through
-          newState.ball.x = rightPaddleX - newState.ball.size - COLLISION_BUFFER;
+          newState.ball.x = rightPaddleX - newState.ball.size;
 
           // Trigger rumble effect on right paddle hit
           newState.rumbleEffect.isActive = true;
@@ -4758,7 +4758,7 @@ const Pong404: React.FC = () => {
           newState.ball.lastTouchedBy = 'top';
 
           // DEFENSIVE: Position ball safely outside paddle to prevent pass-through
-          newState.ball.y = topPaddleBottom + COLLISION_BUFFER;
+          newState.ball.y = topPaddleBottom;
 
           // Trigger rumble effect on top paddle hit
           newState.rumbleEffect.isActive = true;
@@ -4845,7 +4845,7 @@ const Pong404: React.FC = () => {
           newState.ball.lastTouchedBy = 'bottom';
 
           // DEFENSIVE: Position ball safely outside paddle to prevent pass-through
-          newState.ball.y = bottomPaddleY - newState.ball.size - COLLISION_BUFFER;
+          newState.ball.y = bottomPaddleY - newState.ball.size;
 
           // Trigger rumble effect on bottom paddle hit
           newState.rumbleEffect.isActive = true;

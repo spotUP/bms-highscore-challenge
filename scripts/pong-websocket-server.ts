@@ -684,7 +684,7 @@ class PongWebSocketServer {
   }
 
   private updateBallPhysics(gameState: GameState, canvasSize: { width: number; height: number }): boolean {
-    const COLLISION_BUFFER = 20;
+    const COLLISION_BUFFER = 0; // Precise collision detection - hitbox matches paddle size exactly
     let ballChanged = false;
 
     // Update ball position
