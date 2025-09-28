@@ -8,7 +8,7 @@ interface Pickup {
   id: string;
   x: number;
   y: number;
-  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid';
   createdAt: number;
   size?: number;
 }
@@ -22,7 +22,7 @@ interface Coin {
 }
 
 interface ActiveEffect {
-  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid';
   startTime: number;
   duration: number;
   originalValue?: any;
@@ -117,6 +117,7 @@ interface GameState {
   machineGunActive: boolean;
   machineGunStartTime: number;
   machineGunShooter: 'left' | 'right' | 'top' | 'bottom' | null;
+  stickyPaddlesActive: boolean;
   playfieldScale: number;
   playfieldScaleTarget: number;
   playfieldScaleStart: number;
@@ -141,6 +142,11 @@ interface GameState {
   hypnoStartTime: number;
   congaBalls: any[];
   extraBalls: any[];
+  // Arkanoid mode properties
+  arkanoidBricks: any[];
+  arkanoidActive: boolean;
+  arkanoidMode: boolean;
+  arkanoidBricksHit: number;
 }
 
 interface Player {
@@ -187,7 +193,7 @@ class PongWebSocketServer {
   private setupWebSocketHandlers() {
     this.wss.on('connection', (ws) => {
       const connectionTime = Date.now();
-      console.log('🎮 New WebSocket connection at', new Date().toISOString());
+      console.log('[▶] New WebSocket connection at', new Date().toISOString());
       let playerId: string | null = null;
 
       // Enhanced connection tracking
@@ -200,7 +206,7 @@ class PongWebSocketServer {
           this.handleMessage(ws, data);
           playerId = data.playerId || playerId;
         } catch (error) {
-          console.error('❌ Error parsing message:', error);
+          console.error('[X] Error parsing message:', error);
           ws.send(JSON.stringify({ error: 'Invalid JSON' }));
         }
       });
@@ -220,7 +226,7 @@ class PongWebSocketServer {
       });
 
       ws.on('error', (error) => {
-        console.error('❌ WebSocket error:', error);
+        console.error('[X] WebSocket error:', error);
       });
     });
   }
@@ -272,7 +278,7 @@ class PongWebSocketServer {
         }
         break;
       default:
-        console.log('❓ Unknown message type:', fullType, 'original:', type);
+        console.log('[?] Unknown message type:', fullType, 'original:', type);
     }
   }
 
@@ -355,7 +361,7 @@ class PongWebSocketServer {
       }
     }, playerId);
 
-    console.log(`✅ Player ${playerId} joined as ${playerSide} (${room.players.size} total players)`);
+    console.log(`[✓] Player ${playerId} joined as ${playerSide} (${room.players.size} total players)`);
   }
 
   private handlePaddleUpdate(playerId: string, data: any) {
@@ -479,7 +485,7 @@ class PongWebSocketServer {
       data: room.gameState
     });
 
-    console.log(`🔄 Room ${roomId} reset by gamemaster ${playerId}`);
+    console.log(`[↻] Room ${roomId} reset by gamemaster ${playerId}`);
   }
 
   private handlePlayerDisconnect(playerId: string) {
@@ -528,7 +534,7 @@ class PongWebSocketServer {
             }
           }));
 
-          console.log(`🔄 Spectator ${spectator.id} promoted to ${player.side} position`);
+          console.log(`[↻] Spectator ${spectator.id} promoted to ${player.side} position`);
         }
       }
 
@@ -537,7 +543,7 @@ class PongWebSocketServer {
         this.rooms.delete(player.roomId);
         console.log(`🗑️ Empty room ${player.roomId} deleted`);
       } else if (room.players.size === 0 && player.roomId === 'main') {
-        console.log(`🏠 Main room kept alive (empty but persistent)`);
+        console.log(`[⌂] Main room kept alive (empty but persistent)`);
       } else {
         // Notify remaining players
         this.broadcastToRoom(player.roomId, {
@@ -567,7 +573,7 @@ class PongWebSocketServer {
         try {
           player.ws.send(messageStr);
         } catch (error) {
-          console.error(`❌ Error sending message to player ${player.id}:`, error);
+          console.error(`[X] Error sending message to player ${player.id}:`, error);
         }
       }
     });
@@ -608,7 +614,26 @@ class PongWebSocketServer {
         aimX: 0,
         aimY: 0,
         aimTargetX: 0,
-        aimTargetY: 0
+        aimTargetY: 0,
+        // Extended ball properties
+        isStuck: false,
+        stuckToPaddle: null,
+        stuckStartTime: 0,
+        stuckOffset: { x: 0, y: 0 },
+        hasPortal: false,
+        portalX: 0,
+        portalY: 0,
+        isMirror: false,
+        mirrorBalls: [],
+        isQuantum: false,
+        quantumPositions: [],
+        hasTrailMines: false,
+        trailMines: [],
+        isSlippery: false,
+        bounciness: 1,
+        isMagnetic: false,
+        isFloating: false,
+        isHypnotic: false
       },
       paddles: {
         left: { y: 250, height: 100, width: 12, speed: 32, velocity: 0, targetY: 250, originalHeight: 100 },
@@ -649,9 +674,45 @@ class PongWebSocketServer {
         isActive: false,
         startTime: 0,
         intensity: 0
-      }
+      },
+      // Pickup effect properties
+      machineGunBalls: [],
+      machineGunActive: false,
+      machineGunStartTime: 0,
+      machineGunShooter: null,
+      stickyPaddlesActive: false,
+      playfieldScale: 1,
+      playfieldScaleTarget: 1,
+      playfieldScaleStart: 1,
+      playfieldScaleTime: 0,
+      walls: [],
+      timeWarpActive: false,
+      timeWarpFactor: 1,
+      blackHoles: [],
+      lightningStrikes: [],
+      paddleVisibility: { left: 1, right: 1, top: 1, bottom: 1 },
+      discoMode: false,
+      discoStartTime: 0,
+      sidesSwitched: false,
+      paddleSwapActive: false,
+      nextPaddleSwapTime: 0,
+      pacMans: [],
+      paddlesDrunk: false,
+      drunkStartTime: 0,
+      earthquakeActive: false,
+      earthquakeStartTime: 0,
+      confetti: [],
+      hypnoStartTime: 0,
+      congaBalls: [],
+      extraBalls: [],
+      // Arkanoid mode properties
+      arkanoidBricks: [],
+      arkanoidActive: false,
+      arkanoidMode: false,
+      arkanoidBricksHit: 0
     };
   }
+
 
   private startCleanupInterval() {
     setInterval(() => {
@@ -661,7 +722,7 @@ class PongWebSocketServer {
       // Clean up inactive players
       this.players.forEach((player, playerId) => {
         if (now - player.lastSeen > timeout) {
-          console.log(`🧹 Cleaning up inactive player ${playerId}`);
+          console.log(`[~] Cleaning up inactive player ${playerId}`);
           this.handlePlayerDisconnect(playerId);
         }
       });
@@ -669,7 +730,7 @@ class PongWebSocketServer {
       // Clean up inactive rooms
       this.rooms.forEach((room, roomId) => {
         if (now - room.lastUpdate > timeout && room.players.size === 0) {
-          console.log(`🧹 Cleaning up inactive room ${roomId}`);
+          console.log(`[~] Cleaning up inactive room ${roomId}`);
           this.rooms.delete(roomId);
         }
       });
@@ -680,7 +741,7 @@ class PongWebSocketServer {
     // Create the main room that persists even when empty
     const mainRoom = this.createNewRoom('main');
     this.rooms.set('main', mainRoom);
-    console.log(`🏠 Persistent main room created`);
+    console.log(`[⌂] Persistent main room created`);
   }
 
   private startGameLoop() {
@@ -692,7 +753,7 @@ class PongWebSocketServer {
       this.updateGameLogic();
     }, GAME_LOOP_INTERVAL);
 
-    console.log(`🔄 Server game loop started at ${GAME_LOOP_FPS} FPS`);
+    console.log(`[↻] Server game loop started at ${GAME_LOOP_FPS} FPS`);
   }
 
   private updateGameLogic() {
@@ -704,6 +765,13 @@ class PongWebSocketServer {
 
       const gameState = room.gameState;
       const canvasSize = room.canvasSize;
+
+      // Check if pause timer has expired
+      if (gameState.isPaused && gameState.pauseEndTime > 0 && Date.now() >= gameState.pauseEndTime) {
+        gameState.isPaused = false;
+        gameState.pauseEndTime = 0;
+        console.log('⏰ Pause timer expired, resuming game');
+      }
 
       // Only update game logic if game is playing and not paused
       if (!gameState.isPlaying || gameState.isPaused || gameState.gameEnded) return;
@@ -916,6 +984,91 @@ class PongWebSocketServer {
       ballChanged = true;
     }
 
+    // Arkanoid brick collision detection
+    if (gameState.arkanoidActive && gameState.arkanoidBricks && gameState.arkanoidBricks.length > 0) {
+      for (let i = gameState.arkanoidBricks.length - 1; i >= 0; i--) {
+        const brick = gameState.arkanoidBricks[i];
+
+        // Check collision with brick
+        const brickCollision = ballRight >= brick.x &&
+                              ballLeft <= brick.x + brick.width &&
+                              ballBottom >= brick.y &&
+                              ballTop <= brick.y + brick.height;
+
+        if (brickCollision) {
+          // Remove the brick
+          gameState.arkanoidBricks.splice(i, 1);
+          gameState.arkanoidBricksHit++;
+
+          // Score every 4th brick hit
+          if (gameState.arkanoidBricksHit % 4 === 0) {
+            // Award point to the player who last touched the ball
+            if (gameState.ball.lastTouchedBy) {
+              gameState.score[gameState.ball.lastTouchedBy]++;
+            }
+          }
+
+          // Determine collision direction and bounce appropriately
+          const brickCenterX = brick.x + brick.width / 2;
+          const brickCenterY = brick.y + brick.height / 2;
+          const ballCenterXCurrent = gameState.ball.x + gameState.ball.size / 2;
+          const ballCenterYCurrent = gameState.ball.y + gameState.ball.size / 2;
+
+          const prevBallCenterX = ballCenterXCurrent - gameState.ball.dx;
+          const prevBallCenterY = ballCenterYCurrent - gameState.ball.dy;
+
+          // Determine which side of the brick was hit
+          const deltaX = ballCenterXCurrent - brickCenterX;
+          const deltaY = ballCenterYCurrent - brickCenterY;
+          const absX = Math.abs(deltaX);
+          const absY = Math.abs(deltaY);
+
+          // Hit from left or right side
+          if (absX > absY) {
+            gameState.ball.dx = -gameState.ball.dx;
+            // Position ball outside the brick
+            if (deltaX > 0) {
+              gameState.ball.x = brick.x + brick.width + 1;
+            } else {
+              gameState.ball.x = brick.x - gameState.ball.size - 1;
+            }
+          }
+          // Hit from top or bottom
+          else {
+            gameState.ball.dy = -gameState.ball.dy;
+            // Position ball outside the brick
+            if (deltaY > 0) {
+              gameState.ball.y = brick.y + brick.height + 1;
+            } else {
+              gameState.ball.y = brick.y - gameState.ball.size - 1;
+            }
+          }
+
+          ballChanged = true;
+
+          // Check if all bricks are cleared
+          if (gameState.arkanoidBricks.length === 0) {
+            // End Arkanoid mode
+            gameState.arkanoidActive = false;
+            gameState.arkanoidMode = false;
+
+            // Remove the effect
+            gameState.activeEffects = gameState.activeEffects.filter(
+              effect => effect.type !== 'arkanoid'
+            );
+
+            // Bonus points for clearing all bricks
+            if (gameState.ball.lastTouchedBy) {
+              gameState.score[gameState.ball.lastTouchedBy] += 2; // 2 bonus points
+            }
+          }
+
+          // Only handle one brick collision per frame
+          break;
+        }
+      }
+    }
+
     // Scoring boundaries - ball goes off screen
     if (gameState.ball.x < -20) {
       this.handleScoring(gameState, 'left');
@@ -970,6 +1123,11 @@ class PongWebSocketServer {
       gameState.gameEnded = true;
       gameState.isPlaying = false;
       console.log(`🎉 Game Over! Winner: ${scoringPlayer}`);
+    } else {
+      // Pause for goal celebration (2 seconds)
+      gameState.isPaused = true;
+      gameState.pauseEndTime = Date.now() + 2000;
+      console.log(`⏸️ Pausing for goal celebration, resuming in 2 seconds`);
     }
 
     // Reset ball position
@@ -1067,31 +1225,94 @@ class PongWebSocketServer {
 
     // Apply immediate effects based on pickup type
     switch (pickup.type) {
-      case 'speed':
-        const speedMultiplier = 1.5;
-        gameState.ball.dx *= speedMultiplier;
-        gameState.ball.dy *= speedMultiplier;
+      case 'speed_up':
+        gameState.ball.dx *= 1.5;
+        gameState.ball.dy *= 1.5;
+        effect.duration = 6000;
         break;
-
-      case 'size':
-        gameState.ball.size = Math.min(gameState.ball.size * 1.5, 40);
+      case 'speed_down':
+        gameState.ball.dx *= 0.4;
+        gameState.ball.dy *= 0.4;
+        effect.duration = 6000;
         break;
-
-      case 'reverse':
-        gameState.ball.dx *= -1;
-        gameState.ball.dy *= -1;
+      case 'big_ball':
+        effect.originalValue = gameState.ball.size;
+        gameState.ball.size = 24;
         break;
-
-      case 'drunk':
+      case 'small_ball':
+        effect.originalValue = gameState.ball.size;
+        gameState.ball.size = 6;
+        break;
+      case 'drunk_ball':
         gameState.ball.isDrunk = true;
+        gameState.ball.drunkAngle = 0;
+        effect.duration = 4000;
         break;
-
-      case 'freeze':
-        // Freeze all paddle movement for 3 seconds
-        gameState.paddles.left.velocity = 0;
-        gameState.paddles.right.velocity = 0;
-        gameState.paddles.top.velocity = 0;
-        gameState.paddles.bottom.velocity = 0;
+      case 'grow_paddle':
+        const targetSide = Math.random() > 0.5 ? 'left' : 'right';
+        effect.side = targetSide;
+        effect.originalValue = gameState.paddles[targetSide].height;
+        gameState.paddles[targetSide].height = Math.min(150, gameState.paddles[targetSide].height * 1.5);
+        break;
+      case 'shrink_paddle':
+        const shrinkSide = Math.random() > 0.5 ? 'left' : 'right';
+        effect.side = shrinkSide;
+        effect.originalValue = gameState.paddles[shrinkSide].height;
+        gameState.paddles[shrinkSide].height = Math.max(30, gameState.paddles[shrinkSide].height * 0.6);
+        break;
+      case 'reverse_controls':
+        // This will be handled in the input logic on client side
+        break;
+      case 'invisible_ball':
+        // Visual effect handled on client side
+        effect.duration = 4000;
+        break;
+      case 'freeze_opponent':
+        effect.side = Math.random() > 0.5 ? 'left' : 'right';
+        effect.duration = 3000;
+        break;
+      case 'super_speed':
+        gameState.ball.dx *= 2.5;
+        gameState.ball.dy *= 2.5;
+        effect.duration = 3000;
+        break;
+      case 'sticky_paddles':
+        // Ball will stick to paddles for 3 seconds before shooting
+        gameState.stickyPaddlesActive = true;
+        effect.duration = 15000; // Effect lasts 15 seconds
+        break;
+      case 'machine_gun':
+        // Rapidly fire balls for 3 seconds
+        gameState.machineGunActive = true;
+        gameState.machineGunStartTime = Date.now();
+        gameState.machineGunShooter = gameState.ball.lastTouchedBy;
+        effect.duration = 3000; // 3 seconds of machine gun
+        break;
+      case 'dynamic_playfield':
+        // Grow and shrink playfield with easing for 15 seconds
+        gameState.playfieldScaleStart = gameState.playfieldScale;
+        gameState.playfieldScaleTarget = 0.7 + Math.random() * 0.6; // Scale between 0.7-1.3
+        gameState.playfieldScaleTime = Date.now();
+        effect.duration = 15000; // 15 seconds
+        break;
+      case 'switch_sides':
+        // All players switch sides and keep their scores
+        const tempLeftScore = gameState.score.left;
+        const tempRightScore = gameState.score.right;
+        const tempTopScore = gameState.score.top;
+        const tempBottomScore = gameState.score.bottom;
+        gameState.score.left = tempRightScore;
+        gameState.score.right = tempLeftScore;
+        gameState.score.top = tempBottomScore;
+        gameState.score.bottom = tempTopScore;
+        gameState.sidesSwitched = !gameState.sidesSwitched;
+        effect.duration = 3000; // Show effect for 3 seconds
+        break;
+      case 'time_warp':
+        // Slow down or speed up time
+        gameState.timeWarpActive = true;
+        gameState.timeWarpFactor = Math.random() > 0.5 ? 0.5 : 2.0; // Half speed or double speed
+        effect.duration = 8000; // 8 seconds
         break;
       case 'gravity_in_space':
         gameState.ball.hasGravity = true;
@@ -1106,6 +1327,267 @@ class PongWebSocketServer {
         gameState.ball.dx = 0; // Stop the ball
         gameState.ball.dy = 0;
         effect.duration = 4000; // 4 seconds to aim
+        break;
+      case 'arkanoid':
+        // Create arkanoid bricks in + formation
+        gameState.arkanoidBricks = [];
+        gameState.arkanoidActive = true;
+        gameState.arkanoidMode = true;
+        gameState.arkanoidBricksHit = 0;
+
+        // Create + formation with 16 bricks (7 horizontal + 9 vertical, center overlaps)
+        const centerX = 400; // Center of 800px canvas
+        const centerY = 300; // Center of 600px canvas
+        const brickWidth = 40;
+        const brickHeight = 20;
+        const spacing = 5;
+
+        // Horizontal line of the + (7 bricks)
+        for (let i = -3; i <= 3; i++) {
+          gameState.arkanoidBricks.push({
+            x: centerX + i * (brickWidth + spacing) - brickWidth / 2,
+            y: centerY - brickHeight / 2,
+            width: brickWidth,
+            height: brickHeight,
+            id: `h_${i}`,
+            life: 1
+          });
+        }
+
+        // Vertical line of the + (9 bricks, excluding center overlap)
+        for (let i = -4; i <= 4; i++) {
+          if (i !== 0) { // Skip center to avoid overlap
+            gameState.arkanoidBricks.push({
+              x: centerX - brickWidth / 2,
+              y: centerY + i * (brickHeight + spacing) - brickHeight / 2,
+              width: brickWidth,
+              height: brickHeight,
+              id: `v_${i}`,
+              life: 1
+            });
+          }
+        }
+
+        effect.duration = 30000; // 30 seconds or until all bricks destroyed
+        break;
+      case 'multi_ball':
+        // Add extra balls to the game
+        for (let i = 0; i < 2; i++) {
+          gameState.extraBalls.push({
+            x: gameState.ball.x + (i * 10),
+            y: gameState.ball.y + (i * 10),
+            dx: gameState.ball.dx * (0.8 + i * 0.2),
+            dy: gameState.ball.dy * (0.8 + i * 0.2),
+            size: gameState.ball.size,
+            id: `extra_${Date.now()}_${i}`
+          });
+        }
+        effect.duration = 15000; // 15 seconds
+        break;
+      case 'teleport_ball':
+        // Teleport ball to random location
+        gameState.ball.x = 200 + Math.random() * 400;
+        gameState.ball.y = 150 + Math.random() * 300;
+        gameState.ball.isTeleporting = true;
+        gameState.ball.lastTeleportTime = Date.now();
+        effect.duration = 2000; // Visual effect for 2 seconds
+        break;
+      case 'rubber_ball':
+        // Increase ball bounciness
+        effect.originalValue = gameState.ball.bounciness;
+        gameState.ball.bounciness = 1.5;
+        gameState.ball.isSlippery = false; // Ensure clean state
+        effect.duration = 10000; // 10 seconds
+        break;
+      case 'balloon_ball':
+        // Make ball float and bounce gently
+        gameState.ball.isFloating = true;
+        effect.originalValue = gameState.ball.bounciness;
+        gameState.ball.bounciness = 0.8;
+        effect.duration = 8000; // 8 seconds
+        break;
+      case 'magnet_ball':
+        // Ball attracted to paddles
+        gameState.ball.isMagnetic = true;
+        effect.duration = 12000; // 12 seconds
+        break;
+      case 'invisible_paddles':
+        // Make paddles partially invisible
+        gameState.paddleVisibility = { left: 0.2, right: 0.2, top: 0.2, bottom: 0.2 };
+        effect.duration = 8000; // 8 seconds
+        break;
+      case 'drunk_paddles':
+        // Make paddles move erratically
+        gameState.paddlesDrunk = true;
+        gameState.drunkStartTime = Date.now();
+        effect.duration = 10000; // 10 seconds
+        break;
+      case 'earthquake':
+        // Shake the playfield
+        gameState.earthquakeActive = true;
+        gameState.earthquakeStartTime = Date.now();
+        effect.duration = 6000; // 6 seconds
+        break;
+      case 'hypno_ball':
+        // Ball hypnotic effect
+        gameState.ball.isHypnotic = true;
+        gameState.hypnoStartTime = Date.now();
+        effect.duration = 8000; // 8 seconds
+        break;
+      case 'disco_mode':
+        // Disco effect
+        gameState.discoMode = true;
+        gameState.discoStartTime = Date.now();
+        effect.duration = 15000; // 15 seconds
+        break;
+      case 'conga_line':
+        // Create a line of balls following the main ball
+        gameState.congaBalls = [];
+        for (let i = 0; i < 3; i++) {
+          gameState.congaBalls.push({
+            x: gameState.ball.x - (i + 1) * 20,
+            y: gameState.ball.y,
+            targetX: gameState.ball.x,
+            targetY: gameState.ball.y,
+            id: `conga_${i}`
+          });
+        }
+        effect.duration = 12000; // 12 seconds
+        break;
+      case 'confetti_cannon':
+        // Create confetti particles
+        gameState.confetti = [];
+        for (let i = 0; i < 20; i++) {
+          gameState.confetti.push({
+            x: gameState.ball.x,
+            y: gameState.ball.y,
+            dx: (Math.random() - 0.5) * 10,
+            dy: (Math.random() - 0.5) * 10,
+            color: `hsl(${Math.random() * 360}, 70%, 60%)`,
+            life: 3000,
+            id: `confetti_${i}`
+          });
+        }
+        effect.duration = 3000; // 3 seconds
+        break;
+      case 'coin_shower':
+        // Create coins for collection
+        gameState.coins = [];
+        for (let i = 0; i < 10; i++) {
+          gameState.coins.push({
+            id: `coin_${Date.now()}_${i}`,
+            x: Math.random() * 600 + 100,
+            y: Math.random() * 400 + 100,
+            createdAt: Date.now(),
+            size: 12
+          });
+        }
+        effect.duration = 15000; // 15 seconds
+        break;
+      case 'blocker':
+        // Create walls/blockers
+        gameState.walls = [];
+        for (let i = 0; i < 3; i++) {
+          gameState.walls.push({
+            x: Math.random() * 600 + 100,
+            y: Math.random() * 400 + 100,
+            width: 20,
+            height: 60,
+            id: `wall_${i}`
+          });
+        }
+        effect.duration = 20000; // 20 seconds
+        break;
+      case 'portal_ball':
+        // Create portals for ball teleportation
+        gameState.ball.hasPortal = true;
+        gameState.ball.portalX = Math.random() * 600 + 100;
+        gameState.ball.portalY = Math.random() * 400 + 100;
+        effect.duration = 15000; // 15 seconds
+        break;
+      case 'mirror_mode':
+        // Create mirror balls
+        gameState.ball.isMirror = true;
+        gameState.ball.mirrorBalls = [];
+        for (let i = 0; i < 2; i++) {
+          gameState.ball.mirrorBalls.push({
+            x: 800 - gameState.ball.x,
+            y: 600 - gameState.ball.y,
+            dx: -gameState.ball.dx,
+            dy: -gameState.ball.dy,
+            id: `mirror_${i}`
+          });
+        }
+        effect.duration = 12000; // 12 seconds
+        break;
+      case 'quantum_ball':
+        // Create quantum positions
+        gameState.ball.isQuantum = true;
+        gameState.ball.quantumPositions = [];
+        for (let i = 0; i < 3; i++) {
+          gameState.ball.quantumPositions.push({
+            x: Math.random() * 600 + 100,
+            y: Math.random() * 400 + 100
+          });
+        }
+        effect.duration = 8000; // 8 seconds
+        break;
+      case 'black_hole':
+        // Create black holes
+        gameState.blackHoles = [];
+        for (let i = 0; i < 2; i++) {
+          gameState.blackHoles.push({
+            x: Math.random() * 600 + 100,
+            y: Math.random() * 400 + 100,
+            radius: 40,
+            strength: 150,
+            id: `blackhole_${i}`
+          });
+        }
+        effect.duration = 15000; // 15 seconds
+        break;
+      case 'lightning_storm':
+        // Create lightning strikes
+        gameState.lightningStrikes = [];
+        effect.duration = 10000; // 10 seconds
+        break;
+      case 'ball_trail_mine':
+        // Enable trail mines
+        gameState.ball.hasTrailMines = true;
+        gameState.ball.trailMines = [];
+        effect.duration = 15000; // 15 seconds
+        break;
+      case 'paddle_swap':
+        // Swap paddle positions
+        gameState.paddleSwapActive = true;
+        gameState.nextPaddleSwapTime = Date.now() + 2000; // First swap in 2 seconds
+        effect.duration = 10000; // 10 seconds
+        break;
+      case 'pac_man':
+        // Create pac-man enemies
+        gameState.pacMans = [];
+        for (let i = 0; i < 3; i++) {
+          gameState.pacMans.push({
+            x: Math.random() * 600 + 100,
+            y: Math.random() * 400 + 100,
+            dx: (Math.random() - 0.5) * 4,
+            dy: (Math.random() - 0.5) * 4,
+            id: `pacman_${i}`,
+            size: 20
+          });
+        }
+        effect.duration = 15000; // 15 seconds
+        break;
+      case 'banana_peel':
+        // Make ball slippery
+        gameState.ball.isSlippery = true;
+        effect.originalValue = gameState.ball.bounciness;
+        gameState.ball.bounciness = 1.2;
+        effect.duration = 8000; // 8 seconds
+        break;
+      default:
+        // For any unimplemented pickup, give it a default 5 second duration
+        effect.duration = 5000;
         break;
     }
   }
@@ -1147,13 +1629,23 @@ class PongWebSocketServer {
 
   private reversePickupEffect(gameState: GameState, effect: ActiveEffect): void {
     switch (effect.type) {
-      case 'size':
-        gameState.ball.size = gameState.ball.originalSize;
+      case 'big_ball':
+      case 'small_ball':
+        if (effect.originalValue !== undefined) {
+          gameState.ball.size = effect.originalValue;
+        }
         break;
 
-      case 'drunk':
+      case 'drunk_ball':
         gameState.ball.isDrunk = false;
         gameState.ball.drunkAngle = 0;
+        break;
+
+      case 'grow_paddle':
+      case 'shrink_paddle':
+        if (effect.side && effect.originalValue !== undefined) {
+          gameState.paddles[effect.side as keyof typeof gameState.paddles].height = effect.originalValue;
+        }
         break;
 
       case 'gravity_in_space':
@@ -1167,6 +1659,140 @@ class PongWebSocketServer {
           gameState.ball.dx = 10;
           gameState.ball.dy = 0;
         }
+        break;
+
+      case 'sticky_paddles':
+        gameState.stickyPaddlesActive = false;
+        break;
+
+      case 'machine_gun':
+        gameState.machineGunActive = false;
+        gameState.machineGunBalls = [];
+        break;
+
+      case 'dynamic_playfield':
+        gameState.playfieldScale = 1.0;
+        gameState.playfieldScaleTarget = 1.0;
+        break;
+
+      case 'time_warp':
+        gameState.timeWarpActive = false;
+        gameState.timeWarpFactor = 1.0;
+        break;
+
+      case 'arkanoid':
+        gameState.arkanoidBricks = [];
+        gameState.arkanoidActive = false;
+        gameState.arkanoidMode = false;
+        gameState.arkanoidBricksHit = 0;
+        break;
+
+      case 'multi_ball':
+        gameState.extraBalls = [];
+        break;
+
+      case 'teleport_ball':
+        gameState.ball.isTeleporting = false;
+        break;
+
+      case 'rubber_ball':
+        if (effect.originalValue !== undefined) {
+          gameState.ball.bounciness = effect.originalValue;
+        }
+        gameState.ball.isSlippery = false;
+        break;
+
+      case 'balloon_ball':
+        gameState.ball.isFloating = false;
+        if (effect.originalValue !== undefined) {
+          gameState.ball.bounciness = effect.originalValue;
+        }
+        break;
+
+      case 'magnet_ball':
+        gameState.ball.isMagnetic = false;
+        break;
+
+      case 'invisible_paddles':
+        gameState.paddleVisibility = { left: 1, right: 1, top: 1, bottom: 1 };
+        break;
+
+      case 'drunk_paddles':
+        gameState.paddlesDrunk = false;
+        break;
+
+      case 'earthquake':
+        gameState.earthquakeActive = false;
+        break;
+
+      case 'hypno_ball':
+        gameState.ball.isHypnotic = false;
+        break;
+
+      case 'disco_mode':
+        gameState.discoMode = false;
+        break;
+
+      case 'conga_line':
+        gameState.congaBalls = [];
+        break;
+
+      case 'confetti_cannon':
+        gameState.confetti = [];
+        break;
+
+      case 'coin_shower':
+        gameState.coins = [];
+        break;
+
+      case 'blocker':
+        gameState.walls = [];
+        break;
+
+      case 'portal_ball':
+        gameState.ball.hasPortal = false;
+        break;
+
+      case 'mirror_mode':
+        gameState.ball.isMirror = false;
+        gameState.ball.mirrorBalls = [];
+        break;
+
+      case 'quantum_ball':
+        gameState.ball.isQuantum = false;
+        gameState.ball.quantumPositions = [];
+        break;
+
+      case 'black_hole':
+        gameState.blackHoles = [];
+        break;
+
+      case 'lightning_storm':
+        gameState.lightningStrikes = [];
+        break;
+
+      case 'ball_trail_mine':
+        gameState.ball.hasTrailMines = false;
+        gameState.ball.trailMines = [];
+        break;
+
+      case 'paddle_swap':
+        gameState.paddleSwapActive = false;
+        break;
+
+      case 'pac_man':
+        gameState.pacMans = [];
+        break;
+
+      case 'banana_peel':
+        gameState.ball.isSlippery = false;
+        if (effect.originalValue !== undefined) {
+          gameState.ball.bounciness = effect.originalValue;
+        }
+        break;
+
+      // For other effects, no cleanup needed (visual effects, etc.)
+      default:
         break;
     }
   }
@@ -1199,9 +1825,9 @@ class PongWebSocketServer {
 
   public start() {
     this.server.listen(this.port, '0.0.0.0', () => {
-      console.log(`🚀 Pong WebSocket server running on http://0.0.0.0:${this.port}`);
-      console.log(`🎮 Ready for Pong multiplayer connections!`);
-      console.log(`🆔 Server Instance ID: ${this.instanceId}`);
+      console.log(`[▲] Pong WebSocket server running on http://0.0.0.0:${this.port}`);
+      console.log(`[▶] Ready for Pong multiplayer connections!`);
+      console.log(`[#] Server Instance ID: ${this.instanceId}`);
     });
 
     // Send periodic heartbeat to all connected clients
@@ -1215,7 +1841,7 @@ class PongWebSocketServer {
               serverInstanceId: this.instanceId
             }));
           } catch (error) {
-            console.error(`❌ Error sending heartbeat to player ${player.id}:`, error);
+            console.error(`[X] Error sending heartbeat to player ${player.id}:`, error);
           }
         }
       });

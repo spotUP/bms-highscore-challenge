@@ -13,3 +13,4 @@
 - remember the pixel size in pong is 12x12
 - remember the pixel size in pong404 is the same as in the scores use this for every pickup etc that you draw
 - remember always check the console after adding/updating a new feature and fix all console errors
+- remember that pickups always should be handled by the websocket

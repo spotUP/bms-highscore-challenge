@@ -737,9 +737,9 @@ const Pong404: React.FC = () => {
   const frameCountRef = useRef<number>(0);
   const lastFpsUpdateRef = useRef<number>(Date.now());
 
-  // 🎯 60 FPS Frame Rate Control
+  // 🎯 Frame Rate Control - Lower FPS for mobile devices
   const lastFrameTimeRef = useRef<number>(0);
-  const targetFPS = 60;
+  const targetFPS = isMobile ? 30 : 60; // 30 FPS on mobile, 60 FPS on desktop
   const targetFrameTime = 1000 / targetFPS; // 16.67ms per frame
 
   // ⚡ Performance: Cached time values to reduce Date.now() calls
@@ -783,14 +783,35 @@ const Pong404: React.FC = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const isSpectatorMode = urlParams.get('spectator') === 'true' || urlParams.get('mode') === 'spectator';
 
-  // Fixed square canvas size for perfect square gameplay
+  // Detect mobile device for performance optimizations
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
+  // Responsive square canvas size for perfect square gameplay
   const [canvasSize, setCanvasSize] = useState(() => {
-    const FIXED_SQUARE_SIZE = 800; // Fixed 800x800 square
-    return { width: FIXED_SQUARE_SIZE, height: FIXED_SQUARE_SIZE };
+    const getOptimalCanvasSize = () => {
+      if (typeof window === 'undefined') return 800;
+
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const minDimension = Math.min(viewportWidth, viewportHeight);
+
+      // For mobile devices (< 768px), use 90% of the smallest viewport dimension
+      // For desktop, use the fixed 800px size
+      if (viewportWidth < 768) {
+        return Math.min(Math.floor(minDimension * 0.9), 600); // Cap at 600px for very large phones
+      } else {
+        return 800; // Desktop size
+      }
+    };
+
+    const size = getOptimalCanvasSize();
+    return { width: size, height: size };
   });
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'warming' | 'connected' | 'error' | 'retrying'>('idle');
   const [retryCount, setRetryCount] = useState(0);
   const [connectionMessage, setConnectionMessage] = useState('');
+  const [connectionStartTime, setConnectionStartTime] = useState(0);
+  const [currentPhase, setCurrentPhase] = useState<'initializing' | 'warming' | 'booting' | 'finalizing'>('initializing');
   const [isCRTEnabled, setIsCRTEnabled] = useState(false);
 
   const [gameState, _setGameState] = useState<GameState>({
@@ -819,6 +840,7 @@ const Pong404: React.FC = () => {
       isStuck: false,
       stuckToPaddle: null,
       stuckStartTime: 0,
+      stuckTime: 0,
       stuckOffset: { x: 0, y: 0 },
       hasPortal: false,
       portalX: 0,
@@ -829,6 +851,11 @@ const Pong404: React.FC = () => {
       quantumPositions: [],
       hasTrailMines: false,
       trailMines: [],
+      isSlippery: false,
+      bounciness: 1.0,
+      isMagnetic: false,
+      isFloating: false,
+      isHypnotic: false,
     },
     paddles: {
       left: { y: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), originalHeight: PADDLE_LENGTH },
@@ -878,6 +905,20 @@ const Pong404: React.FC = () => {
     machineGunActive: false,
     machineGunStartTime: 0,
     machineGunShooter: null,
+    stickyPaddlesActive: false,
+    sidesSwitched: false,
+    paddleVisibility: { left: 1.0, right: 1.0, top: 1.0, bottom: 1.0 },
+    paddleSwapActive: false,
+    nextPaddleSwapTime: 0,
+    discoMode: false,
+    discoStartTime: 0,
+    pacMans: [],
+    paddlesDrunk: false,
+    drunkStartTime: 0,
+    earthquakeActive: false,
+    earthquakeStartTime: 0,
+    confetti: [],
+    hypnoStartTime: 0,
     playfieldScale: 1.0,
     playfieldScaleTarget: 1.0,
     playfieldScaleStart: 1.0,
@@ -1027,28 +1068,40 @@ const Pong404: React.FC = () => {
 
     setConnectionStatus('connecting');
     setConnectionMessage('Initializing connection to multiplayer server...');
+    setConnectionStartTime(Date.now());
+    setCurrentPhase('initializing');
 
-    // Progressive timeout stages for better user feedback
+    // Progressive timeout stages with enhanced feedback
     const warmingTimeout = setTimeout(() => {
       if (wsRef.current?.readyState === WebSocket.CONNECTING) {
         setConnectionStatus('warming');
-        setConnectionMessage('🔥 Server is warming up... This may take 30-60 seconds');
+        setCurrentPhase('warming');
+        setConnectionMessage('🔥 Server is warming up... Estimated 30-60 seconds');
         setTimeout(() => speakRobotic('SERVER IS WARMING UP PLEASE WAIT'), 500);
       }
     }, 8000); // Switch to warming state after 8 seconds
 
+    const bootingTimeout = setTimeout(() => {
+      if (wsRef.current?.readyState === WebSocket.CONNECTING) {
+        setCurrentPhase('booting');
+        setConnectionMessage('⚡ Booting server processes... Almost ready!');
+        setTimeout(() => speakRobotic('BOOTING SERVER PROCESSES ALMOST READY'), 500);
+      }
+    }, 20000); // Booting phase at 20 seconds
+
     const connectionTimeout = setTimeout(() => {
       if (wsRef.current?.readyState === WebSocket.CONNECTING) {
-        setConnectionMessage('⏰ Still warming up... Almost ready!');
-        setTimeout(() => speakRobotic('STILL WARMING UP ALMOST READY'), 500);
+        setCurrentPhase('finalizing');
+        setConnectionMessage('⏰ Finalizing startup... Just a few more seconds!');
+        setTimeout(() => speakRobotic('FINALIZING STARTUP JUST A FEW MORE SECONDS'), 500);
       }
-    }, 25000); // Additional encouragement at 25 seconds
+    }, 35000); // Finalizing phase at 35 seconds
 
     const encouragementTimeout = setTimeout(() => {
       if (wsRef.current?.readyState === WebSocket.CONNECTING) {
-        setConnectionMessage('🚀 Servers booting up... Worth the wait!');
+        setConnectionMessage('🚀 Almost there... Server is nearly ready!');
       }
-    }, 35000); // Final encouragement at 35 seconds
+    }, 50000); // Final encouragement at 50 seconds
 
     const finalTimeout = setTimeout(() => {
       if (wsRef.current?.readyState === WebSocket.CONNECTING) {
@@ -1090,6 +1143,7 @@ const Pong404: React.FC = () => {
 
           // Clear all connection timeouts since we connected successfully
           if (warmingTimeout) clearTimeout(warmingTimeout);
+          if (bootingTimeout) clearTimeout(bootingTimeout);
           if (connectionTimeout) clearTimeout(connectionTimeout);
           if (encouragementTimeout) clearTimeout(encouragementTimeout);
           if (finalTimeout) clearTimeout(finalTimeout);
@@ -1170,6 +1224,7 @@ const Pong404: React.FC = () => {
           if (!event.wasClean) {
             setConnectionStatus('retrying');
             setRetryCount(prev => prev + 1);
+            setCurrentPhase('initializing'); // Reset phase for retry
             const retryDelay = Math.min(5000 + Math.random() * 5000, 15000); // 5-10 seconds, max 15s
             setConnectionMessage(`Reconnecting in ${Math.ceil(retryDelay/1000)} seconds... (attempt ${retryCount + 1})`);
             reconnectTimeoutRef.current = setTimeout(() => {
@@ -1182,6 +1237,7 @@ const Pong404: React.FC = () => {
           console.error('🚨 WebSocket error:', error);
           // Clear all connection timeouts since we got an error
           if (warmingTimeout) clearTimeout(warmingTimeout);
+          if (bootingTimeout) clearTimeout(bootingTimeout);
           if (connectionTimeout) clearTimeout(connectionTimeout);
           if (encouragementTimeout) clearTimeout(encouragementTimeout);
           if (finalTimeout) clearTimeout(finalTimeout);
@@ -1986,18 +2042,32 @@ const Pong404: React.FC = () => {
     }
   }, [multiplayerState.playerId, multiplayerState.roomId, multiplayerState.isConnected, multiplayerState.isGameMaster]);
 
-  // Handle window resize - fill entire screen
+  // Handle window resize - responsive canvas sizing
   useEffect(() => {
     const updateCanvasSize = () => {
-      // Force a fixed square size for perfect square gameplay
-      const FIXED_SQUARE_SIZE = 800; // Fixed 800x800 square
+      const getOptimalCanvasSize = () => {
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const minDimension = Math.min(viewportWidth, viewportHeight);
+
+        // For mobile devices (< 768px), use 90% of the smallest viewport dimension
+        // For desktop, use the fixed 800px size
+        if (viewportWidth < 768) {
+          return Math.min(Math.floor(minDimension * 0.9), 600); // Cap at 600px for very large phones
+        } else {
+          return 800; // Desktop size
+        }
+      };
+
+      const newSize = getOptimalCanvasSize();
 
       console.log('Canvas size update:', {
-        fixedSize: FIXED_SQUARE_SIZE,
-        willSet: { width: FIXED_SQUARE_SIZE, height: FIXED_SQUARE_SIZE }
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        newSize,
+        willSet: { width: newSize, height: newSize }
       });
 
-      setCanvasSize({ width: FIXED_SQUARE_SIZE, height: FIXED_SQUARE_SIZE });
+      setCanvasSize({ width: newSize, height: newSize });
 
       // Update game state when canvas size changes
       setGameState(prev => ({
@@ -2991,6 +3061,7 @@ const Pong404: React.FC = () => {
   const [mouseY, setMouseY] = useState<number | null>(null);
   const [mouseX, setMouseX] = useState<number | null>(null);
   const [touchY, setTouchY] = useState<number | null>(null);
+  const [touchX, setTouchX] = useState<number | null>(null);
   const [controlSide, setControlSide] = useState<'left' | 'right' | 'top' | 'bottom' | null>(null);
   const [cursorHidden, setCursorHidden] = useState(false);
 
@@ -3157,7 +3228,8 @@ const Pong404: React.FC = () => {
       case 'sticky_paddles':
         // Ball will stick to paddles for 3 seconds before shooting
         gameState.ball.isStuck = false; // Initialize (will be set when ball hits paddle)
-        effect.duration = 0; // Instant effect that changes ball behavior
+        gameState.stickyPaddlesActive = true; // Enable sticky behavior
+        effect.duration = 15000; // Effect lasts 15 seconds
         break;
 
       case 'machine_gun':
@@ -3188,7 +3260,7 @@ const Pong404: React.FC = () => {
         gameState.score.top = tempBottomScore;
         gameState.score.bottom = tempTopScore;
         gameState.sidesSwitched = !gameState.sidesSwitched;
-        effect.duration = 0; // Instant effect
+        effect.duration = 3000; // Show effect for 3 seconds
         break;
 
       case 'blocker':
@@ -3344,9 +3416,10 @@ const Pong404: React.FC = () => {
         break;
 
       case 'confetti_cannon':
-        // Spawn colorful confetti particles
+        // Spawn colorful confetti particles (fewer on mobile for performance)
         gameState.confetti = [];
-        for (let i = 0; i < 50; i++) {
+        const confettiCount = isMobile ? 25 : 50; // Half particles on mobile
+        for (let i = 0; i < confettiCount; i++) {
           gameState.confetti.push({
             x: gameState.ball.x,
             y: gameState.ball.y,
@@ -3494,6 +3567,12 @@ const Pong404: React.FC = () => {
           case 'machine_gun':
             gameState.machineGunActive = false;
             gameState.machineGunBalls = [];
+            break;
+
+          case 'sticky_paddles':
+            gameState.stickyPaddlesActive = false;
+            gameState.ball.isStuck = false;
+            gameState.ball.stuckTime = 0;
             break;
 
           case 'dynamic_playfield':
@@ -3859,7 +3938,7 @@ const Pong404: React.FC = () => {
 
       // SIMPLIFIED: Always allow paddle control regardless of mode
       // Auto-switch to player vs AI mode when any input is detected (if not in multiplayer)
-      const hasInput = keys.w || keys.s || keys.up || keys.down || keys.a || keys.d || keys.left || keys.right || mouseY !== null || touchY !== null;
+      const hasInput = keys.w || keys.s || keys.up || keys.down || keys.a || keys.d || keys.left || keys.right || mouseY !== null || touchY !== null || mouseX !== null || touchX !== null;
 
       if (newState.gameMode === 'auto' && hasInput) {
         newState.gameMode = 'player';
@@ -3885,8 +3964,8 @@ const Pong404: React.FC = () => {
 
           newState.paddles.right.y = clampedY;
 
-          // Add trail for mouse/touch controlled right paddle movement
-          if (Math.abs(newState.paddles.right.velocity) > 0.01) {
+          // Add trail for mouse/touch controlled right paddle movement (reduced on mobile)
+          if (Math.abs(newState.paddles.right.velocity) > 0.01 && (!isMobile || Math.random() < 0.5)) {
             const now = Date.now();
             // Ensure trails object exists
             if (!newState.trails) {
@@ -4013,16 +4092,15 @@ const Pong404: React.FC = () => {
             const isExtremePanicMove = Math.random() < 0.05; // 5% chance for extreme panic
 
             if (isEmergencyPanic || isExtremePanicMove) {
-              // Emergency panic or extreme panic - JUMP TO BALL IMMEDIATELY
+              // Emergency panic - smooth but fast movement toward ball
               const extremePanicDirection = Math.sign(ballCenterY - currentPaddleCenter);
-              const panicMultiplier = isEmergencyPanic ? EXTREME_PANIC_MULTIPLIER * 1.5 : EXTREME_PANIC_MULTIPLIER * 2;
+              const panicMultiplier = isEmergencyPanic ? 3.0 : 4.0; // Reduced from extreme values
 
-              // Completely replace velocity with extreme movement - MUCH FASTER
-              paddle.velocity = extremePanicDirection * paddle.speed * panicMultiplier;
-              // Add violent jitter to simulate frantic spinning
-              paddle.velocity += (Math.random() - 0.5) * 15;
-              // Override friction temporarily for this extreme move
-              return; // Skip normal physics for this frame
+              // Smooth acceleration instead of violent velocity changes
+              paddle.velocity += extremePanicDirection * paddle.speed * panicMultiplier * 0.3;
+              // Cap velocity to prevent jitter
+              paddle.velocity = Math.max(-paddle.speed * 2, Math.min(paddle.speed * 2, paddle.velocity));
+              // Continue with normal physics processing
             } else if (isPanicMove && ballHeadingTowardsPaddle) {
               // Regular panic move - faster movement toward ball
               paddle.velocity += direction * PADDLE_ACCELERATION * 5.0; // Much higher acceleration
@@ -4132,14 +4210,15 @@ const Pong404: React.FC = () => {
           const isEmergencyPanic = ballHeadingTowardsPaddle && ballDistance < 150 && ballPaddleDistance > 30;
 
           if (isEmergencyPanic) {
+            // Smooth emergency movement without jitter
             const extremePanicDirection = Math.sign(ballCenterX - currentPaddleCenter);
-            paddle.velocity = extremePanicDirection * paddle.speed * EXTREME_PANIC_MULTIPLIER * 2;
+            paddle.velocity += extremePanicDirection * paddle.speed * 2.5; // Smooth acceleration
           } else if (Math.abs(distance) > 25) {
-            paddle.velocity += direction * PADDLE_ACCELERATION * 3.0;
+            paddle.velocity += direction * PADDLE_ACCELERATION * 2.0; // Reduced from 3.0
           } else if (Math.abs(distance) > 8) {
-            paddle.velocity += direction * PADDLE_ACCELERATION * 1.2;
+            paddle.velocity += direction * PADDLE_ACCELERATION * 1.0; // Reduced from 1.2
           } else {
-            paddle.velocity *= 0.5;
+            paddle.velocity *= 0.7; // Improved from 0.5
           }
 
           paddle.velocity *= PADDLE_FRICTION * 0.95;
@@ -4285,9 +4364,9 @@ const Pong404: React.FC = () => {
         if ((multiplayerStateRef.current?.playerSide === 'top' || localTestMode) && newState.paddles.top) {
           const oldX = newState.paddles.top.x;
 
-          // Handle mouse control for top paddle (always enabled)
-          if (mouseX !== null) {
-            const targetX = mouseX - newState.paddles.top.width / 2;
+          // Handle mouse/touch control for top paddle (always enabled)
+          if (controlSide === 'top' && (mouseX !== null || touchX !== null)) {
+            const targetX = (touchX !== null ? touchX : mouseX!) - newState.paddles.top.width / 2;
             const clampedX = Math.max(0, Math.min(canvasSize.width - newState.paddles.top.width, targetX));
             newState.paddles.top.velocity = clampedX - newState.paddles.top.x;
             newState.paddles.top.x = clampedX;
@@ -4304,8 +4383,8 @@ const Pong404: React.FC = () => {
             newState.paddles.top.velocity += 1.2; // Reduced acceleration
             newState.paddles.top.velocity = Math.min(newState.paddles.top.speed * 1.5, newState.paddles.top.velocity);
             newState.paddles.top.x += newState.paddles.top.velocity;
-          } else if (!(controlSide === 'top' && mouseX !== null)) {
-            // Only apply friction if neither keyboard nor mouse is active
+          } else if (!(controlSide === 'top' && (mouseX !== null || touchX !== null))) {
+            // Only apply friction if neither keyboard nor mouse/touch is active
             newState.paddles.top.velocity *= 0.8; // Friction
             if (Math.abs(newState.paddles.top.velocity) < 0.1) {
               newState.paddles.top.velocity = 0; // Stop when very slow
@@ -4337,9 +4416,9 @@ const Pong404: React.FC = () => {
         if ((multiplayerStateRef.current?.playerSide === 'bottom' || localTestMode) && newState.paddles.bottom) {
           const oldX = newState.paddles.bottom.x;
 
-          // Handle mouse control for bottom paddle (always enabled)
-          if (mouseX !== null) {
-            const targetX = mouseX - newState.paddles.bottom.width / 2;
+          // Handle mouse/touch control for bottom paddle (always enabled)
+          if (controlSide === 'bottom' && (mouseX !== null || touchX !== null)) {
+            const targetX = (touchX !== null ? touchX : mouseX!) - newState.paddles.bottom.width / 2;
             const clampedX = Math.max(0, Math.min(canvasSize.width - newState.paddles.bottom.width, targetX));
             newState.paddles.bottom.velocity = clampedX - newState.paddles.bottom.x;
             newState.paddles.bottom.x = clampedX;
@@ -4356,8 +4435,8 @@ const Pong404: React.FC = () => {
             newState.paddles.bottom.velocity += 1.2; // Reduced acceleration
             newState.paddles.bottom.velocity = Math.min(newState.paddles.bottom.speed * 1.5, newState.paddles.bottom.velocity);
             newState.paddles.bottom.x += newState.paddles.bottom.velocity;
-          } else if (!(controlSide === 'bottom' && mouseX !== null)) {
-            // Only apply friction if neither keyboard nor mouse is active
+          } else if (!(controlSide === 'bottom' && (mouseX !== null || touchX !== null))) {
+            // Only apply friction if neither keyboard nor mouse/touch is active
             newState.paddles.bottom.velocity *= 0.8; // Friction
             if (Math.abs(newState.paddles.bottom.velocity) < 0.1) {
               newState.paddles.bottom.velocity = 0; // Stop when very slow
@@ -4538,14 +4617,15 @@ const Pong404: React.FC = () => {
           const isEmergencyPanic = ballHeadingTowardsPaddle && ballDistance < 150 && ballPaddleDistance > 30;
 
           if (isEmergencyPanic) {
+            // Smooth emergency movement without jitter
             const extremePanicDirection = Math.sign(ballCenterX - currentPaddleCenter);
-            paddle.velocity = extremePanicDirection * paddle.speed * EXTREME_PANIC_MULTIPLIER * 2;
+            paddle.velocity += extremePanicDirection * paddle.speed * 2.5; // Smooth acceleration
           } else if (Math.abs(distance) > 25) {
-            paddle.velocity += direction * PADDLE_ACCELERATION * 3.0;
+            paddle.velocity += direction * PADDLE_ACCELERATION * 2.0; // Reduced from 3.0
           } else if (Math.abs(distance) > 8) {
-            paddle.velocity += direction * PADDLE_ACCELERATION * 1.2;
+            paddle.velocity += direction * PADDLE_ACCELERATION * 1.0; // Reduced from 1.2
           } else {
-            paddle.velocity *= 0.5;
+            paddle.velocity *= 0.7; // Improved from 0.5
           }
 
           paddle.velocity *= PADDLE_FRICTION * 0.95;
@@ -5024,6 +5104,280 @@ const Pong404: React.FC = () => {
                    mgBall.x >= 0 && mgBall.x <= canvasSize.width &&
                    mgBall.y >= 0 && mgBall.y <= canvasSize.height;
           });
+        }
+
+        // 🏓 STICKY PADDLES PHYSICS
+        if (newState.ball.isStuck && newState.ball.stuckToPaddle) {
+          const stuckDuration = currentTime - newState.ball.stuckStartTime;
+          const maxStuckTime = 3000; // 3 seconds
+
+          if (stuckDuration >= maxStuckTime) {
+            // Release ball after 3 seconds
+            const stuckPaddleSide = newState.ball.stuckToPaddle; // Store before clearing
+            newState.ball.isStuck = false;
+            newState.ball.stuckToPaddle = null;
+
+            // Shoot ball away from paddle with enhanced aiming
+            const baseSpeed = BALL_SPEED * 1.2; // Slightly faster when released
+
+            if (stuckPaddleSide === 'left') {
+              newState.ball.dx = baseSpeed; // Shoot right
+              newState.ball.dy = (Math.random() - 0.5) * baseSpeed * 0.8; // Random angle
+            } else if (stuckPaddleSide === 'right') {
+              newState.ball.dx = -baseSpeed; // Shoot left
+              newState.ball.dy = (Math.random() - 0.5) * baseSpeed * 0.8; // Random angle
+            }
+
+            // Robot announcement for ball release
+            setTimeout(() => speakRoboticRef.current?.('BALL RELEASED'), 100);
+            playMelodyNoteRef.current?.('paddle', null, 'both');
+          } else {
+            // Keep ball stuck to paddle, moving with it
+            const paddle = newState.paddles[newState.ball.stuckToPaddle];
+
+            if (newState.ball.stuckToPaddle === 'left') {
+              newState.ball.x = 30 + newState.paddles.left.width + newState.ball.stuckOffset.x;
+              newState.ball.y = newState.paddles.left.y + newState.paddles.left.height / 2 + newState.ball.stuckOffset.y - newState.ball.size / 2;
+            } else if (newState.ball.stuckToPaddle === 'right') {
+              newState.ball.x = canvasSize.width - 30 - newState.paddles.right.width + newState.ball.stuckOffset.x - newState.ball.size;
+              newState.ball.y = newState.paddles.right.y + newState.paddles.right.height / 2 + newState.ball.stuckOffset.y - newState.ball.size / 2;
+            }
+
+            // Keep velocity at zero while stuck
+            newState.ball.dx = 0;
+            newState.ball.dy = 0;
+          }
+        }
+
+        // 🧱 BLOCKER WALLS PHYSICS
+        if (newState.walls && newState.walls.length > 0) {
+          for (const wall of newState.walls) {
+            // Simple rectangle collision detection
+            const ballLeft = newState.ball.x;
+            const ballRight = newState.ball.x + newState.ball.size;
+            const ballTop = newState.ball.y;
+            const ballBottom = newState.ball.y + newState.ball.size;
+
+            const wallLeft = wall.x;
+            const wallRight = wall.x + wall.width;
+            const wallTop = wall.y;
+            const wallBottom = wall.y + wall.height;
+
+            // Check for collision
+            if (ballRight > wallLeft && ballLeft < wallRight &&
+                ballBottom > wallTop && ballTop < wallBottom) {
+
+              // Determine collision side and bounce accordingly
+              const overlapLeft = ballRight - wallLeft;
+              const overlapRight = wallRight - ballLeft;
+              const overlapTop = ballBottom - wallTop;
+              const overlapBottom = wallBottom - ballTop;
+
+              // Find smallest overlap to determine bounce direction
+              const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+
+              if (minOverlap === overlapLeft || minOverlap === overlapRight) {
+                // Horizontal collision
+                newState.ball.dx = -newState.ball.dx;
+              } else {
+                // Vertical collision
+                newState.ball.dy = -newState.ball.dy;
+              }
+
+              // Move ball outside wall to prevent sticking
+              if (minOverlap === overlapLeft) {
+                newState.ball.x = wallLeft - newState.ball.size;
+              } else if (minOverlap === overlapRight) {
+                newState.ball.x = wallRight;
+              } else if (minOverlap === overlapTop) {
+                newState.ball.y = wallTop - newState.ball.size;
+              } else {
+                newState.ball.y = wallBottom;
+              }
+
+              // Play wall hit sound
+              playMelodyNoteRef.current?.('wall', null, 'both');
+              break; // Only collide with one wall per frame
+            }
+          }
+        }
+
+        // 🪞 MIRROR MODE PHYSICS
+        if (newState.ball.isMirror) {
+          // Create mirror balls that follow the main ball
+          if (newState.ball.mirrorBalls.length === 0) {
+            // Initialize 2 mirror balls
+            for (let i = 0; i < 2; i++) {
+              newState.ball.mirrorBalls.push({
+                x: newState.ball.x + (i + 1) * 50,
+                y: newState.ball.y + (i + 1) * 30,
+                dx: newState.ball.dx,
+                dy: newState.ball.dy,
+                size: newState.ball.size * 0.8,
+                alpha: 0.6 - (i * 0.2) // Decreasing opacity
+              });
+            }
+          } else {
+            // Update mirror balls to follow main ball with offset
+            for (let i = 0; i < newState.ball.mirrorBalls.length; i++) {
+              const mirror = newState.ball.mirrorBalls[i];
+              const offset = (i + 1) * 40;
+
+              // Mirror balls follow with slight delay and offset
+              mirror.x = newState.ball.x + Math.cos(Date.now() * 0.001 + i) * offset;
+              mirror.y = newState.ball.y + Math.sin(Date.now() * 0.001 + i) * offset;
+              mirror.dx = newState.ball.dx * 0.9; // Slightly slower
+              mirror.dy = newState.ball.dy * 0.9;
+
+              // Keep mirrors within bounds
+              mirror.x = Math.max(mirror.size, Math.min(canvasSize.width - mirror.size, mirror.x));
+              mirror.y = Math.max(mirror.size, Math.min(canvasSize.height - mirror.size, mirror.y));
+            }
+          }
+        }
+
+        // 🌀 PORTAL BALL PHYSICS
+        if (newState.ball.hasPortal) {
+          // Check for wall collisions to create portals
+          const ballLeft = newState.ball.x;
+          const ballRight = newState.ball.x + newState.ball.size;
+          const ballTop = newState.ball.y;
+          const ballBottom = newState.ball.y + newState.ball.size;
+
+          // Check wall collisions
+          if (ballLeft <= 0 || ballRight >= canvasSize.width || ballTop <= 0 || ballBottom >= canvasSize.height) {
+            // Create portal at collision point
+            let portalX = newState.ball.x;
+            let portalY = newState.ball.y;
+
+            if (ballLeft <= 0) portalX = 0;
+            else if (ballRight >= canvasSize.width) portalX = canvasSize.width;
+            else if (ballTop <= 0) portalY = 0;
+            else if (ballBottom >= canvasSize.height) portalY = canvasSize.height;
+
+            // Set portal position for exit
+            newState.ball.portalX = portalX;
+            newState.ball.portalY = portalY;
+
+            // Teleport ball to opposite side
+            if (ballLeft <= 0) {
+              newState.ball.x = canvasSize.width - newState.ball.size - 5;
+            } else if (ballRight >= canvasSize.width) {
+              newState.ball.x = 5;
+            } else if (ballTop <= 0) {
+              newState.ball.y = canvasSize.height - newState.ball.size - 5;
+            } else if (ballBottom >= canvasSize.height) {
+              newState.ball.y = 5;
+            }
+
+            // Play portal sound
+            playMelodyNoteRef.current?.('pickup', null, 'both');
+          }
+        }
+
+        // 🎈 BALLOON BALL PHYSICS (Floating Ball)
+        if (newState.ball.isFloating) {
+          // Ball floats upward against gravity
+          newState.ball.dy -= 0.2; // Upward force
+          newState.ball.dx *= 0.99; // Slight horizontal drag
+        }
+
+        // 🧲 MAGNET BALL PHYSICS
+        if (newState.ball.isMagnetic) {
+          // Ball is attracted to nearest paddle
+          const paddleDistances = [
+            { side: 'left', distance: Math.abs(newState.ball.x - 30) },
+            { side: 'right', distance: Math.abs(newState.ball.x - (canvasSize.width - 30)) },
+            { side: 'top', distance: Math.abs(newState.ball.y - 30) },
+            { side: 'bottom', distance: Math.abs(newState.ball.y - (canvasSize.height - 30)) }
+          ];
+
+          const nearestPaddle = paddleDistances.reduce((min, curr) =>
+            curr.distance < min.distance ? curr : min
+          );
+
+          // Apply magnetic force toward nearest paddle
+          const magnetForce = 0.3;
+          if (nearestPaddle.side === 'left') {
+            newState.ball.dx -= magnetForce;
+          } else if (nearestPaddle.side === 'right') {
+            newState.ball.dx += magnetForce;
+          } else if (nearestPaddle.side === 'top') {
+            newState.ball.dy -= magnetForce;
+          } else if (nearestPaddle.side === 'bottom') {
+            newState.ball.dy += magnetForce;
+          }
+        }
+
+        // 🌈 PAC-MAN PHYSICS
+        if (newState.pacMans && newState.pacMans.length > 0) {
+          for (let i = 0; i < newState.pacMans.length; i++) {
+            const pacman = newState.pacMans[i];
+
+            // Chase the ball
+            const dx = newState.ball.x - pacman.x;
+            const dy = newState.ball.y - pacman.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > 5) {
+              pacman.dx = (dx / distance) * 2; // Speed of 2
+              pacman.dy = (dy / distance) * 2;
+            }
+
+            // Update position
+            pacman.x += pacman.dx;
+            pacman.y += pacman.dy;
+
+            // Animate mouth
+            pacman.mouth = (pacman.mouth + 0.3) % (Math.PI * 2);
+
+            // Keep within bounds
+            pacman.x = Math.max(pacman.size, Math.min(canvasSize.width - pacman.size, pacman.x));
+            pacman.y = Math.max(pacman.size, Math.min(canvasSize.height - pacman.size, pacman.y));
+
+            // Check collision with ball
+            if (distance < pacman.size + newState.ball.size) {
+              // Pac-Man caught ball - remove score from last player who touched ball
+              if (newState.ball.lastTouchedBy) {
+                newState.score[newState.ball.lastTouchedBy] = Math.max(0, newState.score[newState.ball.lastTouchedBy] - 1);
+                playMelodyNoteRef.current?.('wall', null, 'both'); // Chomp sound
+
+                // Reset ball position
+                newState.ball.x = canvasSize.width / 2;
+                newState.ball.y = canvasSize.height / 2;
+                newState.ball.dx = (Math.random() - 0.5) * BALL_SPEED;
+                newState.ball.dy = (Math.random() - 0.5) * BALL_SPEED;
+              }
+            }
+          }
+        }
+
+        // 🎪 CONFETTI PHYSICS
+        if (newState.confetti && newState.confetti.length > 0) {
+          newState.confetti = newState.confetti.filter(particle => {
+            particle.x += particle.dx;
+            particle.y += particle.dy;
+            particle.dy += 0.1; // Gravity
+            particle.life -= 16; // Decrease life
+            return particle.life > 0;
+          });
+        }
+
+        // 🍌 SLIPPERY BALL PHYSICS
+        if (newState.ball.isSlippery) {
+          // Add random wobble to ball movement
+          newState.ball.dx += (Math.random() - 0.5) * 0.5;
+          newState.ball.dy += (Math.random() - 0.5) * 0.5;
+        }
+
+        // 🌀 HYPNOTIC BALL PHYSICS
+        if (newState.ball.isHypnotic) {
+          const elapsed = currentTime - newState.hypnoStartTime;
+          const hypnoFreq = 0.005;
+
+          // Add spiral movement
+          newState.ball.x += Math.cos(elapsed * hypnoFreq) * 2;
+          newState.ball.y += Math.sin(elapsed * hypnoFreq * 1.3) * 2;
         }
 
         // Dynamic Playfield Physics
@@ -5641,6 +5995,28 @@ const Pong404: React.FC = () => {
                                            ballCameFromRight && newState.ball.dx < 0;
 
         if (leftPaddleCollisionDetected) {
+          // 🏓 STICKY PADDLES: Check if sticky effect is active
+          if (newState.stickyPaddlesActive && !newState.ball.isStuck) {
+            // Stick ball to left paddle
+            newState.ball.isStuck = true;
+            newState.ball.stuckToPaddle = 'left';
+            newState.ball.stuckStartTime = Date.now();
+            newState.ball.dx = 0;
+            newState.ball.dy = 0;
+
+            // Calculate offset relative to paddle
+            const ballCenterY = newState.ball.y + newState.ball.size / 2;
+            const paddleCenterY = newState.paddles.left.y + newState.paddles.left.height / 2;
+            newState.ball.stuckOffset = {
+              x: newState.ball.x - (30 + newState.paddles.left.width),
+              y: ballCenterY - paddleCenterY
+            };
+
+            // Play stick sound
+            playMelodyNoteRef.current?.('paddle', null, 'both');
+            return; // Don't process normal collision
+          }
+
           // Calculate where on the paddle the ball hit (0 = top edge, 1 = bottom edge, 0.5 = center)
           const ballCenterY = newState.ball.y + newState.ball.size / 2;
           const hitPosition = (ballCenterY - newState.paddles.left.y) / newState.paddles.left.height;
@@ -5738,6 +6114,28 @@ const Pong404: React.FC = () => {
                                             ballCameFromLeft && newState.ball.dx > 0;
 
         if (rightPaddleCollisionDetected) {
+          // 🏓 STICKY PADDLES: Check if sticky effect is active
+          if (newState.stickyPaddlesActive && !newState.ball.isStuck) {
+            // Stick ball to right paddle
+            newState.ball.isStuck = true;
+            newState.ball.stuckToPaddle = 'right';
+            newState.ball.stuckStartTime = Date.now();
+            newState.ball.dx = 0;
+            newState.ball.dy = 0;
+
+            // Calculate offset relative to paddle
+            const ballCenterY = newState.ball.y + newState.ball.size / 2;
+            const paddleCenterY = newState.paddles.right.y + newState.paddles.right.height / 2;
+            newState.ball.stuckOffset = {
+              x: newState.ball.x - rightPaddleX,
+              y: ballCenterY - paddleCenterY
+            };
+
+            // Play stick sound
+            playMelodyNoteRef.current?.('paddle', null, 'both');
+            return; // Don't process normal collision
+          }
+
           // Calculate where on the paddle the ball hit (0 = top edge, 1 = bottom edge, 0.5 = center)
           const ballCenterY = newState.ball.y + newState.ball.size / 2;
           const hitPosition = (ballCenterY - newState.paddles.right.y) / newState.paddles.right.height;
@@ -7608,9 +8006,9 @@ const Pong404: React.FC = () => {
     ctx.fillStyle = currentColors.foreground; // Use dynamic color for scores too
     ctx.textAlign = 'center';
 
-    // 4-player score positions
-    const leftScoreX = 80; // Left edge
-    const rightScoreX = canvasSize.width - 80; // Right edge
+    // 4-player score positions - increased spacing from paddles
+    const leftScoreX = 120; // Left edge with more spacing
+    const rightScoreX = canvasSize.width - 120; // Right edge with more spacing
     // Position scores at same distance from paddles as left/right (50px from paddle edge)
     const topPaddleBottom = 30 + gameState.paddles.top.height;
     const bottomPaddleTop = canvasSize.height - 30 - gameState.paddles.bottom.height;
@@ -7835,36 +8233,106 @@ const Pong404: React.FC = () => {
         ctx.fillText('Press D for debug mode to see connection logs', canvasSize.width / 2, canvasSize.height - 40);
         ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
       } else if (connectionStatus === 'warming') {
-        // Animated fire emoji effect for server warming
-        const fireFrames = ['🔥', '🔴', '🟠', '🟡'];
-        const fireEmoji = fireFrames[Math.floor(Date.now() / 400) % fireFrames.length];
-        ctx.fillText(`${fireEmoji} SERVER WARMING UP ${fireEmoji}`, canvasSize.width / 2, canvasSize.height - 80);
-        ctx.fillText(connectionMessage, canvasSize.width / 2, canvasSize.height - 60);
+        // Enhanced warming display with phase-specific feedback
+        const elapsed = connectionStartTime > 0 ? Math.floor((Date.now() - connectionStartTime) / 1000) : 0;
+        const estimatedTotal = 60; // 60 second estimate
+        const actualProgress = Math.min(elapsed / estimatedTotal, 0.95); // Cap at 95% until connected
 
-        // Warming progress bar
-        const progressWidth = 200;
-        const progressHeight = 4;
+        // Phase-specific animations and emojis
+        let phaseEmoji = '🔥';
+        let phaseColor = '#ff6600';
+        let phaseText = 'WARMING UP';
+
+        if (currentPhase === 'initializing') {
+          phaseEmoji = '🔄';
+          phaseColor = '#0080ff';
+          phaseText = 'INITIALIZING';
+        } else if (currentPhase === 'warming') {
+          const fireFrames = ['🔥', '🔴', '🟠', '🟡'];
+          phaseEmoji = fireFrames[Math.floor(Date.now() / 400) % fireFrames.length];
+          phaseColor = '#ff6600';
+          phaseText = 'WARMING UP';
+        } else if (currentPhase === 'booting') {
+          const bootFrames = ['⚡', '🔌', '💻', '⚙️'];
+          phaseEmoji = bootFrames[Math.floor(Date.now() / 500) % bootFrames.length];
+          phaseColor = '#ffff00';
+          phaseText = 'BOOTING';
+        } else if (currentPhase === 'finalizing') {
+          const finalFrames = ['🚀', '✨', '⭐', '🎯'];
+          phaseEmoji = finalFrames[Math.floor(Date.now() / 300) % finalFrames.length];
+          phaseColor = '#00ff80';
+          phaseText = 'FINALIZING';
+        }
+
+        ctx.fillText(`${phaseEmoji} SERVER ${phaseText} ${phaseEmoji}`, canvasSize.width / 2, canvasSize.height - 100);
+        ctx.fillText(connectionMessage, canvasSize.width / 2, canvasSize.height - 80);
+
+        // Enhanced progress bar with time estimate
+        const progressWidth = 300;
+        const progressHeight = 8;
         const progressX = canvasSize.width / 2 - progressWidth / 2;
-        const progressY = canvasSize.height - 50;
+        const progressY = canvasSize.height - 65;
 
-        // Background bar
+        // Background bar with border
+        ctx.fillStyle = '#222';
+        ctx.fillRect(progressX - 2, progressY - 2, progressWidth + 4, progressHeight + 4);
         ctx.fillStyle = '#333';
         ctx.fillRect(progressX, progressY, progressWidth, progressHeight);
 
-        // Animated progress
-        const progress = (Math.sin(Date.now() / 1000) + 1) / 2; // 0-1 sine wave
-        ctx.fillStyle = '#ff6600';
-        ctx.fillRect(progressX, progressY, progressWidth * progress, progressHeight);
+        // Progress fill with phase-specific color
+        ctx.fillStyle = phaseColor;
+        ctx.fillRect(progressX, progressY, progressWidth * actualProgress, progressHeight);
 
-        // Restore text color
+        // Progress percentage and time info
         ctx.fillStyle = currentColors.foreground;
-        ctx.fillText('Free servers take time to boot up - please be patient!', canvasSize.width / 2, canvasSize.height - 30);
-        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 10);
+        ctx.font = 'bold 8px "Press Start 2P", monospace';
+        const progressPercent = Math.floor(actualProgress * 100);
+        const timeRemaining = Math.max(0, estimatedTotal - elapsed);
+        ctx.fillText(`${progressPercent}% - ~${timeRemaining}s remaining`, canvasSize.width / 2, canvasSize.height - 50);
+
+        // Retry count display
+        if (retryCount > 0) {
+          ctx.fillText(`Retry attempt ${retryCount}/5`, canvasSize.width / 2, canvasSize.height - 35);
+        }
+
+        // Restore text color and font
+        ctx.font = 'bold 10px "Press Start 2P", monospace';
+        ctx.fillStyle = currentColors.foreground;
+        ctx.fillText('Free servers take time to boot up - please be patient!', canvasSize.width / 2, canvasSize.height - 20);
+        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 5);
       } else if (connectionStatus === 'retrying') {
+        // Enhanced retry display with progress visualization
         const dots = '.'.repeat((Math.floor(Date.now() / 300) % 4) + 1);
-        ctx.fillText(`RETRYING${dots}`, canvasSize.width / 2, canvasSize.height - 80);
-        ctx.fillText(connectionMessage || `Retry attempt ${retryCount}/5...`, canvasSize.width / 2, canvasSize.height - 60);
-        ctx.fillText('Connection timeout - automatically retrying', canvasSize.width / 2, canvasSize.height - 40);
+        const retryFrames = ['🔄', '⏳', '🔁', '⚡'];
+        const retryEmoji = retryFrames[Math.floor(Date.now() / 400) % retryFrames.length];
+
+        ctx.fillText(`${retryEmoji} RETRYING CONNECTION${dots}`, canvasSize.width / 2, canvasSize.height - 100);
+        ctx.fillText(connectionMessage || `Retry attempt ${retryCount}/5...`, canvasSize.width / 2, canvasSize.height - 80);
+
+        // Retry attempt progress bar
+        const retryProgressWidth = 250;
+        const retryProgressHeight = 6;
+        const retryProgressX = canvasSize.width / 2 - retryProgressWidth / 2;
+        const retryProgressY = canvasSize.height - 65;
+
+        // Background
+        ctx.fillStyle = '#333';
+        ctx.fillRect(retryProgressX, retryProgressY, retryProgressWidth, retryProgressHeight);
+
+        // Progress based on retry count
+        const retryProgress = Math.min(retryCount / 5, 1);
+        const retryColor = retryProgress < 0.6 ? '#ffaa00' : retryProgress < 0.8 ? '#ff6600' : '#ff3300';
+        ctx.fillStyle = retryColor;
+        ctx.fillRect(retryProgressX, retryProgressY, retryProgressWidth * retryProgress, retryProgressHeight);
+
+        // Retry status text
+        ctx.fillStyle = currentColors.foreground;
+        ctx.font = 'bold 8px "Press Start 2P", monospace';
+        ctx.fillText(`Attempt ${retryCount}/5 - ${Math.max(0, 5 - retryCount)} retries remaining`, canvasSize.width / 2, canvasSize.height - 50);
+
+        // Restore font and show additional info
+        ctx.font = 'bold 10px "Press Start 2P", monospace';
+        ctx.fillText('Server may be sleeping - retrying automatically', canvasSize.width / 2, canvasSize.height - 35);
         ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, canvasSize.width / 2, canvasSize.height - 20);
       } else if (connectionStatus === 'error') {
         ctx.fillText('❌ CONNECTION FAILED', canvasSize.width / 2, canvasSize.height - 80);
@@ -7899,31 +8367,53 @@ const Pong404: React.FC = () => {
         ctx.textAlign = 'center';
         ctx.font = 'bold 12px "Press Start 2P", monospace';
 
-        // Show connection status and player info with visual indicators
-        if (connectionStatus === 'connecting') {
-          const dots = '.'.repeat((Math.floor(Date.now() / 500) % 3) + 1);
-          ctx.fillText(`CONNECTING TO MULTIPLAYER${dots}`, canvasSize.width / 2, canvasSize.height - 80);
-          ctx.fillText(connectionMessage || 'Establishing connection...', canvasSize.width / 2, canvasSize.height - 60);
-        } else if (connectionStatus === 'warming') {
-          const fireFrames = ['🔥', '🔴', '🟠', '🟡'];
-          const fireEmoji = fireFrames[Math.floor(Date.now() / 400) % fireFrames.length];
-          ctx.fillText(`${fireEmoji} SERVER WARMING UP ${fireEmoji}`, canvasSize.width / 2, canvasSize.height - 80);
-          ctx.fillText(connectionMessage, canvasSize.width / 2, canvasSize.height - 60);
-        } else if (connectionStatus === 'retrying') {
-          const dots = '.'.repeat((Math.floor(Date.now() / 300) % 4) + 1);
-          ctx.fillText(`RETRYING CONNECTION${dots}`, canvasSize.width / 2, canvasSize.height - 80);
-          ctx.fillText(connectionMessage || `Attempt ${retryCount}/5...`, canvasSize.width / 2, canvasSize.height - 60);
-        } else if (connectionStatus === 'error') {
-          ctx.fillText('❌ CONNECTION FAILED', canvasSize.width / 2, canvasSize.height - 80);
-          ctx.fillText('Press ANY KEY to retry', canvasSize.width / 2, canvasSize.height - 60);
-        } else if (connectionStatus === 'connected' || multiplayerState.isConnected) {
-          // Connection status display only
-        } else {
-          ctx.fillText('CONNECTING...', canvasSize.width / 2, canvasSize.height - 60);
-        }
+        // Show other fading info text (not connection status)
+        // Connection status is now shown below outside the fade zone
 
         // Restore color
         ctx.fillStyle = currentColors.foreground;
+      }
+
+      // Always show connection status (outside of fade zone)
+      ctx.textAlign = 'center';
+      ctx.fillStyle = currentColors.foreground;
+
+      if (connectionStatus === 'connecting') {
+        const dots = '.'.repeat((Math.floor(Date.now() / 500) % 3) + 1);
+        ctx.font = 'bold 12px "Press Start 2P", monospace';
+        ctx.fillText(`CONNECTING TO MULTIPLAYER${dots}`, canvasSize.width / 2, canvasSize.height - 100);
+        ctx.font = 'bold 10px "Press Start 2P", monospace';
+        ctx.fillText(connectionMessage || 'Establishing connection...', canvasSize.width / 2, canvasSize.height - 80);
+      } else if (connectionStatus === 'warming') {
+        const elapsed = connectionStartTime > 0 ? Math.floor((Date.now() - connectionStartTime) / 1000) : 0;
+        let phaseText = 'WARMING UP';
+
+        if (currentPhase === 'initializing') {
+          phaseText = 'INITIALIZING';
+        } else if (currentPhase === 'warming') {
+          phaseText = 'WARMING UP';
+        } else if (currentPhase === 'booting') {
+          phaseText = 'BOOTING';
+        } else if (currentPhase === 'finalizing') {
+          phaseText = 'FINALIZING';
+        }
+
+        ctx.font = 'bold 12px "Press Start 2P", monospace';
+        ctx.fillText(`SERVER ${phaseText}`, canvasSize.width / 2, canvasSize.height - 100);
+        ctx.font = 'bold 10px "Press Start 2P", monospace';
+        ctx.fillText(connectionMessage, canvasSize.width / 2, canvasSize.height - 80);
+        ctx.fillText(`${elapsed}s elapsed - Please wait...`, canvasSize.width / 2, canvasSize.height - 65);
+      } else if (connectionStatus === 'retrying') {
+        const dots = '.'.repeat((Math.floor(Date.now() / 300) % 4) + 1);
+        ctx.font = 'bold 12px "Press Start 2P", monospace';
+        ctx.fillText(`RETRYING CONNECTION${dots}`, canvasSize.width / 2, canvasSize.height - 100);
+        ctx.font = 'bold 10px "Press Start 2P", monospace';
+        ctx.fillText(connectionMessage || `Attempt ${retryCount}/5...`, canvasSize.width / 2, canvasSize.height - 80);
+      } else if (connectionStatus === 'error') {
+        ctx.font = 'bold 12px "Press Start 2P", monospace';
+        ctx.fillText('[X] CONNECTION FAILED', canvasSize.width / 2, canvasSize.height - 100);
+        ctx.font = 'bold 10px "Press Start 2P", monospace';
+        ctx.fillText('Press ANY KEY to retry', canvasSize.width / 2, canvasSize.height - 80);
       }
 
       // Always show spectator/player status when connected (outside of fade)
@@ -8130,7 +8620,7 @@ const Pong404: React.FC = () => {
   }, []);
 
   return (
-    <div className="w-screen h-screen overflow-hidden bg-black flex items-center justify-center">
+    <div className="w-screen h-screen overflow-hidden bg-black flex items-center justify-center p-1">
       <canvas
         ref={canvasRef}
         width={canvasSize.width}
@@ -8139,14 +8629,10 @@ const Pong404: React.FC = () => {
         style={{
           background: COLOR_PALETTE[gameState.colorIndex].background,
           outline: 'none',
-          width: `${canvasSize.width}px`,
-          height: `${canvasSize.height}px`,
-          maxWidth: `${canvasSize.width}px`,
-          maxHeight: `${canvasSize.height}px`,
-          minWidth: `${canvasSize.width}px`,
-          minHeight: `${canvasSize.height}px`,
+          // Force square aspect ratio - use the smaller of width/height available
+          width: `min(calc(100vw - 8px), calc(100vh - 8px))`,
+          height: `min(calc(100vw - 8px), calc(100vh - 8px))`,
           aspectRatio: '1',
-          objectFit: 'contain',
           cursor: cursorHidden ? 'none' : 'default',
           // Disable text smoothing and antialiasing for pixelated text
           fontSmooth: 'never',
@@ -8349,13 +8835,40 @@ const Pong404: React.FC = () => {
             const touch = e.touches[0];
             const x = touch.clientX - rect.left;
             const y = touch.clientY - rect.top;
-            setTouchY(y);
 
-            // Determine which side of the screen was touched
-            if (x < canvasSize.width / 2) {
+            // Determine which quadrant was touched for 4-paddle control
+            const centerX = canvasSize.width / 2;
+            const centerY = canvasSize.height / 2;
+
+            // Calculate distance from center for each edge
+            const distToLeft = x;
+            const distToRight = canvasSize.width - x;
+            const distToTop = y;
+            const distToBottom = canvasSize.height - y;
+
+            // Find the closest edge
+            const minDist = Math.min(distToLeft, distToRight, distToTop, distToBottom);
+
+            if (minDist === distToLeft) {
+              // Left paddle (vertical movement)
               setControlSide('left');
-            } else {
+              setTouchY(y);
+              setTouchX(null);
+            } else if (minDist === distToRight) {
+              // Right paddle (vertical movement)
               setControlSide('right');
+              setTouchY(y);
+              setTouchX(null);
+            } else if (minDist === distToTop) {
+              // Top paddle (horizontal movement)
+              setControlSide('top');
+              setTouchX(x);
+              setTouchY(null);
+            } else {
+              // Bottom paddle (horizontal movement)
+              setControlSide('bottom');
+              setTouchX(x);
+              setTouchY(null);
             }
           }
         }}
@@ -8365,14 +8878,24 @@ const Pong404: React.FC = () => {
           const rect = canvasRef.current?.getBoundingClientRect();
           if (rect && e.touches.length > 0) {
             const touch = e.touches[0];
+            const x = touch.clientX - rect.left;
             const y = touch.clientY - rect.top;
-            setTouchY(y);
+
+            // Update the appropriate coordinate based on control side
+            if (controlSide === 'left' || controlSide === 'right') {
+              // Vertical paddles use Y coordinate
+              setTouchY(y);
+            } else if (controlSide === 'top' || controlSide === 'bottom') {
+              // Horizontal paddles use X coordinate
+              setTouchX(x);
+            }
           }
         }}
         onTouchEnd={(e) => {
           e.preventDefault();
 
           setTouchY(null);
+          setTouchX(null);
           setControlSide(null);
         }}
       />
