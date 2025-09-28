@@ -732,6 +732,9 @@ const Pong404: React.FC = () => {
   const animationFrameRef = useRef<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
 
+  // Detect mobile device for performance optimizations
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
   // 📊 FPS Counter
   const fpsRef = useRef<number>(0);
   const frameCountRef = useRef<number>(0);
@@ -783,8 +786,6 @@ const Pong404: React.FC = () => {
   const urlParams = new URLSearchParams(window.location.search);
   const isSpectatorMode = urlParams.get('spectator') === 'true' || urlParams.get('mode') === 'spectator';
 
-  // Detect mobile device for performance optimizations
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   // Responsive square canvas size for perfect square gameplay
   const [canvasSize, setCanvasSize] = useState(() => {
