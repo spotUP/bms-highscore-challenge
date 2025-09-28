@@ -631,7 +631,7 @@ const Pong404: React.FC = () => {
 
     // Set up localStorage for cross-tab communication
     const playerId = multiplayerState.playerId || 'player-' + Math.random().toString(36).substr(2, 9);
-    const roomId = multiplayerState.roomId || 'local-room';
+    const roomId = 'main'; // Always use 'main' room for consistency
 
     // Check existing players in localStorage
     const existingPlayers = JSON.parse(localStorage.getItem('pong-players') || '[]');
