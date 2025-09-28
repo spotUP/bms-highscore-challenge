@@ -7214,7 +7214,7 @@ const Pong404: React.FC = () => {
       )}
 
       {/* Space Blazers Logo - shown only on start screen */}
-      {gameState.gameMode === 'auto' && (
+      {gameState.gameMode === 'auto' && gameState.showStartScreen && !showAudioPrompt && (
         <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-20">
           <SpaceBlazersLogo className="scale-75 md:scale-100" />
         </div>
