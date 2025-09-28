@@ -232,6 +232,8 @@ const PICKUP_TYPES = [
   { type: 'super_speed', pattern: 'stripes', color: '#ffffff', description: 'LUDICROUS SPEED!', scale: 'diminished', note: 7 },
   { type: 'coin_shower', pattern: 'diamond', color: '#ffdd00', description: 'Coin Shower!', scale: 'wholetone', note: 4 },
   { type: 'teleport_ball', pattern: 'star', color: '#9966ff', description: 'Teleport Ball!', scale: 'diminished', note: 1 },
+  { type: 'gravity_in_space', pattern: 'gravity', color: '#6a0dad', description: 'Gravity in Space!', scale: 'phrygian', note: 2 },
+  { type: 'super_striker', pattern: 'target', color: '#ff4500', description: 'Super Striker!', scale: 'wholetone', note: 7 },
 ];
 
 // WebSocket server URL - using working Render service
@@ -431,6 +433,28 @@ const PRECALC_PICKUP_PATTERNS = {
              (Math.abs(dx - dy) <= 1 && Math.abs(dx) <= 3) || // Diagonal 1
              (Math.abs(dx + dy) <= 1 && Math.abs(dx) <= 3); // Diagonal 2
     })
+  ),
+
+  gravity: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Create a gravity well pattern - concentric circles getting denser towards center
+      const centerX = 6, centerY = 6;
+      const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
+      return (dist <= 5 && ((Math.floor(dist * 2) + row + col) % 3 === 0)) ||
+             (dist <= 2.5); // Dense center
+    })
+  ),
+
+  target: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Create a target/crosshair pattern
+      const centerX = 6, centerY = 6;
+      const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
+      return (Math.abs(row - centerY) <= 1 && Math.abs(col - centerX) <= 5) || // Horizontal crosshair
+             (Math.abs(col - centerX) <= 1 && Math.abs(row - centerY) <= 5) || // Vertical crosshair
+             (dist >= 3.5 && dist <= 4.5) || // Outer ring
+             (dist >= 1.5 && dist <= 2.5);   // Inner ring
+    })
   )
 };
 
@@ -516,6 +540,13 @@ const Pong404: React.FC = () => {
       stuckCheckStartX: 0,
       lastTouchedBy: null,
       previousTouchedBy: null,
+      hasGravity: false,
+      isAiming: false,
+      aimStartTime: 0,
+      aimX: 0,
+      aimY: 0,
+      aimTargetX: 0,
+      aimTargetY: 0,
     },
     paddles: {
       left: { y: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), originalHeight: PADDLE_LENGTH },
@@ -2794,11 +2825,32 @@ const Pong404: React.FC = () => {
             stuckCheckStartX: 0,
             lastTouchedBy: null,
             previousTouchedBy: null,
+            hasGravity: false,
+            isAiming: false,
+            aimStartTime: 0,
+            aimX: 0,
+            aimY: 0,
+            aimTargetX: 0,
+            aimTargetY: 0,
             id: `extra_${Date.now()}_${i}`, // Unique ID for each extra ball
           };
           gameState.extraBalls.push(extraBall);
         }
         effect.duration = 10000; // 10 seconds of multi-ball chaos
+        break;
+      case 'gravity_in_space':
+        gameState.ball.hasGravity = true;
+        effect.duration = 10000; // 10 seconds of gravity
+        break;
+      case 'super_striker':
+        // Pause the ball and enter aiming mode
+        gameState.ball.isAiming = true;
+        gameState.ball.aimStartTime = Date.now();
+        gameState.ball.aimX = gameState.ball.x; // Store ball position
+        gameState.ball.aimY = gameState.ball.y;
+        gameState.ball.dx = 0; // Stop the ball
+        gameState.ball.dy = 0;
+        effect.duration = 4000; // 4 seconds to aim
         break;
     }
 
@@ -2844,6 +2896,27 @@ const Pong404: React.FC = () => {
             break;
           case 'multi_ball':
             gameState.extraBalls = [];
+            break;
+          case 'gravity_in_space':
+            gameState.ball.hasGravity = false;
+            break;
+          case 'super_striker':
+            gameState.ball.isAiming = false;
+            // If still aiming when time expires, launch ball in current aim direction
+            if (gameState.ball.isAiming) {
+              const aimDx = gameState.ball.aimTargetX - gameState.ball.x;
+              const aimDy = gameState.ball.aimTargetY - gameState.ball.y;
+              const aimDistance = Math.sqrt(aimDx * aimDx + aimDy * aimDy);
+              if (aimDistance > 0) {
+                const speed = BALL_SPEED;
+                gameState.ball.dx = (aimDx / aimDistance) * speed;
+                gameState.ball.dy = (aimDy / aimDistance) * speed;
+              } else {
+                // Default direction if no aim target
+                gameState.ball.dx = BALL_SPEED;
+                gameState.ball.dy = 0;
+              }
+            }
             break;
         }
         return false; // Remove effect
@@ -4203,9 +4276,44 @@ const Pong404: React.FC = () => {
           });
         });
 
-        // 🕒 Smooth ball movement at consistent speed
-        newState.ball.x += newState.ball.dx;
-        newState.ball.y += newState.ball.dy;
+        // 🌌 Apply gravity effects
+        if (newState.ball.hasGravity) {
+          const gravity = 0.3; // Gravity acceleration
+          newState.ball.dy += gravity; // Apply downward gravity
+        }
+
+        // 🎯 Handle Super Striker aiming mode
+        if (newState.ball.isAiming) {
+          // Update aim target based on input method
+          // For now, default to mouse position or center if no input
+          const aimElapsed = Date.now() - newState.ball.aimStartTime;
+          if (aimElapsed < 4000) { // Still within aiming time
+            // Set aim target to current mouse position or default
+            newState.ball.aimTargetX = mouseX || canvasSize.width / 2;
+            newState.ball.aimTargetY = mouseY || canvasSize.height / 2;
+          } else {
+            // Time's up, launch the ball
+            const aimDx = newState.ball.aimTargetX - newState.ball.x;
+            const aimDy = newState.ball.aimTargetY - newState.ball.y;
+            const aimDistance = Math.sqrt(aimDx * aimDx + aimDy * aimDy);
+            if (aimDistance > 0) {
+              const speed = BALL_SPEED;
+              newState.ball.dx = (aimDx / aimDistance) * speed;
+              newState.ball.dy = (aimDy / aimDistance) * speed;
+            } else {
+              // Default direction if no aim target
+              newState.ball.dx = BALL_SPEED;
+              newState.ball.dy = 0;
+            }
+            newState.ball.isAiming = false;
+          }
+        }
+
+        // 🕒 Smooth ball movement at consistent speed (only if not aiming)
+        if (!newState.ball.isAiming) {
+          newState.ball.x += newState.ball.dx;
+          newState.ball.y += newState.ball.dy;
+        }
 
         // Add ball trail point
         const now = Date.now();
@@ -5965,6 +6073,40 @@ const Pong404: React.FC = () => {
         ctx.strokeRect(gameState.ball.x, gameState.ball.y, gameState.ball.size, gameState.ball.size);
         ctx.globalAlpha = 1;
       }
+
+      // 🎯 Draw Super Striker aiming line
+      if (gameState.ball.isAiming) {
+        const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
+        const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
+        const aimTargetX = gameState.ball.aimTargetX || ballCenterX + 100;
+        const aimTargetY = gameState.ball.aimTargetY || ballCenterY;
+
+        // Draw aiming line with pulsing effect
+        const aimElapsed = Date.now() - gameState.ball.aimStartTime;
+        const pulse = Math.sin(aimElapsed * 0.01) * 0.3 + 0.7; // Pulsing alpha
+
+        ctx.globalAlpha = pulse;
+        ctx.strokeStyle = '#ff4500'; // Orange aim line
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 5]); // Dashed line
+        ctx.beginPath();
+        ctx.moveTo(ballCenterX, ballCenterY);
+        ctx.lineTo(aimTargetX, aimTargetY);
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset dash
+
+        // Draw target crosshair
+        ctx.strokeStyle = '#ff4500';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(aimTargetX - 10, aimTargetY);
+        ctx.lineTo(aimTargetX + 10, aimTargetY);
+        ctx.moveTo(aimTargetX, aimTargetY - 10);
+        ctx.lineTo(aimTargetX, aimTargetY + 10);
+        ctx.stroke();
+
+        ctx.globalAlpha = 1; // Reset alpha
+      }
     }
 
     // 🟠 Draw extra balls (for multi-ball effect)
@@ -6137,7 +6279,9 @@ const Pong404: React.FC = () => {
           'cross': 'cross',
           'stripes': 'stripes',
           'diamond': 'diamond',
-          'star': 'star'
+          'star': 'star',
+          'gravity': 'gravity',
+          'target': 'target'
         };
 
         const precalcPattern = PRECALC_PICKUP_PATTERNS[patternMap[pattern] as keyof typeof PRECALC_PICKUP_PATTERNS];
@@ -6962,8 +7106,7 @@ const Pong404: React.FC = () => {
           WebkitFontSmoothing: 'none',
           MozOsxFontSmoothing: 'unset',
           textRendering: 'geometricPrecision',
-          imageRendering: 'pixelated',
-          imageRendering: 'crisp-edges'
+          imageRendering: 'pixelated'
         } as React.CSSProperties}
         tabIndex={0}
         onClick={async () => {

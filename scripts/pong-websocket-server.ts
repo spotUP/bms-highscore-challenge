@@ -8,7 +8,7 @@ interface Pickup {
   id: string;
   x: number;
   y: number;
-  type: 'speed' | 'size' | 'reverse' | 'drunk' | 'teleport' | 'paddle' | 'freeze' | 'coins';
+  type: 'speed' | 'size' | 'reverse' | 'drunk' | 'teleport' | 'paddle' | 'freeze' | 'coins' | 'gravity_in_space' | 'super_striker';
   createdAt: number;
   size?: number;
 }
@@ -22,7 +22,7 @@ interface Coin {
 }
 
 interface ActiveEffect {
-  type: 'speed' | 'size' | 'reverse' | 'drunk' | 'teleport' | 'paddle' | 'freeze';
+  type: 'speed' | 'size' | 'reverse' | 'drunk' | 'teleport' | 'paddle' | 'freeze' | 'gravity_in_space' | 'super_striker';
   startTime: number;
   duration: number;
 }
@@ -43,6 +43,13 @@ interface GameState {
     stuckCheckStartX: number;
     lastTouchedBy: 'left' | 'right' | 'top' | 'bottom' | null;
     previousTouchedBy: 'left' | 'right' | 'top' | 'bottom' | null;
+    hasGravity: boolean;
+    isAiming: boolean;
+    aimStartTime: number;
+    aimX: number;
+    aimY: number;
+    aimTargetX: number;
+    aimTargetY: number;
   };
   paddles: {
     left: { y: number; height: number; width: number; speed: number; velocity: number; targetY: number; originalHeight: number };
@@ -544,7 +551,14 @@ class PongWebSocketServer {
         stuckCheckStartTime: 0,
         stuckCheckStartX: 0,
         lastTouchedBy: null,
-        previousTouchedBy: null
+        previousTouchedBy: null,
+        hasGravity: false,
+        isAiming: false,
+        aimStartTime: 0,
+        aimX: 0,
+        aimY: 0,
+        aimTargetX: 0,
+        aimTargetY: 0
       },
       paddles: {
         left: { y: 250, height: 100, width: 12, speed: 32, velocity: 0, targetY: 250, originalHeight: 100 },
@@ -687,10 +701,42 @@ class PongWebSocketServer {
     const COLLISION_BUFFER = 0; // Precise collision detection - hitbox matches paddle size exactly
     let ballChanged = false;
 
-    // Update ball position
-    gameState.ball.x += gameState.ball.dx;
-    gameState.ball.y += gameState.ball.dy;
-    ballChanged = true;
+    // Apply gravity effects
+    if (gameState.ball.hasGravity) {
+      const gravity = 0.3; // Gravity acceleration
+      gameState.ball.dy += gravity; // Apply downward gravity
+      ballChanged = true;
+    }
+
+    // Handle Super Striker aiming mode
+    if (gameState.ball.isAiming) {
+      const now = Date.now();
+      const aimElapsed = now - gameState.ball.aimStartTime;
+      if (aimElapsed >= 4000) { // 4 seconds aiming time
+        // Time's up, launch the ball
+        const aimDx = gameState.ball.aimTargetX - gameState.ball.x;
+        const aimDy = gameState.ball.aimTargetY - gameState.ball.y;
+        const aimDistance = Math.sqrt(aimDx * aimDx + aimDy * aimDy);
+        if (aimDistance > 0) {
+          const speed = 10; // Server ball speed
+          gameState.ball.dx = (aimDx / aimDistance) * speed;
+          gameState.ball.dy = (aimDy / aimDistance) * speed;
+        } else {
+          // Default direction if no aim target
+          gameState.ball.dx = 10;
+          gameState.ball.dy = 0;
+        }
+        gameState.ball.isAiming = false;
+        ballChanged = true;
+      }
+    }
+
+    // Update ball position (only if not aiming)
+    if (!gameState.ball.isAiming) {
+      gameState.ball.x += gameState.ball.dx;
+      gameState.ball.y += gameState.ball.dy;
+      ballChanged = true;
+    }
 
     // Ball collision with paddles (server-side authoritative)
     const ballLeft = gameState.ball.x;
@@ -887,6 +933,13 @@ class PongWebSocketServer {
     gameState.ball.dy = Math.random() > 0.5 ? 10 : -10;
     gameState.ball.lastTouchedBy = null;
     gameState.ball.previousTouchedBy = null;
+    gameState.ball.hasGravity = false;
+    gameState.ball.isAiming = false;
+    gameState.ball.aimStartTime = 0;
+    gameState.ball.aimX = 0;
+    gameState.ball.aimY = 0;
+    gameState.ball.aimTargetX = 0;
+    gameState.ball.aimTargetY = 0;
   }
 
   private updatePickups(gameState: GameState, canvasSize: { width: number; height: number }, now: number): boolean {
@@ -990,6 +1043,20 @@ class PongWebSocketServer {
         gameState.paddles.top.velocity = 0;
         gameState.paddles.bottom.velocity = 0;
         break;
+      case 'gravity_in_space':
+        gameState.ball.hasGravity = true;
+        effect.duration = 10000; // 10 seconds of gravity
+        break;
+      case 'super_striker':
+        // Pause the ball and enter aiming mode
+        gameState.ball.isAiming = true;
+        gameState.ball.aimStartTime = Date.now();
+        gameState.ball.aimX = gameState.ball.x;
+        gameState.ball.aimY = gameState.ball.y;
+        gameState.ball.dx = 0; // Stop the ball
+        gameState.ball.dy = 0;
+        effect.duration = 4000; // 4 seconds to aim
+        break;
     }
   }
 
@@ -1037,6 +1104,19 @@ class PongWebSocketServer {
       case 'drunk':
         gameState.ball.isDrunk = false;
         gameState.ball.drunkAngle = 0;
+        break;
+
+      case 'gravity_in_space':
+        gameState.ball.hasGravity = false;
+        break;
+
+      case 'super_striker':
+        gameState.ball.isAiming = false;
+        // If still aiming when time expires, launch ball in default direction
+        if (gameState.ball.isAiming) {
+          gameState.ball.dx = 10;
+          gameState.ball.dy = 0;
+        }
         break;
     }
   }
