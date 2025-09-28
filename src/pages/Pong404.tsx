@@ -583,7 +583,7 @@ const PRECALC_PICKUP_PATTERNS = {
     })
   ),
 
-  lightning: Array.from({ length: 12 }, (_, row) =>
+  zigzag: Array.from({ length: 12 }, (_, row) =>
     Array.from({ length: 12 }, (_, col) => {
       // Zigzag lightning pattern
       const zigzag = Math.sin(col * 0.5) * 2;
@@ -928,12 +928,6 @@ const Pong404: React.FC = () => {
     timeWarpFactor: 1.0,
     blackHoles: [],
     lightningStrikes: [],
-    paddleVisibility: { left: 1, right: 1, top: 1, bottom: 1 },
-    discoMode: false,
-    discoStartTime: 0,
-    sidesSwitched: false,
-    paddleSwapActive: false,
-    nextPaddleSwapTime: 0,
   });
 
   // Wrapper around setGameState to ensure top/bottom paddles are always preserved
