@@ -234,6 +234,31 @@ const PICKUP_TYPES = [
   { type: 'teleport_ball', pattern: 'star', color: '#9966ff', description: 'Teleport Ball!', scale: 'diminished', note: 1 },
   { type: 'gravity_in_space', pattern: 'gravity', color: '#6a0dad', description: 'Gravity in Space!', scale: 'phrygian', note: 2 },
   { type: 'super_striker', pattern: 'target', color: '#ff4500', description: 'Super Striker!', scale: 'wholetone', note: 7 },
+  { type: 'sticky_paddles', pattern: 'sticky', color: '#ffb347', description: 'Sticky Paddles!', scale: 'phrygian', note: 3 },
+  { type: 'machine_gun', pattern: 'bullets', color: '#ff1493', description: 'Machine Gun!', scale: 'diminished', note: 6 },
+  { type: 'dynamic_playfield', pattern: 'expand', color: '#32cd32', description: 'Dynamic Playfield!', scale: 'wholetone', note: 4 },
+  { type: 'switch_sides', pattern: 'swap', color: '#ff6347', description: 'Switch Sides!', scale: 'hungarian', note: 5 },
+  { type: 'blocker', pattern: 'wall', color: '#696969', description: 'Blocker!', scale: 'locrian', note: 2 },
+  { type: 'time_warp', pattern: 'clock', color: '#4169e1', description: 'Time Warp!', scale: 'diminished', note: 1 },
+  { type: 'portal_ball', pattern: 'portal', color: '#ff69b4', description: 'Portal Ball!', scale: 'wholetone', note: 6 },
+  { type: 'mirror_mode', pattern: 'mirror', color: '#dda0dd', description: 'Mirror Mode!', scale: 'phrygian', note: 7 },
+  { type: 'quantum_ball', pattern: 'quantum', color: '#00ced1', description: 'Quantum Ball!', scale: 'hungarian', note: 4 },
+  { type: 'black_hole', pattern: 'vortex', color: '#2f2f2f', description: 'Black Hole!', scale: 'locrian', note: 0 },
+  { type: 'lightning_storm', pattern: 'lightning', color: '#ffff99', description: 'Lightning Storm!', scale: 'diminished', note: 3 },
+  { type: 'invisible_paddles', pattern: 'fade', color: '#f0f8ff', description: 'Invisible Paddles!', scale: 'wholetone', note: 2 },
+  { type: 'ball_trail_mine', pattern: 'mine', color: '#dc143c', description: 'Ball Trail Mine!', scale: 'hungarian', note: 1 },
+  { type: 'paddle_swap', pattern: 'shuffle', color: '#ffd700', description: 'Paddle Swap!', scale: 'phrygian', note: 5 },
+  { type: 'disco_mode', pattern: 'disco', color: '#ff1493', description: 'Disco Mode!', scale: 'wholetone', note: 7 },
+  { type: 'pac_man', pattern: 'pacman', color: '#ffff00', description: 'Pac-Man Hunt!', scale: 'diminished', note: 4 },
+  { type: 'banana_peel', pattern: 'banana', color: '#ffff99', description: 'Banana Peel!', scale: 'wholetone', note: 2 },
+  { type: 'rubber_ball', pattern: 'bounce', color: '#ff69b4', description: 'Super Bouncy!', scale: 'phrygian', note: 6 },
+  { type: 'drunk_paddles', pattern: 'wobble', color: '#8b4513', description: 'Drunk Paddles!', scale: 'hungarian', note: 3 },
+  { type: 'magnet_ball', pattern: 'magnet', color: '#dc143c', description: 'Magnet Ball!', scale: 'locrian', note: 5 },
+  { type: 'balloon_ball', pattern: 'balloon', color: '#ff1493', description: 'Balloon Ball!', scale: 'diminished', note: 1 },
+  { type: 'earthquake', pattern: 'shake', color: '#8b4513', description: 'Earthquake!', scale: 'wholetone', note: 0 },
+  { type: 'confetti_cannon', pattern: 'confetti', color: '#ff6347', description: 'Confetti Cannon!', scale: 'phrygian', note: 7 },
+  { type: 'hypno_ball', pattern: 'hypno', color: '#9932cc', description: 'Hypno Ball!', scale: 'hungarian', note: 2 },
+  { type: 'conga_line', pattern: 'conga', color: '#ffa500', description: 'Conga Line!', scale: 'diminished', note: 6 },
 ];
 
 // WebSocket server URL - using working Render service
@@ -455,6 +480,241 @@ const PRECALC_PICKUP_PATTERNS = {
              (dist >= 3.5 && dist <= 4.5) || // Outer ring
              (dist >= 1.5 && dist <= 2.5);   // Inner ring
     })
+  ),
+
+  sticky: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Sticky drops pattern
+      return (row === 2 && col >= 5 && col <= 6) || // Top drops
+             (row === 3 && col >= 4 && col <= 7) ||
+             (row === 5 && col >= 3 && col <= 4) || // Left drops
+             (row === 6 && col >= 2 && col <= 5) ||
+             (row === 5 && col >= 7 && col <= 8) || // Right drops
+             (row === 6 && col >= 6 && col <= 9) ||
+             (row === 8 && col >= 4 && col <= 7); // Bottom drops
+    })
+  ),
+
+  bullets: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Machine gun bullets pattern
+      return (row === 2 && col === 2) || (row === 2 && col === 5) || (row === 2 && col === 8) ||
+             (row === 4 && col === 1) || (row === 4 && col === 6) || (row === 4 && col === 9) ||
+             (row === 6 && col === 3) || (row === 6 && col === 7) || (row === 6 && col === 10) ||
+             (row === 8 && col === 2) || (row === 8 && col === 5) || (row === 8 && col === 8) ||
+             (row === 10 && col === 1) || (row === 10 && col === 4) || (row === 10 && col === 7);
+    })
+  ),
+
+  expand: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Expanding arrows pattern
+      const centerX = 6, centerY = 6;
+      return (Math.abs(row - centerY) === 2 && Math.abs(col - centerX) <= 1) || // Vertical arrows
+             (Math.abs(col - centerX) === 2 && Math.abs(row - centerY) <= 1) || // Horizontal arrows
+             (Math.abs(row - centerY) === 4 && col === centerX) || // Far vertical points
+             (Math.abs(col - centerX) === 4 && row === centerY);   // Far horizontal points
+    })
+  ),
+
+  swap: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Swap arrows pattern
+      return (row >= 2 && row <= 4 && col >= 1 && col <= 3) || // Top-left arrow
+             (row >= 8 && row <= 10 && col >= 8 && col <= 10) || // Bottom-right arrow
+             (row === 6 && col >= 4 && col <= 7); // Center line
+    })
+  ),
+
+  wall: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Brick wall pattern
+      const isEvenRow = row % 2 === 0;
+      const brickPattern = isEvenRow ? (col % 4 === 0 || col % 4 === 1) : (col % 4 === 2 || col % 4 === 3);
+      return brickPattern && row >= 2 && row <= 9;
+    })
+  ),
+
+  clock: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Clock pattern with hands
+      const centerX = 6, centerY = 6;
+      const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
+      return (dist >= 3 && dist <= 4) || // Clock circle
+             (row === centerY && col >= centerX && col <= centerX + 2) || // Hour hand
+             (col === centerX && row >= centerY - 3 && row <= centerY); // Minute hand
+    })
+  ),
+
+  portal: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Portal rings pattern
+      const centerX = 6, centerY = 6;
+      const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
+      return (dist >= 1 && dist <= 1.5) || (dist >= 2.5 && dist <= 3) || (dist >= 4 && dist <= 4.5);
+    })
+  ),
+
+  mirror: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Mirror reflection pattern
+      return col === row || col === (11 - row) || // Diagonal mirrors
+             (row === 6 && col >= 2 && col <= 9); // Center line
+    })
+  ),
+
+  quantum: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Quantum superposition pattern - multiple positions
+      return (row === 3 && (col === 3 || col === 8)) ||
+             (row === 6 && (col === 1 || col === 6 || col === 10)) ||
+             (row === 9 && (col === 4 || col === 7));
+    })
+  ),
+
+  vortex: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Black hole vortex pattern
+      const centerX = 6, centerY = 6;
+      const angle = Math.atan2(row - centerY, col - centerX);
+      const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
+      return Math.sin(angle * 3 + dist * 0.8) > 0.3 && dist <= 5;
+    })
+  ),
+
+  lightning: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Zigzag lightning pattern
+      const zigzag = Math.sin(col * 0.5) * 2;
+      return Math.abs(row - 6 - zigzag) <= 1;
+    })
+  ),
+
+  fade: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Fading pattern for invisible paddles
+      const centerX = 6, centerY = 6;
+      const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
+      return (row + col) % 3 === 0 && dist <= 4;
+    })
+  ),
+
+  mine: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Mine explosion pattern
+      const centerX = 6, centerY = 6;
+      return (Math.abs(row - centerY) <= 1 && Math.abs(col - centerX) <= 1) || // Center
+             (Math.abs(row - centerY) === 2 && col === centerX) || // Vertical spikes
+             (Math.abs(col - centerX) === 2 && row === centerY) || // Horizontal spikes
+             (Math.abs(row - centerY) === Math.abs(col - centerX) && Math.abs(row - centerY) === 3); // Diagonal spikes
+    })
+  ),
+
+  shuffle: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Shuffle pattern with moving elements
+      return (row % 3 === 0 && col % 3 === 1) || (row % 3 === 1 && col % 3 === 2) || (row % 3 === 2 && col % 3 === 0);
+    })
+  ),
+
+  disco: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Disco ball pattern
+      const isDiscoBall = (row + col) % 2 === 0;
+      const centerX = 6, centerY = 6;
+      const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
+      return isDiscoBall && dist <= 4;
+    })
+  ),
+
+  pacman: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Pac-Man shape (circular with mouth opening)
+      const centerX = 6, centerY = 6;
+      const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
+      const angle = Math.atan2(row - centerY, col - centerX);
+      const mouthAngle = Math.PI / 6; // 30 degree mouth opening
+      return dist <= 4 && !(dist >= 2 && Math.abs(angle) < mouthAngle);
+    })
+  ),
+
+  banana: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Curved banana shape
+      return (row >= 2 && row <= 9 && col >= 4 && col <= 7) &&
+             !(row <= 3 && col <= 5) && !(row >= 8 && col >= 6);
+    })
+  ),
+
+  bounce: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Bouncing ball with motion lines
+      const centerX = 6, centerY = 6;
+      const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
+      const motionLines = (row === 4 && col >= 1 && col <= 3) || (row === 8 && col >= 9 && col <= 11);
+      return (dist <= 2.5) || motionLines;
+    })
+  ),
+
+  wobble: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Wobbly paddle pattern
+      const wave = Math.sin((row * Math.PI) / 6) * 1.5;
+      return col >= 5 + wave && col <= 7 + wave;
+    })
+  ),
+
+  magnet: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Horseshoe magnet with N/S poles
+      return (row >= 2 && row <= 9 && (col === 3 || col === 8)) ||
+             (row === 2 && col >= 3 && col <= 8) ||
+             (row >= 7 && row <= 9 && col >= 4 && col <= 7);
+    })
+  ),
+
+  balloon: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Balloon with string
+      const centerX = 6, centerY = 4;
+      const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
+      const string = col === 6 && row >= 7 && row <= 10;
+      return (dist <= 3) || string;
+    })
+  ),
+
+  shake: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Earthquake crack pattern
+      return (row === 6 && col % 2 === 0) ||
+             (row === 5 && col % 3 === 1) ||
+             (row === 7 && col % 3 === 2);
+    })
+  ),
+
+  confetti: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Random confetti pieces
+      return ((row + col * 3) % 7 === 0) || ((row * 2 + col) % 8 === 0);
+    })
+  ),
+
+  hypno: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Hypnotic spiral pattern
+      const centerX = 6, centerY = 6;
+      const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
+      const angle = Math.atan2(row - centerY, col - centerX);
+      return Math.floor(dist + angle * 2) % 2 === 0 && dist <= 5;
+    })
+  ),
+
+  conga: Array.from({ length: 12 }, (_, row) =>
+    Array.from({ length: 12 }, (_, col) => {
+      // Dancing figures in a line
+      return (row >= 4 && row <= 8) &&
+             ((col >= 2 && col <= 3) || (col >= 5 && col <= 6) || (col >= 8 && col <= 9));
+    })
   )
 };
 
@@ -547,6 +807,19 @@ const Pong404: React.FC = () => {
       aimY: 0,
       aimTargetX: 0,
       aimTargetY: 0,
+      isStuck: false,
+      stuckToPaddle: null,
+      stuckStartTime: 0,
+      stuckOffset: { x: 0, y: 0 },
+      hasPortal: false,
+      portalX: 0,
+      portalY: 0,
+      isMirror: false,
+      mirrorBalls: [],
+      isQuantum: false,
+      quantumPositions: [],
+      hasTrailMines: false,
+      trailMines: [],
     },
     paddles: {
       left: { y: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), originalHeight: PADDLE_LENGTH },
@@ -592,6 +865,25 @@ const Pong404: React.FC = () => {
     },
     physicsForces: [],
     nextForceSpawnTime: Date.now() + Math.random() * 60000 + 60000, // 60-120 seconds for first force
+    machineGunBalls: [],
+    machineGunActive: false,
+    machineGunStartTime: 0,
+    machineGunShooter: null,
+    playfieldScale: 1.0,
+    playfieldScaleTarget: 1.0,
+    playfieldScaleStart: 1.0,
+    playfieldScaleTime: 0,
+    walls: [],
+    timeWarpActive: false,
+    timeWarpFactor: 1.0,
+    blackHoles: [],
+    lightningStrikes: [],
+    paddleVisibility: { left: 1, right: 1, top: 1, bottom: 1 },
+    discoMode: false,
+    discoStartTime: 0,
+    sidesSwitched: false,
+    paddleSwapActive: false,
+    nextPaddleSwapTime: 0,
   });
 
   // Wrapper around setGameState to ensure top/bottom paddles are always preserved
@@ -2852,6 +3144,232 @@ const Pong404: React.FC = () => {
         gameState.ball.dy = 0;
         effect.duration = 4000; // 4 seconds to aim
         break;
+
+      case 'sticky_paddles':
+        // Ball will stick to paddles for 3 seconds before shooting
+        gameState.ball.isStuck = false; // Initialize (will be set when ball hits paddle)
+        effect.duration = 0; // Instant effect that changes ball behavior
+        break;
+
+      case 'machine_gun':
+        // Rapidly fire balls for 3 seconds
+        gameState.machineGunActive = true;
+        gameState.machineGunStartTime = Date.now();
+        gameState.machineGunShooter = gameState.ball.lastTouchedBy;
+        effect.duration = 3000; // 3 seconds of machine gun
+        break;
+
+      case 'dynamic_playfield':
+        // Grow and shrink playfield with easing for 15 seconds
+        gameState.playfieldScaleStart = gameState.playfieldScale;
+        gameState.playfieldScaleTarget = 0.7 + Math.random() * 0.6; // Scale between 0.7-1.3
+        gameState.playfieldScaleTime = Date.now();
+        effect.duration = 15000; // 15 seconds
+        break;
+
+      case 'switch_sides':
+        // All players switch sides and keep their scores
+        const tempLeftScore = gameState.score.left;
+        const tempRightScore = gameState.score.right;
+        const tempTopScore = gameState.score.top;
+        const tempBottomScore = gameState.score.bottom;
+
+        gameState.score.left = tempRightScore;
+        gameState.score.right = tempLeftScore;
+        gameState.score.top = tempBottomScore;
+        gameState.score.bottom = tempTopScore;
+        gameState.sidesSwitched = !gameState.sidesSwitched;
+        effect.duration = 0; // Instant effect
+        break;
+
+      case 'blocker':
+        // Add random walls that block the ball
+        gameState.walls = [];
+        for (let i = 0; i < 3; i++) {
+          const wall = {
+            x: 150 + Math.random() * (canvasSize.width - 300),
+            y: 150 + Math.random() * (canvasSize.height - 300),
+            width: 60 + Math.random() * 40,
+            height: 15,
+            angle: Math.random() * Math.PI * 2
+          };
+          gameState.walls.push(wall);
+        }
+        effect.duration = 12000; // 12 seconds
+        break;
+
+      case 'time_warp':
+        // Slow down or speed up time
+        gameState.timeWarpActive = true;
+        gameState.timeWarpFactor = Math.random() > 0.5 ? 0.5 : 2.0; // Half speed or double speed
+        effect.duration = 8000; // 8 seconds
+        break;
+
+      case 'portal_ball':
+        // Ball creates portals when it hits walls
+        gameState.ball.hasPortal = true;
+        effect.duration = 10000; // 10 seconds
+        break;
+
+      case 'mirror_mode':
+        // Ball creates mirror copies
+        gameState.ball.isMirror = true;
+        gameState.ball.mirrorBalls = [];
+        effect.duration = 8000; // 8 seconds
+        break;
+
+      case 'quantum_ball':
+        // Ball exists in multiple positions simultaneously
+        gameState.ball.isQuantum = true;
+        gameState.ball.quantumPositions = [];
+        for (let i = 0; i < 3; i++) {
+          gameState.ball.quantumPositions.push({
+            x: gameState.ball.x + (Math.random() - 0.5) * 100,
+            y: gameState.ball.y + (Math.random() - 0.5) * 100
+          });
+        }
+        effect.duration = 6000; // 6 seconds
+        break;
+
+      case 'black_hole':
+        // Create black holes that attract the ball
+        gameState.blackHoles = [];
+        for (let i = 0; i < 2; i++) {
+          gameState.blackHoles.push({
+            x: 200 + Math.random() * (canvasSize.width - 400),
+            y: 200 + Math.random() * (canvasSize.height - 400),
+            size: 30,
+            force: 0.8
+          });
+        }
+        effect.duration = 10000; // 10 seconds
+        break;
+
+      case 'lightning_storm':
+        // Random lightning strikes affect ball trajectory
+        gameState.lightningStrikes = [];
+        effect.duration = 8000; // 8 seconds
+        break;
+
+      case 'invisible_paddles':
+        // Make paddles gradually invisible
+        Object.keys(gameState.paddleVisibility).forEach(side => {
+          gameState.paddleVisibility[side as keyof typeof gameState.paddleVisibility] = 0.1;
+        });
+        effect.duration = 6000; // 6 seconds
+        break;
+
+      case 'ball_trail_mine':
+        // Ball leaves explosive trail mines
+        gameState.ball.hasTrailMines = true;
+        gameState.ball.trailMines = [];
+        effect.duration = 8000; // 8 seconds
+        break;
+
+      case 'paddle_swap':
+        // Randomly swap paddle positions
+        gameState.paddleSwapActive = true;
+        gameState.nextPaddleSwapTime = Date.now() + 2000; // First swap in 2 seconds
+        effect.duration = 10000; // 10 seconds
+        break;
+
+      case 'disco_mode':
+        // Flashing disco colors and effects
+        gameState.discoMode = true;
+        gameState.discoStartTime = Date.now();
+        effect.duration = 12000; // 12 seconds
+        break;
+
+      case 'pac_man':
+        // 3 Pac-Mans chase the ball and remove scores
+        gameState.pacMans = [];
+        for (let i = 0; i < 3; i++) {
+          gameState.pacMans.push({
+            x: 100 + Math.random() * (canvasSize.width - 200),
+            y: 100 + Math.random() * (canvasSize.height - 200),
+            dx: (Math.random() - 0.5) * 3,
+            dy: (Math.random() - 0.5) * 3,
+            size: 20,
+            mouth: 0
+          });
+        }
+        effect.duration = 15000; // 15 seconds
+        break;
+
+      case 'banana_peel':
+        // Ball becomes slippery and unpredictable
+        gameState.ball.isSlippery = true;
+        effect.duration = 8000; // 8 seconds
+        break;
+
+      case 'rubber_ball':
+        // Ball bounces with extra force
+        gameState.ball.bounciness = 1.5;
+        effect.duration = 10000; // 10 seconds
+        break;
+
+      case 'drunk_paddles':
+        // Paddles move erratically
+        gameState.paddlesDrunk = true;
+        gameState.drunkStartTime = Date.now();
+        effect.duration = 8000; // 8 seconds
+        break;
+
+      case 'magnet_ball':
+        // Ball is attracted to paddles
+        gameState.ball.isMagnetic = true;
+        effect.duration = 8000; // 8 seconds
+        break;
+
+      case 'balloon_ball':
+        // Ball floats upward with gravity
+        gameState.ball.isFloating = true;
+        effect.duration = 8000; // 8 seconds
+        break;
+
+      case 'earthquake':
+        // Screen shakes and paddles wobble
+        gameState.earthquakeActive = true;
+        gameState.earthquakeStartTime = Date.now();
+        effect.duration = 6000; // 6 seconds
+        break;
+
+      case 'confetti_cannon':
+        // Spawn colorful confetti particles
+        gameState.confetti = [];
+        for (let i = 0; i < 50; i++) {
+          gameState.confetti.push({
+            x: gameState.ball.x,
+            y: gameState.ball.y,
+            dx: (Math.random() - 0.5) * 8,
+            dy: (Math.random() - 0.5) * 8,
+            color: `hsl(${Math.random() * 360}, 70%, 60%)`,
+            life: 3000
+          });
+        }
+        effect.duration = 3000; // 3 seconds
+        break;
+
+      case 'hypno_ball':
+        // Ball moves in hypnotic patterns
+        gameState.ball.isHypnotic = true;
+        gameState.hypnoStartTime = Date.now();
+        effect.duration = 8000; // 8 seconds
+        break;
+
+      case 'conga_line':
+        // Multiple balls follow in a conga line
+        gameState.congaBalls = [];
+        for (let i = 0; i < 5; i++) {
+          gameState.congaBalls.push({
+            x: gameState.ball.x - (i + 1) * 30,
+            y: gameState.ball.y,
+            size: 8,
+            trail: []
+          });
+        }
+        effect.duration = 10000; // 10 seconds
+        break;
     }
 
     gameState.activeEffects.push(effect);
@@ -2917,6 +3435,106 @@ const Pong404: React.FC = () => {
                 gameState.ball.dy = 0;
               }
             }
+            break;
+
+          case 'machine_gun':
+            gameState.machineGunActive = false;
+            gameState.machineGunBalls = [];
+            break;
+
+          case 'dynamic_playfield':
+            gameState.playfieldScale = 1.0;
+            gameState.playfieldScaleTarget = 1.0;
+            break;
+
+          case 'blocker':
+            gameState.walls = [];
+            break;
+
+          case 'time_warp':
+            gameState.timeWarpActive = false;
+            gameState.timeWarpFactor = 1.0;
+            break;
+
+          case 'portal_ball':
+            gameState.ball.hasPortal = false;
+            break;
+
+          case 'mirror_mode':
+            gameState.ball.isMirror = false;
+            gameState.ball.mirrorBalls = [];
+            break;
+
+          case 'quantum_ball':
+            gameState.ball.isQuantum = false;
+            gameState.ball.quantumPositions = [];
+            break;
+
+          case 'black_hole':
+            gameState.blackHoles = [];
+            break;
+
+          case 'lightning_storm':
+            gameState.lightningStrikes = [];
+            break;
+
+          case 'invisible_paddles':
+            Object.keys(gameState.paddleVisibility).forEach(side => {
+              gameState.paddleVisibility[side as keyof typeof gameState.paddleVisibility] = 1.0;
+            });
+            break;
+
+          case 'ball_trail_mine':
+            gameState.ball.hasTrailMines = false;
+            gameState.ball.trailMines = [];
+            break;
+
+          case 'paddle_swap':
+            gameState.paddleSwapActive = false;
+            break;
+
+          case 'disco_mode':
+            gameState.discoMode = false;
+            break;
+
+          case 'pac_man':
+            gameState.pacMans = [];
+            break;
+
+          case 'banana_peel':
+            gameState.ball.isSlippery = false;
+            break;
+
+          case 'rubber_ball':
+            gameState.ball.bounciness = 1.0;
+            break;
+
+          case 'drunk_paddles':
+            gameState.paddlesDrunk = false;
+            break;
+
+          case 'magnet_ball':
+            gameState.ball.isMagnetic = false;
+            break;
+
+          case 'balloon_ball':
+            gameState.ball.isFloating = false;
+            break;
+
+          case 'earthquake':
+            gameState.earthquakeActive = false;
+            break;
+
+          case 'confetti_cannon':
+            gameState.confetti = [];
+            break;
+
+          case 'hypno_ball':
+            gameState.ball.isHypnotic = false;
+            break;
+
+          case 'conga_line':
+            gameState.congaBalls = [];
             break;
         }
         return false; // Remove effect
@@ -4311,8 +4929,234 @@ const Pong404: React.FC = () => {
 
         // 🕒 Smooth ball movement at consistent speed (only if not aiming)
         if (!newState.ball.isAiming) {
-          newState.ball.x += newState.ball.dx;
-          newState.ball.y += newState.ball.dy;
+          // Apply time warp effect to ball movement
+          const timeMultiplier = newState.timeWarpActive ? newState.timeWarpFactor : 1.0;
+
+          newState.ball.x += newState.ball.dx * timeMultiplier;
+          newState.ball.y += newState.ball.dy * timeMultiplier;
+        }
+
+        // 🎮 NEW PICKUP PHYSICS UPDATES
+
+        // Machine Gun Physics
+        if (newState.machineGunActive && currentTime - newState.machineGunStartTime < 3000) {
+          // Fire a new ball every 200ms
+          if (currentTime - newState.machineGunStartTime > newState.machineGunBalls.length * 200) {
+            const angle = (Math.random() - 0.5) * Math.PI / 3; // Random spread
+            const speed = BALL_SPEED * 0.8;
+            newState.machineGunBalls.push({
+              x: newState.ball.x,
+              y: newState.ball.y,
+              dx: Math.cos(angle) * speed,
+              dy: Math.sin(angle) * speed,
+              size: 8,
+              life: 2000
+            });
+          }
+
+          // Update machine gun balls
+          newState.machineGunBalls = newState.machineGunBalls.filter(mgBall => {
+            mgBall.x += mgBall.dx;
+            mgBall.y += mgBall.dy;
+            mgBall.life -= 16; // Assuming 60fps
+            return mgBall.life > 0 &&
+                   mgBall.x >= 0 && mgBall.x <= canvasSize.width &&
+                   mgBall.y >= 0 && mgBall.y <= canvasSize.height;
+          });
+        }
+
+        // Dynamic Playfield Physics
+        if (newState.playfieldScaleTarget !== newState.playfieldScale) {
+          const elapsed = (currentTime - newState.playfieldScaleTime) / 1000; // seconds
+          const duration = 15; // 15 seconds total
+          const progress = Math.min(elapsed / duration, 1);
+
+          // Smooth easing curve
+          const easedProgress = 0.5 - 0.5 * Math.cos(progress * Math.PI);
+          newState.playfieldScale = newState.playfieldScaleStart +
+            (newState.playfieldScaleTarget - newState.playfieldScaleStart) * easedProgress;
+
+          // Oscillate the target every few seconds
+          if (Math.floor(elapsed) % 3 === 0 && elapsed > 0) {
+            newState.playfieldScaleTarget = 0.7 + Math.random() * 0.6;
+            newState.playfieldScaleStart = newState.playfieldScale;
+            newState.playfieldScaleTime = currentTime;
+          }
+        }
+
+        // Black Hole Physics
+        if (newState.blackHoles && newState.blackHoles.length > 0) {
+          for (const blackHole of newState.blackHoles) {
+            const dx = blackHole.x - newState.ball.x;
+            const dy = blackHole.y - newState.ball.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < 100) { // Attraction range
+              const force = blackHole.force / (distance + 1);
+              newState.ball.dx += (dx / distance) * force;
+              newState.ball.dy += (dy / distance) * force;
+            }
+          }
+        }
+
+        // Lightning Storm Physics
+        if (newState.lightningStrikes && newState.activeEffects.some(e => e.type === 'lightning_storm')) {
+          // Generate random lightning strikes
+          if (Math.random() < 0.05) { // 5% chance per frame
+            newState.lightningStrikes.push({
+              x: Math.random() * canvasSize.width,
+              y: Math.random() * canvasSize.height,
+              life: 300 // 300ms flash
+            });
+
+            // Lightning affects ball if nearby
+            const strike = newState.lightningStrikes[newState.lightningStrikes.length - 1];
+            const dx = strike.x - newState.ball.x;
+            const dy = strike.y - newState.ball.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < 80) {
+              // Lightning deflects ball
+              newState.ball.dx += (Math.random() - 0.5) * 4;
+              newState.ball.dy += (Math.random() - 0.5) * 4;
+            }
+          }
+
+          // Update lightning strikes
+          newState.lightningStrikes = newState.lightningStrikes.filter(strike => {
+            strike.life -= 16;
+            return strike.life > 0;
+          });
+        }
+
+        // Pac-Man Physics
+        if (newState.pacMans && newState.pacMans.length > 0) {
+          for (const pacMan of newState.pacMans) {
+            // Move Pac-Man towards ball
+            const dx = newState.ball.x - pacMan.x;
+            const dy = newState.ball.y - pacMan.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > 0) {
+              const speed = 2;
+              pacMan.dx = (dx / distance) * speed;
+              pacMan.dy = (dy / distance) * speed;
+            }
+
+            pacMan.x += pacMan.dx;
+            pacMan.y += pacMan.dy;
+            pacMan.mouth = (pacMan.mouth + 0.2) % (Math.PI * 2);
+
+            // Check if Pac-Man caught the ball
+            if (distance < pacMan.size) {
+              // Remove a point from the player who last touched the ball
+              if (newState.ball.lastTouchedBy) {
+                newState.score[newState.ball.lastTouchedBy] = Math.max(0, newState.score[newState.ball.lastTouchedBy] - 1);
+              }
+
+              // Reset ball position
+              newState.ball.x = canvasSize.width / 2;
+              newState.ball.y = canvasSize.height / 2;
+              newState.ball.dx = (Math.random() - 0.5) * BALL_SPEED;
+              newState.ball.dy = (Math.random() - 0.5) * BALL_SPEED;
+            }
+          }
+        }
+
+        // Magnet Ball Physics
+        if (newState.ball.isMagnetic) {
+          // Attract to nearest paddle
+          let nearestDistance = Infinity;
+          let attractX = 0, attractY = 0;
+
+          // Check all paddles
+          const paddlePositions = [
+            { x: newState.paddles.left.x, y: newState.paddles.left.y + newState.paddles.left.height / 2 },
+            { x: newState.paddles.right.x, y: newState.paddles.right.y + newState.paddles.right.height / 2 },
+            { x: newState.paddles.top.x + newState.paddles.top.width / 2, y: newState.paddles.top.y },
+            { x: newState.paddles.bottom.x + newState.paddles.bottom.width / 2, y: newState.paddles.bottom.y }
+          ];
+
+          for (const paddle of paddlePositions) {
+            const dx = paddle.x - newState.ball.x;
+            const dy = paddle.y - newState.ball.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < nearestDistance) {
+              nearestDistance = distance;
+              attractX = dx;
+              attractY = dy;
+            }
+          }
+
+          if (nearestDistance < 150 && nearestDistance > 0) {
+            const force = 0.3 / nearestDistance;
+            newState.ball.dx += (attractX / nearestDistance) * force;
+            newState.ball.dy += (attractY / nearestDistance) * force;
+          }
+        }
+
+        // Balloon Ball Physics
+        if (newState.ball.isFloating) {
+          newState.ball.dy -= 0.1; // Upward force
+        }
+
+        // Banana Peel Physics (Slippery Ball)
+        if (newState.ball.isSlippery) {
+          // Add random drift
+          newState.ball.dx += (Math.random() - 0.5) * 0.5;
+          newState.ball.dy += (Math.random() - 0.5) * 0.5;
+        }
+
+        // Hypnotic Ball Physics
+        if (newState.ball.isHypnotic) {
+          const elapsed = (currentTime - newState.hypnoStartTime) / 1000;
+          const amplitude = 30;
+          const frequency = 2;
+
+          // Hypnotic sine wave movement
+          newState.ball.x += Math.sin(elapsed * frequency) * amplitude * 0.01;
+          newState.ball.y += Math.cos(elapsed * frequency * 1.5) * amplitude * 0.01;
+        }
+
+        // Quantum Ball Physics
+        if (newState.ball.isQuantum && newState.ball.quantumPositions) {
+          // Update quantum positions to follow the main ball with slight offsets
+          for (let i = 0; i < newState.ball.quantumPositions.length; i++) {
+            const offset = i * 50;
+            newState.ball.quantumPositions[i].x = newState.ball.x + Math.sin(currentTime * 0.01 + offset) * 30;
+            newState.ball.quantumPositions[i].y = newState.ball.y + Math.cos(currentTime * 0.01 + offset) * 30;
+          }
+        }
+
+        // Conga Line Physics
+        if (newState.congaBalls && newState.congaBalls.length > 0) {
+          for (let i = 0; i < newState.congaBalls.length; i++) {
+            const congaBall = newState.congaBalls[i];
+            const target = i === 0 ?
+              { x: newState.ball.x - 30, y: newState.ball.y } :
+              newState.congaBalls[i - 1];
+
+            const dx = target.x - congaBall.x;
+            const dy = target.y - congaBall.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > 25) {
+              congaBall.x += (dx / distance) * 2;
+              congaBall.y += (dy / distance) * 2;
+            }
+          }
+        }
+
+        // Confetti Physics
+        if (newState.confetti && newState.confetti.length > 0) {
+          newState.confetti = newState.confetti.filter(piece => {
+            piece.x += piece.dx;
+            piece.y += piece.dy;
+            piece.dy += 0.2; // Gravity
+            piece.life -= 16;
+            return piece.life > 0;
+          });
         }
 
         // Add ball trail point
@@ -6281,7 +7125,32 @@ const Pong404: React.FC = () => {
           'diamond': 'diamond',
           'star': 'star',
           'gravity': 'gravity',
-          'target': 'target'
+          'target': 'target',
+          'sticky': 'sticky',
+          'bullets': 'bullets',
+          'expand': 'expand',
+          'swap': 'swap',
+          'wall': 'wall',
+          'clock': 'clock',
+          'portal': 'portal',
+          'mirror': 'mirror',
+          'quantum': 'quantum',
+          'vortex': 'vortex',
+          'lightning': 'lightning',
+          'fade': 'fade',
+          'mine': 'mine',
+          'shuffle': 'shuffle',
+          'disco': 'disco',
+          'pacman': 'pacman',
+          'banana': 'banana',
+          'bounce': 'bounce',
+          'wobble': 'wobble',
+          'magnet': 'magnet',
+          'balloon': 'balloon',
+          'shake': 'shake',
+          'confetti': 'confetti',
+          'hypno': 'hypno',
+          'conga': 'conga'
         };
 
         const precalcPattern = PRECALC_PICKUP_PATTERNS[patternMap[pattern] as keyof typeof PRECALC_PICKUP_PATTERNS];

@@ -8,7 +8,7 @@ interface Pickup {
   id: string;
   x: number;
   y: number;
-  type: 'speed' | 'size' | 'reverse' | 'drunk' | 'teleport' | 'paddle' | 'freeze' | 'coins' | 'gravity_in_space' | 'super_striker';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line';
   createdAt: number;
   size?: number;
 }
@@ -22,9 +22,11 @@ interface Coin {
 }
 
 interface ActiveEffect {
-  type: 'speed' | 'size' | 'reverse' | 'drunk' | 'teleport' | 'paddle' | 'freeze' | 'gravity_in_space' | 'super_striker';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line';
   startTime: number;
   duration: number;
+  originalValue?: any;
+  side?: string;
 }
 
 interface GameState {
@@ -50,6 +52,25 @@ interface GameState {
     aimY: number;
     aimTargetX: number;
     aimTargetY: number;
+    // New pickup properties
+    isStuck: boolean;
+    stuckToPaddle: 'left' | 'right' | 'top' | 'bottom' | null;
+    stuckStartTime: number;
+    stuckOffset: { x: number; y: number };
+    hasPortal: boolean;
+    portalX: number;
+    portalY: number;
+    isMirror: boolean;
+    mirrorBalls: any[];
+    isQuantum: boolean;
+    quantumPositions: { x: number; y: number }[];
+    hasTrailMines: boolean;
+    trailMines: any[];
+    isSlippery: boolean;
+    bounciness: number;
+    isMagnetic: boolean;
+    isFloating: boolean;
+    isHypnotic: boolean;
   };
   paddles: {
     left: { y: number; height: number; width: number; speed: number; velocity: number; targetY: number; originalHeight: number };
@@ -91,6 +112,35 @@ interface GameState {
     startTime: number;
     intensity: number;
   };
+  // New pickup effect properties
+  machineGunBalls: any[];
+  machineGunActive: boolean;
+  machineGunStartTime: number;
+  machineGunShooter: 'left' | 'right' | 'top' | 'bottom' | null;
+  playfieldScale: number;
+  playfieldScaleTarget: number;
+  playfieldScaleStart: number;
+  playfieldScaleTime: number;
+  walls: any[];
+  timeWarpActive: boolean;
+  timeWarpFactor: number;
+  blackHoles: any[];
+  lightningStrikes: any[];
+  paddleVisibility: { left: number; right: number; top: number; bottom: number };
+  discoMode: boolean;
+  discoStartTime: number;
+  sidesSwitched: boolean;
+  paddleSwapActive: boolean;
+  nextPaddleSwapTime: number;
+  pacMans: any[];
+  paddlesDrunk: boolean;
+  drunkStartTime: number;
+  earthquakeActive: boolean;
+  earthquakeStartTime: number;
+  confetti: any[];
+  hypnoStartTime: number;
+  congaBalls: any[];
+  extraBalls: any[];
 }
 
 interface Player {
