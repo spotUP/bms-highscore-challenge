@@ -20,7 +20,6 @@ import { dlog } from "@/lib/debug";
 // import tetrisLogo from "@/assets/tetris-logo.png";
 // import donkeyKongLogo from "@/assets/donkey-kong-logo.png";
 import { supabase } from "@/integrations/supabase/client";
-import SpaceBlazersLogo from "@/components/SpaceBlazersLogo";
 
 // Fallback logo mapping for backwards compatibility
 const LOGO_MAP: Record<string, string> = {
@@ -320,10 +319,6 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
 
   return (
     <div className="p-3 md:p-4 overflow-visible">
-      {/* Space Blazers Logo Header */}
-      <div className="mb-6">
-        <SpaceBlazersLogo className="mb-4" />
-      </div>
 
       <div className="w-full space-y-4 overflow-visible">
         <div className={`grid gap-3 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-12rem)] grid-cols-1 lg:grid-cols-6'} overflow-visible`}>

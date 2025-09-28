@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import SamJs from 'sam-js';
 import { getDynamicTauntSystem, GameContext, PlayerBehavior } from '../utils/browserTauntSystem';
+import SpaceBlazersLogo from '../components/SpaceBlazersLogo';
 
 interface Pickup {
   x: number;
@@ -7142,6 +7143,13 @@ const Pong404: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Space Blazers Logo - shown only on start screen */}
+      {gameState.gameMode === 'auto' && (
+        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-20">
+          <SpaceBlazersLogo className="scale-75 md:scale-100" />
         </div>
       )}
 
