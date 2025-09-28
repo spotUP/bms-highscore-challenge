@@ -2069,25 +2069,25 @@ const Pong404: React.FC = () => {
         ...prev,
         ball: {
           ...prev.ball,
-          x: Math.min(prev.ball.x, FIXED_SQUARE_SIZE - prev.ball.size),
-          y: Math.min(prev.ball.y, FIXED_SQUARE_SIZE - prev.ball.size)
+          x: Math.min(prev.ball.x, newSize - prev.ball.size),
+          y: Math.min(prev.ball.y, newSize - prev.ball.size)
         },
         paddles: {
           left: {
             ...prev.paddles.left,
-            y: Math.min(prev.paddles.left.y, FIXED_SQUARE_SIZE - prev.paddles.left.height)
+            y: Math.min(prev.paddles.left.y, newSize - prev.paddles.left.height)
           },
           right: {
             ...prev.paddles.right,
-            y: Math.min(prev.paddles.right.y, FIXED_SQUARE_SIZE - prev.paddles.right.height)
+            y: Math.min(prev.paddles.right.y, newSize - prev.paddles.right.height)
           },
           top: {
             ...prev.paddles.top,
-            x: Math.min(prev.paddles.top.x, FIXED_SQUARE_SIZE - prev.paddles.top.width)
+            x: Math.min(prev.paddles.top.x, newSize - prev.paddles.top.width)
           },
           bottom: {
             ...prev.paddles.bottom,
-            x: Math.min(prev.paddles.bottom.x, FIXED_SQUARE_SIZE - prev.paddles.bottom.width)
+            x: Math.min(prev.paddles.bottom.x, newSize - prev.paddles.bottom.width)
           }
         }
       }));
