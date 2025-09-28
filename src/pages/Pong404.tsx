@@ -3923,7 +3923,6 @@ const Pong404: React.FC = () => {
           if (Math.abs(newState.ball.dx) < 0.1 && Math.abs(newState.ball.dy) < 0.1) {
             newState.ball.dx = Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED;
             newState.ball.dy = (Math.random() - 0.5) * BALL_SPEED * 0.8; // Random vertical component
-            console.log('🏓 Ball movement restarted after pause:', { dx: newState.ball.dx, dy: newState.ball.dy });
           }
         } else {
           // Still paused - allow paddle movement but skip ball logic
@@ -6589,8 +6588,6 @@ const Pong404: React.FC = () => {
           // Reset ball to center
           newState.ball.x = canvasSize.width / 2;
           newState.ball.y = canvasSize.height / 2;
-          newState.ball.dx = 0; // Stop ball movement during pause
-          newState.ball.dy = 0;
           newState.ball.lastTouchedBy = null; // Reset tracking
           newState.ball.previousTouchedBy = null;
 
@@ -6598,7 +6595,7 @@ const Pong404: React.FC = () => {
           newState.isPaused = true;
           newState.pauseEndTime = Date.now() + 2000; // 2 seconds
 
-          // Set ball direction for after pause (will be applied when pause ends)
+          // Set ball direction for after pause - don't set to 0 during pause as this works
           newState.ball.dx = boundaryHit === 'left' || boundaryHit === 'right'
               ? (boundaryHit === 'left' ? BALL_SPEED : -BALL_SPEED)
               : (Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED);
