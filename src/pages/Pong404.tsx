@@ -1859,8 +1859,11 @@ const Pong404: React.FC = () => {
         // Create and connect speech master gain if not exists
         if (!speechMasterGainRef.current) {
           speechMasterGainRef.current = audioContextRef.current!.createGain();
-          speechMasterGainRef.current.gain.setValueAtTime(0.15, audioContextRef.current!.currentTime); // Lowered robot voice volume
+          speechMasterGainRef.current.gain.setValueAtTime(0.08, audioContextRef.current!.currentTime); // Lower robot voice volume to prevent distortion
           speechMasterGainRef.current.connect(audioContextRef.current!.destination);
+        } else {
+          // Reset volume level to prevent distortion buildup
+          speechMasterGainRef.current.gain.setValueAtTime(0.08, audioContextRef.current!.currentTime);
         }
 
         // Connect to speech master gain instead of direct destination
@@ -2552,8 +2555,11 @@ const Pong404: React.FC = () => {
         // Create and connect speech master gain if not exists
         if (!speechMasterGainRef.current) {
           speechMasterGainRef.current = audioContextRef.current!.createGain();
-          speechMasterGainRef.current.gain.setValueAtTime(0.15, audioContextRef.current!.currentTime); // Lowered robot voice volume
+          speechMasterGainRef.current.gain.setValueAtTime(0.08, audioContextRef.current!.currentTime); // Lower robot voice volume to prevent distortion
           speechMasterGainRef.current.connect(audioContextRef.current!.destination);
+        } else {
+          // Reset volume level to prevent distortion buildup
+          speechMasterGainRef.current.gain.setValueAtTime(0.08, audioContextRef.current!.currentTime);
         }
 
         // Connect to speech master gain instead of direct destination
@@ -5250,7 +5256,7 @@ const Pong404: React.FC = () => {
 
           if (!speechMasterGainRef.current && audioContextRef.current) {
             speechMasterGainRef.current = audioContextRef.current.createGain();
-            speechMasterGainRef.current.gain.setValueAtTime(0.15, audioContextRef.current.currentTime);
+            speechMasterGainRef.current.gain.setValueAtTime(0.08, audioContextRef.current.currentTime);
             speechMasterGainRef.current.connect(audioContextRef.current.destination);
             console.log('🎵 Created speech gain node');
           }
@@ -6414,8 +6420,11 @@ const Pong404: React.FC = () => {
     // 4-player score positions
     const leftScoreX = 80; // Left edge
     const rightScoreX = canvasSize.width - 80; // Right edge
-    const topScoreY = 60; // Top edge
-    const bottomScoreY = canvasSize.height - 30; // Bottom edge
+    // Position scores at same distance from paddles as left/right (50px from paddle edge)
+    const topPaddleBottom = 30 + gameState.paddles.top.height;
+    const bottomPaddleTop = canvasSize.height - 30 - gameState.paddles.bottom.height;
+    const topScoreY = topPaddleBottom + 50; // 50px below top paddle (same distance as left/right)
+    const bottomScoreY = bottomPaddleTop - 50; // 50px above bottom paddle
     const centerScoreY = 50; // For top/bottom scores
 
     // Display all 4 player scores with padding
@@ -6544,10 +6553,18 @@ const Pong404: React.FC = () => {
                   [effect.type]: new Set([...(prev[effect.type] || []), remaining])
                 }));
 
-                // Use force speech for countdown numbers to ensure they're always heard
+                // Use staggered speech for countdown numbers to prevent voice conflicts
                 // Add unique delay based on effect type to prevent voice conflicts
-                const delayOffset = index * 100; // Stagger announcements by effect index
-                setTimeout(() => forceSpeak(remaining.toString()), 50 + delayOffset);
+                const delayOffset = index * 800; // Stagger announcements by 800ms per effect
+                setTimeout(() => {
+                  // Use speakRobotic with retry logic for countdown numbers
+                  if (!isSpeakingRef.current) {
+                    speakRobotic(remaining.toString());
+                  } else {
+                    // If still speaking, retry after a short delay
+                    setTimeout(() => speakRobotic(remaining.toString()), 200);
+                  }
+                }, 50 + delayOffset);
               } else {
                 // If we can't announce due to delay, schedule it for later
                 const remainingDelay = minimumDelay - timeSinceAnnouncement;
@@ -6561,7 +6578,10 @@ const Pong404: React.FC = () => {
                         ...prev,
                         [effect.type]: new Set([...(prev[effect.type] || []), remaining])
                       }));
-                      forceSpeak(remaining.toString());
+                      // Use speakRobotic instead of forceSpeak to prevent overlapping
+                      if (!isSpeakingRef.current) {
+                        speakRobotic(remaining.toString());
+                      }
                     }
                   }
                 }, remainingDelay + 100);
