@@ -308,8 +308,6 @@ const GlobalAmbientMusic: React.FC = () => {
         setTimeout(() => startAmbienceSound(), 100);
       }
     }, 5 * 60 * 1000); // 5 minutes
-
-    return () => clearInterval(restartInterval);
   }, []);
 
   const stopAmbienceSound = useCallback(() => {
