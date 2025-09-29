@@ -174,6 +174,7 @@ class PongWebSocketServer {
   private players: Map<string, Player> = new Map();
   private port: number;
   private instanceId: string;
+  private lastLogTime: number = 0;
 
   constructor(port = 3002) {
     this.port = port;
@@ -202,7 +203,7 @@ class PongWebSocketServer {
       ws.on('message', (message) => {
         try {
           const data = JSON.parse(message.toString());
-          console.log('📨 Received message:', data);
+          // console.log('📨 Received message:', data);
           this.handleMessage(ws, data);
           playerId = data.playerId || playerId;
         } catch (error) {
@@ -362,6 +363,26 @@ class PongWebSocketServer {
     }, playerId);
 
     console.log(`[✓] Player ${playerId} joined as ${playerSide} (${room.players.size} total players)`);
+
+    // RESET and START fresh game when human players join (server-authoritative)
+    if (room.players.size >= 1) {
+      // Reset all game state for fresh human game
+      room.gameState.score = { left: 0, right: 0, top: 0, bottom: 0 };
+      room.gameState.winner = null;
+      room.gameState.gameEnded = false;
+      room.gameState.isPlaying = true;
+      room.gameState.showStartScreen = false;
+      room.gameState.gameMode = 'multiplayer';
+      room.gameState.isPaused = false;
+      room.gameState.pauseEndTime = 0;
+      // Reset ball to center
+      room.gameState.ball.x = 400;
+      room.gameState.ball.y = 300;
+      // Reduce ball velocity to make gameplay more reasonable (was 10, now 3)
+      room.gameState.ball.dx = Math.random() > 0.5 ? 3 : -3;
+      room.gameState.ball.dy = Math.random() > 0.5 ? 3 : -3;
+      console.log(`🎮 FRESH GAME STARTED in room ${roomId} with ${room.players.size} player(s) - All scores reset to 0-0-0-0`);
+    }
   }
 
   private handlePaddleUpdate(playerId: string, data: any) {
@@ -443,8 +464,14 @@ class PongWebSocketServer {
       room.gameState.ball = { ...room.gameState.ball, ...deltaData.ball };
     }
 
+    // CRITICAL FIX: Server is authoritative for scoring - never accept score updates from clients
+    // Clients should never send score data in a server-authoritative architecture
+    // All scoring is handled by server-side ball physics and collision detection
     if (deltaData.score) {
-      room.gameState.score = deltaData.score;
+      console.log('🚨 IGNORED: Client attempted to send score update - server is authoritative for scoring');
+      console.log('   ├─ Attempted score update:', deltaData.score);
+      console.log('   ├─ Current server score:', room.gameState.score);
+      // Do not apply client score updates
     }
 
     if (deltaData.isPlaying !== undefined) room.gameState.isPlaying = deltaData.isPlaying;
@@ -557,6 +584,14 @@ class PongWebSocketServer {
           }
         });
       }
+
+      // Stop game when last human player disconnects (save server resources)
+      if (room.players.size === 0) {
+        room.gameState.isPlaying = false;
+        room.gameState.isPaused = false;
+        room.gameState.pauseEndTime = 0;
+        console.log(`⏸️ Game stopped in room ${player.roomId} - no human players remaining`);
+      }
     }
 
     this.players.delete(playerId);
@@ -587,7 +622,7 @@ class PongWebSocketServer {
       gamemaster: null,
       lastUpdate: Date.now(),
       isActive: true,
-      canvasSize: { width: 800, height: 600 }
+      canvasSize: { width: 800, height: 800 }
     };
   }
 
@@ -760,7 +795,7 @@ class PongWebSocketServer {
     const now = Date.now();
 
     this.rooms.forEach((room, roomId) => {
-      // Only update active game rooms with players
+      // Only update active game rooms with human players - stop AI waste when no humans connected
       if (!room.isActive || room.players.size === 0) return;
 
       const gameState = room.gameState;
@@ -773,15 +808,30 @@ class PongWebSocketServer {
         console.log('⏰ Pause timer expired, resuming game');
       }
 
+      // Minimal server status logging
+      if (this.lastLogTime === 0) this.lastLogTime = now;
+      // Reduced logging frequency to every 5 seconds
+      if (now - this.lastLogTime > 5000) {
+        console.log('⚡ Server Status:', {
+          ballPos: gameState.ball.x + ',' + gameState.ball.y,
+          isPlaying: gameState.isPlaying,
+          players: room.players.size
+        });
+        this.lastLogTime = now;
+      }
+
       // Only update game logic if game is playing and not paused
       if (!gameState.isPlaying || gameState.isPaused || gameState.gameEnded) return;
 
       let gameStateChanged = false;
 
       // Update ball physics
-      if (this.updateBallPhysics(gameState, canvasSize)) {
+      const ballPhysicsChanged = this.updateBallPhysics(gameState, canvasSize);
+      if (ballPhysicsChanged) {
         gameStateChanged = true;
       }
+
+      // Physics debug removed for cleaner console
 
       // Handle pickups generation and collision
       if (this.updatePickups(gameState, canvasSize, now)) {
@@ -793,8 +843,11 @@ class PongWebSocketServer {
         gameStateChanged = true;
       }
 
-      // Broadcast game state updates to all players if changed
-      if (gameStateChanged) {
+      // Broadcast debug removed for cleaner console
+
+      // Force broadcast every frame to ensure smooth client updates
+      // (Since client runs at 90 FPS and server at 60 FPS, we need frequent updates)
+      if (gameState.isPlaying && !gameState.isPaused && !gameState.gameEnded) {
         this.broadcastToRoom(roomId, {
           type: 'server_game_update',
           data: {
@@ -806,7 +859,10 @@ class PongWebSocketServer {
             pickupEffect: gameState.pickupEffect,
             rumbleEffect: gameState.rumbleEffect,
             winner: gameState.winner,
-            gameEnded: gameState.gameEnded
+            gameEnded: gameState.gameEnded,
+            isPlaying: gameState.isPlaying,
+            isPaused: gameState.isPaused,
+            showStartScreen: gameState.showStartScreen
           }
         });
 
@@ -816,8 +872,45 @@ class PongWebSocketServer {
   }
 
   private updateBallPhysics(gameState: GameState, canvasSize: { width: number; height: number }): boolean {
-    const COLLISION_BUFFER = 0; // Precise collision detection - hitbox matches paddle size exactly
     let ballChanged = false;
+
+    // Update AI paddles to track the ball
+    const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
+    const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
+    const topPaddleCenter = gameState.paddles.top.x + gameState.paddles.top.width / 2;
+    const bottomPaddleCenter = gameState.paddles.bottom.x + gameState.paddles.bottom.width / 2;
+    const leftPaddleCenter = gameState.paddles.left.y + gameState.paddles.left.height / 2;
+    const rightPaddleCenter = gameState.paddles.right.y + gameState.paddles.right.height / 2;
+
+    // Simple AI: Move paddles toward ball position
+    const paddleSpeed = 6; // Slightly slower for more predictable movement
+
+    // Left paddle AI - track ball Y position
+    if (Math.abs(ballCenterY - leftPaddleCenter) > 3) {
+      const direction = ballCenterY > leftPaddleCenter ? 1 : -1;
+      gameState.paddles.left.y += direction * paddleSpeed;
+      // Keep paddle within bounds
+      gameState.paddles.left.y = Math.max(0, Math.min(canvasSize.height - gameState.paddles.left.height, gameState.paddles.left.y));
+    }
+
+    // Right paddle AI - already controlled by player in single player, but add AI if needed
+    // Skip for now since player controls right paddle
+
+    // Top paddle AI - track ball X position
+    if (Math.abs(ballCenterX - topPaddleCenter) > 3) {
+      const direction = ballCenterX > topPaddleCenter ? 1 : -1;
+      gameState.paddles.top.x += direction * paddleSpeed;
+      // Keep paddle within bounds
+      gameState.paddles.top.x = Math.max(0, Math.min(canvasSize.width - gameState.paddles.top.width, gameState.paddles.top.x));
+    }
+
+    // Bottom paddle AI - track ball X position
+    if (Math.abs(ballCenterX - bottomPaddleCenter) > 3) {
+      const direction = ballCenterX > bottomPaddleCenter ? 1 : -1;
+      gameState.paddles.bottom.x += direction * paddleSpeed;
+      // Keep paddle within bounds
+      gameState.paddles.bottom.x = Math.max(0, Math.min(canvasSize.width - gameState.paddles.bottom.width, gameState.paddles.bottom.x));
+    }
 
     // Apply gravity effects
     if (gameState.ball.hasGravity) {
@@ -849,137 +942,164 @@ class PongWebSocketServer {
       }
     }
 
-    // Update ball position (only if not aiming)
-    if (!gameState.ball.isAiming) {
-      gameState.ball.x += gameState.ball.dx;
-      gameState.ball.y += gameState.ball.dy;
-      ballChanged = true;
-    }
+    // Calculate where the ball WILL BE after this frame
+    const nextX = gameState.ball.isAiming ? gameState.ball.x : gameState.ball.x + gameState.ball.dx;
+    const nextY = gameState.ball.isAiming ? gameState.ball.y : gameState.ball.y + gameState.ball.dy;
 
-    // Ball collision with paddles (server-side authoritative)
-    const ballLeft = gameState.ball.x;
-    const ballRight = gameState.ball.x + gameState.ball.size;
-    const ballTop = gameState.ball.y;
-    const ballBottom = gameState.ball.y + gameState.ball.size;
-    const prevBallX = gameState.ball.x - gameState.ball.dx;
-    const prevBallY = gameState.ball.y - gameState.ball.dy;
-    const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
-    const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
-    const prevBallCenterX = prevBallX + gameState.ball.size / 2;
-    const prevBallCenterY = prevBallY + gameState.ball.size / 2;
+    // Current position (before moving)
+    const currentLeft = gameState.ball.x;
+    const currentRight = gameState.ball.x + gameState.ball.size;
+    const currentTop = gameState.ball.y;
+    const currentBottom = gameState.ball.y + gameState.ball.size;
 
-    // Left paddle collision (30px spacing from left wall only)
+    // Next position (after moving)
+    const nextLeft = nextX;
+    const nextRight = nextX + gameState.ball.size;
+    const nextTop = nextY;
+    const nextBottom = nextY + gameState.ball.size;
+
+    // LEFT PADDLE - Fixed at X=30, varies in Y
     const leftPaddleX = 30;
     const leftPaddleRight = leftPaddleX + gameState.paddles.left.width;
-    const ballIntersectsLeftPaddle =
-      ballLeft <= leftPaddleRight + COLLISION_BUFFER &&
-      ballRight >= leftPaddleX - COLLISION_BUFFER &&
-      ballBottom >= gameState.paddles.left.y - COLLISION_BUFFER &&
-      ballTop <= gameState.paddles.left.y + gameState.paddles.left.height + COLLISION_BUFFER;
-    const ballTrajectoryIntersectsLeftPaddle = this.lineIntersectsRect(
-      prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
-      leftPaddleX, gameState.paddles.left.y, gameState.paddles.left.width, gameState.paddles.left.height
-    );
-    const ballCameFromRight = prevBallX > leftPaddleRight || prevBallCenterX > leftPaddleRight;
+    const leftPaddleTop = gameState.paddles.left.y;
+    const leftPaddleBottom = gameState.paddles.left.y + gameState.paddles.left.height;
 
-    if ((ballIntersectsLeftPaddle || ballTrajectoryIntersectsLeftPaddle) && ballCameFromRight && gameState.ball.dx < 0) {
-      const hitPosition = (ballCenterY - gameState.paddles.left.y) / gameState.paddles.left.height;
-      const normalizedHit = (hitPosition - 0.5) * 2;
-      const maxSpeedVariation = 10;
-      const newDx = Math.abs(gameState.ball.dx) + Math.random() * 2;
-      const newDy = normalizedHit * maxSpeedVariation + (Math.random() - 0.5) * 2;
+    // Check collision: ball will cross paddle plane AND overlaps in Y
+    if (gameState.ball.dx < 0 && // Moving left
+        currentLeft >= leftPaddleX && // Currently at or right of paddle
+        nextLeft <= leftPaddleRight && // Will be at or left of paddle edge
+        nextBottom >= leftPaddleTop && // Ball within paddle Y range
+        nextTop <= leftPaddleBottom) { // Ball within paddle Y range
 
-      gameState.ball.dx = newDx;
-      gameState.ball.dy = newDy;
-      gameState.ball.x = leftPaddleRight + 1;
-      gameState.ball.previousTouchedBy = gameState.ball.lastTouchedBy;
+      console.log('🚨 LEFT PADDLE COLLISION DETECTED', {
+        ballPos: `${gameState.ball.x},${gameState.ball.y}`,
+        nextPos: `${nextX},${nextY}`,
+        paddleX: leftPaddleX,
+        paddleRight: leftPaddleRight,
+        paddleY: `${leftPaddleTop}-${leftPaddleBottom}`
+      });
+
+      // Arkanoid-style collision: position-based angle + velocity transfer
+      const ballCenterY = nextY + gameState.ball.size / 2;
+      const paddleCenterY = leftPaddleTop + gameState.paddles.left.height / 2;
+      const hitOffset = (ballCenterY - paddleCenterY) / (gameState.paddles.left.height / 2);
+
+      // Reverse X direction
+      gameState.ball.dx = -gameState.ball.dx;
+
+      // Modify Y velocity based on hit position (Arkanoid-style)
+      const angleInfluence = hitOffset * 3; // Max 3 units of Y velocity change
+      gameState.ball.dy += angleInfluence;
+
+      // Optional: Add slight speed boost on collision for excitement
+      const speedBoost = 1.02;
+      gameState.ball.dx *= speedBoost;
+      gameState.ball.dy *= speedBoost;
+
+      gameState.ball.x = leftPaddleRight + 1; // Place ball outside paddle
       gameState.ball.lastTouchedBy = 'left';
       ballChanged = true;
     }
 
-    // Right paddle collision
+    // RIGHT PADDLE - Fixed at right side, varies in Y
     const rightPaddleX = canvasSize.width - 30 - gameState.paddles.right.width;
     const rightPaddleLeft = rightPaddleX;
-    const ballIntersectsRightPaddle =
-      ballRight >= rightPaddleLeft - COLLISION_BUFFER &&
-      ballLeft <= rightPaddleX + gameState.paddles.right.width + COLLISION_BUFFER &&
-      ballBottom >= gameState.paddles.right.y - COLLISION_BUFFER &&
-      ballTop <= gameState.paddles.right.y + gameState.paddles.right.height + COLLISION_BUFFER;
-    const ballTrajectoryIntersectsRightPaddle = this.lineIntersectsRect(
-      prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
-      rightPaddleX, gameState.paddles.right.y, gameState.paddles.right.width, gameState.paddles.right.height
-    );
-    const ballCameFromLeft = prevBallX < rightPaddleLeft || prevBallCenterX < rightPaddleLeft;
+    const rightPaddleTop = gameState.paddles.right.y;
+    const rightPaddleBottom = gameState.paddles.right.y + gameState.paddles.right.height;
 
-    if ((ballIntersectsRightPaddle || ballTrajectoryIntersectsRightPaddle) && ballCameFromLeft && gameState.ball.dx > 0) {
-      const hitPosition = (ballCenterY - gameState.paddles.right.y) / gameState.paddles.right.height;
-      const normalizedHit = (hitPosition - 0.5) * 2;
-      const maxSpeedVariation = 10;
-      const newDx = -(Math.abs(gameState.ball.dx) + Math.random() * 2);
-      const newDy = normalizedHit * maxSpeedVariation + (Math.random() - 0.5) * 2;
+    // Check collision: ball will cross paddle plane AND overlaps in Y
+    if (gameState.ball.dx > 0 && // Moving right
+        currentRight <= rightPaddleX + gameState.paddles.right.width && // Currently at or left of paddle
+        nextRight >= rightPaddleLeft && // Will be at or right of paddle edge
+        nextBottom >= rightPaddleTop && // Ball within paddle Y range
+        nextTop <= rightPaddleBottom) { // Ball within paddle Y range
 
-      gameState.ball.dx = newDx;
-      gameState.ball.dy = newDy;
-      gameState.ball.x = rightPaddleLeft - gameState.ball.size - 1;
-      gameState.ball.previousTouchedBy = gameState.ball.lastTouchedBy;
+      // Arkanoid-style collision: position-based angle + velocity transfer
+      const ballCenterY = nextY + gameState.ball.size / 2;
+      const paddleCenterY = rightPaddleTop + gameState.paddles.right.height / 2;
+      const hitOffset = (ballCenterY - paddleCenterY) / (gameState.paddles.right.height / 2);
+
+      // Reverse X direction
+      gameState.ball.dx = -gameState.ball.dx;
+
+      // Modify Y velocity based on hit position (Arkanoid-style)
+      const angleInfluence = hitOffset * 3; // Max 3 units of Y velocity change
+      gameState.ball.dy += angleInfluence;
+
+      // Optional: Add slight speed boost on collision for excitement
+      const speedBoost = 1.02;
+      gameState.ball.dx *= speedBoost;
+      gameState.ball.dy *= speedBoost;
+
+      gameState.ball.x = rightPaddleLeft - gameState.ball.size - 1; // Place ball outside paddle
       gameState.ball.lastTouchedBy = 'right';
       ballChanged = true;
     }
 
-    // Top paddle collision
+    // TOP PADDLE - Fixed at Y=30, varies in X
     const topPaddleY = 30;
     const topPaddleBottom = topPaddleY + gameState.paddles.top.height;
-    const ballIntersectsTopPaddle =
-      ballTop <= topPaddleBottom + COLLISION_BUFFER &&
-      ballBottom >= topPaddleY - COLLISION_BUFFER &&
-      ballRight >= gameState.paddles.top.x - COLLISION_BUFFER &&
-      ballLeft <= gameState.paddles.top.x + gameState.paddles.top.width + COLLISION_BUFFER;
-    const ballTrajectoryIntersectsTopPaddle = this.lineIntersectsRect(
-      prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
-      gameState.paddles.top.x, topPaddleY, gameState.paddles.top.width, gameState.paddles.top.height
-    );
-    const ballCameFromBelow = prevBallY > topPaddleBottom || prevBallCenterY > topPaddleBottom;
+    const topPaddleLeft = gameState.paddles.top.x;
+    const topPaddleRight = gameState.paddles.top.x + gameState.paddles.top.width;
 
-    if ((ballIntersectsTopPaddle || ballTrajectoryIntersectsTopPaddle) && ballCameFromBelow && gameState.ball.dy < 0) {
-      const hitPosition = (ballCenterX - gameState.paddles.top.x) / gameState.paddles.top.width;
-      const normalizedHit = (hitPosition - 0.5) * 2;
-      const maxSpeedVariation = 10;
-      const newDy = Math.abs(gameState.ball.dy) + Math.random() * 2;
-      const newDx = normalizedHit * maxSpeedVariation + (Math.random() - 0.5) * 2;
+    // Check collision: ball will cross paddle plane AND overlaps in X
+    if (gameState.ball.dy < 0 && // Moving up
+        currentTop >= topPaddleY && // Currently at or below paddle
+        nextTop <= topPaddleBottom && // Will be at or above paddle edge
+        nextRight >= topPaddleLeft && // Ball within paddle X range
+        nextLeft <= topPaddleRight) { // Ball within paddle X range
 
-      gameState.ball.dx = newDx;
-      gameState.ball.dy = newDy;
-      gameState.ball.y = topPaddleBottom + 1;
-      gameState.ball.previousTouchedBy = gameState.ball.lastTouchedBy;
+      // Arkanoid-style collision: position-based angle + velocity transfer
+      const ballCenterX = nextX + gameState.ball.size / 2;
+      const paddleCenterX = topPaddleLeft + gameState.paddles.top.width / 2;
+      const hitOffset = (ballCenterX - paddleCenterX) / (gameState.paddles.top.width / 2);
+
+      // Reverse Y direction
+      gameState.ball.dy = -gameState.ball.dy;
+
+      // Modify X velocity based on hit position (Arkanoid-style)
+      const angleInfluence = hitOffset * 3; // Max 3 units of X velocity change
+      gameState.ball.dx += angleInfluence;
+
+      // Optional: Add slight speed boost on collision for excitement
+      const speedBoost = 1.02;
+      gameState.ball.dx *= speedBoost;
+      gameState.ball.dy *= speedBoost;
+      gameState.ball.y = topPaddleBottom + 1; // Place ball outside paddle
       gameState.ball.lastTouchedBy = 'top';
       ballChanged = true;
     }
 
-    // Bottom paddle collision
+    // BOTTOM PADDLE - Fixed at bottom, varies in X
     const bottomPaddleY = canvasSize.height - 30 - gameState.paddles.bottom.height;
     const bottomPaddleTop = bottomPaddleY;
-    const ballIntersectsBottomPaddle =
-      ballBottom >= bottomPaddleTop - COLLISION_BUFFER &&
-      ballTop <= bottomPaddleY + gameState.paddles.bottom.height + COLLISION_BUFFER &&
-      ballRight >= gameState.paddles.bottom.x - COLLISION_BUFFER &&
-      ballLeft <= gameState.paddles.bottom.x + gameState.paddles.bottom.width + COLLISION_BUFFER;
-    const ballTrajectoryIntersectsBottomPaddle = this.lineIntersectsRect(
-      prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
-      gameState.paddles.bottom.x, bottomPaddleY, gameState.paddles.bottom.width, gameState.paddles.bottom.height
-    );
-    const ballCameFromAbove = prevBallY < bottomPaddleTop || prevBallCenterY < bottomPaddleTop;
+    const bottomPaddleLeft = gameState.paddles.bottom.x;
+    const bottomPaddleRight = gameState.paddles.bottom.x + gameState.paddles.bottom.width;
 
-    if ((ballIntersectsBottomPaddle || ballTrajectoryIntersectsBottomPaddle) && ballCameFromAbove && gameState.ball.dy > 0) {
-      const hitPosition = (ballCenterX - gameState.paddles.bottom.x) / gameState.paddles.bottom.width;
-      const normalizedHit = (hitPosition - 0.5) * 2;
-      const maxSpeedVariation = 10;
-      const newDy = -(Math.abs(gameState.ball.dy) + Math.random() * 2);
-      const newDx = normalizedHit * maxSpeedVariation + (Math.random() - 0.5) * 2;
+    // Check collision: ball will cross paddle plane AND overlaps in X
+    if (gameState.ball.dy > 0 && // Moving down
+        currentBottom <= bottomPaddleY + gameState.paddles.bottom.height && // Currently at or above paddle
+        nextBottom >= bottomPaddleTop && // Will be at or below paddle edge
+        nextRight >= bottomPaddleLeft && // Ball within paddle X range
+        nextLeft <= bottomPaddleRight) { // Ball within paddle X range
 
-      gameState.ball.dx = newDx;
-      gameState.ball.dy = newDy;
-      gameState.ball.y = bottomPaddleTop - gameState.ball.size - 1;
-      gameState.ball.previousTouchedBy = gameState.ball.lastTouchedBy;
+      // Arkanoid-style collision: position-based angle + velocity transfer
+      const ballCenterX = nextX + gameState.ball.size / 2;
+      const paddleCenterX = bottomPaddleLeft + gameState.paddles.bottom.width / 2;
+      const hitOffset = (ballCenterX - paddleCenterX) / (gameState.paddles.bottom.width / 2);
+
+      // Reverse Y direction
+      gameState.ball.dy = -gameState.ball.dy;
+
+      // Modify X velocity based on hit position (Arkanoid-style)
+      const angleInfluence = hitOffset * 3; // Max 3 units of X velocity change
+      gameState.ball.dx += angleInfluence;
+
+      // Optional: Add slight speed boost on collision for excitement
+      const speedBoost = 1.02;
+      gameState.ball.dx *= speedBoost;
+      gameState.ball.dy *= speedBoost;
+      gameState.ball.y = bottomPaddleTop - gameState.ball.size - 1; // Place ball outside paddle
       gameState.ball.lastTouchedBy = 'bottom';
       ballChanged = true;
     }
@@ -1069,17 +1189,43 @@ class PongWebSocketServer {
       }
     }
 
+    // Move ball if not in aiming mode and no collision occurred
+    if (!gameState.ball.isAiming) {
+      gameState.ball.x += gameState.ball.dx;
+      gameState.ball.y += gameState.ball.dy;
+    }
+
     // Scoring boundaries - ball goes off screen
     if (gameState.ball.x < -20) {
+      console.log('🏆 BOUNDARY SCORING: Left boundary hit', {
+        ballX: gameState.ball.x,
+        boundary: -20,
+        canvasWidth: canvasSize.width
+      });
       this.handleScoring(gameState, 'left');
       ballChanged = true;
     } else if (gameState.ball.x > canvasSize.width + 20) {
+      console.log('🏆 BOUNDARY SCORING: Right boundary hit', {
+        ballX: gameState.ball.x,
+        boundary: canvasSize.width + 20,
+        canvasWidth: canvasSize.width
+      });
       this.handleScoring(gameState, 'right');
       ballChanged = true;
     } else if (gameState.ball.y < -20) {
+      console.log('🏆 BOUNDARY SCORING: Top boundary hit', {
+        ballY: gameState.ball.y,
+        boundary: -20,
+        canvasHeight: canvasSize.height
+      });
       this.handleScoring(gameState, 'top');
       ballChanged = true;
     } else if (gameState.ball.y > canvasSize.height + 20) {
+      console.log('🏆 BOUNDARY SCORING: Bottom boundary hit', {
+        ballY: gameState.ball.y,
+        boundary: canvasSize.height + 20,
+        canvasHeight: canvasSize.height
+      });
       this.handleScoring(gameState, 'bottom');
       ballChanged = true;
     }
@@ -1117,8 +1263,8 @@ class PongWebSocketServer {
     gameState.score[scoringPlayer]++;
     console.log(`🏆 SERVER SCORING: ${scoringPlayer} scores! New scores:`, gameState.score);
 
-    // Check for winner (first to 3 points)
-    if (gameState.score[scoringPlayer] >= 3) {
+    // Check for winner (first to 11 points)
+    if (gameState.score[scoringPlayer] >= 11) {
       gameState.winner = scoringPlayer;
       gameState.gameEnded = true;
       gameState.isPlaying = false;
@@ -1137,8 +1283,9 @@ class PongWebSocketServer {
   private resetBall(gameState: GameState): void {
     gameState.ball.x = 400;
     gameState.ball.y = 300;
-    gameState.ball.dx = Math.random() > 0.5 ? 10 : -10;
-    gameState.ball.dy = Math.random() > 0.5 ? 10 : -10;
+    // Reduce ball velocity to make gameplay more reasonable (was 10, now 3)
+    gameState.ball.dx = Math.random() > 0.5 ? 3 : -3;
+    gameState.ball.dy = Math.random() > 0.5 ? 3 : -3;
     gameState.ball.lastTouchedBy = null;
     gameState.ball.previousTouchedBy = null;
     gameState.ball.hasGravity = false;
@@ -1824,8 +1971,33 @@ class PongWebSocketServer {
   }
 
   public start() {
+    // Add health check endpoint
+    this.server.on('request', (req, res) => {
+      if (req.url === '/health') {
+        res.writeHead(200, {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET',
+          'Access-Control-Allow-Headers': 'Content-Type'
+        });
+        res.end(JSON.stringify({
+          status: 'ok',
+          timestamp: Date.now(),
+          serverInstanceId: this.instanceId,
+          rooms: this.rooms.size,
+          players: this.players.size
+        }));
+        return;
+      }
+
+      // Default response for other requests
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('WebSocket server running');
+    });
+
     this.server.listen(this.port, '0.0.0.0', () => {
       console.log(`[▲] Pong WebSocket server running on http://0.0.0.0:${this.port}`);
+      console.log(`[💓] Health endpoint available at http://0.0.0.0:${this.port}/health`);
       console.log(`[▶] Ready for Pong multiplayer connections!`);
       console.log(`[#] Server Instance ID: ${this.instanceId}`);
     });
