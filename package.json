@@ -101,6 +101,7 @@
     "input-otp": "^1.2.4",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",
+    "pixi.js": "^8.13.2",
     "puppeteer": "^24.22.2",
     "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",

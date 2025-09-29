@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import SamJs from 'sam-js';
+import { Application, Sprite, Texture } from 'pixi.js';
+import { CRTFilter } from '../shaders/CRTShader';
 import { getDynamicTauntSystem, GameContext, PlayerBehavior } from '../utils/browserTauntSystem';
 import SpaceBlazersLogo from '../components/SpaceBlazersLogo';
 import MusicSelector from '../components/MusicSelector';
@@ -745,6 +747,9 @@ const PRECALC_PICKUP_PATTERNS = {
 
 const Pong404: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const pixiAppRef = useRef<Application | null>(null);
+  const pixiContainerRef = useRef<HTMLDivElement>(null);
+  const crtFilterRef = useRef<CRTFilter | null>(null);
   const animationFrameRef = useRef<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -6818,7 +6823,8 @@ const Pong404: React.FC = () => {
       }
 
       // Handle non-spacebar audio prompt dismissal (other keys just dismiss, don't start game)
-      if (showAudioPrompt && !audioPromptDismissedRef.current && e.key !== ' ') {
+      // Exclude 'c' and 'm' keys from starting the game (they toggle CRT/music)
+      if (showAudioPrompt && !audioPromptDismissedRef.current && e.key !== ' ' && e.key.toLowerCase() !== 'c' && e.key.toLowerCase() !== 'm') {
         audioPromptDismissedRef.current = true;
         setShowAudioPrompt(false);
 
@@ -6855,6 +6861,12 @@ const Pong404: React.FC = () => {
         return;
       }
 
+      // Handle CRT toggle - should work at any time, even on audio prompt
+      if (e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        setCrtEffect(prev => !prev);
+        return; // Don't process any other logic
+      }
 
       // Initialize audio on first user interaction
       await initializeAudio();
@@ -6898,10 +6910,6 @@ const Pong404: React.FC = () => {
         case 'arrowright':
           e.preventDefault();
           setKeys(prev => ({ ...prev, right: true }));
-          break;
-        case 'c':
-          e.preventDefault();
-          setCrtEffect(prev => !prev);
           break;
         case 'm':
           e.preventDefault();
@@ -8940,6 +8948,115 @@ const Pong404: React.FC = () => {
   // Prevent React strict mode from causing duplicate WebSocket connections
   const hasInitialized = useRef(false);
 
+  // Initialize PixiJS for CRT shader effect
+  useEffect(() => {
+    if (!pixiContainerRef.current || !canvasRef.current) return;
+
+    let app: Application | null = null;
+
+    (async () => {
+      app = new Application();
+
+      await app.init({
+        width: canvasSize.width,
+        height: canvasSize.height,
+        backgroundAlpha: 0,
+        antialias: false,
+      });
+
+      if (!pixiContainerRef.current) return;
+
+      pixiContainerRef.current.appendChild(app.canvas);
+      pixiAppRef.current = app;
+
+      // Create sprite that we'll update each frame
+      let texture = Texture.from(canvasRef.current);
+      const sprite = new Sprite(texture);
+      sprite.width = canvasSize.width;
+      sprite.height = canvasSize.height;
+      app.stage.addChild(sprite);
+
+      // Create and apply CRT filter with subtle authentic effects
+      const filter = new CRTFilter({
+        curvature: 6.0,               // Subtle screen curve
+        scanlineIntensity: 0.15,      // Subtle scanlines
+        vignetteIntensity: 0.3,       // Gentle edge darkening
+        noiseIntensity: 0.03,         // Subtle CRT noise
+        brightness: 1.1,              // Slightly brighter
+      });
+
+      crtFilterRef.current = filter;
+
+      // ALWAYS apply filter to test if it's working
+      sprite.filters = [filter];
+
+      console.log('[CRT] Filter created and applied:', {
+        hasCrtFilter: !!filter,
+        filterApplied: sprite.filters.length > 0,
+        filterSettings: {
+          curvature: 6.0,
+          scanlineIntensity: 0.15,
+          vignetteIntensity: 0.3
+        }
+      });
+
+      // Don't recreate texture - just keep one and it should update automatically
+      // PixiJS will detect the canvas has changed and update the texture
+      let frameCount = 0;
+      let lastLogTime = 0;
+      app.ticker.add(() => {
+        frameCount++;
+
+        // Debug log every 120 frames (every 2 seconds at 60fps)
+        const now = Date.now();
+        if (now - lastLogTime > 2000) {
+          console.log('[CRT] Render frame:', {
+            frame: frameCount,
+            hasTexture: !!sprite.texture,
+            hasFilter: !!sprite.filters && sprite.filters.length > 0,
+            filterCount: sprite.filters?.length || 0,
+            filterTime: (filter.uniforms as any)?.uTime
+          });
+          lastLogTime = now;
+        }
+
+        if (filter && filter.uniforms) {
+          (filter.uniforms as any).uTime = Date.now() * 0.001;
+          (filter.uniforms as any).uResolution = new Float32Array([canvasSize.width, canvasSize.height]);
+        }
+
+        // Force texture update from canvas source
+        if (texture.source && texture.source.resource === canvasRef.current) {
+          texture.source.update();
+        }
+      });
+
+      console.log('[CRT] PixiJS initialized with CRT filter:', {
+        filterEnabled: crtEffect,
+        canvasSize: { width: canvasSize.width, height: canvasSize.height },
+        hasSprite: !!sprite,
+        hasFilter: !!filter
+      });
+    })();
+
+    return () => {
+      if (app) {
+        app.destroy(true);
+      }
+    };
+  }, [canvasSize.width, canvasSize.height]);
+
+  // Toggle CRT filter on/off
+  useEffect(() => {
+    if (pixiAppRef.current && crtFilterRef.current && pixiAppRef.current.stage.children.length > 0) {
+      const sprite = pixiAppRef.current.stage.children[0] as Sprite;
+      if (sprite) {
+        sprite.filters = crtEffect ? [crtFilterRef.current] : [];
+        console.log('[CRT] Filter toggled:', crtEffect ? 'ON' : 'OFF');
+      }
+    }
+  }, [crtEffect]);
+
   // Listen for localStorage events from other tabs
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
@@ -9126,30 +9243,33 @@ const Pong404: React.FC = () => {
         left: 0
       }}
     >
-      <canvas
-        ref={canvasRef}
-        width={canvasSize.width}
-        height={canvasSize.height}
-        className="block"
-        style={{
-          background: COLOR_PALETTE[gameState.colorIndex].background,
-          outline: 'none',
-          // Force square aspect ratio - use the smaller of width/height available
-          width: `min(calc(100vw - 8px), calc(100vh - 8px))`,
-          height: `min(calc(100vw - 8px), calc(100vh - 8px))`,
-          aspectRatio: '1',
-          cursor: cursorHidden ? 'none' : 'default',
-          // Disable text smoothing and antialiasing for pixelated text
-          fontSmooth: 'never',
-          WebkitFontSmoothing: 'none',
-          MozOsxFontSmoothing: 'unset',
-          textRendering: 'geometricPrecision',
-          imageRendering: 'pixelated'
-        } as React.CSSProperties}
-        tabIndex={0}
-        onClick={async () => {
-          // Handle audio prompt dismissal
-          if (showAudioPrompt) {
+      <div style={{ position: 'relative' }}>
+        {/* Canvas for game rendering - hidden when CRT is active (PixiJS shows it instead) */}
+        <canvas
+          ref={canvasRef}
+          width={canvasSize.width}
+          height={canvasSize.height}
+          className="block"
+          style={{
+            background: COLOR_PALETTE[gameState.colorIndex].background,
+            outline: 'none',
+            // Force square aspect ratio - use the smaller of width/height available
+            width: `min(calc(100vw - 8px), calc(100vh - 8px))`,
+            height: `min(calc(100vw - 8px), calc(100vh - 8px))`,
+            aspectRatio: '1',
+            cursor: cursorHidden ? 'none' : 'default',
+            // Disable text smoothing and antialiasing for pixelated text
+            fontSmooth: 'never',
+            WebkitFontSmoothing: 'none',
+            MozOsxFontSmoothing: 'unset',
+            textRendering: 'geometricPrecision',
+            imageRendering: 'pixelated',
+            visibility: crtEffect ? 'hidden' : 'visible', // Hide canvas when CRT is active
+          } as React.CSSProperties}
+          tabIndex={0}
+          onClick={async () => {
+            // Handle audio prompt dismissal
+            if (showAudioPrompt) {
             audioPromptDismissedRef.current = true; // Set ref like keyboard handler
             setShowAudioPrompt(false);
 
@@ -9441,6 +9561,26 @@ const Pong404: React.FC = () => {
           setControlSide(null);
         }}
       />
+
+      {/* PixiJS WebGL container for CRT shader post-processing - visible when CRT is ON */}
+      <div
+        ref={pixiContainerRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          // Force square aspect ratio - use the smaller of width/height available
+          width: `min(calc(100vw - 8px), calc(100vh - 8px))`,
+          height: `min(calc(100vw - 8px), calc(100vh - 8px))`,
+          aspectRatio: '1',
+          cursor: cursorHidden ? 'none' : 'default',
+          imageRendering: 'pixelated',
+          pointerEvents: 'none', // Let events pass through to canvas
+          zIndex: 10, // Above canvas
+          visibility: crtEffect ? 'visible' : 'hidden', // Only show when CRT is active
+        }}
+      />
+      </div>
 
       {/* Spectator Mode UI Overlay */}
       {isSpectatorMode && (
