@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import SamJs from 'sam-js';
 import { getDynamicTauntSystem, GameContext, PlayerBehavior } from '../utils/browserTauntSystem';
 import SpaceBlazersLogo from '../components/SpaceBlazersLogo';
+import MusicSelector from '../components/MusicSelector';
+import { CollisionManager, CollisionDetector, CollisionResult } from '../utils/CollisionDetection';
 
 interface Pickup {
   x: number;
@@ -151,8 +153,11 @@ interface WebSocketMessage {
 
 // Canvas size will be calculated dynamically based on viewport
 const PADDLE_SPEED = 12; // Faster base speed for keyboard control
-const PADDLE_LENGTH = 120; // Length of paddles in their movement direction
-const PADDLE_THICKNESS = 20; // Thickness of paddles perpendicular to movement - increased for better visibility
+// NOTE: Paddle dimensions are server-authoritative. Client receives actual dimensions from server gameState.
+// These constants are fallback values for initialization only - server defines the true values.
+const PADDLE_LENGTH = 140; // SERVER-AUTHORITATIVE: Fallback for initialization, server defines true value
+const PADDLE_THICKNESS = 20; // SERVER-AUTHORITATIVE: Fallback for initialization, server defines true value
+const BORDER_THICKNESS = 12; // Thickness of playfield border drawn in render function
 const BALL_SPEED = 4; // Moderate speed for playable gameplay
 const MIN_BALL_SPEED = 3;  // Slower minimum speed
 const MAX_BALL_SPEED = 6; // Slower maximum speed
@@ -161,7 +166,7 @@ const PADDLE_ACCELERATION = 0.2; // Reduced acceleration for smoother control
 const PADDLE_FRICTION = 0.88; // Slightly more friction for better control
 const HUMAN_REACTION_DELAY = 8; // Reduced delay for more responsive AI at 60fps
 const PANIC_MOVE_CHANCE = 0.08; // Lower chance for panic moves at 60fps
-const COLLISION_BUFFER = 0; // Precise collision detection - hitbox matches paddle size exactly
+const COLLISION_BUFFER = 2; // Small buffer for larger 24px ball to improve collision reliability
 const PANIC_VELOCITY_MULTIPLIER = 8; // Reduced panic speed multiplier
 const EXTREME_PANIC_CHANCE = 0.04; // Lower extreme panic chance
 const EXTREME_PANIC_MULTIPLIER = 20; // Reduced extreme panic speed
@@ -784,6 +789,186 @@ const Pong404: React.FC = () => {
   const playMelodyNoteRef = useRef<any>(null);
   const updateGameStateRef = useRef<any>(null);
   const updatePaddlePositionRef = useRef<any>(null);
+
+  // 🎯 CENTRALIZED COLLISION DETECTION SYSTEM
+  const collisionManagerRef = useRef<CollisionManager>(new CollisionManager());
+
+  // Set up collision event handlers once on mount
+  useEffect(() => {
+    const collisionManager = collisionManagerRef.current;
+
+    // 🏓 Ball-Paddle Collision Handler - Complete game logic
+    collisionManager.on('ball-paddle', (result: CollisionResult) => {
+      console.log('🏓 BALL-PADDLE COLLISION DETECTED:', {
+        ballPos: `${result.object1.x},${result.object1.y}`,
+        paddleSide: (result.object2 as any).side,
+        hitPosition: result.hitPosition,
+        normal: result.normal
+      });
+      if (!result.hit) return;
+
+      const paddle = result.object2 as any;
+      const paddleSide = paddle.side || 'unknown';
+
+      // Apply complete collision logic
+      setGameState(prevState => {
+        const newState = { ...prevState };
+
+        // 🏓 STICKY PADDLES: Check if sticky effect is active
+        if (newState.stickyPaddlesActive && !newState.ball.isStuck) {
+          // Stick ball to paddle
+          newState.ball.isStuck = true;
+          newState.ball.stuckToPaddle = paddleSide as any;
+          newState.ball.stuckStartTime = Date.now();
+          newState.ball.dx = 0;
+          newState.ball.dy = 0;
+
+          // Calculate offset relative to paddle
+          const ballCenterX = newState.ball.x + newState.ball.size / 2;
+          const ballCenterY = newState.ball.y + newState.ball.size / 2;
+          const paddleCenterX = paddle.x + paddle.width / 2;
+          const paddleCenterY = paddle.y + paddle.height / 2;
+
+          // Calculate offset based on paddle side
+          if (paddleSide === 'left' || paddleSide === 'right') {
+            newState.ball.stuckOffset = {
+              x: newState.ball.x - (paddleSide === 'left' ? (32 + newState.paddles.left.width) : (canvasSize.width - 32 - newState.paddles.right.width)),
+              y: ballCenterY - paddleCenterY
+            };
+          } else {
+            newState.ball.stuckOffset = {
+              x: ballCenterX - paddleCenterX,
+              y: newState.ball.y - (paddleSide === 'top' ? (32 + newState.paddles.top.height) : (canvasSize.height - 32 - newState.paddles.bottom.height))
+            };
+          }
+
+          playMelodyNoteRef.current?.('paddle', null, 'both');
+          return newState;
+        }
+
+        // Enhanced Aiming System - same logic as before
+        const hitPosition = result.hitPosition;
+        const clampedHitPosition = Math.max(0, Math.min(1, hitPosition));
+        const normalizedPosition = (clampedHitPosition - 0.5) * 2; // Convert to range [-1, 1]
+        const aimingCurve = Math.sin(normalizedPosition * Math.PI * 0.4); // 0.4 limits max angle
+        const baseSpeed = BALL_SPEED;
+        const maxAngle = Math.PI / 3; // 60 degrees maximum deflection
+        const deflectionAngle = aimingCurve * maxAngle;
+
+        // Apply velocity based on paddle side
+        if (paddleSide === 'left') {
+          newState.ball.dx = Math.cos(deflectionAngle) * baseSpeed;
+          newState.ball.dy = Math.sin(deflectionAngle) * baseSpeed;
+          newState.ball.x = 32 + newState.paddles.left.width;
+        } else if (paddleSide === 'right') {
+          newState.ball.dx = -Math.cos(deflectionAngle) * baseSpeed;
+          newState.ball.dy = Math.sin(deflectionAngle) * baseSpeed;
+          newState.ball.x = canvasSize.width - 32 - newState.paddles.right.width - newState.ball.size;
+        } else if (paddleSide === 'top') {
+          newState.ball.dx = Math.sin(deflectionAngle) * baseSpeed;
+          newState.ball.dy = Math.cos(deflectionAngle) * baseSpeed;
+          newState.ball.y = 32 + newState.paddles.top.height;
+        } else if (paddleSide === 'bottom') {
+          newState.ball.dx = Math.sin(deflectionAngle) * baseSpeed;
+          newState.ball.dy = -Math.cos(deflectionAngle) * baseSpeed;
+          newState.ball.y = canvasSize.height - 32 - newState.paddles.bottom.height - newState.ball.size;
+        }
+
+        // Add speed variation based on distance from center
+        const distanceFromCenter = Math.abs(clampedHitPosition - 0.5) * 2;
+        const speedVariation = 1 + (distanceFromCenter * 0.2); // 0-20% speed increase
+        newState.ball.dx *= speedVariation;
+        newState.ball.dy *= speedVariation;
+
+        // Change colors on paddle hit
+        newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
+
+        // Track ball touch for scoring system
+        console.log(`🏓 CENTRALIZED COLLISION: Ball touched by ${paddleSide} paddle`, {
+          previous: newState.ball.lastTouchedBy,
+          new: paddleSide,
+          hitPosition: result.hitPosition,
+          ballPosition: { x: newState.ball.x, y: newState.ball.y }
+        });
+        newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
+        newState.ball.lastTouchedBy = paddleSide as any;
+
+        // Trigger rumble effect
+        newState.rumbleEffect.isActive = true;
+        newState.rumbleEffect.startTime = Date.now();
+        newState.rumbleEffect.intensity = 8;
+
+        // Track rally and potentially taunt
+        rallyCountRef.current++;
+        if (rallyCountRef.current >= LONG_RALLY_THRESHOLD) {
+          attemptRobotTauntRef.current?.('long_rally');
+          rallyCountRef.current = 0;
+        }
+
+        return newState;
+      });
+
+      // Play paddle hit sound (only in single player to avoid duplicates)
+      const currentState = gameStateRef.current;
+      if (currentState.gameMode !== 'multiplayer') {
+        playMelodyNoteRef.current?.('paddle', null, 'both');
+      }
+
+      console.log(`🏓 CENTRALIZED COLLISION: Ball hit ${paddleSide} paddle at position ${result.hitPosition.toFixed(2)}`);
+    });
+
+    // 🏆 Ball-Wall Collision Handler (Scoring)
+    collisionManager.on('ball-wall', (result: CollisionResult) => {
+      if (!result.hit) return;
+
+      const wallSide = result.side;
+      console.log(`🏆 CENTRALIZED SCORING: Ball hit ${wallSide} boundary`);
+
+      // Only handle scoring in single-player modes (server handles multiplayer scoring)
+      setGameState(prev => {
+        if (prev.gameMode === 'multiplayer') return prev; // Server handles multiplayer scoring
+
+        const newState = { ...prev };
+        // Use the existing handleLastTouchScoring function
+        handleLastTouchScoring(newState, wallSide);
+        return newState;
+      });
+    });
+
+    // ⚔️ Paddle-Paddle Collision Handler (Corner cases)
+    collisionManager.on('paddle-paddle', (result: CollisionResult) => {
+      if (!result.hit) return;
+
+      console.log('⚔️ PADDLE-PADDLE COLLISION DETECTED:', {
+        paddle1: (result.object1 as any).side,
+        paddle2: (result.object2 as any).side,
+        penetration: result.penetration
+      });
+
+      // Handle paddle separation logic here if needed
+    });
+
+    // 🎯 Ball-Pickup Collision Handler
+    collisionManager.on('ball-pickup', (result: CollisionResult) => {
+      if (!result.hit) return;
+
+      console.log('🎯 PICKUP COLLISION:', result.object2);
+      // Handle pickup collection
+    });
+
+    // 🟠 Extra Ball Collision Handlers
+    collisionManager.on('extra-ball-paddle', (result: CollisionResult) => {
+      if (!result.hit) return;
+      playMelodyNoteRef.current?.('paddle', null, 'both');
+    });
+
+    collisionManager.on('extra-ball-wall', (result: CollisionResult) => {
+      if (!result.hit) return;
+      console.log('🟠 Extra ball boundary hit:', result.side);
+    });
+
+  }, []); // Empty dependency array - run once on mount
+
   const createPickupRef = useRef<any>(null);
   const applyPickupEffectRef = useRef<any>(null);
   const updateEffectsRef = useRef<any>(null);
@@ -795,9 +980,9 @@ const Pong404: React.FC = () => {
   const checkRandomTauntRef = useRef<any>(null);
   const multiplayerStateRef = useRef<any>(null);
 
-  // Check URL parameters for spectator mode
+  // Check URL parameters for spectator mode - DISABLED to allow normal multiplayer joining
   const urlParams = new URLSearchParams(window.location.search);
-  const isSpectatorMode = urlParams.get('spectator') === 'true' || urlParams.get('mode') === 'spectator';
+  const isSpectatorMode = false; // urlParams.get('spectator') === 'true' || urlParams.get('mode') === 'spectator';
 
 
 
@@ -838,8 +1023,8 @@ const Pong404: React.FC = () => {
       y: canvasSize.height / 2,
       dx: 0,
       dy: 0,
-      size: 12,
-      originalSize: 12,
+      size: 24,
+      originalSize: 24,
       isDrunk: false,
       drunkAngle: 0,
       isTeleporting: false,
@@ -877,10 +1062,10 @@ const Pong404: React.FC = () => {
       isHypnotic: false,
     },
     paddles: {
-      left: { y: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), originalHeight: PADDLE_LENGTH },
-      right: { y: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), originalHeight: PADDLE_LENGTH },
-      top: { x: Math.max(0, Math.min(canvasSize.width - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(0, Math.min(canvasSize.width - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), originalWidth: PADDLE_LENGTH },
-      bottom: { x: Math.max(0, Math.min(canvasSize.width - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(0, Math.min(canvasSize.width - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), originalWidth: PADDLE_LENGTH },
+      left: { x: 32, y: Math.max(32, Math.min(canvasSize.height - 32 - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(32, Math.min(canvasSize.height - 32 - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), originalHeight: PADDLE_LENGTH },
+      right: { x: canvasSize.width - 32 - PADDLE_THICKNESS, y: Math.max(32, Math.min(canvasSize.height - 32 - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(32, Math.min(canvasSize.height - 32 - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), originalHeight: PADDLE_LENGTH },
+      top: { x: Math.max(32, Math.min(canvasSize.width - 32 - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), y: 32, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(32, Math.min(canvasSize.width - 32 - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), originalWidth: PADDLE_LENGTH },
+      bottom: { x: Math.max(32, Math.min(canvasSize.width - 32 - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), y: canvasSize.height - 32 - PADDLE_THICKNESS, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(32, Math.min(canvasSize.width - 32 - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), originalWidth: PADDLE_LENGTH },
     },
     score: { left: 0, right: 0, top: 0, bottom: 0 }, // 4-player scoring
     isPlaying: false,
@@ -1008,9 +1193,8 @@ const Pong404: React.FC = () => {
 
   const [localTestMode, setLocalTestMode] = useState(false);
   const [crtEffect, setCrtEffect] = useState(true); // CRT shader enabled by default
-  const [showAudioPrompt, setShowAudioPrompt] = useState(true); // Show audio interaction prompt on first load
-  const audioPromptDismissedRef = useRef(false); // Track if audio prompt was dismissed
-
+  const [showAudioPrompt, setShowAudioPrompt] = useState(!isSpectatorMode); // Show audio interaction prompt on first load (skip for spectators)
+  const audioPromptDismissedRef = useRef(isSpectatorMode); // Track if audio prompt was dismissed (auto-dismiss for spectators)
 
   // Local multiplayer using localStorage for cross-tab sync
   const connectLocalMultiplayer = useCallback(() => {
@@ -1051,8 +1235,6 @@ const Pong404: React.FC = () => {
 
     // Set game to multiplayer mode
     setGameState(prev => ({ ...prev, gameMode: 'multiplayer' }));
-
-    return; // Skip WebSocket connection
   }, [multiplayerState.playerId, multiplayerState.roomId]);
 
   // Check if WebSocket server is available
@@ -1375,36 +1557,43 @@ const Pong404: React.FC = () => {
         updateMultiplayerState(newMultiplayerState);
 
         if (message.data.gameState) {
-          // Server sent gameState with paddles - ensure correct paddle dimensions
+          // Server sent gameState with paddles - ensure correct paddle dimensions and positions
           setGameState(prevState => ({
             ...message.data.gameState,
-            // Use server's paddles but enforce correct dimensions
+            // Use server's paddles but enforce correct dimensions and positions
             paddles: {
               left: {
                 ...message.data.gameState.paddles.left,
+                x: message.data.gameState.paddles.left.x ?? 32,
                 height: PADDLE_LENGTH,
                 width: PADDLE_THICKNESS
               },
               right: {
                 ...message.data.gameState.paddles.right,
+                x: message.data.gameState.paddles.right.x ?? (canvasSize.width - 32 - PADDLE_THICKNESS),
                 height: PADDLE_LENGTH,
                 width: PADDLE_THICKNESS
               },
               top: message.data.gameState.paddles.top ? {
                 ...message.data.gameState.paddles.top,
+                y: message.data.gameState.paddles.top.y ?? 32,
                 height: PADDLE_THICKNESS,
                 width: PADDLE_LENGTH
               } : prevState.paddles.top,
               bottom: message.data.gameState.paddles.bottom ? {
                 ...message.data.gameState.paddles.bottom,
+                y: message.data.gameState.paddles.bottom.y ?? (canvasSize.height - 32 - PADDLE_THICKNESS),
                 height: PADDLE_THICKNESS,
                 width: PADDLE_LENGTH
               } : prevState.paddles.bottom
             },
             trails: {
               ...message.data.gameState.trails,
-              topPaddle: prevState.trails.topPaddle,
-              bottomPaddle: prevState.trails.bottomPaddle
+              ball: prevState.trails.ball || [], // Preserve client-side ball trails
+              leftPaddle: prevState.trails.leftPaddle || [], // Preserve client-side left paddle trails
+              rightPaddle: prevState.trails.rightPaddle || [], // Preserve client-side right paddle trails
+              topPaddle: prevState.trails.topPaddle || [],
+              bottomPaddle: prevState.trails.bottomPaddle || []
             }
           }));
         }
@@ -1513,13 +1702,13 @@ const Pong404: React.FC = () => {
             newState.paddles.left.velocity = data.velocity || 0;
             newState.paddles.left.targetY = data.targetY || compensatedY;
             // Clamp to bounds (using fixed canvas size)
-            newState.paddles.left.y = Math.max(0, Math.min(newState.paddles.left.y, 800 - newState.paddles.left.height));
+            newState.paddles.left.y = Math.max(32, Math.min(newState.paddles.left.y, canvasSize.height - 32 - newState.paddles.left.height));
           } else if (data.side === 'right') {
             newState.paddles.right.y = compensatedY;
             newState.paddles.right.velocity = data.velocity || 0;
             newState.paddles.right.targetY = data.targetY || compensatedY;
             // Clamp to bounds (using fixed canvas size)
-            newState.paddles.right.y = Math.max(0, Math.min(newState.paddles.right.y, 800 - newState.paddles.right.height));
+            newState.paddles.right.y = Math.max(32, Math.min(newState.paddles.right.y, canvasSize.height - 32 - newState.paddles.right.height));
           }
           return newState;
         });
@@ -1529,16 +1718,30 @@ const Pong404: React.FC = () => {
         if (message.data) {
           setGameState(prevState => ({
             ...message.data,
-            // Preserve client-only paddles and trails
+            // Preserve client-only paddles and trails, enforce positions/dimensions
             paddles: {
-              ...message.data.paddles,
+              left: {
+                ...message.data.paddles.left,
+                x: message.data.paddles.left?.x ?? 32,
+                width: PADDLE_THICKNESS,
+                height: PADDLE_LENGTH
+              },
+              right: {
+                ...message.data.paddles.right,
+                x: message.data.paddles.right?.x ?? (canvasSize.width - 32 - PADDLE_THICKNESS),
+                width: PADDLE_THICKNESS,
+                height: PADDLE_LENGTH
+              },
               top: prevState.paddles.top,
               bottom: prevState.paddles.bottom
             },
             trails: {
               ...message.data.trails,
-              topPaddle: prevState.trails.topPaddle,
-              bottomPaddle: prevState.trails.bottomPaddle
+              ball: prevState.trails.ball || [], // Preserve client-side ball trails
+              leftPaddle: prevState.trails.leftPaddle || [], // Preserve client-side left paddle trails
+              rightPaddle: prevState.trails.rightPaddle || [], // Preserve client-side right paddle trails
+              topPaddle: prevState.trails.topPaddle || [],
+              bottomPaddle: prevState.trails.bottomPaddle || []
             }
           }));
         }
@@ -1590,6 +1793,11 @@ const Pong404: React.FC = () => {
             if (messageData.decrunchEffect) networkState.decrunchEffect = messageData.decrunchEffect;
             if (messageData.rumbleEffect) networkState.rumbleEffect = messageData.rumbleEffect;
 
+            // Update color index from server
+            if (messageData.colorIndex !== undefined) {
+              networkState.colorIndex = messageData.colorIndex;
+            }
+
             // Store network state and timing for interpolation
             networkGameStateRef.current = networkState;
             lastNetworkReceiveTimeRef.current = Date.now();
@@ -1599,7 +1807,10 @@ const Pong404: React.FC = () => {
               return networkState;
             }
 
-            return networkState;
+            // In single-player mode, IGNORE server updates to prevent race conditions with client collision detection
+            // This fixes the 48px boundary bouncing issue caused by server/client collision detection conflicts
+            console.log('🚫 IGNORING server update in single-player mode to prevent collision race condition');
+            return prevState; // Keep current client state
           });
         }
         break;
@@ -1608,16 +1819,30 @@ const Pong404: React.FC = () => {
         if (message.data) {
           setGameState(prevState => ({
             ...message.data,
-            // Preserve client-only paddles and trails
+            // Preserve client-only paddles and trails, enforce positions/dimensions
             paddles: {
-              ...message.data.paddles,
+              left: {
+                ...message.data.paddles.left,
+                x: message.data.paddles.left?.x ?? 32,
+                width: PADDLE_THICKNESS,
+                height: PADDLE_LENGTH
+              },
+              right: {
+                ...message.data.paddles.right,
+                x: message.data.paddles.right?.x ?? (canvasSize.width - 32 - PADDLE_THICKNESS),
+                width: PADDLE_THICKNESS,
+                height: PADDLE_LENGTH
+              },
               top: prevState.paddles.top,
               bottom: prevState.paddles.bottom
             },
             trails: {
               ...message.data.trails,
-              topPaddle: prevState.trails.topPaddle,
-              bottomPaddle: prevState.trails.bottomPaddle
+              ball: prevState.trails.ball || [], // Preserve client-side ball trails
+              leftPaddle: prevState.trails.leftPaddle || [], // Preserve client-side left paddle trails
+              rightPaddle: prevState.trails.rightPaddle || [], // Preserve client-side right paddle trails
+              topPaddle: prevState.trails.topPaddle || [],
+              bottomPaddle: prevState.trails.bottomPaddle || []
             }
           }));
         }
@@ -1644,21 +1869,8 @@ const Pong404: React.FC = () => {
 
       case 'server_game_update':
         // Receive authoritative game state from server
-        console.log('[MULTIPLAYER] Received server_game_update', {
-          hasData: !!message.data,
-          isConnected: multiplayerState.isConnected,
-          hasBall: !!message.data?.ball
-        });
         // Process updates even if isConnected is false (it might not be set yet)
         if (message.data) {
-          // Essential ball debugging only
-          if (message.data.ball) {
-            console.log('[TARGET] BALL UPDATE:', {
-              from: gameState.ball.x + ',' + gameState.ball.y,
-              to: message.data.ball.x + ',' + message.data.ball.y,
-              connected: multiplayerState.isConnected
-            });
-          }
 
           setGameState(prevState => {
             // Apply delta to create new authoritative network state
@@ -1684,6 +1896,33 @@ const Pong404: React.FC = () => {
 
             if (message.data.pickupEffect) networkState.pickupEffect = message.data.pickupEffect;
             if (message.data.rumbleEffect) networkState.rumbleEffect = message.data.rumbleEffect;
+
+            // Update color index from server
+            if (message.data.colorIndex !== undefined) {
+              networkState.colorIndex = message.data.colorIndex;
+            }
+
+            // Update paddles from server AI
+            if (message.data.paddles) {
+              networkState.paddles = {
+                left: message.data.paddles.left ? {
+                  ...prevState.paddles.left,
+                  ...message.data.paddles.left
+                } : prevState.paddles.left,
+                right: message.data.paddles.right ? {
+                  ...prevState.paddles.right,
+                  ...message.data.paddles.right
+                } : prevState.paddles.right,
+                top: message.data.paddles.top ? {
+                  ...prevState.paddles.top,
+                  ...message.data.paddles.top
+                } : prevState.paddles.top,
+                bottom: message.data.paddles.bottom ? {
+                  ...prevState.paddles.bottom,
+                  ...message.data.paddles.bottom
+                } : prevState.paddles.bottom
+              };
+            }
 
             // Store network state and timing for interpolation
             networkGameStateRef.current = networkState;
@@ -1900,22 +2139,9 @@ const Pong404: React.FC = () => {
         y: networkState.ball.y + (networkState.ball.dy * deltaTime / 1000)
       };
 
-      // Handle ball bouncing off walls during prediction
-      if (predicted.ball.x <= 12) {
-        predicted.ball.x = 12;
-        predicted.ball.dx = Math.abs(predicted.ball.dx);
-      } else if (predicted.ball.x >= canvasSize.width - 12) {
-        predicted.ball.x = canvasSize.width - 12;
-        predicted.ball.dx = -Math.abs(predicted.ball.dx);
-      }
-
-      if (predicted.ball.y <= 12) {
-        predicted.ball.y = 12;
-        predicted.ball.dy = Math.abs(predicted.ball.dy);
-      } else if (predicted.ball.y >= canvasSize.height - 12) {
-        predicted.ball.y = canvasSize.height - 12;
-        predicted.ball.dy = -Math.abs(predicted.ball.dy);
-      }
+      // REMOVED CLIENT-SIDE WALL BOUNCING: Ball should reach server-side scoring boundaries
+      // Server handles all scoring when ball reaches boundaries (-20, +820) beyond canvas edges
+      // Client prediction should not prevent ball from reaching scoring areas
     }
 
     return predicted;
@@ -2540,7 +2766,8 @@ const Pong404: React.FC = () => {
 
   }, [playTone]);
 
-  // Subtle background ambience - very low volume, deep frequencies only
+  // ATMOSPHERIC DARK DRONE - Inspired by "station - atmospheric dark drone music for focus.mp3"
+  // Original cinematic system temporarily disabled to test dark atmospheric approach
   const startAmbienceSound = useCallback(() => {
 
     if (ambienceActiveRef.current || !audioContextRef.current) {
@@ -2550,31 +2777,31 @@ const Pong404: React.FC = () => {
     const ctx = audioContextRef.current;
     ambienceActiveRef.current = true;
 
-    // Create dedicated ambient audio bus with DRAMATIC master control
+    // Create atmospheric drone soft synth master bus
     if (!ambienceMasterGainRef.current) {
       ambienceMasterGainRef.current = ctx.createGain();
-      ambienceMasterGainRef.current.gain.setValueAtTime(0.5, ctx.currentTime); // Raised ambient music volume significantly
+      ambienceMasterGainRef.current.gain.setValueAtTime(0.35, ctx.currentTime); // Atmospheric volume for focus
       ambienceMasterGainRef.current.connect(ctx.destination);
 
-      // Add DRAMATIC master volume swells every 15-30 seconds
-      const addMasterDrama = () => {
+      // Add gentle atmospheric breathing - very slow volume modulation
+      const addAtmosphericBreathing = () => {
         if (!ambienceMasterGainRef.current || !ambienceActiveRef.current) return;
 
-        const dramaticVolume = 0.25 + Math.random() * 0.15; // 0.25 to 0.4 - subtle background swells
-        const swellDuration = 8 + Math.random() * 12; // 8-20 second swells
+        const breatheVolume = 0.3 + Math.random() * 0.1; // 0.3 to 0.4 - subtle breathing
+        const breatheDuration = 45 + Math.random() * 60; // 45-105 second breathing cycles
         const now = ctx.currentTime;
 
         try {
-          ambienceMasterGainRef.current.gain.exponentialRampToValueAtTime(dramaticVolume, now + swellDuration);
+          ambienceMasterGainRef.current.gain.exponentialRampToValueAtTime(breatheVolume, now + breatheDuration);
         } catch (e) {}
 
-        setTimeout(addMasterDrama, (15 + Math.random() * 15) * 1000); // 15-30 second intervals
+        setTimeout(addAtmosphericBreathing, (60 + Math.random() * 90) * 1000); // 60-150 second intervals
       };
 
-      setTimeout(addMasterDrama, 5000); // Start after 5 seconds
+      setTimeout(addAtmosphericBreathing, 15000); // Start after 15 seconds
     }
 
-    // Clear any existing oscillators
+    // Clear any existing synth voices
     ambienceOscillatorsRef.current.forEach(osc => {
       try { osc.stop(); } catch (e) {}
     });
@@ -2582,196 +2809,90 @@ const Pong404: React.FC = () => {
     ambienceOscillatorsRef.current = [];
     ambienceGainsRef.current = [];
 
-    // Expanded ambient layers - increased to 15 for much more varied atmosphere
-    const currentScale = MUSICAL_SCALES[melodyState.currentScale as keyof typeof MUSICAL_SCALES];
-    const ambienceLayers = [
-      // ESSENTIAL SPACESHIP HUMMING - Core atmosphere
-      { freq: 60, volume: 0.35, type: 'sine' as OscillatorType, modDepth: 0.02, modRate: 0.08, tension: 'humming' }, // Deep engine hum
-      { freq: 120, volume: 0.25, type: 'triangle' as OscillatorType, modDepth: 0.015, modRate: 0.12, tension: 'humming' }, // Ventilation system
-      { freq: 180, volume: 0.15, type: 'sine' as OscillatorType, modDepth: 0.01, modRate: 0.06, tension: 'humming' }, // Generator harmonics
-      { freq: 90, volume: 0.2, type: 'sawtooth' as OscillatorType, modDepth: 0.025, modRate: 0.09, tension: 'humming' }, // Low machinery
-      { freq: 240, volume: 0.12, type: 'triangle' as OscillatorType, modDepth: 0.02, modRate: 0.14, tension: 'humming' }, // High systems
+    // SIMPLE ATMOSPHERIC DARK DRONE - Clean and focus-friendly
+    console.log('[ATMOSPHERIC DRONE] Creating simple dark atmospheric layers...');
 
-      // SUB-BASS FOUNDATION - Essential ominous foundation
-      { freq: currentScale[0] * 0.2, volume: 0.25, type: 'sine' as OscillatorType, modDepth: 0.08, modRate: 0.05, tension: 'ominous' },
-      { freq: currentScale[0] * 0.4, volume: 0.2, type: 'sine' as OscillatorType, modDepth: 0.06, modRate: 0.08, tension: 'ominous' },
-      { freq: currentScale[1] * 0.3, volume: 0.18, type: 'triangle' as OscillatorType, modDepth: 0.1, modRate: 0.04, tension: 'ominous' },
+    const droneVoices = [
+      // Deep sub-bass foundation
+      { freq: 40, vol: 0.3, wave: 'sine' as OscillatorType, name: 'Deep Foundation' },
+      { freq: 60, vol: 0.25, wave: 'triangle' as OscillatorType, name: 'Sub Bass' },
 
-      // TENSION BUILDERS - Core suspense elements
-      { freq: currentScale[1] * 0.6, volume: 0.15, type: 'triangle' as OscillatorType, modDepth: 0.12, modRate: 0.18, tension: 'suspense' },
-      { freq: currentScale[2] * 0.8, volume: 0.12, type: 'triangle' as OscillatorType, modDepth: 0.1, modRate: 0.15, tension: 'suspense' },
-      { freq: currentScale[3] * 0.7, volume: 0.14, type: 'sawtooth' as OscillatorType, modDepth: 0.15, modRate: 0.22, tension: 'suspense' },
+      // Warm mid-bass
+      { freq: 80, vol: 0.2, wave: 'sine' as OscillatorType, name: 'Warm Bass' },
+      { freq: 120, vol: 0.15, wave: 'triangle' as OscillatorType, name: 'Mid Bass' },
 
-      // CINEMATIC LAYERS - Multiple epic elements for variety
-      { freq: currentScale[0] * 1.2, volume: 0.1, type: 'triangle' as OscillatorType, modDepth: 0.15, modRate: 0.28, tension: 'epic' },
-      { freq: currentScale[2] * 1.1, volume: 0.08, type: 'sine' as OscillatorType, modDepth: 0.18, modRate: 0.32, tension: 'epic' },
+      // Atmospheric mid-range
+      { freq: 160, vol: 0.12, wave: 'sine' as OscillatorType, name: 'Atmospheric Mid' },
+      { freq: 240, vol: 0.08, wave: 'triangle' as OscillatorType, name: 'Upper Mid' },
 
-      // ETHEREAL WISPS - Mysterious floating elements for atmosphere
-      { freq: currentScale[4] * 1.8, volume: 0.06, type: 'sine' as OscillatorType, modDepth: 0.25, modRate: 0.15, tension: 'ethereal' },
-      { freq: currentScale[1] * 2.2, volume: 0.05, type: 'triangle' as OscillatorType, modDepth: 0.3, modRate: 0.11, tension: 'ethereal' },
+      // Ethereal high content
+      { freq: 320, vol: 0.06, wave: 'sine' as OscillatorType, name: 'Ethereal High' },
+      { freq: 480, vol: 0.04, wave: 'triangle' as OscillatorType, name: 'Distant High' }
     ];
 
-    ambienceLayers.forEach((layer, index) => {
+    // CREATE SIMPLE ATMOSPHERIC DRONE VOICES
+    droneVoices.forEach((voice, index) => {
+      console.log(`[ATMOSPHERIC DRONE] Creating voice: ${voice.name} at ${voice.freq}Hz`);
+
       const oscillator = ctx.createOscillator();
       const gainNode = ctx.createGain();
       const filterNode = ctx.createBiquadFilter();
 
-      oscillator.type = layer.type;
-      oscillator.frequency.setValueAtTime(layer.freq, ctx.currentTime);
+      // Simple oscillator configuration
+      oscillator.type = voice.wave;
+      oscillator.frequency.setValueAtTime(voice.freq, ctx.currentTime);
 
-      // DRAMATIC frequency modulation for cinematic tension
+      // SOFT SYNTH LFO SYSTEM - Atmospheric modulation based on voice configuration
       const lfoGain = ctx.createGain();
       const lfo = ctx.createOscillator();
 
-      // Tension-based modulation characteristics
-      let modCharacter;
-      switch ((layer as any).tension) {
-        case 'humming':
-          lfo.type = 'sine'; // Smooth, continuous hum
-          modCharacter = { rate: layer.modRate, depth: layer.modDepth }; // Minimal modulation for stability
-          break;
-        case 'ominous':
-          lfo.type = 'sine'; // Smooth, mysterious
-          modCharacter = { rate: layer.modRate * 0.3, depth: layer.modDepth * 1.5 };
-          break;
-        case 'suspense':
-          lfo.type = 'triangle'; // Building tension
-          modCharacter = { rate: layer.modRate * 1.8, depth: layer.modDepth * 4.0 };
-          break;
-        case 'epic':
-          lfo.type = 'sine'; // Heroic sweep
-          modCharacter = { rate: layer.modRate * 0.6, depth: layer.modDepth * 3.2 };
-          break;
-        case 'intense':
-          lfo.type = 'triangle'; // Smooth intensity
-          modCharacter = { rate: layer.modRate * 2.0, depth: layer.modDepth * 3.0 };
-          break;
-        case 'ethereal':
-          lfo.type = 'sine'; // Mystical waves
-          modCharacter = { rate: layer.modRate * 0.4, depth: layer.modDepth * 6.0 };
-          break;
-        case 'sparkle':
-          lfo.type = 'triangle'; // Glittering
-          modCharacter = { rate: layer.modRate * 3.2, depth: layer.modDepth * 8.0 };
-          break;
-        default:
-          lfo.type = 'sine';
-          modCharacter = { rate: layer.modRate, depth: layer.modDepth };
-      }
+      // Configure LFO based on voice parameters
+      lfo.type = 'sine'; // Always smooth for atmospheric drone
+      lfo.frequency.setValueAtTime(voice.lfo.rate, ctx.currentTime);
+      lfoGain.gain.setValueAtTime(voice.freq * voice.lfo.depth, ctx.currentTime);
 
-      lfo.frequency.setValueAtTime(modCharacter.rate, ctx.currentTime);
-      lfoGain.gain.setValueAtTime(layer.freq * modCharacter.depth, ctx.currentTime);
-
+      // Connect LFO to appropriate target
       lfo.connect(lfoGain);
-      lfoGain.connect(oscillator.frequency);
+      if (voice.lfo.target === 'frequency') {
+        lfoGain.connect(oscillator.frequency);
+      } else if (voice.lfo.target === 'amplitude') {
+        lfoGain.connect(gainNode.gain);
+      } else if (voice.lfo.target === 'filter') {
+        lfoGain.connect(filterNode.frequency);
+      }
       lfo.start();
 
-      // DRAMATIC amplitude tremolo for intensity
-      const ampLfoGain = ctx.createGain();
-      const ampLfo = ctx.createOscillator();
-      ampLfo.frequency.setValueAtTime(modCharacter.rate * 0.4, ctx.currentTime);
-      ampLfo.type = 'sine';
-      ampLfoGain.gain.setValueAtTime(layer.volume * 0.4, ctx.currentTime); // Much more dramatic amplitude variation
+      // SOFT SYNTH FILTER SYSTEM - Configure filter from voice parameters
+      filterNode.type = voice.filter.type;
+      filterNode.frequency.setValueAtTime(voice.filter.freq, ctx.currentTime);
+      filterNode.Q.setValueAtTime(voice.filter.q, ctx.currentTime);
 
-      ampLfo.connect(ampLfoGain);
-      ampLfoGain.connect(gainNode.gain);
-      ampLfo.start();
-
-      // Add DRAMATIC filter sweeps for cinematic movement
-      const filterLfoGain = ctx.createGain();
-      const filterLfo = ctx.createOscillator();
-      filterLfo.frequency.setValueAtTime(modCharacter.rate * 0.25, ctx.currentTime);
-      filterLfo.type = 'triangle';
-      filterLfoGain.gain.setValueAtTime(filterNode.frequency.value * 0.3, ctx.currentTime);
-
-      filterLfo.connect(filterLfoGain);
-      filterLfoGain.connect(filterNode.frequency);
-      filterLfo.start();
-
-      // DRAMATIC filtering based on tension character
-      switch ((layer as any).tension) {
-        case 'humming':
-          // Spaceship system filtering - warm, muffled like inside a ship
-          filterNode.type = 'lowpass';
-          filterNode.frequency.setValueAtTime(400 + index * 200, ctx.currentTime); // Gentle rolloff
-          filterNode.Q.setValueAtTime(0.8, ctx.currentTime); // Smooth, non-resonant
-          break;
-        case 'ominous':
-          // Dark, brooding low-pass with high resonance
-          filterNode.type = 'lowpass';
-          filterNode.frequency.setValueAtTime(200 + index * 100, ctx.currentTime);
-          filterNode.Q.setValueAtTime(3.0 + index * 0.5, ctx.currentTime); // High Q for drama
-          break;
-        case 'suspense':
-          // Tense band-pass with sweeping frequency
-          filterNode.type = 'bandpass';
-          filterNode.frequency.setValueAtTime(300 + index * 150, ctx.currentTime);
-          filterNode.Q.setValueAtTime(4.0 + index * 0.8, ctx.currentTime); // Very focused
-          break;
-        case 'epic':
-          // Heroic notch filtering for character
-          filterNode.type = 'notch';
-          filterNode.frequency.setValueAtTime(500 + index * 200, ctx.currentTime);
-          filterNode.Q.setValueAtTime(2.5 + index * 0.6, ctx.currentTime);
-          break;
-        case 'intense':
-          // Aggressive high-pass with resonance
-          filterNode.type = 'highpass';
-          filterNode.frequency.setValueAtTime(150 + index * 80, ctx.currentTime);
-          filterNode.Q.setValueAtTime(5.0 + index, ctx.currentTime); // Extreme resonance
-          break;
-        case 'ethereal':
-          // Mystical peaking filter
-          filterNode.type = 'peaking';
-          filterNode.frequency.setValueAtTime(800 + index * 300, ctx.currentTime);
-          filterNode.Q.setValueAtTime(6.0 + index * 1.2, ctx.currentTime); // Very sharp peaks
-          filterNode.gain.setValueAtTime(12 + index * 2, ctx.currentTime); // Boost for drama
-          break;
-        case 'sparkle':
-          // Brilliant all-pass for shimmer
-          filterNode.type = 'allpass';
-          filterNode.frequency.setValueAtTime(1000 + index * 500, ctx.currentTime);
-          filterNode.Q.setValueAtTime(8.0 + index * 1.5, ctx.currentTime); // Maximum drama
-          break;
-        default:
-          filterNode.type = 'lowpass';
-          filterNode.frequency.setValueAtTime(400 + index * 100, ctx.currentTime);
-          filterNode.Q.setValueAtTime(1.0, ctx.currentTime);
+      // Set gain for peaking filters
+      if (voice.filter.type === 'peaking' && filterNode.gain) {
+        filterNode.gain.setValueAtTime(6, ctx.currentTime); // Moderate gain for atmospheric character
       }
 
-      // DRAMATIC entrance based on tension type
-      gainNode.gain.setValueAtTime(0, ctx.currentTime);
+      // SOFT SYNTH ADSR ENVELOPE - Proper synthesizer envelope from voice parameters
+      const now = ctx.currentTime;
+      const envelope = voice.envelope;
 
-      let entranceTime;
-      switch ((layer as any).tension) {
-        case 'humming':
-          entranceTime = 0.5 + index * 0.2; // Quick, steady build like systems coming online
-          break;
-        case 'ominous':
-          entranceTime = 3 + index * 0.8; // Slow, menacing build
-          break;
-        case 'suspense':
-          entranceTime = 0.2 + index * 0.1; // Quick, startling entrance
-          break;
-        case 'epic':
-          entranceTime = 5 + index * 1.2; // Grand, sweeping entrance
-          break;
-        case 'intense':
-          entranceTime = 0.05 + index * 0.05; // Immediate, aggressive
-          break;
-        case 'ethereal':
-          entranceTime = 8 + index * 2.0; // Mystical, gradual appearance
-          break;
-        case 'sparkle':
-          entranceTime = 0.01 + index * 0.02; // Instant, brilliant flash
-          break;
-        default:
-          entranceTime = 1 + index * 0.3;
+      // ADSR Envelope implementation
+      gainNode.gain.setValueAtTime(0.001, now); // Start nearly silent
+
+      // Attack phase - fade in over attack time
+      gainNode.gain.exponentialRampToValueAtTime(voice.vol, now + envelope.attack);
+
+      // Decay phase - settle to sustain level (if decay > 0)
+      if (envelope.decay > 0) {
+        gainNode.gain.exponentialRampToValueAtTime(
+          voice.vol * envelope.sustain,
+          now + envelope.attack + envelope.decay
+        );
       }
 
-      gainNode.gain.exponentialRampToValueAtTime(layer.volume, ctx.currentTime + entranceTime);
+      console.log(`[SOFT SYNTH] Voice "${voice.name}" ADSR: A=${envelope.attack}s D=${envelope.decay}s S=${envelope.sustain} R=${envelope.release}s`);
 
-      // Connect chain: oscillator -> filter -> gain -> reverb -> destination
+      // SOFT SYNTH SIGNAL CHAIN - Connect oscillator through filter and envelope to output
       oscillator.connect(filterNode);
       filterNode.connect(gainNode);
       gainNode.connect(ambienceMasterGainRef.current!); // Connect to dedicated ambient bus, not main destination
@@ -2781,131 +2902,110 @@ const Pong404: React.FC = () => {
       ambienceOscillatorsRef.current.push(oscillator);
       ambienceGainsRef.current.push(gainNode);
 
-      // Add subtle volume fluctuations (never silent)
-      const addFluctuation = () => {
+      // Add gentle atmospheric breathing for organic feel
+      const addAtmosphericModulation = () => {
         if (!ambienceActiveRef.current) {
           return;
         }
 
-          // DRAMATIC volume fluctuations based on tension type
-        let dramaDynamics;
-        switch ((layer as any).tension) {
-          case 'humming':
-            dramaDynamics = {
-              variation: 0.15, // Very stable for continuous hum
-              minVolume: layer.volume * 0.9, // Almost constant
-              maxVolume: layer.volume * 1.1, // Tiny fluctuations
-              duration: Math.random() * 8 + 5, // 5-13 second slow changes
-            };
-            break;
-          case 'ominous':
-            dramaDynamics = {
-              variation: 0.4, // Subtle swells
-              minVolume: layer.volume * 0.6, // Stays audible
-              maxVolume: layer.volume * 1.2, // Gentle peaks
-              duration: Math.random() * 3 + 2, // 2-5 second swells
-            };
-            break;
-          case 'suspense':
-            dramaDynamics = {
-              variation: 0.5, // Moderate variation
-              minVolume: layer.volume * 0.5, // Subtle dips
-              maxVolume: layer.volume * 1.3, // Modest peaks
-              duration: Math.random() * 2 + 1, // 1-3 second tension builds
-            };
-            break;
-          case 'epic':
-            dramaDynamics = {
-              variation: 0.4, // Gentle swells
-              minVolume: layer.volume * 0.7, // Always present
-              maxVolume: layer.volume * 1.2, // Subtle heroic peaks
-              duration: Math.random() * 4 + 3, // 3-7 second epic builds
-            };
-            break;
-          case 'intense':
-            dramaDynamics = {
-              variation: 0.6, // Controlled intensity
-              minVolume: layer.volume * 0.4, // Noticeable but not gone
-              maxVolume: layer.volume * 1.4, // Moderate peaks
-              duration: Math.random() * 1.5 + 0.5, // 0.5-2 second bursts
-            };
-            break;
-          case 'ethereal':
-            dramaDynamics = {
-              variation: 0.7, // Mystical but subtle
-              minVolume: layer.volume * 0.3, // Whisper level
-              maxVolume: layer.volume * 1.5, // Gentle appearances
-              duration: Math.random() * 5 + 2, // 2-7 second mystery
-            };
-            break;
-          case 'sparkle':
-            dramaDynamics = {
-              variation: 0.8, // Controlled sparkle
-              minVolume: layer.volume * 0.2, // Faint but present
-              maxVolume: layer.volume * 1.6, // Modest flashes
-              duration: Math.random() * 0.8 + 0.2, // 0.2-1 second sparkles
-            };
-            break;
-          default:
-            dramaDynamics = {
-              variation: 0.6,
-              minVolume: layer.volume * 0.4,
-              maxVolume: layer.volume * 1.2,
-              duration: Math.random() * 2 + 1,
-            };
-        }
-
-        const randomVolume = Math.random() * (dramaDynamics.maxVolume - dramaDynamics.minVolume) + dramaDynamics.minVolume;
-        const fluctuationDuration = dramaDynamics.duration;
-        const randomTime = ctx.currentTime + fluctuationDuration;
+        // SUBTLE ATMOSPHERIC MODULATION - Very gentle for focus-friendly background
+        // Simple atmospheric breathing - very gentle modulation
+        const modulationDuration = 90 + Math.random() * 60; // 90-150 second slow breathing
+        const targetVolume = voice.vol * (0.9 + Math.random() * 0.2); // ±10% gentle variation
 
         try {
-          gainNode.gain.exponentialRampToValueAtTime(Math.max(0.001, randomVolume), randomTime);
+          gainNode.gain.exponentialRampToValueAtTime(Math.max(0.001, targetVolume), ctx.currentTime + modulationDuration);
         } catch (e) {}
 
-        // Schedule next dramatic event with tension-specific timing
-        const nextDelay = fluctuationDuration + (Math.random() * 1 - 0.5); // ±500ms variation for drama
-        setTimeout(addFluctuation, nextDelay * 1000);
+        // Schedule next gentle modulation
+        setTimeout(addAtmosphericModulation, (modulationDuration + Math.random() * 60) * 1000);
       };
 
-      addFluctuation(); // Start fluctuation immediately
-
-      // Add SLOW FREQUENCY EVOLUTION to break loop feeling
-      const addFrequencyEvolution = () => {
-        if (!ambienceActiveRef.current) return;
-
-        // Slowly evolve frequency over long periods to create organic changes
-        const baseFreq = layer.freq;
-        const evolutionAmount = baseFreq * (0.02 + Math.random() * 0.06); // 2-8% frequency drift
-        const direction = Math.random() > 0.5 ? 1 : -1;
-        const newFreq = baseFreq + (evolutionAmount * direction);
-        const evolutionTime = 30 + Math.random() * 60; // 30-90 second slow evolution
-
-        try {
-          oscillator.frequency.exponentialRampToValueAtTime(
-            Math.max(20, Math.min(2000, newFreq)), // Keep in reasonable range
-            ctx.currentTime + evolutionTime
-          );
-        } catch (e) {}
-
-        // Schedule next evolution with randomized timing
-        const nextEvolutionDelay = evolutionTime + (Math.random() * 20 - 10); // ±10 second variation
-        setTimeout(addFrequencyEvolution, nextEvolutionDelay * 1000);
-      };
-
-      // Start frequency evolution after initial entrance, with staggered timing per layer
-      setTimeout(addFrequencyEvolution, (index * 5 + Math.random() * 10) * 1000);
+      // Start atmospheric modulation after a delay
+      setTimeout(addAtmosphericModulation, (60 + Math.random() * 120) * 1000);
     });
 
-    // Restart oscillators every 5 minutes to ensure they never end
+    // Restart soft synth every 12 minutes to keep it fresh
     const restartInterval = setInterval(() => {
       if (ambienceActiveRef.current) {
+        console.log('[SOFT SYNTH] Restarting atmospheric drone synthesizer for freshness');
         stopAmbienceSound();
-        // setTimeout(() => startAmbienceSound(), 100); // Disabled - now using global ambient music
+        // setTimeout(() => startAmbienceSound(), 3000); // 3 second gap for clean restart - DISABLED
       }
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 12 * 60 * 1000); // 12 minutes
 
     return () => clearInterval(restartInterval);
+  }, []);
+
+  // SIMPLE ATMOSPHERIC DARK DRONE - Clean implementation inspired by your reference MP3
+  const startSimpleAtmosphericDrone = useCallback(() => {
+    if (ambienceActiveRef.current || !audioContextRef.current) {
+      return;
+    }
+
+    const ctx = audioContextRef.current;
+    ambienceActiveRef.current = true;
+
+    // Create master gain for atmospheric drone
+    if (!ambienceMasterGainRef.current) {
+      ambienceMasterGainRef.current = ctx.createGain();
+      ambienceMasterGainRef.current.gain.setValueAtTime(0.4, ctx.currentTime);
+      ambienceMasterGainRef.current.connect(ctx.destination);
+    }
+
+    // Clear existing oscillators
+    ambienceOscillatorsRef.current.forEach(osc => {
+      try { osc.stop(); } catch (e) {}
+    });
+    ambienceGainsRef.current.forEach(gain => gain.disconnect());
+    ambienceOscillatorsRef.current = [];
+    ambienceGainsRef.current = [];
+
+    console.log('[ATMOSPHERIC DRONE] Starting simple dark atmospheric drone...');
+
+    // Simple atmospheric drone frequencies - inspired by focus ambient music
+    const frequencies = [
+      { freq: 32, vol: 0.25, wave: 'sine' as OscillatorType },      // Deep sub-bass
+      { freq: 48, vol: 0.2, wave: 'sine' as OscillatorType },       // Sub foundation
+      { freq: 64, vol: 0.18, wave: 'triangle' as OscillatorType },  // Warm bass
+      { freq: 96, vol: 0.15, wave: 'sine' as OscillatorType },      // Low mid
+      { freq: 128, vol: 0.12, wave: 'triangle' as OscillatorType }, // Mid atmospheric
+      { freq: 192, vol: 0.08, wave: 'sine' as OscillatorType },     // Upper mid
+      { freq: 256, vol: 0.06, wave: 'triangle' as OscillatorType }, // Ethereal
+      { freq: 384, vol: 0.04, wave: 'sine' as OscillatorType }      // High atmospheric
+    ];
+
+    frequencies.forEach((layer, index) => {
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      const filterNode = ctx.createBiquadFilter();
+
+      // Configure oscillator
+      oscillator.type = layer.wave;
+      oscillator.frequency.setValueAtTime(layer.freq, ctx.currentTime);
+
+      // Simple lowpass filter for warmth
+      filterNode.type = 'lowpass';
+      filterNode.frequency.setValueAtTime(layer.freq * 2.5, ctx.currentTime);
+      filterNode.Q.setValueAtTime(0.5, ctx.currentTime);
+
+      // Very slow attack for smooth entrance
+      const attackTime = 8 + index * 2; // 8-22 second staggered attacks
+      gainNode.gain.setValueAtTime(0.001, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(layer.vol, ctx.currentTime + attackTime);
+
+      // Connect simple chain
+      oscillator.connect(filterNode);
+      filterNode.connect(gainNode);
+      gainNode.connect(ambienceMasterGainRef.current!);
+
+      oscillator.start();
+
+      ambienceOscillatorsRef.current.push(oscillator);
+      ambienceGainsRef.current.push(gainNode);
+    });
+
+    console.log('[ATMOSPHERIC DRONE] Simple atmospheric drone started successfully');
   }, []);
 
   const stopAmbienceSound = useCallback(() => {
@@ -2913,10 +3013,10 @@ const Pong404: React.FC = () => {
 
     ambienceActiveRef.current = false;
 
-    // Fade out and stop all oscillators
+    // Fade out and stop all soft synth voices
     ambienceGainsRef.current.forEach((gain, index) => {
       try {
-        gain.gain.exponentialRampToValueAtTime(0.001, audioContextRef.current!.currentTime + 2);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioContextRef.current!.currentTime + 3);
       } catch (e) {}
     });
 
@@ -2927,8 +3027,9 @@ const Pong404: React.FC = () => {
       ambienceGainsRef.current.forEach(gain => gain.disconnect());
       ambienceOscillatorsRef.current = [];
       ambienceGainsRef.current = [];
-    }, 2500);
+    }, 3500);
   }, []);
+
 
   // Process speech queue to prevent overlapping speech
 
@@ -3038,7 +3139,7 @@ const Pong404: React.FC = () => {
     if (gameState.showStartScreen) {
       // Start ambient sounds on title screen
       if (audioContextRef.current && audioContextRef.current.state === 'running' && !ambienceActiveRef.current) {
-        // setTimeout(() => startAmbienceSound(), 100); // Disabled - now using global ambient music
+        // setTimeout(() => startSimpleAtmosphericDrone(), 100); // Simple atmospheric drone - DISABLED
       }
 
       // Instant welcome message on title screen
@@ -3248,8 +3349,8 @@ const Pong404: React.FC = () => {
             y: gameState.ball.y + (Math.random() - 0.5) * 50,
             dx: Math.cos(angle) * speed,
             dy: Math.sin(angle) * speed,
-            size: 12, // Same size as main ball
-            originalSize: 12,
+            size: 24, // Same size as main ball
+            originalSize: 24,
             isDrunk: false,
             drunkAngle: 0,
             isTeleporting: false,
@@ -3863,18 +3964,8 @@ const Pong404: React.FC = () => {
         newState.ball.isFloating = false;
         newState.ball.isHypnotic = false;
 
-        // Reset paddle properties to defaults - ensure all paddles have same effective length
-        // Left/Right paddles: height = PADDLE_LENGTH (movement direction), width = PADDLE_THICKNESS
-        newState.paddles.left.height = PADDLE_LENGTH;
-        newState.paddles.left.width = PADDLE_THICKNESS;
-        newState.paddles.right.height = PADDLE_LENGTH;
-        newState.paddles.right.width = PADDLE_THICKNESS;
-
-        // Top/Bottom paddles: height = PADDLE_THICKNESS, width = PADDLE_LENGTH (movement direction)
-        newState.paddles.top.height = PADDLE_THICKNESS;
-        newState.paddles.top.width = PADDLE_LENGTH;
-        newState.paddles.bottom.height = PADDLE_THICKNESS;
-        newState.paddles.bottom.width = PADDLE_LENGTH;
+        // NOTE: Paddle dimensions are server-authoritative - do not reset client-side
+        // Server will maintain correct paddle dimensions via gameState updates
 
         // Reset other game state properties
         newState.extraBalls = [];
@@ -3924,8 +4015,7 @@ const Pong404: React.FC = () => {
         return next;
       });
 
-      // Enable debug mode to prevent random pickup spawning
-      setIsDebugMode(true);
+      // Debug mode disabled - random pickup spawning will continue normally
     }
   }, [debugPickupIndex, gameState.isPlaying, speakRobotic]);
 
@@ -3965,17 +4055,8 @@ const Pong404: React.FC = () => {
         newState.ball.isMagnetic = false;
         newState.ball.isFloating = false;
         newState.ball.isHypnotic = false;
-        // Reset paddle properties to defaults - ensure all paddles have same effective length
-        // Left/Right paddles: height = PADDLE_LENGTH (movement direction), width = PADDLE_THICKNESS
-        newState.paddles.left.height = PADDLE_LENGTH;
-        newState.paddles.left.width = PADDLE_THICKNESS;
-        newState.paddles.right.height = PADDLE_LENGTH;
-        newState.paddles.right.width = PADDLE_THICKNESS;
-        // Top/Bottom paddles: height = PADDLE_THICKNESS, width = PADDLE_LENGTH (movement direction)
-        newState.paddles.top.height = PADDLE_THICKNESS;
-        newState.paddles.top.width = PADDLE_LENGTH;
-        newState.paddles.bottom.height = PADDLE_THICKNESS;
-        newState.paddles.bottom.width = PADDLE_LENGTH;
+        // NOTE: Paddle dimensions are server-authoritative - do not reset client-side
+        // Server will maintain correct paddle dimensions via gameState updates
         // Reset other game state properties
         newState.extraBalls = [];
         newState.coins = [];
@@ -4015,8 +4096,7 @@ const Pong404: React.FC = () => {
         console.log(`[CYCLE] BACKWARD: ${prev} → ${next} (${PICKUP_TYPES[prev]?.type} → ${PICKUP_TYPES[next]?.type})`);
         return next;
       });
-      // Enable debug mode to prevent random pickup spawning
-      setIsDebugMode(true);
+      // Debug mode disabled - random pickup spawning will continue normally
     }
   }, [debugPickupIndex, gameState.isPlaying, speakRobotic]);
 
@@ -4052,15 +4132,8 @@ const Pong404: React.FC = () => {
       newState.ball.isMagnetic = false;
       newState.ball.isFloating = false;
       newState.ball.isHypnotic = false;
-      // Reset paddle properties to defaults
-      newState.paddles.left.height = PADDLE_LENGTH;
-      newState.paddles.left.width = PADDLE_THICKNESS;
-      newState.paddles.right.height = PADDLE_LENGTH;
-      newState.paddles.right.width = PADDLE_THICKNESS;
-      newState.paddles.top.height = PADDLE_THICKNESS;
-      newState.paddles.top.width = PADDLE_LENGTH;
-      newState.paddles.bottom.height = PADDLE_THICKNESS;
-      newState.paddles.bottom.width = PADDLE_LENGTH;
+      // NOTE: Paddle dimensions are server-authoritative - do not reset client-side
+      // Server will maintain correct paddle dimensions via gameState updates
       // Reset other game state properties
       newState.extraBalls = [];
       newState.coins = [];
@@ -4097,7 +4170,7 @@ const Pong404: React.FC = () => {
 
     // Announce the pickup
     setTimeout(() => speakRobotic(`DEBUG: ${pickupType.description}`), 100);
-    setIsDebugMode(true);
+    // Debug mode disabled - random pickup spawning will continue normally
   }, [canvasSize, speakRobotic]);
 
   // Helper function for last-touch scoring
@@ -4474,7 +4547,7 @@ const Pong404: React.FC = () => {
         if (controlSide === 'right' && (mouseY !== null || touchY !== null)) {
           // Mouse/touch control for right paddle (player)
           const targetY = (touchY !== null ? touchY : mouseY!) - newState.paddles.right.height / 2;
-          const clampedY = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, targetY));
+          const clampedY = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.right.height, targetY));
 
           // Calculate velocity based on movement delta for trail effects
           const deltaY = clampedY - newState.paddles.right.y;
@@ -4500,7 +4573,7 @@ const Pong404: React.FC = () => {
               newState.trails.rightPaddle = [];
             }
             newState.trails.rightPaddle.push({
-              x: canvasSize.width - 12 - newState.paddles.right.width / 2,
+              x: canvasSize.width - 32 - newState.paddles.right.width / 2,
               y: newState.paddles.right.y + newState.paddles.right.height / 2,
               width: newState.paddles.right.width,
               height: newState.paddles.right.height,
@@ -4520,7 +4593,7 @@ const Pong404: React.FC = () => {
           // Add trail for right paddle movement
           if (Math.abs(newState.paddles.right.velocity) > 0.01) {
             newState.trails.rightPaddle.push({
-              x: canvasSize.width - 12 - newState.paddles.right.width / 2,
+              x: canvasSize.width - 32 - newState.paddles.right.width / 2,
               y: newState.paddles.right.y + newState.paddles.right.height / 2,
               width: newState.paddles.right.width,
               height: newState.paddles.right.height,
@@ -4537,7 +4610,7 @@ const Pong404: React.FC = () => {
           // Add trail for right paddle movement
           if (Math.abs(newState.paddles.right.velocity) > 0.01) {
             newState.trails.rightPaddle.push({
-              x: canvasSize.width - 12 - newState.paddles.right.width / 2,
+              x: canvasSize.width - 32 - newState.paddles.right.width / 2,
               y: newState.paddles.right.y + newState.paddles.right.height / 2,
               width: newState.paddles.right.width,
               height: newState.paddles.right.height,
@@ -4555,7 +4628,7 @@ const Pong404: React.FC = () => {
         }
 
         // Clamp right paddle position
-        newState.paddles.right.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, newState.paddles.right.y));
+        newState.paddles.right.y = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.right.height, newState.paddles.right.y));
 
         // In player mode, make the left paddle AI-controlled (always, since player controls right)
         if (newState.gameMode === 'player') {
@@ -4645,7 +4718,7 @@ const Pong404: React.FC = () => {
             paddle.y += paddle.velocity;
 
             // Keep paddle within bounds
-            paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
+            paddle.y = Math.max(32, Math.min(canvasSize.height - 32 - paddle.height, paddle.y));
           };
 
           // Check if left paddle is frozen (all paddles except the one who last touched)
@@ -4676,7 +4749,7 @@ const Pong404: React.FC = () => {
               newState.trails.leftPaddle = [];
             }
             newState.trails.leftPaddle.push({
-              x: 12 + newState.paddles.left.width / 2, // Paddle center X
+              x: 32 + newState.paddles.left.width / 2, // Paddle center X
               y: newState.paddles.left.y + newState.paddles.left.height / 2,
               timestamp: now,
               width: newState.paddles.left.width,
@@ -4771,7 +4844,7 @@ const Pong404: React.FC = () => {
           paddle.x += paddle.velocity;
 
           // Keep paddle within bounds
-          paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
+          paddle.x = Math.max(32, Math.min(canvasSize.width - 32 - paddle.width, paddle.x));
         };
 
         if (newState.paddles.top) {
@@ -4781,7 +4854,7 @@ const Pong404: React.FC = () => {
           if (Math.abs(newState.paddles.top.velocity) > 0.01) {
             newState.trails.topPaddle.push({
               x: newState.paddles.top.x + newState.paddles.top.width / 2,
-              y: 30 + newState.paddles.top.height / 2, // 30px spacing from top wall
+              y: 32 + newState.paddles.top.height / 2, // 32px spacing from top wall
               timestamp: now,
               width: newState.paddles.top.width,
               height: newState.paddles.top.height
@@ -4795,7 +4868,7 @@ const Pong404: React.FC = () => {
           if (Math.abs(newState.paddles.bottom.velocity) > 0.01) {
             newState.trails.bottomPaddle.push({
               x: newState.paddles.bottom.x + newState.paddles.bottom.width / 2,
-              y: canvasSize.height - 30 - newState.paddles.bottom.height / 2, // 30px spacing from bottom wall
+              y: canvasSize.height - 32 - newState.paddles.bottom.height / 2, // 32px spacing from bottom wall
               timestamp: now,
               width: newState.paddles.bottom.width,
               height: newState.paddles.bottom.height
@@ -4818,7 +4891,7 @@ const Pong404: React.FC = () => {
             // Handle mouse control for left paddle (always enabled)
             if (mouseY !== null) {
               const targetY = mouseY - newState.paddles.left.height / 2;
-              const clampedY = Math.max(0, Math.min(canvasSize.height - newState.paddles.left.height,targetY));
+              const clampedY = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.left.height,targetY));
               newState.paddles.left.velocity = clampedY - newState.paddles.left.y;
               newState.paddles.left.y = clampedY;
             }
@@ -4857,12 +4930,12 @@ const Pong404: React.FC = () => {
           }
 
           // Clamp left paddle position
-          newState.paddles.left.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.left.height,newState.paddles.left.y));
+          newState.paddles.left.y = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.left.height,newState.paddles.left.y));
 
           // Add left paddle trail point
           if (Math.abs(newState.paddles.left.velocity) > 0.01) {
             newState.trails.leftPaddle.push({
-              x: 12 + newState.paddles.left.width / 2, // Paddle center X
+              x: 32 + newState.paddles.left.width / 2, // Paddle center X
               y: newState.paddles.left.y + newState.paddles.left.height / 2,
               width: newState.paddles.left.width,
               height: newState.paddles.left.height,
@@ -4889,7 +4962,7 @@ const Pong404: React.FC = () => {
             // Handle mouse control for right paddle (always enabled)
             if (mouseY !== null) {
               const targetY = mouseY - newState.paddles.right.height / 2;
-              const clampedY = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, targetY));
+              const clampedY = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.right.height, targetY));
               newState.paddles.right.velocity = clampedY - newState.paddles.right.y;
               newState.paddles.right.y = clampedY;
             }
@@ -4928,12 +5001,12 @@ const Pong404: React.FC = () => {
           }
 
           // Clamp right paddle position
-          newState.paddles.right.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, newState.paddles.right.y));
+          newState.paddles.right.y = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.right.height, newState.paddles.right.y));
 
           // Add right paddle trail point
           if (Math.abs(newState.paddles.right.velocity) > 0.01) {
             newState.trails.rightPaddle.push({
-              x: canvasSize.width - 12 - newState.paddles.right.width / 2, // Paddle center X
+              x: canvasSize.width - 32 - newState.paddles.right.width / 2, // Paddle center X
               y: newState.paddles.right.y + newState.paddles.right.height / 2,
               width: newState.paddles.right.width,
               height: newState.paddles.right.height,
@@ -4957,11 +5030,12 @@ const Pong404: React.FC = () => {
           // Handle mouse/touch control for top paddle (always enabled)
           if (controlSide === 'top' && (mouseX !== null || touchX !== null)) {
             const targetX = (touchX !== null ? touchX : mouseX!) - newState.paddles.top.width / 2;
-            const clampedX = Math.max(0, Math.min(canvasSize.width - newState.paddles.top.width, targetX));
+            const clampedX = Math.max(32, Math.min(canvasSize.width - 32 - newState.paddles.top.width, targetX));
             newState.paddles.top.velocity = clampedX - newState.paddles.top.x;
             newState.paddles.top.x = clampedX;
           }
           // Check if reverse controls affects top paddle
+          const reverseControlsEffect = newState.activeEffects.find(e => e.type === 'reverse_controls');
           const shouldReverseTopControls = reverseControlsEffect && reverseControlsEffect.activator !== 'top';
 
           // Top paddle - A/D keys (A = LEFT, D = RIGHT) - with acceleration
@@ -4995,14 +5069,14 @@ const Pong404: React.FC = () => {
           }
 
           // Clamp top paddle position
-          newState.paddles.top.x = Math.max(0, Math.min(canvasSize.width - newState.paddles.top.width, newState.paddles.top.x));
+          newState.paddles.top.x = Math.max(32, Math.min(canvasSize.width - 32 - newState.paddles.top.width, newState.paddles.top.x));
 
           // Add top paddle trail point
           const now = Date.now();
           if (Math.abs(newState.paddles.top.velocity) > 0.01) {
             newState.trails.topPaddle.push({
               x: newState.paddles.top.x + newState.paddles.top.width / 2,
-              y: 30 + newState.paddles.top.height / 2, // 30px spacing from top wall
+              y: 32 + newState.paddles.top.height / 2, // 32px spacing from top wall
               width: newState.paddles.top.width,
               height: newState.paddles.top.height,
               timestamp: now
@@ -5021,11 +5095,12 @@ const Pong404: React.FC = () => {
           // Handle mouse/touch control for bottom paddle (always enabled)
           if (controlSide === 'bottom' && (mouseX !== null || touchX !== null)) {
             const targetX = (touchX !== null ? touchX : mouseX!) - newState.paddles.bottom.width / 2;
-            const clampedX = Math.max(0, Math.min(canvasSize.width - newState.paddles.bottom.width, targetX));
+            const clampedX = Math.max(32, Math.min(canvasSize.width - 32 - newState.paddles.bottom.width, targetX));
             newState.paddles.bottom.velocity = clampedX - newState.paddles.bottom.x;
             newState.paddles.bottom.x = clampedX;
           }
           // Check if reverse controls affects bottom paddle
+          const reverseControlsEffect = newState.activeEffects.find(e => e.type === 'reverse_controls');
           const shouldReverseBottomControls = reverseControlsEffect && reverseControlsEffect.activator !== 'bottom';
 
           // Bottom paddle - Left/Right arrow keys - with acceleration
@@ -5059,14 +5134,14 @@ const Pong404: React.FC = () => {
           }
 
           // Clamp bottom paddle position
-          newState.paddles.bottom.x = Math.max(0, Math.min(canvasSize.width - newState.paddles.bottom.width, newState.paddles.bottom.x));
+          newState.paddles.bottom.x = Math.max(32, Math.min(canvasSize.width - 32 - newState.paddles.bottom.width, newState.paddles.bottom.x));
 
           // Add bottom paddle trail point
           const now = Date.now();
           if (Math.abs(newState.paddles.bottom.velocity) > 0.01) {
             newState.trails.bottomPaddle.push({
               x: newState.paddles.bottom.x + newState.paddles.bottom.width / 2,
-              y: canvasSize.height - 30 - newState.paddles.bottom.height / 2, // 30px spacing from bottom wall
+              y: canvasSize.height - 32 - newState.paddles.bottom.height / 2, // 32px spacing from bottom wall
               width: newState.paddles.bottom.width,
               height: newState.paddles.bottom.height,
               timestamp: now
@@ -5077,6 +5152,52 @@ const Pong404: React.FC = () => {
             // TODO: Add updatePaddlePosition for bottom paddle when WebSocket server supports it
           }
         }
+
+        // PADDLE-TO-PADDLE COLLISION DETECTION - Prevent paddles from overlapping
+        // Check corner collisions between vertical and horizontal paddles
+
+        // Left paddle vs Top paddle (left side, top corner)
+        if (newState.paddles.left.y <= 32 + newState.paddles.top.height &&
+            newState.paddles.left.x <= 32 + newState.paddles.top.x + newState.paddles.top.width) {
+          // Push left paddle down to avoid overlap
+          newState.paddles.left.y = Math.max(newState.paddles.left.y, 32 + newState.paddles.top.height);
+        }
+
+        // Left paddle vs Bottom paddle (left side, bottom corner)
+        if (newState.paddles.left.y + newState.paddles.left.height >= canvasSize.height - 32 - newState.paddles.bottom.height &&
+            newState.paddles.left.x <= 32 + newState.paddles.bottom.x + newState.paddles.bottom.width) {
+          // Push left paddle up to avoid overlap
+          newState.paddles.left.y = Math.min(newState.paddles.left.y, canvasSize.height - 32 - newState.paddles.bottom.height - newState.paddles.left.height);
+        }
+
+        // Right paddle vs Top paddle (right side, top corner)
+        if (newState.paddles.right.y <= 32 + newState.paddles.top.height &&
+            newState.paddles.right.x + newState.paddles.right.width >= newState.paddles.top.x) {
+          // Push right paddle down to avoid overlap
+          newState.paddles.right.y = Math.max(newState.paddles.right.y, 32 + newState.paddles.top.height);
+        }
+
+        // Right paddle vs Bottom paddle (right side, bottom corner)
+        if (newState.paddles.right.y + newState.paddles.right.height >= canvasSize.height - 32 - newState.paddles.bottom.height &&
+            newState.paddles.right.x + newState.paddles.right.width >= newState.paddles.bottom.x) {
+          // Push right paddle up to avoid overlap
+          newState.paddles.right.y = Math.min(newState.paddles.right.y, canvasSize.height - 32 - newState.paddles.bottom.height - newState.paddles.right.height);
+        }
+
+        // Top paddle vs Left paddle (already handled above)
+
+        // Top paddle vs Right paddle (already handled above)
+
+        // Bottom paddle vs Left paddle (already handled above)
+
+        // Bottom paddle vs Right paddle (already handled above)
+
+        // Re-clamp all paddles after collision resolution to ensure they stay in bounds
+        // Account for 32px spacing for 24px ball (was 12px for 12px ball)
+        newState.paddles.left.y = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.left.height, newState.paddles.left.y));
+        newState.paddles.right.y = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.right.height, newState.paddles.right.y));
+        newState.paddles.top.x = Math.max(32, Math.min(canvasSize.width - 32 - newState.paddles.top.width, newState.paddles.top.x));
+        newState.paddles.bottom.x = Math.max(32, Math.min(canvasSize.width - 32 - newState.paddles.bottom.width, newState.paddles.bottom.x));
 
         // AI CONTROL FOR NON-HUMAN PADDLES IN MULTIPLAYER
         const currentPlayerSide = multiplayerStateRef.current?.playerSide;
@@ -5120,7 +5241,7 @@ const Pong404: React.FC = () => {
             }
 
             // Keep within bounds
-            paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
+            paddle.y = Math.max(32, Math.min(canvasSize.height - 32 - paddle.height, paddle.y));
           } else {
             // Paddle is frozen - stop all movement
             newState.paddles.left.velocity = 0;
@@ -5129,7 +5250,7 @@ const Pong404: React.FC = () => {
           // Add trail for AI left paddle
           if (Math.abs(newState.paddles.left.velocity) > 0.01) {
             newState.trails.leftPaddle.push({
-              x: 12 + newState.paddles.left.width / 2,
+              x: 32 + newState.paddles.left.width / 2,
               y: newState.paddles.left.y + newState.paddles.left.height / 2,
               width: newState.paddles.left.width,
               height: newState.paddles.left.height,
@@ -5177,7 +5298,7 @@ const Pong404: React.FC = () => {
             }
 
             // Keep within bounds
-            paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
+            paddle.y = Math.max(32, Math.min(canvasSize.height - 32 - paddle.height, paddle.y));
           } else {
             // Paddle is frozen - stop all movement
             newState.paddles.right.velocity = 0;
@@ -5186,7 +5307,7 @@ const Pong404: React.FC = () => {
           // Add trail for AI right paddle
           if (Math.abs(newState.paddles.right.velocity) > 0.01) {
             newState.trails.rightPaddle.push({
-              x: canvasSize.width - 12 - newState.paddles.right.width / 2,
+              x: canvasSize.width - 32 - newState.paddles.right.width / 2,
               y: newState.paddles.right.y + newState.paddles.right.height / 2,
               width: newState.paddles.right.width,
               height: newState.paddles.right.height,
@@ -5268,7 +5389,7 @@ const Pong404: React.FC = () => {
           const maxSpeed = paddle.speed * 0.9;
           paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
           paddle.x += paddle.velocity;
-          paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
+          paddle.x = Math.max(32, Math.min(canvasSize.width - 32 - paddle.width, paddle.x));
         };
 
         // Apply AI to top paddle (only if no player is controlling it)
@@ -5279,7 +5400,7 @@ const Pong404: React.FC = () => {
           if (Math.abs(newState.paddles.top.velocity) > 0.01) {
             newState.trails.topPaddle.push({
               x: newState.paddles.top.x + newState.paddles.top.width / 2,
-              y: 30 + newState.paddles.top.height / 2, // 30px spacing from top wall
+              y: 32 + newState.paddles.top.height / 2, // 32px spacing from top wall
               timestamp: now,
               width: newState.paddles.top.width,
               height: newState.paddles.top.height
@@ -5295,7 +5416,7 @@ const Pong404: React.FC = () => {
           if (Math.abs(newState.paddles.bottom.velocity) > 0.01) {
             newState.trails.bottomPaddle.push({
               x: newState.paddles.bottom.x + newState.paddles.bottom.width / 2,
-              y: canvasSize.height - 30 - newState.paddles.bottom.height / 2, // 30px spacing from bottom wall
+              y: canvasSize.height - 32 - newState.paddles.bottom.height / 2, // 32px spacing from bottom wall
               timestamp: now,
               width: newState.paddles.bottom.width,
               height: newState.paddles.bottom.height
@@ -5410,7 +5531,7 @@ const Pong404: React.FC = () => {
           paddle.y += paddle.velocity;
 
           // Keep paddle within bounds
-          paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
+          paddle.y = Math.max(32, Math.min(canvasSize.height - 32 - paddle.height, paddle.y));
         };
 
         updatePaddleWithSpinner(newState.paddles.left, true, leftFrameCountRef.current);
@@ -5455,7 +5576,7 @@ const Pong404: React.FC = () => {
           const maxSpeed = paddle.speed;
           paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
           paddle.x += paddle.velocity;
-          paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
+          paddle.x = Math.max(32, Math.min(canvasSize.width - 32 - paddle.width, paddle.x));
         };
 
         if (newState.paddles.top) {
@@ -5469,7 +5590,7 @@ const Pong404: React.FC = () => {
         const now = Date.now();
         if (Math.abs(newState.paddles.left.velocity) > 0.01) {
           newState.trails.leftPaddle.push({
-            x: 12 + newState.paddles.left.width / 2, // Left paddle center x position
+            x: 32 + newState.paddles.left.width / 2, // Left paddle center x position
             y: newState.paddles.left.y + newState.paddles.left.height / 2,
             timestamp: now,
             width: newState.paddles.left.width,
@@ -5478,7 +5599,7 @@ const Pong404: React.FC = () => {
         }
         if (Math.abs(newState.paddles.right.velocity) > 0.01) {
           newState.trails.rightPaddle.push({
-            x: canvasSize.width - 12 - newState.paddles.right.width / 2, // Right paddle center x position
+            x: canvasSize.width - 32 - newState.paddles.right.width / 2, // Right paddle center x position
             y: newState.paddles.right.y + newState.paddles.right.height / 2,
             timestamp: now,
             width: newState.paddles.right.width,
@@ -5490,7 +5611,7 @@ const Pong404: React.FC = () => {
         if (newState.paddles.top && Math.abs(newState.paddles.top.velocity) > 0.01) {
           newState.trails.topPaddle.push({
             x: newState.paddles.top.x + newState.paddles.top.width / 2,
-            y: 30 + newState.paddles.top.height / 2, // 30px spacing from top wall
+            y: 32 + newState.paddles.top.height / 2, // 32px spacing from top wall
             timestamp: now,
             width: newState.paddles.top.width,
             height: newState.paddles.top.height
@@ -5499,7 +5620,7 @@ const Pong404: React.FC = () => {
         if (newState.paddles.bottom && Math.abs(newState.paddles.bottom.velocity) > 0.01) {
           newState.trails.bottomPaddle.push({
             x: newState.paddles.bottom.x + newState.paddles.bottom.width / 2,
-            y: canvasSize.height - 30 - newState.paddles.bottom.height / 2, // 30px spacing from bottom wall
+            y: canvasSize.height - 32 - newState.paddles.bottom.height / 2, // 32px spacing from bottom wall
             timestamp: now,
             width: newState.paddles.bottom.width,
             height: newState.paddles.bottom.height
@@ -5722,6 +5843,28 @@ const Pong404: React.FC = () => {
           }
         }
 
+        // 🎯 COLLISION DETECTION BEFORE BALL MOVEMENT
+        // Check for collisions BEFORE moving the ball to prevent pass-through
+        const shouldDetectCollisions = true; // ALWAYS use centralized collision detection
+
+        if (shouldDetectCollisions) {
+          console.log('🔍 COLLISION DEBUG: Ball position before detection:', {
+            x: newState.ball.x,
+            y: newState.ball.y,
+            dx: newState.ball.dx,
+            dy: newState.ball.dy,
+            leftPaddle: { x: newState.paddles.left.x, y: newState.paddles.left.y, width: newState.paddles.left.width, height: newState.paddles.left.height }
+          });
+
+          const collisions = collisionManagerRef.current.detectAllCollisions(newState, canvasSize.width, canvasSize.height);
+
+          console.log('🎯 COLLISION DETECTION RESULTS:', {
+            totalCollisions: collisions.length,
+            collisionTypes: collisions.map(c => `${c.object1.constructor?.name || 'ball'}-${c.object2.constructor?.name || 'object'}`),
+            ballAfter: { x: newState.ball.x, y: newState.ball.y, dx: newState.ball.dx, dy: newState.ball.dy }
+          });
+        }
+
         // 🕒 Smooth ball movement at consistent speed (only if not aiming)
         if (!newState.ball.isAiming) {
           // Apply time warp effect to ball movement
@@ -5757,11 +5900,11 @@ const Pong404: React.FC = () => {
             if (side === 'left' || side === 'right') {
               // Vertical paddles - add erratic Y movement
               paddle.y += randomOffset;
-              paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
+              paddle.y = Math.max(32, Math.min(canvasSize.height - 32 - paddle.height, paddle.y));
             } else {
               // Horizontal paddles - add erratic X movement
               paddle.x += randomOffset;
-              paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
+              paddle.x = Math.max(32, Math.min(canvasSize.width - 32 - paddle.width, paddle.x));
             }
           });
         }
@@ -5823,10 +5966,10 @@ const Pong404: React.FC = () => {
             const paddle = newState.paddles[newState.ball.stuckToPaddle];
 
             if (newState.ball.stuckToPaddle === 'left') {
-              newState.ball.x = 30 + newState.paddles.left.width + newState.ball.stuckOffset.x;
+              newState.ball.x = 32 + newState.paddles.left.width + newState.ball.stuckOffset.x;
               newState.ball.y = newState.paddles.left.y + newState.paddles.left.height / 2 + newState.ball.stuckOffset.y - newState.ball.size / 2;
             } else if (newState.ball.stuckToPaddle === 'right') {
-              newState.ball.x = canvasSize.width - 30 - newState.paddles.right.width + newState.ball.stuckOffset.x - newState.ball.size;
+              newState.ball.x = canvasSize.width - 32 - newState.paddles.right.width + newState.ball.stuckOffset.x - newState.ball.size;
               newState.ball.y = newState.paddles.right.y + newState.paddles.right.height / 2 + newState.ball.stuckOffset.y - newState.ball.size / 2;
             }
 
@@ -5836,58 +5979,6 @@ const Pong404: React.FC = () => {
           }
         }
 
-        // 🧱 BLOCKER WALLS PHYSICS
-        if (newState.walls && newState.walls.length > 0) {
-          for (const wall of newState.walls) {
-            // Simple rectangle collision detection
-            const ballLeft = newState.ball.x;
-            const ballRight = newState.ball.x + newState.ball.size;
-            const ballTop = newState.ball.y;
-            const ballBottom = newState.ball.y + newState.ball.size;
-
-            const wallLeft = wall.x;
-            const wallRight = wall.x + wall.width;
-            const wallTop = wall.y;
-            const wallBottom = wall.y + wall.height;
-
-            // Check for collision
-            if (ballRight > wallLeft && ballLeft < wallRight &&
-                ballBottom > wallTop && ballTop < wallBottom) {
-
-              // Determine collision side and bounce accordingly
-              const overlapLeft = ballRight - wallLeft;
-              const overlapRight = wallRight - ballLeft;
-              const overlapTop = ballBottom - wallTop;
-              const overlapBottom = wallBottom - ballTop;
-
-              // Find smallest overlap to determine bounce direction
-              const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
-
-              if (minOverlap === overlapLeft || minOverlap === overlapRight) {
-                // Horizontal collision
-                newState.ball.dx = -newState.ball.dx;
-              } else {
-                // Vertical collision
-                newState.ball.dy = -newState.ball.dy;
-              }
-
-              // Move ball outside wall to prevent sticking
-              if (minOverlap === overlapLeft) {
-                newState.ball.x = wallLeft - newState.ball.size;
-              } else if (minOverlap === overlapRight) {
-                newState.ball.x = wallRight;
-              } else if (minOverlap === overlapTop) {
-                newState.ball.y = wallTop - newState.ball.size;
-              } else {
-                newState.ball.y = wallBottom;
-              }
-
-              // Play wall hit sound
-              playMelodyNoteRef.current?.('wall', null, 'both');
-              break; // Only collide with one wall per frame
-            }
-          }
-        }
 
         // 🪞 MIRROR MODE PHYSICS
         if (newState.ball.isMirror) {
@@ -5916,9 +6007,9 @@ const Pong404: React.FC = () => {
               mirror.dx = newState.ball.dx * 0.9; // Slightly slower
               mirror.dy = newState.ball.dy * 0.9;
 
-              // Keep mirrors within bounds
-              mirror.x = Math.max(mirror.size, Math.min(canvasSize.width - mirror.size, mirror.x));
-              mirror.y = Math.max(mirror.size, Math.min(canvasSize.height - mirror.size, mirror.y));
+              // Keep mirrors within bounds (respect 32px paddle spacing)
+              mirror.x = Math.max(32 + mirror.size, Math.min(canvasSize.width - 32 - mirror.size, mirror.x));
+              mirror.y = Math.max(32 + mirror.size, Math.min(canvasSize.height - 32 - mirror.size, mirror.y));
             }
           }
         }
@@ -5931,29 +6022,29 @@ const Pong404: React.FC = () => {
           const ballTop = newState.ball.y;
           const ballBottom = newState.ball.y + newState.ball.size;
 
-          // Check wall collisions
-          if (ballLeft <= 0 || ballRight >= canvasSize.width || ballTop <= 0 || ballBottom >= canvasSize.height) {
+          // Check wall collisions (use ball-size-adjusted boundaries)
+          if (ballRight < 0 || ballLeft > canvasSize.width || ballBottom < 0 || ballTop > canvasSize.height) {
             // Create portal at collision point
             let portalX = newState.ball.x;
             let portalY = newState.ball.y;
 
-            if (ballLeft <= 0) portalX = 0;
-            else if (ballRight >= canvasSize.width) portalX = canvasSize.width;
-            else if (ballTop <= 0) portalY = 0;
-            else if (ballBottom >= canvasSize.height) portalY = canvasSize.height;
+            if (ballRight < 0) portalX = 0;
+            else if (ballLeft > canvasSize.width) portalX = canvasSize.width;
+            else if (ballBottom < 0) portalY = 0;
+            else if (ballTop > canvasSize.height) portalY = canvasSize.height;
 
             // Set portal position for exit
             newState.ball.portalX = portalX;
             newState.ball.portalY = portalY;
 
             // Teleport ball to opposite side
-            if (ballLeft <= 0) {
+            if (ballRight < 0) {
               newState.ball.x = canvasSize.width - newState.ball.size - 5;
-            } else if (ballRight >= canvasSize.width) {
+            } else if (ballLeft > canvasSize.width) {
               newState.ball.x = 5;
-            } else if (ballTop <= 0) {
+            } else if (ballBottom < 0) {
               newState.ball.y = canvasSize.height - newState.ball.size - 5;
-            } else if (ballBottom >= canvasSize.height) {
+            } else if (ballTop > canvasSize.height) {
               newState.ball.y = 5;
             }
 
@@ -6108,8 +6199,8 @@ const Pong404: React.FC = () => {
             pacMan.mouth = (pacMan.mouth + 0.2) % (Math.PI * 2);
 
             // Keep within bounds
-            pacMan.x = Math.max(pacMan.size, Math.min(canvasSize.width - pacMan.size, pacMan.x));
-            pacMan.y = Math.max(pacMan.size, Math.min(canvasSize.height - pacMan.size, pacMan.y));
+            pacMan.x = Math.max(32 + pacMan.size, Math.min(canvasSize.width - 32 - pacMan.size, pacMan.x));
+            pacMan.y = Math.max(32 + pacMan.size, Math.min(canvasSize.height - 32 - pacMan.size, pacMan.y));
 
             // Check if Pac-Man caught the ball
             if (distance < pacMan.size) {
@@ -6226,84 +6317,6 @@ const Pong404: React.FC = () => {
           });
         }
 
-        // 🧱 ARKANOID BRICK COLLISION SYSTEM
-        if (newState.arkanoidActive && newState.arkanoidBricks && newState.arkanoidBricks.length > 0) {
-          const ballLeft = newState.ball.x;
-          const ballRight = newState.ball.x + newState.ball.size;
-          const ballTop = newState.ball.y;
-          const ballBottom = newState.ball.y + newState.ball.size;
-
-          for (let i = newState.arkanoidBricks.length - 1; i >= 0; i--) {
-            const brick = newState.arkanoidBricks[i];
-
-            // Check collision with brick
-            const brickCollision = ballRight >= brick.x &&
-                                  ballLeft <= brick.x + brick.width &&
-                                  ballBottom >= brick.y &&
-                                  ballTop <= brick.y + brick.height;
-
-            if (brickCollision) {
-              // Remove the brick
-              newState.arkanoidBricks.splice(i, 1);
-              newState.arkanoidBricksHit++;
-
-              // Score every 4th brick hit
-              if (newState.arkanoidBricksHit % 4 === 0) {
-                // Award point to the player who last touched the ball
-                if (newState.ball.lastTouchedBy) {
-                  newState.score[newState.ball.lastTouchedBy]++;
-
-                  // End reverse controls effect when a score occurs (Arkanoid mode)
-                  const reverseControlsIndex = newState.activeEffects.findIndex(e => e.type === 'reverse_controls');
-                  if (reverseControlsIndex !== -1) {
-                    console.log(`[REFRESH] REVERSE CONTROLS ended due to Arkanoid score by ${newState.ball.lastTouchedBy}`);
-                    newState.activeEffects.splice(reverseControlsIndex, 1);
-                  }
-                }
-              }
-
-              // Determine bounce direction based on collision side
-              const ballCenterX = newState.ball.x + newState.ball.size / 2;
-              const ballCenterY = newState.ball.y + newState.ball.size / 2;
-              const brickCenterX = brick.x + brick.width / 2;
-              const brickCenterY = brick.y + brick.height / 2;
-
-              const deltaX = ballCenterX - brickCenterX;
-              const deltaY = ballCenterY - brickCenterY;
-
-              // Determine which side was hit based on overlap
-              if (Math.abs(deltaX / brick.width) > Math.abs(deltaY / brick.height)) {
-                // Hit from left or right side
-                newState.ball.dx = -newState.ball.dx;
-              } else {
-                // Hit from top or bottom
-                newState.ball.dy = -newState.ball.dy;
-              }
-
-              // Play brick hit sound
-              playMelodyNoteRef.current?.('paddle', null, 'both');
-
-              // Check if all bricks are cleared
-              if (newState.arkanoidBricks.length === 0) {
-                // End Arkanoid mode
-                newState.arkanoidActive = false;
-                newState.arkanoidMode = false;
-
-                // Remove the effect
-                newState.activeEffects = newState.activeEffects.filter(
-                  effect => effect.type !== 'arkanoid'
-                );
-
-                // Bonus points for clearing all bricks
-                if (newState.ball.lastTouchedBy) {
-                  newState.score[newState.ball.lastTouchedBy] += 2; // 2 bonus points
-                }
-              }
-
-              break; // Only hit one brick per frame
-            }
-          }
-        }
 
         // Add ball trail point
         const now = Date.now();
@@ -6325,14 +6338,19 @@ const Pong404: React.FC = () => {
           extraBall.x += extraBall.dx;
           extraBall.y += extraBall.dy;
 
-          // Extra ball collision with top/bottom walls
-          if (extraBall.y <= 0 || extraBall.y >= canvasSize.height - extraBall.size) {
-            extraBall.dy = -extraBall.dy;
-            extraBall.y = extraBall.y <= 0 ? 0 : canvasSize.height - extraBall.size;
+          // Extra ball collision with top/bottom walls (score and remove ball)
+          if (extraBall.y < -extraBall.size || extraBall.y > canvasSize.height + extraBall.size) {
+            // Award point to the last player who touched this ball
+            if (extraBall.lastTouchedBy && newState.score[extraBall.lastTouchedBy] !== undefined) {
+              newState.score[extraBall.lastTouchedBy]++;
+              console.log(`🟠 MULTIBALL SCORE: ${extraBall.lastTouchedBy} -> ${newState.score[extraBall.lastTouchedBy]}`);
+            }
+            // Mark for removal by setting a flag
+            extraBall.shouldRemove = true;
           }
 
           // Extra ball collision with left/right walls (score and remove ball)
-          if (extraBall.x <= 0 || extraBall.x >= canvasSize.width - extraBall.size) {
+          if (extraBall.x < -extraBall.size || extraBall.x > canvasSize.width + extraBall.size) {
             // Award point to the last player who touched this ball
             if (extraBall.lastTouchedBy && newState.score[extraBall.lastTouchedBy] !== undefined) {
               newState.score[extraBall.lastTouchedBy]++;
@@ -6357,59 +6375,6 @@ const Pong404: React.FC = () => {
 
         // Old attractor system removed - now using new physicsForces system
 
-        // 🏓 Extra ball paddle collisions
-        (newState.extraBalls || []).forEach(extraBall => {
-          const ballLeft = extraBall.x;
-          const ballRight = extraBall.x + extraBall.size;
-          const ballTop = extraBall.y;
-          const ballBottom = extraBall.y + extraBall.size;
-
-          // Left paddle collision
-          const leftPaddleX = 30;
-          const leftPaddleRight = leftPaddleX + newState.paddles.left.width;
-          if (ballLeft <= leftPaddleRight && ballRight >= leftPaddleX &&
-              ballBottom >= newState.paddles.left.y && ballTop <= newState.paddles.left.y + newState.paddles.left.height &&
-              extraBall.dx < 0) {
-            extraBall.dx = -extraBall.dx;
-            extraBall.x = leftPaddleRight + 1;
-            extraBall.lastTouchedBy = 'left';
-          }
-
-          // Right paddle collision
-          const rightPaddleX = canvasSize.width - 30 - newState.paddles.right.width;
-          if (ballRight >= rightPaddleX && ballLeft <= rightPaddleX + newState.paddles.right.width &&
-              ballBottom >= newState.paddles.right.y && ballTop <= newState.paddles.right.y + newState.paddles.right.height &&
-              extraBall.dx > 0) {
-            extraBall.dx = -extraBall.dx;
-            extraBall.x = rightPaddleX - extraBall.size - 1;
-            extraBall.lastTouchedBy = 'right';
-          }
-
-          // Top paddle collision (if exists)
-          if (newState.paddles.top) {
-            const topPaddleY = 30;
-            const topPaddleBottom = topPaddleY + newState.paddles.top.height;
-            if (ballTop <= topPaddleBottom && ballBottom >= topPaddleY &&
-                ballRight >= newState.paddles.top.x && ballLeft <= newState.paddles.top.x + newState.paddles.top.width &&
-                extraBall.dy < 0) {
-              extraBall.dy = -extraBall.dy;
-              extraBall.y = topPaddleBottom + 1;
-              extraBall.lastTouchedBy = 'top';
-            }
-          }
-
-          // Bottom paddle collision (if exists)
-          if (newState.paddles.bottom) {
-            const bottomPaddleY = canvasSize.height - 30 - newState.paddles.bottom.height;
-            if (ballBottom >= bottomPaddleY && ballTop <= bottomPaddleY + newState.paddles.bottom.height &&
-                ballRight >= newState.paddles.bottom.x && ballLeft <= newState.paddles.bottom.x + newState.paddles.bottom.width &&
-                extraBall.dy > 0) {
-              extraBall.dy = -extraBall.dy;
-              extraBall.y = bottomPaddleY - extraBall.size - 1;
-              extraBall.lastTouchedBy = 'bottom';
-            }
-          }
-        });
 
         // Handle pickup spawning (max 3 simultaneous pickups)
         // WebSocket server spawns pickups in multiplayer to avoid duplicates
@@ -6626,590 +6591,15 @@ const Pong404: React.FC = () => {
 
         } // End single-player physics engine
 
-        // ========================================
-        // COLLISION DETECTION
-        // ========================================
-        // - WebSocket server detects ALL paddle collisions (authoritative)
-        // - Clients detect collisions with their own paddle only (local feedback)
-        // - Network sync ensures consistency while maintaining responsiveness
-        // WebSocket server detects collisions in multiplayer
-        const shouldDetectCollisions = newState.gameMode !== 'multiplayer';
+        // COLLISION DETECTION NOW HAPPENS BEFORE BALL MOVEMENT (see above around line 5940)
 
-        if (shouldDetectCollisions) { // Single player only - detect all collisions
-          const ballLeft = newState.ball.x;
-          const ballRight = newState.ball.x + newState.ball.size;
-          const ballTop = newState.ball.y;
-          const ballBottom = newState.ball.y + newState.ball.size;
+        // Collision detection now handled by centralized collision detection system
 
-        // Advanced paddle collision with speed variation based on hit position
-        // Store previous ball position for better collision detection
-        const prevBallX = newState.ball.x - newState.ball.dx;
-        const prevBallY = newState.ball.y - newState.ball.dy;
+        // All collision detection handled by centralized collision detection system
 
-        // Left paddle collision (30px spacing from left wall only)
-        const leftPaddleX = 30; // 30px spacing from left wall
-        const leftPaddleRight = leftPaddleX + newState.paddles.left.width;
+        // All collision detection now handled by centralized system
 
-        // ENHANCED COLLISION DETECTION: Check both overlap and continuous collision
-        // Traditional overlap detection (with increased buffer)
-        const ballIntersectsLeftPaddle =
-          ballLeft <= leftPaddleRight + COLLISION_BUFFER &&
-          ballRight >= leftPaddleX - COLLISION_BUFFER &&
-          ballBottom >= newState.paddles.left.y - COLLISION_BUFFER &&
-          ballTop <= newState.paddles.left.y + newState.paddles.left.height + COLLISION_BUFFER;
-
-        // Continuous collision detection - check if ball trajectory crossed paddle
-        const ballCenterX = newState.ball.x + newState.ball.size / 2;
-        const ballCenterY = newState.ball.y + newState.ball.size / 2;
-        const prevBallCenterX = prevBallX + newState.ball.size / 2;
-        const prevBallCenterY = prevBallY + newState.ball.size / 2;
-
-        const ballTrajectoryIntersectsLeftPaddle = lineIntersectsRect(
-          prevBallCenterX, prevBallCenterY,
-          ballCenterX, ballCenterY,
-          leftPaddleX, newState.paddles.left.y,
-          newState.paddles.left.width, newState.paddles.left.height
-        );
-
-        // Check if ball came from the right side (proper collision direction)
-        const ballCameFromRight = prevBallX > leftPaddleRight || prevBallCenterX > leftPaddleRight;
-
-        // Collision detected if EITHER overlap OR trajectory intersection occurs (and ball moving toward paddle)
-        const leftPaddleCollisionDetected = (ballIntersectsLeftPaddle || ballTrajectoryIntersectsLeftPaddle) &&
-                                           ballCameFromRight && newState.ball.dx < 0;
-
-        if (leftPaddleCollisionDetected) {
-          // 🏓 STICKY PADDLES: Check if sticky effect is active
-          if (newState.stickyPaddlesActive && !newState.ball.isStuck) {
-            // Stick ball to left paddle
-            newState.ball.isStuck = true;
-            newState.ball.stuckToPaddle = 'left';
-            newState.ball.stuckStartTime = Date.now();
-            newState.ball.dx = 0;
-            newState.ball.dy = 0;
-
-            // Calculate offset relative to paddle
-            const ballCenterY = newState.ball.y + newState.ball.size / 2;
-            const paddleCenterY = newState.paddles.left.y + newState.paddles.left.height / 2;
-            newState.ball.stuckOffset = {
-              x: newState.ball.x - (30 + newState.paddles.left.width),
-              y: ballCenterY - paddleCenterY
-            };
-
-            // Play stick sound
-            playMelodyNoteRef.current?.('paddle', null, 'both');
-            return; // Don't process normal collision
-          }
-
-          // Calculate where on the paddle the ball hit (0 = top edge, 1 = bottom edge, 0.5 = center)
-          const ballCenterY = newState.ball.y + newState.ball.size / 2;
-          const hitPosition = (ballCenterY - newState.paddles.left.y) / newState.paddles.left.height;
-
-          // Clamp hit position to valid range [0, 1]
-          const clampedHitPosition = Math.max(0, Math.min(1, hitPosition));
-
-          // [TARGET] ENHANCED AIMING SYSTEM
-          // Map hit position to angle with smooth curve
-          // Top (0) = upward angle, Center (0.5) = straight, Bottom (1) = downward angle
-          const normalizedPosition = (clampedHitPosition - 0.5) * 2; // Convert to range [-1, 1]
-
-          // Apply smooth curve for natural aiming feel
-          // Use sine function for smooth acceleration at edges
-          const aimingCurve = Math.sin(normalizedPosition * Math.PI * 0.4); // 0.4 limits max angle
-
-          // Calculate base speed - consistent ball speed
-          const baseSpeed = BALL_SPEED;
-
-          // Calculate new velocity components with enhanced aiming
-          const maxAngle = Math.PI / 3; // 60 degrees maximum deflection
-          const deflectionAngle = aimingCurve * maxAngle;
-
-          // Reverse horizontal direction (bouncing off left paddle)
-          newState.ball.dx = Math.cos(deflectionAngle) * baseSpeed;
-          newState.ball.dy = Math.sin(deflectionAngle) * baseSpeed;
-
-          // Add subtle speed variation based on distance from center for dynamic gameplay
-          const distanceFromCenter = Math.abs(clampedHitPosition - 0.5) * 2;
-          const speedVariation = 1 + (distanceFromCenter * 0.2); // 0-20% speed increase
-          newState.ball.dx *= speedVariation;
-          newState.ball.dy *= speedVariation;
-
-          // Change colors on paddle hit!
-          newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
-
-          // Track ball touch for scoring system
-          console.log(`🏓 BALL TOUCHED BY LEFT PADDLE:`, {
-            previous: newState.ball.lastTouchedBy,
-            new: 'left',
-            serverAuth: true, // WebSocket server is authoritative
-            gameMode: newState.gameMode,
-            ballPosition: { x: newState.ball.x, y: newState.ball.y }
-          });
-          newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
-          newState.ball.lastTouchedBy = 'left';
-
-          // DEFENSIVE: Position ball exactly at paddle edge to prevent pass-through
-          newState.ball.x = leftPaddleRight;
-
-          // Trigger rumble effect on left paddle hit
-          newState.rumbleEffect.isActive = true;
-          newState.rumbleEffect.startTime = Date.now();
-          newState.rumbleEffect.intensity = 8; // Strong rumble for paddle hits
-
-          // Different beep pitch based on hit position (edge hits = higher pitch)
-          // Only play beep sound in single player to avoid duplicate sounds (server handles multiplayer audio)
-          if (newState.gameMode !== 'multiplayer') {
-            playMelodyNoteRef.current?.('paddle', null, 'both'); // Paddle hit with space melody
-          }
-
-          // Track rally and potentially taunt
-          rallyCountRef.current++;
-          if (rallyCountRef.current >= LONG_RALLY_THRESHOLD) {
-            attemptRobotTauntRef.current?.('long_rally');
-            rallyCountRef.current = 0; // Reset counter after taunt attempt
-          }
-        }
-
-        // Right paddle collision (30px spacing from right wall only)
-        const rightPaddleX = canvasSize.width - 30 - newState.paddles.right.width; // 30px spacing from right wall
-        const rightPaddleLeft = rightPaddleX;
-
-        // ENHANCED COLLISION DETECTION: Check both overlap and continuous collision
-        // Traditional overlap detection (with increased buffer)
-        const ballIntersectsRightPaddle =
-          ballRight >= rightPaddleLeft - COLLISION_BUFFER &&
-          ballLeft <= rightPaddleX + newState.paddles.right.width + COLLISION_BUFFER &&
-          ballBottom >= newState.paddles.right.y - COLLISION_BUFFER &&
-          ballTop <= newState.paddles.right.y + newState.paddles.right.height + COLLISION_BUFFER;
-
-        // Continuous collision detection - check if ball trajectory crossed paddle
-        const ballTrajectoryIntersectsRightPaddle = lineIntersectsRect(
-          prevBallCenterX, prevBallCenterY,
-          ballCenterX, ballCenterY,
-          rightPaddleX, newState.paddles.right.y,
-          newState.paddles.right.width, newState.paddles.right.height
-        );
-
-        // Check if ball came from the left side (proper collision direction)
-        const ballCameFromLeft = prevBallX < rightPaddleLeft || prevBallCenterX < rightPaddleLeft;
-
-        // Collision detected if EITHER overlap OR trajectory intersection occurs (and ball moving toward paddle)
-        const rightPaddleCollisionDetected = (ballIntersectsRightPaddle || ballTrajectoryIntersectsRightPaddle) &&
-                                            ballCameFromLeft && newState.ball.dx > 0;
-
-        if (rightPaddleCollisionDetected) {
-          // 🏓 STICKY PADDLES: Check if sticky effect is active
-          if (newState.stickyPaddlesActive && !newState.ball.isStuck) {
-            // Stick ball to right paddle
-            newState.ball.isStuck = true;
-            newState.ball.stuckToPaddle = 'right';
-            newState.ball.stuckStartTime = Date.now();
-            newState.ball.dx = 0;
-            newState.ball.dy = 0;
-
-            // Calculate offset relative to paddle
-            const ballCenterY = newState.ball.y + newState.ball.size / 2;
-            const paddleCenterY = newState.paddles.right.y + newState.paddles.right.height / 2;
-            newState.ball.stuckOffset = {
-              x: newState.ball.x - rightPaddleX,
-              y: ballCenterY - paddleCenterY
-            };
-
-            // Play stick sound
-            playMelodyNoteRef.current?.('paddle', null, 'both');
-            return; // Don't process normal collision
-          }
-
-          // Calculate where on the paddle the ball hit (0 = top edge, 1 = bottom edge, 0.5 = center)
-          const ballCenterY = newState.ball.y + newState.ball.size / 2;
-          const hitPosition = (ballCenterY - newState.paddles.right.y) / newState.paddles.right.height;
-
-          // Clamp hit position to valid range [0, 1]
-          const clampedHitPosition = Math.max(0, Math.min(1, hitPosition));
-
-          // [TARGET] ENHANCED AIMING SYSTEM
-          // Map hit position to angle with smooth curve
-          // Top (0) = upward angle, Center (0.5) = straight, Bottom (1) = downward angle
-          const normalizedPosition = (clampedHitPosition - 0.5) * 2; // Convert to range [-1, 1]
-
-          // Apply smooth curve for natural aiming feel
-          // Use sine function for smooth acceleration at edges
-          const aimingCurve = Math.sin(normalizedPosition * Math.PI * 0.4); // 0.4 limits max angle
-
-          // Calculate base speed - consistent ball speed
-          const baseSpeed = BALL_SPEED;
-
-          // Calculate new velocity components with enhanced aiming
-          const maxAngle = Math.PI / 3; // 60 degrees maximum deflection
-          const deflectionAngle = aimingCurve * maxAngle;
-
-          // Reverse horizontal direction (bouncing off right paddle)
-          newState.ball.dx = -Math.cos(deflectionAngle) * baseSpeed;
-          newState.ball.dy = Math.sin(deflectionAngle) * baseSpeed;
-
-          // Add subtle speed variation based on distance from center for dynamic gameplay
-          const distanceFromCenter = Math.abs(clampedHitPosition - 0.5) * 2;
-          const speedVariation = 1 + (distanceFromCenter * 0.2); // 0-20% speed increase
-          newState.ball.dx *= speedVariation;
-          newState.ball.dy *= speedVariation;
-
-          // Change colors on paddle hit!
-          newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
-
-          // Track ball touch for scoring system
-          console.log(`🏓 BALL TOUCHED BY RIGHT PADDLE:`, {
-            previous: newState.ball.lastTouchedBy,
-            new: 'right',
-            serverAuth: true, // WebSocket server is authoritative
-            gameMode: newState.gameMode,
-            ballPosition: { x: newState.ball.x, y: newState.ball.y }
-          });
-          newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
-          newState.ball.lastTouchedBy = 'right';
-
-          // DEFENSIVE: Position ball safely outside paddle to prevent pass-through
-          newState.ball.x = rightPaddleX - newState.ball.size;
-
-          // Trigger rumble effect on right paddle hit
-          newState.rumbleEffect.isActive = true;
-          newState.rumbleEffect.startTime = Date.now();
-          newState.rumbleEffect.intensity = 8; // Strong rumble for paddle hits
-
-          // Different beep pitch based on hit position (edge hits = higher pitch)
-          // Only play beep sound in single player to avoid duplicate sounds (server handles multiplayer audio)
-          if (newState.gameMode !== 'multiplayer') {
-            playMelodyNoteRef.current?.('paddle', null, 'both'); // Paddle hit with space melody
-          }
-
-          // Track rally and potentially taunt
-          rallyCountRef.current++;
-          if (rallyCountRef.current >= LONG_RALLY_THRESHOLD) {
-            attemptRobotTauntRef.current?.('long_rally');
-            rallyCountRef.current = 0; // Reset counter after taunt attempt
-          }
-        }
-
-        // Top paddle collision (with spacing from wall) - only if top paddle exists
-        if (newState.paddles.top) {
-          const topPaddleY = 30; // 30px spacing from top wall only
-          const topPaddleBottom = topPaddleY + newState.paddles.top.height;
-
-        // ENHANCED COLLISION DETECTION: Check both overlap and continuous collision
-        // Traditional overlap detection (with increased buffer)
-        const ballIntersectsTopPaddle =
-          ballTop <= topPaddleBottom + COLLISION_BUFFER &&
-          ballBottom >= topPaddleY - COLLISION_BUFFER &&
-          ballRight >= newState.paddles.top.x - COLLISION_BUFFER &&
-          ballLeft <= newState.paddles.top.x + newState.paddles.top.width + COLLISION_BUFFER;
-
-        // Continuous collision detection - check if ball trajectory crossed paddle
-        const ballTrajectoryIntersectsTopPaddle = lineIntersectsRect(
-          prevBallCenterX, prevBallCenterY,
-          ballCenterX, ballCenterY,
-          newState.paddles.top.x, topPaddleY,
-          newState.paddles.top.width, newState.paddles.top.height
-        );
-
-        // Check if ball came from below (proper collision direction)
-        const ballCameFromBelow = prevBallY > topPaddleBottom || prevBallCenterY > topPaddleBottom;
-
-        // Collision detected if EITHER overlap OR trajectory intersection occurs (and ball moving toward paddle)
-        const topPaddleCollisionDetected = (ballIntersectsTopPaddle || ballTrajectoryIntersectsTopPaddle) &&
-                                          ballCameFromBelow && newState.ball.dy < 0;
-
-        if (topPaddleCollisionDetected) {
-          // Calculate where on the paddle the ball hit (0 = left edge, 1 = right edge, 0.5 = center)
-          const ballCenterX = newState.ball.x + newState.ball.size / 2;
-          const hitPosition = (ballCenterX - newState.paddles.top.x) / newState.paddles.top.width;
-
-          // Clamp hit position to valid range [0, 1]
-          const clampedHitPosition = Math.max(0, Math.min(1, hitPosition));
-
-          // [TARGET] ENHANCED AIMING SYSTEM (HORIZONTAL PADDLE)
-          // Map hit position to angle with smooth curve
-          // Left (0) = leftward angle, Center (0.5) = straight, Right (1) = rightward angle
-          const normalizedPosition = (clampedHitPosition - 0.5) * 2; // Convert to range [-1, 1]
-
-          // Apply smooth curve for natural aiming feel
-          // Use sine function for smooth acceleration at edges
-          const aimingCurve = Math.sin(normalizedPosition * Math.PI * 0.4); // 0.4 limits max angle
-
-          // Calculate base speed - consistent ball speed
-          const baseSpeed = BALL_SPEED;
-
-          // Calculate new velocity components with enhanced aiming
-          const maxAngle = Math.PI / 3; // 60 degrees maximum deflection
-          const deflectionAngle = aimingCurve * maxAngle;
-
-          // Reverse vertical direction (bouncing off top paddle)
-          newState.ball.dx = Math.sin(deflectionAngle) * baseSpeed;
-          newState.ball.dy = Math.cos(deflectionAngle) * baseSpeed;
-
-          // Add subtle speed variation based on distance from center for dynamic gameplay
-          const distanceFromCenter = Math.abs(clampedHitPosition - 0.5) * 2;
-          const speedVariation = 1 + (distanceFromCenter * 0.2); // 0-20% speed increase
-          newState.ball.dx *= speedVariation;
-          newState.ball.dy *= speedVariation;
-
-          // Change colors on paddle hit!
-          newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
-
-          // Track ball touch for scoring system
-          console.log(`🏓 BALL TOUCHED BY TOP PADDLE:`, {
-            previous: newState.ball.lastTouchedBy,
-            new: 'top',
-            serverAuth: true, // WebSocket server is authoritative
-            gameMode: newState.gameMode,
-            ballPosition: { x: newState.ball.x, y: newState.ball.y }
-          });
-          newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
-          newState.ball.lastTouchedBy = 'top';
-
-          // DEFENSIVE: Position ball safely outside paddle to prevent pass-through
-          newState.ball.y = topPaddleBottom;
-
-          // Trigger rumble effect on top paddle hit
-          newState.rumbleEffect.isActive = true;
-          newState.rumbleEffect.startTime = Date.now();
-          newState.rumbleEffect.intensity = 8; // Strong rumble for paddle hits
-
-          // Only play beep sound in single player to avoid duplicate sounds (server handles multiplayer audio)
-          if (newState.gameMode !== 'multiplayer') {
-            playMelodyNoteRef.current?.('paddle', null, 'both'); // Paddle hit with space melody
-          }
-
-          // Track rally and potentially taunt
-          rallyCountRef.current++;
-          if (rallyCountRef.current >= LONG_RALLY_THRESHOLD) {
-            attemptRobotTauntRef.current?.('long_rally');
-            rallyCountRef.current = 0; // Reset counter after taunt attempt
-          }
-        }
-        } // End top paddle collision check
-
-        // Bottom paddle collision (with spacing from wall) - only if bottom paddle exists
-        if (newState.paddles.bottom) {
-        const bottomPaddleY = canvasSize.height - 30 - newState.paddles.bottom.height; // 30px spacing from bottom wall only
-        const bottomPaddleTop = bottomPaddleY;
-
-        // ENHANCED COLLISION DETECTION: Check both overlap and continuous collision
-        // Traditional overlap detection (with increased buffer)
-        const ballIntersectsBottomPaddle =
-          ballBottom >= bottomPaddleTop - COLLISION_BUFFER &&
-          ballTop <= bottomPaddleY + newState.paddles.bottom.height + COLLISION_BUFFER &&
-          ballRight >= newState.paddles.bottom.x - COLLISION_BUFFER &&
-          ballLeft <= newState.paddles.bottom.x + newState.paddles.bottom.width + COLLISION_BUFFER;
-
-        // Continuous collision detection - check if ball trajectory crossed paddle
-        const ballTrajectoryIntersectsBottomPaddle = lineIntersectsRect(
-          prevBallCenterX, prevBallCenterY,
-          ballCenterX, ballCenterY,
-          newState.paddles.bottom.x, bottomPaddleY,
-          newState.paddles.bottom.width, newState.paddles.bottom.height
-        );
-
-        // Check if ball came from above (proper collision direction)
-        const ballCameFromAbove = prevBallY < bottomPaddleTop || prevBallCenterY < bottomPaddleTop;
-
-        // Collision detected if EITHER overlap OR trajectory intersection occurs (and ball moving toward paddle)
-        const bottomPaddleCollisionDetected = (ballIntersectsBottomPaddle || ballTrajectoryIntersectsBottomPaddle) &&
-                                             ballCameFromAbove && newState.ball.dy > 0;
-
-        if (bottomPaddleCollisionDetected) {
-          // Calculate where on the paddle the ball hit (0 = left edge, 1 = right edge, 0.5 = center)
-          const ballCenterX = newState.ball.x + newState.ball.size / 2;
-          const hitPosition = (ballCenterX - newState.paddles.bottom.x) / newState.paddles.bottom.width;
-
-          // Clamp hit position to valid range [0, 1]
-          const clampedHitPosition = Math.max(0, Math.min(1, hitPosition));
-
-          // [TARGET] ENHANCED AIMING SYSTEM (HORIZONTAL PADDLE)
-          // Map hit position to angle with smooth curve
-          // Left (0) = leftward angle, Center (0.5) = straight, Right (1) = rightward angle
-          const normalizedPosition = (clampedHitPosition - 0.5) * 2; // Convert to range [-1, 1]
-
-          // Apply smooth curve for natural aiming feel
-          // Use sine function for smooth acceleration at edges
-          const aimingCurve = Math.sin(normalizedPosition * Math.PI * 0.4); // 0.4 limits max angle
-
-          // Calculate base speed - consistent ball speed
-          const baseSpeed = BALL_SPEED;
-
-          // Calculate new velocity components with enhanced aiming
-          const maxAngle = Math.PI / 3; // 60 degrees maximum deflection
-          const deflectionAngle = aimingCurve * maxAngle;
-
-          // Reverse vertical direction (bouncing off bottom paddle)
-          newState.ball.dx = Math.sin(deflectionAngle) * baseSpeed;
-          newState.ball.dy = -Math.cos(deflectionAngle) * baseSpeed;
-
-          // Add subtle speed variation based on distance from center for dynamic gameplay
-          const distanceFromCenter = Math.abs(clampedHitPosition - 0.5) * 2;
-          const speedVariation = 1 + (distanceFromCenter * 0.2); // 0-20% speed increase
-          newState.ball.dx *= speedVariation;
-          newState.ball.dy *= speedVariation;
-
-          // Change colors on paddle hit!
-          newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
-
-          // Track ball touch for scoring system
-          console.log(`🏓 BALL TOUCHED BY BOTTOM PADDLE:`, {
-            previous: newState.ball.lastTouchedBy,
-            new: 'bottom',
-            serverAuth: true, // WebSocket server is authoritative
-            gameMode: newState.gameMode,
-            ballPosition: { x: newState.ball.x, y: newState.ball.y }
-          });
-          newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
-          newState.ball.lastTouchedBy = 'bottom';
-
-          // DEFENSIVE: Position ball safely outside paddle to prevent pass-through
-          newState.ball.y = bottomPaddleY - newState.ball.size;
-
-          // Trigger rumble effect on bottom paddle hit
-          newState.rumbleEffect.isActive = true;
-          newState.rumbleEffect.startTime = Date.now();
-          newState.rumbleEffect.intensity = 8; // Strong rumble for paddle hits
-
-          // Only play beep sound in single player to avoid duplicate sounds (server handles multiplayer audio)
-          if (newState.gameMode !== 'multiplayer') {
-            playMelodyNoteRef.current?.('paddle', null, 'both'); // Paddle hit with space melody
-          }
-
-          // Track rally and potentially taunt
-          rallyCountRef.current++;
-          if (rallyCountRef.current >= LONG_RALLY_THRESHOLD) {
-            attemptRobotTauntRef.current?.('long_rally');
-            rallyCountRef.current = 0; // Reset counter after taunt attempt
-          }
-        }
-        } // End bottom paddle collision check
-
-        // LOCAL COLLISION DETECTION for multiplayer clients (their own paddle only)
-        // This provides immediate visual/audio feedback while WebSocket server handles authoritative collisions
-        else if (newState.gameMode === 'multiplayer' && multiplayerState.playerSide !== 'spectator') {
-          const playerSide = multiplayerState.playerSide;
-          const ballLeft = newState.ball.x;
-          const ballRight = newState.ball.x + newState.ball.size;
-          const ballTop = newState.ball.y;
-          const ballBottom = newState.ball.y + newState.ball.size;
-          const prevBallX = newState.ball.x - newState.ball.dx;
-          const prevBallY = newState.ball.y - newState.ball.dy;
-          const ballCenterX = newState.ball.x + newState.ball.size / 2;
-          const ballCenterY = newState.ball.y + newState.ball.size / 2;
-          const prevBallCenterX = prevBallX + newState.ball.size / 2;
-          const prevBallCenterY = prevBallY + newState.ball.size / 2;
-
-          // Only check collision with the player's own paddle for immediate feedback
-          if (playerSide === 'left') {
-            const leftPaddleX = 30;
-            const leftPaddleRight = leftPaddleX + newState.paddles.left.width;
-            const ballIntersectsLeftPaddle =
-              ballLeft <= leftPaddleRight + COLLISION_BUFFER &&
-              ballRight >= leftPaddleX - COLLISION_BUFFER &&
-              ballBottom >= newState.paddles.left.y - COLLISION_BUFFER &&
-              ballTop <= newState.paddles.left.y + newState.paddles.left.height + COLLISION_BUFFER;
-            const ballTrajectoryIntersectsLeftPaddle = lineIntersectsRect(
-              prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
-              leftPaddleX, newState.paddles.left.y, newState.paddles.left.width, newState.paddles.left.height
-            );
-            const ballCameFromRight = prevBallX > leftPaddleRight || prevBallCenterX > leftPaddleRight;
-            const leftPaddleCollisionDetected = (ballIntersectsLeftPaddle || ballTrajectoryIntersectsLeftPaddle) &&
-                                               ballCameFromRight && newState.ball.dx < 0;
-            if (leftPaddleCollisionDetected) {
-              // LOCAL FEEDBACK ONLY - don't modify ball state (server will handle that)
-              playMelodyNoteRef.current?.('paddle', null, 'both'); // Immediate audio feedback
-              newState.rumbleEffect.isActive = true;
-              newState.rumbleEffect.startTime = Date.now();
-              newState.rumbleEffect.intensity = 8;
-            }
-          } else if (playerSide === 'right') {
-            const rightPaddleX = canvasSize.width - 30 - newState.paddles.right.width;
-            const rightPaddleLeft = rightPaddleX;
-            const ballIntersectsRightPaddle =
-              ballRight >= rightPaddleLeft - COLLISION_BUFFER &&
-              ballLeft <= rightPaddleX + newState.paddles.right.width + COLLISION_BUFFER &&
-              ballBottom >= newState.paddles.right.y - COLLISION_BUFFER &&
-              ballTop <= newState.paddles.right.y + newState.paddles.right.height + COLLISION_BUFFER;
-            const ballTrajectoryIntersectsRightPaddle = lineIntersectsRect(
-              prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
-              rightPaddleX, newState.paddles.right.y, newState.paddles.right.width, newState.paddles.right.height
-            );
-            const ballCameFromLeft = prevBallX < rightPaddleLeft || prevBallCenterX < rightPaddleLeft;
-            const rightPaddleCollisionDetected = (ballIntersectsRightPaddle || ballTrajectoryIntersectsRightPaddle) &&
-                                                ballCameFromLeft && newState.ball.dx > 0;
-            if (rightPaddleCollisionDetected) {
-              // LOCAL FEEDBACK ONLY - don't modify ball state (server will handle that)
-              playMelodyNoteRef.current?.('paddle', null, 'both'); // Immediate audio feedback
-              newState.rumbleEffect.isActive = true;
-              newState.rumbleEffect.startTime = Date.now();
-              newState.rumbleEffect.intensity = 8;
-            }
-          } else if (playerSide === 'top' && newState.paddles.top) {
-            const topPaddleY = 30;
-            const topPaddleBottom = topPaddleY + newState.paddles.top.height;
-            const ballIntersectsTopPaddle =
-              ballTop <= topPaddleBottom + COLLISION_BUFFER &&
-              ballBottom >= topPaddleY - COLLISION_BUFFER &&
-              ballRight >= newState.paddles.top.x - COLLISION_BUFFER &&
-              ballLeft <= newState.paddles.top.x + newState.paddles.top.width + COLLISION_BUFFER;
-            const ballTrajectoryIntersectsTopPaddle = lineIntersectsRect(
-              prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
-              newState.paddles.top.x, topPaddleY, newState.paddles.top.width, newState.paddles.top.height
-            );
-            const ballCameFromBelow = prevBallY > topPaddleBottom || prevBallCenterY > topPaddleBottom;
-            const topPaddleCollisionDetected = (ballIntersectsTopPaddle || ballTrajectoryIntersectsTopPaddle) &&
-                                              ballCameFromBelow && newState.ball.dy < 0;
-            if (topPaddleCollisionDetected) {
-              // LOCAL FEEDBACK ONLY - don't modify ball state (server will handle that)
-              playMelodyNoteRef.current?.('paddle', null, 'both'); // Immediate audio feedback
-              newState.rumbleEffect.isActive = true;
-              newState.rumbleEffect.startTime = Date.now();
-              newState.rumbleEffect.intensity = 8;
-            }
-          } else if (playerSide === 'bottom' && newState.paddles.bottom) {
-            const bottomPaddleY = canvasSize.height - 30 - newState.paddles.bottom.height;
-            const bottomPaddleTop = bottomPaddleY;
-            const ballIntersectsBottomPaddle =
-              ballBottom >= bottomPaddleTop - COLLISION_BUFFER &&
-              ballTop <= bottomPaddleY + newState.paddles.bottom.height + COLLISION_BUFFER &&
-              ballRight >= newState.paddles.bottom.x - COLLISION_BUFFER &&
-              ballLeft <= newState.paddles.bottom.x + newState.paddles.bottom.width + COLLISION_BUFFER;
-            const ballTrajectoryIntersectsBottomPaddle = lineIntersectsRect(
-              prevBallCenterX, prevBallCenterY, ballCenterX, ballCenterY,
-              newState.paddles.bottom.x, bottomPaddleY, newState.paddles.bottom.width, newState.paddles.bottom.height
-            );
-            const ballCameFromAbove = prevBallY < bottomPaddleTop || prevBallCenterY < bottomPaddleTop;
-            const bottomPaddleCollisionDetected = (ballIntersectsBottomPaddle || ballTrajectoryIntersectsBottomPaddle) &&
-                                                 ballCameFromAbove && newState.ball.dy > 0;
-            if (bottomPaddleCollisionDetected) {
-              // LOCAL FEEDBACK ONLY - don't modify ball state (server will handle that)
-              playMelodyNoteRef.current?.('paddle', null, 'both'); // Immediate audio feedback
-              newState.rumbleEffect.isActive = true;
-              newState.rumbleEffect.startTime = Date.now();
-              newState.rumbleEffect.intensity = 8;
-            }
-          }
-        }
-        } // Close if (shouldDetectCollisions) block
-
-        // Handle scoring when ball goes off screen with last-touch system
-        // MULTIPLAYER FIX: WebSocket server is now the game master, so clients don't handle scoring
-        // CRITICAL FIX: Only check boundaries when game is actively playing
-        if (newState.gameMode !== 'multiplayer' && newState.isPlaying && !newState.isPaused) {
-          // Only handle scoring in single player modes when game is actively being played
-          if (newState.ball.x < -20) {
-            handleLastTouchScoring(newState, 'left');
-          } else if (newState.ball.x > canvasSize.width + 20) {
-            handleLastTouchScoring(newState, 'right');
-          } else if (newState.ball.y < -20) {
-            handleLastTouchScoring(newState, 'top');
-          } else if (newState.ball.y > canvasSize.height + 20) {
-            handleLastTouchScoring(newState, 'bottom');
-          }
-        } // End collision detection section
-
-      return newState;
+        return newState;
     });
   }, [gameState, canvasSize, keys, localTestMode, mouseY, mouseX, touchY, controlSide, handleLastTouchScoring, multiplayerState.isConnected, clearAllPickupEffects, playMelodyNote, updateEffects, checkRandomTaunt, speakRobotic]);
 
@@ -7222,14 +6612,6 @@ const Pong404: React.FC = () => {
       // Ignore key repeat events
       if (e.repeat) return;
 
-      console.log('[GAME] KEY PRESSED:', {
-        key: e.key,
-        showAudioPrompt,
-        showStartScreen: gameState.showStartScreen,
-        isConnected: multiplayerState.isConnected,
-        connectionStatus,
-        audioPromptDismissed: audioPromptDismissedRef.current
-      });
 
       // Handle 'L' key FIRST before any early returns (for local test mode)
       if (e.key.toLowerCase() === 'l') {
@@ -7376,7 +6758,7 @@ const Pong404: React.FC = () => {
       // Start ambient sounds immediately on first keyboard interaction (including title screen)
       if (!ambienceActiveRef.current && audioContextRef.current) {
         setTimeout(() => {
-          // startAmbienceSound() // Disabled - now using global ambient music;
+          // startSimpleAtmosphericDrone(); // Simple atmospheric drone - DISABLED
         }, 50); // Even shorter delay
       }
 
@@ -7743,6 +7125,25 @@ const Pong404: React.FC = () => {
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, [connectionStatus, multiplayerState.isConnected, gameState.gameMode, connectWebSocket, resetRoom, localTestMode, crtEffect]);
+
+  // Auto-initialize spectator mode
+  useEffect(() => {
+    if (isSpectatorMode) {
+      console.log('[SPECTATOR] Auto-initializing spectator mode');
+      // Skip all prompts and directly connect to multiplayer WebSocket
+      setGameState(prev => ({
+        ...prev,
+        showStartScreen: false,
+        gameMode: 'multiplayer',
+        isPlaying: true
+      }));
+      // Connect to WebSocket immediately
+      setTimeout(() => {
+        console.log('[SPECTATOR] Connecting to WebSocket server...');
+        connectWebSocket();
+      }, 100); // Small delay to ensure state is set
+    }
+  }, [isSpectatorMode, connectWebSocket]);
 
   // Helper function to convert hex to RGB
   const hexToRgb = useCallback((hex: string) => {
@@ -8149,10 +7550,10 @@ const Pong404: React.FC = () => {
         for (let i = 0; i < trail.length - 1; i++) {
           const point = trail[i];
           const age = currentTime - point.timestamp;
-          const alpha = Math.max(0, 1 - (age / 1500)); // Fade over 1500ms
+          const alpha = Math.max(0, 1 - (age / 400)); // Fade over 400ms to match trail retention
 
 
-          if (alpha > 0 && point.width && point.height) {
+          if (alpha > 0 && point.width && point.height && point.width > 0 && point.height > 0) {
             // Paddle trail visibility - hardly visible
             const paddleTrailOpacity = 0.03;
             ctx.globalAlpha = alpha * paddleTrailOpacity;
@@ -8180,9 +7581,9 @@ const Pong404: React.FC = () => {
         for (let i = 0; i < trail.length - 1; i++) {
           const point = trail[i];
           const age = currentTime - point.timestamp;
-          const alpha = Math.max(0, 1 - (age / 1500)); // Fade over 1500ms
+          const alpha = Math.max(0, 1 - (age / 400)); // Fade over 400ms to match trail retention
 
-          if (alpha > 0 && point.width && point.height) {
+          if (alpha > 0 && point.width && point.height && point.width > 0 && point.height > 0) {
             // Paddle trail visibility - hardly visible
             const paddleTrailOpacity = 0.03;
             ctx.globalAlpha = alpha * paddleTrailOpacity;
@@ -8205,74 +7606,51 @@ const Pong404: React.FC = () => {
     };
 
     // Render left and right paddle trails (vertical paddles)
-    if (gameState.trails?.leftPaddle?.length > 0) {
-    }
     if (gameState.trails?.leftPaddle) {
-      renderVerticalPaddleTrail(gameState.trails.leftPaddle, 30 + gameState.paddles.left.width / 2);
+      renderVerticalPaddleTrail(gameState.trails.leftPaddle, 32 + gameState.paddles.left.width / 2);
     }
     if (gameState.trails?.rightPaddle) {
-      renderVerticalPaddleTrail(gameState.trails.rightPaddle, canvasSize.width - 30 - gameState.paddles.right.width / 2);
+      renderVerticalPaddleTrail(gameState.trails.rightPaddle, canvasSize.width - 32 - gameState.paddles.right.width / 2);
     }
 
     // Render top and bottom paddle trails (horizontal paddles)
     if (gameState.paddles.top && gameState.trails?.topPaddle) {
-      renderHorizontalPaddleTrail(gameState.trails.topPaddle, 30 + gameState.paddles.top.height / 2);
+      renderHorizontalPaddleTrail(gameState.trails.topPaddle, 32 + gameState.paddles.top.height / 2);
     }
     if (gameState.paddles.bottom && gameState.trails?.bottomPaddle) {
-      renderHorizontalPaddleTrail(gameState.trails.bottomPaddle, canvasSize.height - 30 - gameState.paddles.bottom.height / 2);
+      renderHorizontalPaddleTrail(gameState.trails.bottomPaddle, canvasSize.height - 32 - gameState.paddles.bottom.height / 2);
     }
 
     // Reset alpha for normal rendering
     ctx.globalAlpha = 1;
 
-    // Draw paddles - using dynamic color (spacing only from own wall)
-    const leftPaddleX = 30; // 30px spacing from left wall only
-    const rightPaddleX = canvasSize.width - 30 - gameState.paddles.right.width; // 30px spacing from right wall only
-    const topPaddleY = 30; // 30px spacing from top wall only
-    const bottomPaddleY = gameState.paddles.bottom ?
-      canvasSize.height - 30 - gameState.paddles.bottom.height :
-      canvasSize.height - 30 - 12; // 30px spacing from bottom wall only, fallback to 12px height
-
-    // Get player side for color determination
+    // Draw all paddles - simple and clean
     const currentPlayerSide = multiplayerStateRef.current?.playerSide;
     const humanPlayerColor = getHumanPlayerColor(gameState.colorIndex);
 
-    // Draw left paddle
-    ctx.fillStyle = (gameState.gameMode === 'multiplayer' && currentPlayerSide === 'left')
-      ? humanPlayerColor
-      : currentColors.foreground;
-    ctx.fillRect(leftPaddleX, gameState.paddles.left.y, gameState.paddles.left.width, gameState.paddles.left.height);
+    // Helper function to draw a paddle
+    const drawPaddle = (paddle: any, side: string, x: number, y: number) => {
+      // Use fallback dimensions if paddle dimensions are invalid (multiplayer server may not send them)
+      const width = paddle.width || (side === 'left' || side === 'right' ? PADDLE_THICKNESS : PADDLE_LENGTH);
+      const height = paddle.height || (side === 'left' || side === 'right' ? PADDLE_LENGTH : PADDLE_THICKNESS);
 
-    // Draw right paddle - in player mode, right paddle is human-controlled
-    ctx.fillStyle = ((gameState.gameMode === 'multiplayer' && currentPlayerSide === 'right') ||
-                     (gameState.gameMode === 'player'))
-      ? humanPlayerColor
-      : currentColors.foreground;
-    ctx.fillRect(rightPaddleX, gameState.paddles.right.y, gameState.paddles.right.width, gameState.paddles.right.height);
+      const isHumanControlled = (gameState.gameMode === 'multiplayer' && currentPlayerSide === side) ||
+                                (gameState.gameMode === 'player' && side === 'right');
+      ctx.fillStyle = isHumanControlled ? humanPlayerColor : currentColors.foreground;
+      ctx.fillRect(x, y, width, height);
+    };
 
-    // Draw top and bottom paddles (horizontal) - only if they exist
+    // Draw all four paddles
+    drawPaddle(gameState.paddles.left, 'left', gameState.paddles.left.x, gameState.paddles.left.y);
+    drawPaddle(gameState.paddles.right, 'right', gameState.paddles.right.x, gameState.paddles.right.y);
     if (gameState.paddles.top) {
-      ctx.fillStyle = (gameState.gameMode === 'multiplayer' && currentPlayerSide === 'top')
-        ? humanPlayerColor
-        : currentColors.foreground;
-      ctx.fillRect(gameState.paddles.top.x, topPaddleY, gameState.paddles.top.width, gameState.paddles.top.height);
+      drawPaddle(gameState.paddles.top, 'top', gameState.paddles.top.x, gameState.paddles.top.y);
     }
     if (gameState.paddles.bottom) {
-      ctx.fillStyle = (gameState.gameMode === 'multiplayer' && currentPlayerSide === 'bottom')
-        ? humanPlayerColor
-        : currentColors.foreground;
-      ctx.fillRect(gameState.paddles.bottom.x, bottomPaddleY, gameState.paddles.bottom.width, gameState.paddles.bottom.height);
+      drawPaddle(gameState.paddles.bottom, 'bottom', gameState.paddles.bottom.x, gameState.paddles.bottom.y);
     }
 
     // Draw ball - using dynamic color (hide during pause)
-    if (gameState.gameMode === 'multiplayer' && Math.floor(Date.now() / 1000) !== Math.floor((Date.now() - 16) / 1000)) {
-      console.log('🎨 BALL DRAW CHECK:', {
-        isPaused: gameState.isPaused,
-        willDraw: !gameState.isPaused,
-        ballPos: gameState.ball.x + ',' + gameState.ball.y,
-        gameMode: gameState.gameMode
-      });
-    }
     if (!gameState.isPaused) {
       // Check if ball should be invisible
       const invisibleEffect = gameState.activeEffects?.find(e => e.type === 'invisible_ball');
@@ -8288,16 +7666,6 @@ const Pong404: React.FC = () => {
         ctx.globalAlpha = 1;
       }
 
-      // Debug: Log ball position every second in multiplayer mode
-      if (gameState.gameMode === 'multiplayer' && Math.floor(Date.now() / 1000) !== Math.floor((Date.now() - 16) / 1000)) {
-        console.log('🏓 BALL RENDER:', {
-          position: gameState.ball.x + ',' + gameState.ball.y,
-          velocity: gameState.ball.dx + ',' + gameState.ball.dy,
-          isPlaying: gameState.isPlaying,
-          gameMode: gameState.gameMode,
-          renderTime: Date.now()
-        });
-      }
 
       // [TARGET] Draw Super Striker aiming line
       if (gameState.ball.isAiming) {
@@ -8341,6 +7709,7 @@ const Pong404: React.FC = () => {
         ctx.fillRect(extraBall.x, extraBall.y, extraBall.size, extraBall.size);
       });
     }
+
 
     // 🌪️ Draw physics forces (attractors and repulsors) with enhanced animations
     if (!gameState.isPaused) {
@@ -8837,8 +8206,8 @@ const Pong404: React.FC = () => {
     const leftScoreX = 120; // Left edge with more spacing
     const rightScoreX = canvasSize.width - 120; // Right edge with more spacing
     // Position scores at same distance from paddles as left/right (50px from paddle edge)
-    const topPaddleBottom = 30 + gameState.paddles.top.height;
-    const bottomPaddleTop = canvasSize.height - 30 - gameState.paddles.bottom.height;
+    const topPaddleBottom = 32 + gameState.paddles.top.height;
+    const bottomPaddleTop = canvasSize.height - 32 - gameState.paddles.bottom.height;
     const topScoreY = topPaddleBottom + 50; // 50px below top paddle (same distance as left/right)
     const bottomScoreY = bottomPaddleTop - 50; // 50px above bottom paddle
     const centerScoreY = 50; // For top/bottom scores
@@ -9310,6 +8679,183 @@ const Pong404: React.FC = () => {
       applyCRTEffect(ctx, canvasSize);
     }
 
+    // Debug collision zones - always visible - DISABLED
+    if (false) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1.0; // Make fully opaque
+      ctx.lineWidth = 2;
+
+      // Debug mode indicator
+      ctx.fillStyle = 'rgba(255, 255, 0, 1.0)';
+      ctx.font = '16px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText('DEBUG MODE: Collision Zones Visible', 10, 30);
+
+      const COLLISION_BUFFER = 2;
+      const BOUNDARY_SPACING = 32;
+
+      // Paddle collision zones with different colors
+      const paddleZones = [
+        {
+          x: gameState.paddles.left.x - COLLISION_BUFFER,
+          y: gameState.paddles.left.y - COLLISION_BUFFER,
+          width: gameState.paddles.left.width + (COLLISION_BUFFER * 2),
+          height: gameState.paddles.left.height + (COLLISION_BUFFER * 2),
+          color: 'rgba(255, 0, 0, 0.7)',
+          label: 'LEFT'
+        },
+        {
+          x: gameState.paddles.right.x - COLLISION_BUFFER,
+          y: gameState.paddles.right.y - COLLISION_BUFFER,
+          width: gameState.paddles.right.width + (COLLISION_BUFFER * 2),
+          height: gameState.paddles.right.height + (COLLISION_BUFFER * 2),
+          color: 'rgba(0, 255, 0, 0.7)',
+          label: 'RIGHT'
+        }
+      ];
+
+      // Add top/bottom paddles if they exist (with reduced collision buffer for better gameplay)
+      const HORIZONTAL_COLLISION_BUFFER = 1; // Reduced from 2 to make horizontal paddles less sticky
+
+      if (gameState.paddles.top) {
+        paddleZones.push({
+          x: gameState.paddles.top.x - HORIZONTAL_COLLISION_BUFFER,
+          y: gameState.paddles.top.y - HORIZONTAL_COLLISION_BUFFER,
+          width: gameState.paddles.top.width + (HORIZONTAL_COLLISION_BUFFER * 2),
+          height: gameState.paddles.top.height + (HORIZONTAL_COLLISION_BUFFER * 2),
+          color: 'rgba(0, 0, 255, 0.7)',
+          label: 'TOP'
+        });
+      }
+
+      if (gameState.paddles.bottom) {
+        paddleZones.push({
+          x: gameState.paddles.bottom.x - HORIZONTAL_COLLISION_BUFFER,
+          y: gameState.paddles.bottom.y - HORIZONTAL_COLLISION_BUFFER,
+          width: gameState.paddles.bottom.width + (HORIZONTAL_COLLISION_BUFFER * 2),
+          height: gameState.paddles.bottom.height + (HORIZONTAL_COLLISION_BUFFER * 2),
+          color: 'rgba(255, 255, 0, 0.7)',
+          label: 'BOTTOM'
+        });
+      }
+
+      // Draw paddle collision zones
+      paddleZones.forEach(zone => {
+        ctx.fillStyle = zone.color;
+        ctx.strokeStyle = zone.color;
+        ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+        ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
+
+        // Label
+        ctx.fillStyle = 'white';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(zone.label, zone.x + zone.width/2, zone.y + zone.height/2 + 3);
+      });
+
+      // Boundary zones for scoring detection
+      const boundaryZones = [
+        {
+          x: -50, y: 0, width: BOUNDARY_SPACING + 50, height: canvasSize.height,
+          color: 'rgba(255, 0, 255, 0.5)', label: 'LEFT BOUNDARY'
+        },
+        {
+          x: canvasSize.width - BOUNDARY_SPACING, y: 0, width: BOUNDARY_SPACING + 50, height: canvasSize.height,
+          color: 'rgba(255, 0, 255, 0.5)', label: 'RIGHT BOUNDARY'
+        },
+        {
+          x: 0, y: -50, width: canvasSize.width, height: BOUNDARY_SPACING + 50,
+          color: 'rgba(0, 255, 255, 0.5)', label: 'TOP BOUNDARY'
+        },
+        {
+          x: 0, y: canvasSize.height - BOUNDARY_SPACING, width: canvasSize.width, height: BOUNDARY_SPACING + 50,
+          color: 'rgba(0, 255, 255, 0.5)', label: 'BOTTOM BOUNDARY'
+        }
+      ];
+
+      // Draw boundary zones
+      boundaryZones.forEach(zone => {
+        ctx.fillStyle = zone.color;
+        ctx.strokeStyle = zone.color;
+        ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
+        ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
+
+        // Label
+        ctx.fillStyle = 'white';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'center';
+        if (zone.label.includes('LEFT') || zone.label.includes('RIGHT')) {
+          ctx.fillText(zone.label, zone.x + zone.width/2, canvasSize.height/2);
+        } else {
+          ctx.fillText(zone.label, canvasSize.width/2, zone.y + zone.height/2);
+        }
+      });
+
+      // LEGACY COLLISION ZONES - 48px zones where user reports bouncing
+      const legacyZones = [
+        {
+          x: 0, y: 0, width: canvasSize.width, height: 48,
+          color: 'rgba(255, 0, 0, 0.9)', label: 'LEGACY 48px TOP'
+        },
+        {
+          x: 0, y: canvasSize.height - 48, width: canvasSize.width, height: 48,
+          color: 'rgba(255, 0, 0, 0.9)', label: 'LEGACY 48px BOTTOM'
+        },
+        {
+          x: 0, y: 0, width: 48, height: canvasSize.height,
+          color: 'rgba(255, 0, 0, 0.9)', label: 'LEGACY 48px LEFT'
+        },
+        {
+          x: canvasSize.width - 48, y: 0, width: 48, height: canvasSize.height,
+          color: 'rgba(255, 0, 0, 0.9)', label: 'LEGACY 48px RIGHT'
+        }
+      ];
+
+      // Draw legacy zones in bright red to highlight them
+      legacyZones.forEach(zone => {
+        ctx.strokeStyle = zone.color;
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 5]); // Dashed line to distinguish from other zones
+        ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
+
+        // Label in bright white
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 12px monospace';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = 'black';
+        ctx.shadowBlur = 3;
+        if (zone.label.includes('LEFT') || zone.label.includes('RIGHT')) {
+          ctx.fillText(zone.label, zone.x + zone.width/2, canvasSize.height/2 + 20);
+        } else {
+          ctx.fillText(zone.label, canvasSize.width/2, zone.y + zone.height/2 + 10);
+        }
+        ctx.shadowBlur = 0; // Reset shadow
+        ctx.setLineDash([]); // Reset line dash
+      });
+
+      // Ball trajectory prediction
+      if (!gameState.isPaused && gameState.ball.dx && gameState.ball.dy) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.setLineDash([5, 5]);
+        ctx.lineWidth = 2;
+
+        const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
+        const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
+        const trajectoryLength = 100; // How far to project
+
+        ctx.beginPath();
+        ctx.moveTo(ballCenterX, ballCenterY);
+        ctx.lineTo(
+          ballCenterX + (gameState.ball.dx * trajectoryLength / Math.sqrt(gameState.ball.dx * gameState.ball.dx + gameState.ball.dy * gameState.ball.dy)),
+          ballCenterY + (gameState.ball.dy * trajectoryLength / Math.sqrt(gameState.ball.dx * gameState.ball.dx + gameState.ball.dy * gameState.ball.dy))
+        );
+        ctx.stroke();
+        ctx.setLineDash([]); // Reset line dash
+      }
+
+      ctx.restore();
+    }
 
     // Reset canvas transformation after rumble effect
     if (gameState.rumbleEffect.isActive) {
@@ -9396,8 +8942,11 @@ const Pong404: React.FC = () => {
             },
             trails: {
               ...incomingGameState.trails,
-              topPaddle: prevState.trails.topPaddle,
-              bottomPaddle: prevState.trails.bottomPaddle
+              ball: prevState.trails.ball || [], // Preserve client-side ball trails
+              leftPaddle: prevState.trails.leftPaddle || [], // Preserve client-side left paddle trails
+              rightPaddle: prevState.trails.rightPaddle || [], // Preserve client-side right paddle trails
+              topPaddle: prevState.trails.topPaddle || [],
+              bottomPaddle: prevState.trails.bottomPaddle || []
             }
           }));
         } catch (error) {
@@ -9448,7 +8997,7 @@ const Pong404: React.FC = () => {
 
       // Start ambient sounds immediately on first interaction (including title screen)
       if (!ambienceActiveRef.current && audioContextRef.current) {
-        // setTimeout(() => startAmbienceSound(), 50); // Disabled - now using global ambient music
+        // setTimeout(() => startSimpleAtmosphericDrone(), 50); // Simple atmospheric drone - DISABLED
       }
 
 
@@ -9602,7 +9151,7 @@ const Pong404: React.FC = () => {
             // Start ambient sounds immediately on first click interaction
             if (!ambienceActiveRef.current && audioContextRef.current) {
               setTimeout(() => {
-                // startAmbienceSound() // Disabled - now using global ambient music;
+                // startSimpleAtmosphericDrone(); // Simple atmospheric drone - DISABLED
               }, 50);
             }
 
@@ -9723,7 +9272,7 @@ const Pong404: React.FC = () => {
             // Start ambient sounds immediately on first touch interaction
             if (!ambienceActiveRef.current && audioContextRef.current) {
               setTimeout(() => {
-                // startAmbienceSound() // Disabled - now using global ambient music;
+                // startSimpleAtmosphericDrone(); // Simple atmospheric drone - DISABLED
               }, 50);
             }
 
@@ -9882,7 +9431,7 @@ const Pong404: React.FC = () => {
           className="fixed bottom-4 right-4 bg-gray-800 bg-opacity-80 text-white font-arcade text-xs px-3 py-2 rounded border border-gray-600 hover:bg-gray-700 z-10 transition-all"
           style={{ color: COLOR_PALETTE[gameState.colorIndex].foreground }}
         >
-          {isDebugMode ? '🔧 DEBUG MODE' : '[1]/[2] Pickups'}: {PICKUP_TYPES[debugPickupIndex]?.description || 'Unknown'}{isDebugMode ? ' | [R] Reset' : ''}
+          [1]/[2] Pickups: {PICKUP_TYPES[debugPickupIndex]?.description || 'Unknown'}
         </button>
       )}
 
@@ -9894,6 +9443,9 @@ const Pong404: React.FC = () => {
       >
         ← Home
       </Link>
+
+      {/* Music Selector */}
+      <MusicSelector />
 
     </div>
   );
