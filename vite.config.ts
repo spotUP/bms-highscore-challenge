@@ -4,9 +4,14 @@ import path from "path";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  define: {
+    // Polyfill process.env for browser compatibility
+    'process.env': {}
+  },
   server: {
     host: "::",
     port: 8080,
+    strictPort: true, // Always use port 8080, fail if occupied instead of trying another port
     proxy: {
       // Proxy API requests to the logo proxy server in development
       '/api/clear-logos': {
@@ -100,7 +105,10 @@ export default defineConfig(({ mode }) => ({
       'recharts', // Pre-bundle recharts to prevent initialization issues
       'sql.js', // Include SQL.js for Clear Logo functionality
     ],
-    exclude: ['@huggingface/transformers'], // Exclude heavy ML library from pre-bundling
+    exclude: [
+      '@huggingface/transformers', // Exclude heavy ML library from pre-bundling
+      'regenerator-runtime/runtime.js' // Exclude regenerator-runtime to prevent build issues
+    ],
   },
 
   // Handle SQL.js WASM files

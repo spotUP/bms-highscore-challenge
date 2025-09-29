@@ -47,7 +47,7 @@ interface CollisionResult {
 // Server-side Collision Detector using the same logic as client
 // 🏓 CENTRALIZED PADDLE DIMENSIONS - matches client-side constants
 const PADDLE_LENGTH = 140; // Length of paddles in their movement direction
-const PADDLE_THICKNESS = 20; // Thickness of all paddles
+const PADDLE_THICKNESS = 12; // Thickness of all paddles (matches border thickness)
 
 class ServerCollisionDetector {
   private static readonly COLLISION_BUFFER = 0; // No buffer for pixel-perfect collision detection
@@ -256,7 +256,7 @@ class ServerCollisionDetector {
 
 // Server-side collision detection constants (match client-side values)
 const COLLISION_BUFFER = 0; // No buffer for pixel-perfect collision detection
-const BOUNDARY_SPACING = 32; // Standard spacing from walls (matches rendering)
+const BORDER_THICKNESS = 12; // Border thickness to match client-side visual rendering
 const SPEED_BOOST = 1.02; // Speed boost for collision excitement
 
 // Types for game entities
@@ -668,6 +668,14 @@ class PongWebSocketServer {
 
     player.lastSeen = Date.now();
 
+    // Save old position before update
+    const oldPositions = {
+      left: { x: room.gameState.paddles.left.x, y: room.gameState.paddles.left.y },
+      right: { x: room.gameState.paddles.right.x, y: room.gameState.paddles.right.y },
+      top: { x: room.gameState.paddles.top.x, y: room.gameState.paddles.top.y },
+      bottom: { x: room.gameState.paddles.bottom.x, y: room.gameState.paddles.bottom.y }
+    };
+
     // Update paddle position in game state
     if (player.side === 'left') {
       room.gameState.paddles.left.y = data.y;
@@ -687,19 +695,73 @@ class PongWebSocketServer {
       room.gameState.paddles.bottom.targetX = data.targetX || data.x;
     }
 
+    // Check for paddle collisions after player movement
+    const checkPaddleCollision = (p1: any, p2: any) => {
+      return p1.x < p2.x + p2.width &&
+             p1.x + p1.width > p2.x &&
+             p1.y < p2.y + p2.height &&
+             p1.y + p1.height > p2.y;
+    };
+
+    // Check collision between player paddle and other paddles
+    if (player.side === 'left') {
+      if (checkPaddleCollision(room.gameState.paddles.left, room.gameState.paddles.top)) {
+        room.gameState.paddles.left.y = oldPositions.left.y;
+        console.log(`⚔️ Player LEFT blocked by TOP at corner`);
+      }
+      if (checkPaddleCollision(room.gameState.paddles.left, room.gameState.paddles.bottom)) {
+        room.gameState.paddles.left.y = oldPositions.left.y;
+        console.log(`⚔️ Player LEFT blocked by BOTTOM at corner`);
+      }
+    } else if (player.side === 'right') {
+      if (checkPaddleCollision(room.gameState.paddles.right, room.gameState.paddles.top)) {
+        room.gameState.paddles.right.y = oldPositions.right.y;
+        console.log(`⚔️ Player RIGHT blocked by TOP at corner`);
+      }
+      if (checkPaddleCollision(room.gameState.paddles.right, room.gameState.paddles.bottom)) {
+        room.gameState.paddles.right.y = oldPositions.right.y;
+        console.log(`⚔️ Player RIGHT blocked by BOTTOM at corner`);
+      }
+    } else if (player.side === 'top') {
+      if (checkPaddleCollision(room.gameState.paddles.top, room.gameState.paddles.left)) {
+        room.gameState.paddles.top.x = oldPositions.top.x;
+        console.log(`⚔️ Player TOP blocked by LEFT at corner`);
+      }
+      if (checkPaddleCollision(room.gameState.paddles.top, room.gameState.paddles.right)) {
+        room.gameState.paddles.top.x = oldPositions.top.x;
+        console.log(`⚔️ Player TOP blocked by RIGHT at corner`);
+      }
+    } else if (player.side === 'bottom') {
+      if (checkPaddleCollision(room.gameState.paddles.bottom, room.gameState.paddles.left)) {
+        room.gameState.paddles.bottom.x = oldPositions.bottom.x;
+        console.log(`⚔️ Player BOTTOM blocked by LEFT at corner`);
+      }
+      if (checkPaddleCollision(room.gameState.paddles.bottom, room.gameState.paddles.right)) {
+        room.gameState.paddles.bottom.x = oldPositions.bottom.x;
+        console.log(`⚔️ Player BOTTOM blocked by RIGHT at corner`);
+      }
+    }
+
     // Broadcast paddle update to other players
+    // Use the actual game state position (which may have been reverted by collision detection)
     const updateData: any = {
       side: player.side,
       velocity: data.velocity
     };
 
-    // Add appropriate position data based on paddle side
-    if (player.side === 'left' || player.side === 'right') {
-      updateData.y = data.y;
-      updateData.targetY = data.targetY;
-    } else if (player.side === 'top' || player.side === 'bottom') {
-      updateData.x = data.x;
-      updateData.targetX = data.targetX;
+    // Add appropriate position data based on paddle side (from game state, not from client data)
+    if (player.side === 'left') {
+      updateData.y = room.gameState.paddles.left.y;
+      updateData.targetY = room.gameState.paddles.left.targetY;
+    } else if (player.side === 'right') {
+      updateData.y = room.gameState.paddles.right.y;
+      updateData.targetY = room.gameState.paddles.right.targetY;
+    } else if (player.side === 'top') {
+      updateData.x = room.gameState.paddles.top.x;
+      updateData.targetX = room.gameState.paddles.top.targetX;
+    } else if (player.side === 'bottom') {
+      updateData.x = room.gameState.paddles.bottom.x;
+      updateData.targetX = room.gameState.paddles.bottom.targetX;
     }
 
     this.broadcastToRoom(player.roomId, {
@@ -907,8 +969,8 @@ class PongWebSocketServer {
         y: 300,
         dx: 10,
         dy: Math.random() > 0.5 ? 10 : -10, // Random vertical direction
-        size: 24,
-        originalSize: 24,
+        size: 12,
+        originalSize: 12,
         isDrunk: false,
         drunkAngle: 0,
         isTeleporting: false,
@@ -945,10 +1007,10 @@ class PongWebSocketServer {
         isHypnotic: false
       },
       paddles: {
-        left: { y: 250, height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: 32, velocity: 0, targetY: 250, originalHeight: PADDLE_LENGTH },
-        right: { y: 250, height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: 32, velocity: 0, targetY: 250, originalHeight: PADDLE_LENGTH },
-        top: { x: 360, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: 32, velocity: 0, targetX: 360, originalWidth: PADDLE_LENGTH },
-        bottom: { x: 360, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: 32, velocity: 0, targetX: 360, originalWidth: PADDLE_LENGTH }
+        left: { x: BORDER_THICKNESS * 2, y: 250, height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: 32, velocity: 0, targetY: 250, originalHeight: PADDLE_LENGTH },
+        right: { x: 800 - PADDLE_THICKNESS - (BORDER_THICKNESS * 2), y: 250, height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: 32, velocity: 0, targetY: 250, originalHeight: PADDLE_LENGTH },
+        top: { x: 360, y: BORDER_THICKNESS * 2, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: 32, velocity: 0, targetX: 360, originalWidth: PADDLE_LENGTH },
+        bottom: { x: 360, y: 800 - PADDLE_THICKNESS - (BORDER_THICKNESS * 2), height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: 32, velocity: 0, targetX: 360, originalWidth: PADDLE_LENGTH }
       },
       score: {
         left: 0,
@@ -1099,73 +1161,55 @@ class PongWebSocketServer {
         this.lastLogTime = now;
       }
 
-      // Only update game logic if game is playing and not paused
-      if (!gameState.isPlaying || gameState.isPaused || gameState.gameEnded) return;
-
       let gameStateChanged = false;
 
-      // Update ball physics
-      const ballPhysicsChanged = this.updateBallPhysics(gameState, canvasSize);
-      if (ballPhysicsChanged) {
-        gameStateChanged = true;
-      }
+      // Only update ball/pickup/effect physics if game is playing and not paused
+      if (gameState.isPlaying && !gameState.isPaused && !gameState.gameEnded) {
+        // Update ball physics
+        const ballPhysicsChanged = this.updateBallPhysics(gameState, canvasSize);
+        if (ballPhysicsChanged) {
+          gameStateChanged = true;
+        }
 
-      // Physics debug removed for cleaner console
+        // Physics debug removed for cleaner console
 
-      // Handle pickups generation and collision
-      if (this.updatePickups(gameState, canvasSize, now)) {
-        gameStateChanged = true;
-      }
+        // Handle pickups generation and collision
+        if (this.updatePickups(gameState, canvasSize, now)) {
+          gameStateChanged = true;
+        }
 
-      // Update active effects
-      if (this.updateActiveEffects(gameState, now)) {
-        gameStateChanged = true;
+        // Update active effects
+        if (this.updateActiveEffects(gameState, now)) {
+          gameStateChanged = true;
+        }
       }
 
       // Broadcast debug removed for cleaner console
 
+      // ALWAYS broadcast paddle positions - players should be able to move at all times
       // Force broadcast every frame to ensure smooth client updates
       // (Since client runs at 90 FPS and server at 60 FPS, we need frequent updates)
-      if (gameState.isPlaying && !gameState.isPaused && !gameState.gameEnded) {
-        this.broadcastToRoom(roomId, {
-          type: 'server_game_update',
-          data: {
-            ball: gameState.ball,
-            paddles: gameState.paddles, // Include paddle positions for AI movement
-            score: gameState.score,
-            pickups: gameState.pickups,
-            coins: gameState.coins,
-            activeEffects: gameState.activeEffects,
-            pickupEffect: gameState.pickupEffect,
-            rumbleEffect: gameState.rumbleEffect,
-            winner: gameState.winner,
-            gameEnded: gameState.gameEnded,
-            isPlaying: gameState.isPlaying,
-            isPaused: gameState.isPaused,
-            showStartScreen: gameState.showStartScreen,
-            colorIndex: gameState.colorIndex
-          }
-        });
+      this.broadcastToRoom(roomId, {
+        type: 'server_game_update',
+        data: {
+          ball: gameState.ball,
+          paddles: gameState.paddles, // Always include paddle positions so players can move
+          score: gameState.score,
+          pickups: gameState.pickups,
+          coins: gameState.coins,
+          activeEffects: gameState.activeEffects,
+          pickupEffect: gameState.pickupEffect,
+          rumbleEffect: gameState.rumbleEffect,
+          winner: gameState.winner,
+          gameEnded: gameState.gameEnded,
+          isPlaying: gameState.isPlaying,
+          isPaused: gameState.isPaused,
+          showStartScreen: gameState.showStartScreen,
+          colorIndex: gameState.colorIndex
+        }
+      });
 
-        room.lastUpdate = now;
-      } else if (gameState.isPaused) {
-        // During pause, still broadcast paddle positions so players can move
-        this.broadcastToRoom(roomId, {
-          type: 'server_game_update',
-          data: {
-            paddles: gameState.paddles,
-            score: gameState.score,
-            winner: gameState.winner,
-            gameEnded: gameState.gameEnded,
-            isPlaying: gameState.isPlaying,
-            isPaused: gameState.isPaused,
-            showStartScreen: gameState.showStartScreen,
-            ball: gameState.ball // Include ball so it stays visible during pause
-          }
-        });
-
-        room.lastUpdate = now;
-      }
+      room.lastUpdate = now;
     });
   }
 
@@ -1295,9 +1339,14 @@ class PongWebSocketServer {
         !isVertical
       );
 
-      // Add human-like imperfection (5-15 pixel error)
-      const imperfection = (Math.random() - 0.5) * 10;
-      const targetPos = predictedPos + imperfection - (paddleSize / 2);
+      // Store target if not exists or recalculate if ball direction/position changed significantly
+      if (!paddle.targetPos || Math.abs(paddle.lastPredictedPos - predictedPos) > 20) {
+        const imperfection = (Math.random() - 0.5) * 10;
+        paddle.targetPos = predictedPos + imperfection - (paddleSize / 2);
+        paddle.lastPredictedPos = predictedPos;
+      }
+
+      const targetPos = paddle.targetPos;
 
       // Calculate distance and speed
       const paddleCenter = paddle[axis] + (paddleSize / 2);
@@ -1309,20 +1358,34 @@ class PongWebSocketServer {
       const speedMultiplier = Math.min(1, distance / 100); // Scale based on distance
       const speed = minSpeed + (maxSpeed - minSpeed) * speedMultiplier;
 
-      // Only move if distance is significant
-      const deadzone = 5;
+      // Only move if distance is significant (deadzone larger than max speed to prevent oscillation)
+      const deadzone = 10;
       if (distance > deadzone) {
         const direction = (targetPos + (paddleSize / 2)) > paddleCenter ? 1 : -1;
-        paddle[axis] += direction * speed;
+        const movement = direction * speed;
 
-        // Clamp to playable area (32px border on each side)
-        const borderSize = 32;
-        paddle[axis] = Math.max(borderSize, Math.min(canvasDimension - borderSize - paddleSize, paddle[axis]));
+        // Prevent overshoot: don't move past the target
+        if (Math.abs(movement) > distance) {
+          paddle[axis] = targetPos;
+        } else {
+          paddle[axis] += movement;
+        }
+
+        // No clamping - paddles can move freely across entire canvas
+        // Border is purely visual, only ball needs boundary checking for scoring
 
         const newPos = paddle[axis];
-        const movement = newPos - oldPos;
-        console.log(`🤖 ${paddleName.toUpperCase()}: ${oldPos.toFixed(1)} → ${newPos.toFixed(1)} (Δ${movement.toFixed(1)}) predicted=${predictedPos.toFixed(1)} speed=${speed.toFixed(1)}`);
+        const delta = newPos - oldPos;
+        console.log(`🤖 ${paddleName.toUpperCase()}: ${oldPos.toFixed(1)} → ${newPos.toFixed(1)} (Δ${delta.toFixed(1)}) predicted=${predictedPos.toFixed(1)} speed=${speed.toFixed(1)}`);
       }
+    };
+
+    // Save old positions before AI updates
+    const oldPositions = {
+      left: { x: gameState.paddles.left.x, y: gameState.paddles.left.y },
+      right: { x: gameState.paddles.right.x, y: gameState.paddles.right.y },
+      top: { x: gameState.paddles.top.x, y: gameState.paddles.top.y },
+      bottom: { x: gameState.paddles.bottom.x, y: gameState.paddles.bottom.y }
     };
 
     // Update all AI paddles with trajectory prediction
@@ -1331,7 +1394,7 @@ class PongWebSocketServer {
     updatePaddleAI('top', gameState.paddles.top, canvasSize.width, canvasSize.height);
     updatePaddleAI('bottom', gameState.paddles.bottom, canvasSize.width, canvasSize.height);
 
-    // Paddle-to-paddle collision detection (corner cases)
+    // Paddle-to-paddle collision detection with proper resolution
     const checkPaddleCollision = (p1: any, p2: any) => {
       return p1.x < p2.x + p2.width &&
              p1.x + p1.width > p2.x &&
@@ -1339,31 +1402,41 @@ class PongWebSocketServer {
              p1.y + p1.height > p2.y;
     };
 
-    // Check and resolve paddle collisions at corners
-    if (checkPaddleCollision(gameState.paddles.left, gameState.paddles.top)) {
-      // Left-Top corner collision - push apart
-      if (gameState.paddles.left.y < gameState.paddles.top.y + gameState.paddles.top.height) {
-        gameState.paddles.left.y = gameState.paddles.top.y + gameState.paddles.top.height;
+    // Resolve collisions by reverting to old position and clamping
+    const resolveCollision = (paddle1Name: string, paddle2Name: string, paddle1: any, paddle2: any, old1: any, old2: any) => {
+      if (checkPaddleCollision(paddle1, paddle2)) {
+        // Determine which paddle moved most recently or more significantly
+        const p1Movement = Math.abs(paddle1.x - old1.x) + Math.abs(paddle1.y - old1.y);
+        const p2Movement = Math.abs(paddle2.x - old2.x) + Math.abs(paddle2.y - old2.y);
+
+        if (p1Movement > p2Movement) {
+          // Paddle 1 moved more, revert it
+          paddle1.x = old1.x;
+          paddle1.y = old1.y;
+          console.log(`⚔️ ${paddle1Name}-${paddle2Name} collision: ${paddle1Name} reverted to (${old1.x.toFixed(1)}, ${old1.y.toFixed(1)})`);
+        } else {
+          // Paddle 2 moved more (or equal), revert it
+          paddle2.x = old2.x;
+          paddle2.y = old2.y;
+          console.log(`⚔️ ${paddle1Name}-${paddle2Name} collision: ${paddle2Name} reverted to (${old2.x.toFixed(1)}, ${old2.y.toFixed(1)})`);
+        }
+
+        // Check again after revert - if still colliding, revert both
+        if (checkPaddleCollision(paddle1, paddle2)) {
+          paddle1.x = old1.x;
+          paddle1.y = old1.y;
+          paddle2.x = old2.x;
+          paddle2.y = old2.y;
+          console.log(`⚔️ ${paddle1Name}-${paddle2Name} STUCK: Both reverted`);
+        }
       }
-    }
-    if (checkPaddleCollision(gameState.paddles.left, gameState.paddles.bottom)) {
-      // Left-Bottom corner collision
-      if (gameState.paddles.left.y + gameState.paddles.left.height > gameState.paddles.bottom.y) {
-        gameState.paddles.left.y = gameState.paddles.bottom.y - gameState.paddles.left.height;
-      }
-    }
-    if (checkPaddleCollision(gameState.paddles.right, gameState.paddles.top)) {
-      // Right-Top corner collision
-      if (gameState.paddles.right.y < gameState.paddles.top.y + gameState.paddles.top.height) {
-        gameState.paddles.right.y = gameState.paddles.top.y + gameState.paddles.top.height;
-      }
-    }
-    if (checkPaddleCollision(gameState.paddles.right, gameState.paddles.bottom)) {
-      // Right-Bottom corner collision
-      if (gameState.paddles.right.y + gameState.paddles.right.height > gameState.paddles.bottom.y) {
-        gameState.paddles.right.y = gameState.paddles.bottom.y - gameState.paddles.right.height;
-      }
-    }
+    };
+
+    // Check all corner collision combinations
+    resolveCollision('left', 'top', gameState.paddles.left, gameState.paddles.top, oldPositions.left, oldPositions.top);
+    resolveCollision('left', 'bottom', gameState.paddles.left, gameState.paddles.bottom, oldPositions.left, oldPositions.bottom);
+    resolveCollision('right', 'top', gameState.paddles.right, gameState.paddles.top, oldPositions.right, oldPositions.top);
+    resolveCollision('right', 'bottom', gameState.paddles.right, gameState.paddles.bottom, oldPositions.right, oldPositions.bottom);
 
     // Apply gravity effects
     if (gameState.ball.hasGravity) {
@@ -1428,7 +1501,7 @@ class PongWebSocketServer {
 
     // Create paddle objects
     const leftPaddle: Paddle = {
-      x: BOUNDARY_SPACING,
+      x: BORDER_THICKNESS * 2,
       y: gameState.paddles.left.y,
       width: gameState.paddles.left.width,
       height: gameState.paddles.left.height,
@@ -1436,7 +1509,7 @@ class PongWebSocketServer {
     };
 
     const rightPaddle: Paddle = {
-      x: canvasSize.width - BOUNDARY_SPACING - gameState.paddles.right.width,
+      x: canvasSize.width - gameState.paddles.right.width - (BORDER_THICKNESS * 2),
       y: gameState.paddles.right.y,
       width: gameState.paddles.right.width,
       height: gameState.paddles.right.height,
@@ -1445,7 +1518,7 @@ class PongWebSocketServer {
 
     const topPaddle: Paddle = {
       x: gameState.paddles.top.x,
-      y: BOUNDARY_SPACING,
+      y: BORDER_THICKNESS * 2,
       width: gameState.paddles.top.width,
       height: gameState.paddles.top.height,
       side: 'top'
@@ -1453,7 +1526,7 @@ class PongWebSocketServer {
 
     const bottomPaddle: Paddle = {
       x: gameState.paddles.bottom.x,
-      y: canvasSize.height - BOUNDARY_SPACING - gameState.paddles.bottom.height,
+      y: canvasSize.height - gameState.paddles.bottom.height - (BORDER_THICKNESS * 2),
       width: gameState.paddles.bottom.width,
       height: gameState.paddles.bottom.height,
       side: 'bottom'
@@ -1910,7 +1983,7 @@ class PongWebSocketServer {
         break;
       case 'big_ball':
         effect.originalValue = gameState.ball.size;
-        gameState.ball.size = 24;
+        gameState.ball.size = 18;
         break;
       case 'small_ball':
         effect.originalValue = gameState.ball.size;
@@ -2526,6 +2599,15 @@ class PongWebSocketServer {
       console.log(`[💓] Health endpoint available at http://0.0.0.0:${this.port}/health`);
       console.log(`[▶] Ready for Pong multiplayer connections!`);
       console.log(`[#] Server Instance ID: ${this.instanceId}`);
+    }).on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`[✗] ERROR: Port ${this.port} is already in use. Another server is running.`);
+        console.error(`[✗] Kill existing server first: lsof -ti:${this.port} | xargs kill -9`);
+        process.exit(1);
+      } else {
+        console.error(`[✗] Server error:`, err);
+        process.exit(1);
+      }
     });
 
     // Send periodic heartbeat to all connected clients

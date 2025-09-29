@@ -28,7 +28,7 @@ import PerformanceMonitor from "@/components/PerformanceMonitor";
 import { WelcomeModal } from "@/components/WelcomeModal";
 import InteractiveHelpGuide from "@/components/InteractiveHelpGuide";
 import { useHelpGuide, HelpGuideProvider } from "@/hooks/useHelpGuide";
-import GlobalAmbientMusic from "@/components/GlobalAmbientMusic";
+import GlobalAmbientMusic from "@/components/GlobalAmbientMusic"; // Tone.js system with Alex Bainter music
 import "./styles/performance.css";
 import { BracketProvider } from "@/contexts/BracketContext";
 
@@ -143,7 +143,7 @@ const GlobalUIComponents = () => {
       <WelcomeModal />
       {/* Performance Monitor (Ctrl+Shift+P to toggle) */}
       <PerformanceMonitor />
-      {/* Global Ambient Music - plays throughout entire app */}
+      {/* Global Ambient Music - Tone.js system with Alex Bainter music */}
       <GlobalAmbientMusic />
     </>
   );

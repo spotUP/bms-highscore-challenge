@@ -14,3 +14,5 @@
 - remember the pixel size in pong404 is the same as in the scores use this for every pickup etc that you draw
 - remember always check the console after adding/updating a new feature and fix all console errors
 - remember that pickups always should be handled by the websocket
+- the server is on port 8080
+- you keep opening http://localhost:8082/404 even though we forced the server to http://localhost:8080/404
