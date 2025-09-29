@@ -1148,6 +1148,23 @@ class PongWebSocketServer {
         });
 
         room.lastUpdate = now;
+      } else if (gameState.isPaused) {
+        // During pause, still broadcast paddle positions so players can move
+        this.broadcastToRoom(roomId, {
+          type: 'server_game_update',
+          data: {
+            paddles: gameState.paddles,
+            score: gameState.score,
+            winner: gameState.winner,
+            gameEnded: gameState.gameEnded,
+            isPlaying: gameState.isPlaying,
+            isPaused: gameState.isPaused,
+            showStartScreen: gameState.showStartScreen,
+            ball: gameState.ball // Include ball so it stays visible during pause
+          }
+        });
+
+        room.lastUpdate = now;
       }
     });
   }
@@ -1184,57 +1201,169 @@ class PongWebSocketServer {
     const leftPaddleCenter = gameState.paddles.left.y + gameState.paddles.left.height / 2;
     const rightPaddleCenter = gameState.paddles.right.y + gameState.paddles.right.height / 2;
 
-    // Improved AI: Less aggressive tracking to prevent collision loops
-    const paddleSpeed = 3; // Reduced from 6 to prevent over-responsiveness
-    const aiDeadzone = 8; // Increased from 3 to reduce jittery movement
-    const predictionFactor = 0.7; // AI only tracks 70% toward ball for more natural play
+    // Advanced AI with trajectory prediction and wall bounces
+    const predictBallPosition = (
+      ballX: number,
+      ballY: number,
+      ballDX: number,
+      ballDY: number,
+      targetX: number,
+      canvasWidth: number,
+      canvasHeight: number,
+      isHorizontal: boolean
+    ): number => {
+      // Simulate ball movement until it reaches the target X or Y coordinate
+      let x = ballX;
+      let y = ballY;
+      let dx = ballDX;
+      let dy = ballDY;
+      const maxIterations = 200; // Prevent infinite loops
+      let iterations = 0;
 
-    // Centralized AI function that works for any paddle orientation
+      while (iterations < maxIterations) {
+        // Move ball one step
+        x += dx;
+        y += dy;
+
+        // Bounce off walls
+        if (y <= 0 || y >= canvasHeight) {
+          dy = -dy;
+          y = Math.max(0, Math.min(canvasHeight, y));
+        }
+        if (x <= 0 || x >= canvasWidth) {
+          dx = -dx;
+          x = Math.max(0, Math.min(canvasWidth, x));
+        }
+
+        // Check if we've reached the target
+        if (isHorizontal) {
+          // For horizontal paddles (top/bottom), track along Y axis, return X position
+          if ((dy > 0 && y >= targetX) || (dy < 0 && y <= targetX)) {
+            return x; // Return predicted X position when ball reaches target Y
+          }
+        } else {
+          // For vertical paddles (left/right), track along X axis, return Y position
+          if ((dx > 0 && x >= targetX) || (dx < 0 && x <= targetX)) {
+            return y; // Return predicted Y position when ball reaches target X
+          }
+        }
+
+        iterations++;
+      }
+
+      // Fallback: return current ball position
+      return isHorizontal ? ballY : ballX;
+    };
+
     const updatePaddleAI = (
       paddleName: 'left' | 'right' | 'top' | 'bottom',
       paddle: any,
-      ballPos: number,
-      ballVel: number,
-      paddleCenter: number,
-      canvasDimension: number,
-      isApproaching: boolean
+      canvasWidth: number,
+      canvasHeight: number
     ) => {
-      if (isApproaching) {
-        const targetPos = ballPos + (ballVel * predictionFactor);
-        if (Math.abs(targetPos - paddleCenter) > aiDeadzone) {
-          const direction = targetPos > paddleCenter ? 1 : -1;
-          const axis = paddleName === 'left' || paddleName === 'right' ? 'y' : 'x';
-          const dirText = paddleName === 'left' || paddleName === 'right'
-            ? (direction > 0 ? 'down' : 'up')
-            : (direction > 0 ? 'right' : 'left');
-          console.log(`🤖 ${paddleName.toUpperCase()} AI: Moving paddle ${dirText} from ${paddleCenter.toFixed(1)} toward ${targetPos.toFixed(1)} (ball approaching)`);
-          paddle[axis] += direction * paddleSpeed;
-          // Keep paddle within bounds
-          const paddleSize = paddleName === 'left' || paddleName === 'right' ? paddle.height : paddle.width;
-          paddle[axis] = Math.max(48, Math.min(canvasDimension - 48 - paddleSize, paddle[axis]));
-        }
-      } else {
-        // Ball moving away - return to center gradually
-        const centerPos = (canvasDimension / 2) - (paddleName === 'left' || paddleName === 'right' ? paddle.height : paddle.width) / 2;
-        if (Math.abs(centerPos - paddleCenter) > aiDeadzone) {
-          const direction = centerPos > paddleCenter ? 1 : -1;
-          const axis = paddleName === 'left' || paddleName === 'right' ? 'y' : 'x';
-          const dirText = paddleName === 'left' || paddleName === 'right'
-            ? (direction > 0 ? 'down' : 'up')
-            : (direction > 0 ? 'right' : 'left');
-          console.log(`🤖 ${paddleName.toUpperCase()} AI: Returning to center ${dirText} from ${paddleCenter.toFixed(1)} toward ${centerPos.toFixed(1)} (ball away)`);
-          paddle[axis] += direction * (paddleSpeed * 0.3); // Slower return to center
-          const paddleSize = paddleName === 'left' || paddleName === 'right' ? paddle.height : paddle.width;
-          paddle[axis] = Math.max(48, Math.min(canvasDimension - 48 - paddleSize, paddle[axis]));
-        }
+      const isVertical = paddleName === 'left' || paddleName === 'right';
+      const axis = isVertical ? 'y' : 'x';
+      const paddleSize = isVertical ? paddle.height : paddle.width;
+      const canvasDimension = isVertical ? canvasHeight : canvasWidth;
+
+      // Determine if ball is approaching this paddle
+      const isApproaching = (
+        (paddleName === 'left' && gameState.ball.dx < 0) ||
+        (paddleName === 'right' && gameState.ball.dx > 0) ||
+        (paddleName === 'top' && gameState.ball.dy < 0) ||
+        (paddleName === 'bottom' && gameState.ball.dy > 0)
+      );
+
+      if (!isApproaching) return; // Don't move if ball is moving away
+
+      const oldPos = paddle[axis];
+
+      // Predict where ball will be
+      const targetCoord = paddleName === 'left' ? 32 :
+                          paddleName === 'right' ? canvasWidth - 32 :
+                          paddleName === 'top' ? 32 :
+                          canvasHeight - 32;
+
+      const predictedPos = predictBallPosition(
+        gameState.ball.x,
+        gameState.ball.y,
+        gameState.ball.dx,
+        gameState.ball.dy,
+        targetCoord,
+        canvasWidth,
+        canvasHeight,
+        !isVertical
+      );
+
+      // Add human-like imperfection (5-15 pixel error)
+      const imperfection = (Math.random() - 0.5) * 10;
+      const targetPos = predictedPos + imperfection - (paddleSize / 2);
+
+      // Calculate distance and speed
+      const paddleCenter = paddle[axis] + (paddleSize / 2);
+      const distance = Math.abs(targetPos + (paddleSize / 2) - paddleCenter);
+
+      // Dynamic speed: faster when far, slower when close
+      const minSpeed = 2.0;
+      const maxSpeed = 8.0;
+      const speedMultiplier = Math.min(1, distance / 100); // Scale based on distance
+      const speed = minSpeed + (maxSpeed - minSpeed) * speedMultiplier;
+
+      // Only move if distance is significant
+      const deadzone = 5;
+      if (distance > deadzone) {
+        const direction = (targetPos + (paddleSize / 2)) > paddleCenter ? 1 : -1;
+        paddle[axis] += direction * speed;
+
+        // Clamp to playable area (32px border on each side)
+        const borderSize = 32;
+        paddle[axis] = Math.max(borderSize, Math.min(canvasDimension - borderSize - paddleSize, paddle[axis]));
+
+        const newPos = paddle[axis];
+        const movement = newPos - oldPos;
+        console.log(`🤖 ${paddleName.toUpperCase()}: ${oldPos.toFixed(1)} → ${newPos.toFixed(1)} (Δ${movement.toFixed(1)}) predicted=${predictedPos.toFixed(1)} speed=${speed.toFixed(1)}`);
       }
     };
 
-    // Use centralized AI function for all paddles
-    updatePaddleAI('left', gameState.paddles.left, ballCenterY, gameState.ball.dy, leftPaddleCenter, canvasSize.height, gameState.ball.dx < 0);
-    updatePaddleAI('right', gameState.paddles.right, ballCenterY, gameState.ball.dy, rightPaddleCenter, canvasSize.height, gameState.ball.dx > 0);
-    updatePaddleAI('top', gameState.paddles.top, ballCenterX, gameState.ball.dx, topPaddleCenter, canvasSize.width, gameState.ball.dy < 0);
-    updatePaddleAI('bottom', gameState.paddles.bottom, ballCenterX, gameState.ball.dx, bottomPaddleCenter, canvasSize.width, gameState.ball.dy > 0);
+    // Update all AI paddles with trajectory prediction
+    updatePaddleAI('left', gameState.paddles.left, canvasSize.width, canvasSize.height);
+    updatePaddleAI('right', gameState.paddles.right, canvasSize.width, canvasSize.height);
+    updatePaddleAI('top', gameState.paddles.top, canvasSize.width, canvasSize.height);
+    updatePaddleAI('bottom', gameState.paddles.bottom, canvasSize.width, canvasSize.height);
+
+    // Paddle-to-paddle collision detection (corner cases)
+    const checkPaddleCollision = (p1: any, p2: any) => {
+      return p1.x < p2.x + p2.width &&
+             p1.x + p1.width > p2.x &&
+             p1.y < p2.y + p2.height &&
+             p1.y + p1.height > p2.y;
+    };
+
+    // Check and resolve paddle collisions at corners
+    if (checkPaddleCollision(gameState.paddles.left, gameState.paddles.top)) {
+      // Left-Top corner collision - push apart
+      if (gameState.paddles.left.y < gameState.paddles.top.y + gameState.paddles.top.height) {
+        gameState.paddles.left.y = gameState.paddles.top.y + gameState.paddles.top.height;
+      }
+    }
+    if (checkPaddleCollision(gameState.paddles.left, gameState.paddles.bottom)) {
+      // Left-Bottom corner collision
+      if (gameState.paddles.left.y + gameState.paddles.left.height > gameState.paddles.bottom.y) {
+        gameState.paddles.left.y = gameState.paddles.bottom.y - gameState.paddles.left.height;
+      }
+    }
+    if (checkPaddleCollision(gameState.paddles.right, gameState.paddles.top)) {
+      // Right-Top corner collision
+      if (gameState.paddles.right.y < gameState.paddles.top.y + gameState.paddles.top.height) {
+        gameState.paddles.right.y = gameState.paddles.top.y + gameState.paddles.top.height;
+      }
+    }
+    if (checkPaddleCollision(gameState.paddles.right, gameState.paddles.bottom)) {
+      // Right-Bottom corner collision
+      if (gameState.paddles.right.y + gameState.paddles.right.height > gameState.paddles.bottom.y) {
+        gameState.paddles.right.y = gameState.paddles.bottom.y - gameState.paddles.right.height;
+      }
+    }
 
     // Apply gravity effects
     if (gameState.ball.hasGravity) {

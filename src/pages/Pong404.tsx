@@ -370,10 +370,8 @@ const PRECALC_CONSTANTS = {
     0.8 + 0.2 * Math.sin((i / 60) * Math.PI * 2)
   ),
 
-  // CRT flicker values (precalculated for 60fps)
-  flickerValues: Array.from({ length: 60 }, (_, i) =>
-    0.98 + 0.015 * Math.sin((i / 60) * 47 * Math.PI * 2)
-  )
+  // CRT flicker values (precalculated for 60fps) - static value removes jitter
+  flickerValues: Array.from({ length: 60 }, () => 0.98)
 };
 
 // [TARGET] PRECALCULATED PICKUP PATTERNS (eliminates nested loops during gameplay)
@@ -1062,10 +1060,10 @@ const Pong404: React.FC = () => {
       isHypnotic: false,
     },
     paddles: {
-      left: { x: 32, y: Math.max(32, Math.min(canvasSize.height - 32 - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(32, Math.min(canvasSize.height - 32 - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), originalHeight: PADDLE_LENGTH },
-      right: { x: canvasSize.width - 32 - PADDLE_THICKNESS, y: Math.max(32, Math.min(canvasSize.height - 32 - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(32, Math.min(canvasSize.height - 32 - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), originalHeight: PADDLE_LENGTH },
-      top: { x: Math.max(32, Math.min(canvasSize.width - 32 - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), y: 32, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(32, Math.min(canvasSize.width - 32 - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), originalWidth: PADDLE_LENGTH },
-      bottom: { x: Math.max(32, Math.min(canvasSize.width - 32 - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), y: canvasSize.height - 32 - PADDLE_THICKNESS, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(32, Math.min(canvasSize.width - 32 - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), originalWidth: PADDLE_LENGTH },
+      left: { x: 0, y: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), originalHeight: PADDLE_LENGTH },
+      right: { x: canvasSize.width - PADDLE_THICKNESS, y: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(0, Math.min(canvasSize.height - PADDLE_LENGTH, canvasSize.height / 2 - PADDLE_LENGTH/2)), originalHeight: PADDLE_LENGTH },
+      top: { x: Math.max(0, Math.min(canvasSize.width - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), y: 0, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(0, Math.min(canvasSize.width - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), originalWidth: PADDLE_LENGTH },
+      bottom: { x: Math.max(0, Math.min(canvasSize.width - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), y: canvasSize.height - PADDLE_THICKNESS, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(0, Math.min(canvasSize.width - PADDLE_LENGTH, canvasSize.width / 2 - PADDLE_LENGTH/2)), originalWidth: PADDLE_LENGTH },
     },
     score: { left: 0, right: 0, top: 0, bottom: 0 }, // 4-player scoring
     isPlaying: false,
@@ -1702,13 +1700,13 @@ const Pong404: React.FC = () => {
             newState.paddles.left.velocity = data.velocity || 0;
             newState.paddles.left.targetY = data.targetY || compensatedY;
             // Clamp to bounds (using fixed canvas size)
-            newState.paddles.left.y = Math.max(32, Math.min(newState.paddles.left.y, canvasSize.height - 32 - newState.paddles.left.height));
+            newState.paddles.left.y = Math.max(0, Math.min(newState.paddles.left.y, canvasSize.height - newState.paddles.left.height));
           } else if (data.side === 'right') {
             newState.paddles.right.y = compensatedY;
             newState.paddles.right.velocity = data.velocity || 0;
             newState.paddles.right.targetY = data.targetY || compensatedY;
             // Clamp to bounds (using fixed canvas size)
-            newState.paddles.right.y = Math.max(32, Math.min(newState.paddles.right.y, canvasSize.height - 32 - newState.paddles.right.height));
+            newState.paddles.right.y = Math.max(0, Math.min(newState.paddles.right.y, canvasSize.height - newState.paddles.right.height));
           }
           return newState;
         });
@@ -1716,9 +1714,11 @@ const Pong404: React.FC = () => {
 
       case 'game_state_updated':
         if (message.data) {
-          setGameState(prevState => ({
+          // ONLY update the network state ref - let the game loop handle rendering
+          // This prevents competing state updates that cause flickering
+          networkGameStateRef.current = {
             ...message.data,
-            // Preserve client-only paddles and trails, enforce positions/dimensions
+            // Enforce correct paddle dimensions
             paddles: {
               left: {
                 ...message.data.paddles.left,
@@ -1732,18 +1732,11 @@ const Pong404: React.FC = () => {
                 width: PADDLE_THICKNESS,
                 height: PADDLE_LENGTH
               },
-              top: prevState.paddles.top,
-              bottom: prevState.paddles.bottom
-            },
-            trails: {
-              ...message.data.trails,
-              ball: prevState.trails.ball || [], // Preserve client-side ball trails
-              leftPaddle: prevState.trails.leftPaddle || [], // Preserve client-side left paddle trails
-              rightPaddle: prevState.trails.rightPaddle || [], // Preserve client-side right paddle trails
-              topPaddle: prevState.trails.topPaddle || [],
-              bottomPaddle: prevState.trails.bottomPaddle || []
+              top: message.data.paddles.top || networkGameStateRef.current?.paddles.top,
+              bottom: message.data.paddles.bottom || networkGameStateRef.current?.paddles.bottom
             }
-          }));
+          };
+          lastNetworkReceiveTimeRef.current = Date.now();
         }
         break;
 
@@ -1798,19 +1791,13 @@ const Pong404: React.FC = () => {
               networkState.colorIndex = messageData.colorIndex;
             }
 
-            // Store network state and timing for interpolation
+            // Store network state and timing - let the game loop handle rendering from the ref
             networkGameStateRef.current = networkState;
             lastNetworkReceiveTimeRef.current = Date.now();
 
-            // For multiplayer, start with network state and let prediction/interpolation smooth it
-            if (multiplayerState.gameMode === 'multiplayer') {
-              return networkState;
-            }
-
-            // In single-player mode, IGNORE server updates to prevent race conditions with client collision detection
-            // This fixes the 48px boundary bouncing issue caused by server/client collision detection conflicts
-            console.log('🚫 IGNORING server update in single-player mode to prevent collision race condition');
-            return prevState; // Keep current client state
+            // Don't call setGameState here - the game loop will pick up changes from networkGameStateRef
+            // This prevents competing state updates that cause flickering
+            return prevState; // Keep current state, game loop will use networkGameStateRef
           });
         }
         break;
@@ -2165,33 +2152,22 @@ const Pong404: React.FC = () => {
       };
     }
 
-    // Interpolate remote paddle positions (not controlled by this client)
-    if (multiplayerState.playerSide !== 'left' && currentState.paddles.left && targetState.paddles.left) {
-      interpolated.paddles.left = {
-        ...targetState.paddles.left,
-        y: currentState.paddles.left.y + (targetState.paddles.left.y - currentState.paddles.left.y) * factor
-      };
+    // Use server paddle positions directly without interpolation to prevent jitter
+    // Interpolation can cause visual jitter when AI paddles move slowly
+    if (multiplayerState.playerSide !== 'left' && targetState.paddles.left) {
+      interpolated.paddles.left = { ...targetState.paddles.left };
     }
 
-    if (multiplayerState.playerSide !== 'right' && currentState.paddles.right && targetState.paddles.right) {
-      interpolated.paddles.right = {
-        ...targetState.paddles.right,
-        y: currentState.paddles.right.y + (targetState.paddles.right.y - currentState.paddles.right.y) * factor
-      };
+    if (multiplayerState.playerSide !== 'right' && targetState.paddles.right) {
+      interpolated.paddles.right = { ...targetState.paddles.right };
     }
 
-    if (multiplayerState.playerSide !== 'top' && currentState.paddles.top && targetState.paddles.top) {
-      interpolated.paddles.top = {
-        ...targetState.paddles.top,
-        x: currentState.paddles.top.x + (targetState.paddles.top.x - currentState.paddles.top.x) * factor
-      };
+    if (multiplayerState.playerSide !== 'top' && targetState.paddles.top) {
+      interpolated.paddles.top = { ...targetState.paddles.top };
     }
 
-    if (multiplayerState.playerSide !== 'bottom' && currentState.paddles.bottom && targetState.paddles.bottom) {
-      interpolated.paddles.bottom = {
-        ...targetState.paddles.bottom,
-        x: currentState.paddles.bottom.x + (targetState.paddles.bottom.x - currentState.paddles.bottom.x) * factor
-      };
+    if (multiplayerState.playerSide !== 'bottom' && targetState.paddles.bottom) {
+      interpolated.paddles.bottom = { ...targetState.paddles.bottom };
     }
 
     // Don't interpolate discrete game state changes
@@ -4299,88 +4275,157 @@ const Pong404: React.FC = () => {
 
       // Server-side physics mode will be added in future update
 
-      // Apply client-side prediction and interpolation for multiplayer clients
-      if (multiplayerStateRef.current?.gameMode === 'multiplayer' &&
+      // Use network state directly without interpolation/prediction to prevent flicker
+      if (prevState.gameMode === 'multiplayer' &&
           networkGameStateRef.current &&
           lastNetworkReceiveTimeRef.current > 0) {
 
-        const timeSinceNetworkUpdate = now - lastNetworkReceiveTimeRef.current;
+        // MULTIPLAYER SERVER-AUTHORITATIVE MODE
+        // Server handles all physics, AI, and collision detection
+        // Client only renders and handles local player input
 
-        // Predict where the game state should be now based on network data
-        const predictedState = predictGameStateRef.current?.(networkGameStateRef.current, timeSinceNetworkUpdate);
-
-        // Interpolate smoothly towards the predicted state (but preserve local paddle control)
-        const interpolationFactor = Math.min(timeSinceNetworkUpdate / NETWORK_UPDATE_RATE, 1.0);
-        const interpolatedState = interpolateGameStateRef.current?.(prevState, predictedState, interpolationFactor * 0.7); // Stronger interpolation for smoothness
-
-        // CRITICAL FIX: Use interpolated state if available, otherwise use network state directly
-        if (interpolatedState) {
-          // Use interpolated state as base, but preserve local paddle control
-          newState = {
-            ...interpolatedState,
-            // FORCE AUTHORITATIVE NETWORK STATE for critical game elements
-            score: networkGameStateRef.current.score, // Always use server scores
-            ball: networkGameStateRef.current.ball,   // Always use server ball state
-            paddles: {
-              // Ensure correct paddle dimensions even from interpolated state
-              left: {
-                ...interpolatedState.paddles.left,
-                height: PADDLE_LENGTH,
-                width: PADDLE_THICKNESS
-              },
-              right: {
-                ...interpolatedState.paddles.right,
-                height: PADDLE_LENGTH,
-                width: PADDLE_THICKNESS
-              },
-              top: {
-                ...interpolatedState.paddles.top,
-                height: PADDLE_THICKNESS,
-                width: PADDLE_LENGTH
-              },
-              bottom: {
-                ...interpolatedState.paddles.bottom,
-                height: PADDLE_THICKNESS,
-                width: PADDLE_LENGTH
-              },
-              // Keep local control of player's paddle
-              [multiplayerState.playerSide]: prevState.paddles[multiplayerState.playerSide as keyof typeof prevState.paddles]
+        // Use network state directly - no interpolation or prediction to prevent jitter
+        newState = {
+          ...networkGameStateRef.current,
+          paddles: {
+            // Use server state for all paddles
+            left: {
+              ...networkGameStateRef.current.paddles.left,
+              height: PADDLE_LENGTH,
+              width: PADDLE_THICKNESS
+            },
+            right: {
+              ...networkGameStateRef.current.paddles.right,
+              height: PADDLE_LENGTH,
+              width: PADDLE_THICKNESS
+            },
+            top: {
+              ...networkGameStateRef.current.paddles.top,
+              height: PADDLE_THICKNESS,
+              width: PADDLE_LENGTH
+            },
+            bottom: {
+              ...networkGameStateRef.current.paddles.bottom,
+              height: PADDLE_THICKNESS,
+              width: PADDLE_LENGTH
             }
-          };
-        } else {
-          // Fallback: Use network state directly if interpolation fails
-          newState = {
-            ...networkGameStateRef.current,
-            paddles: {
-              // Ensure correct paddle dimensions even from network state
-              left: {
-                ...networkGameStateRef.current.paddles.left,
-                height: PADDLE_LENGTH,
-                width: PADDLE_THICKNESS
-              },
-              right: {
-                ...networkGameStateRef.current.paddles.right,
-                height: PADDLE_LENGTH,
-                width: PADDLE_THICKNESS
-              },
-              top: {
-                ...networkGameStateRef.current.paddles.top,
-                height: PADDLE_THICKNESS,
-                width: PADDLE_LENGTH
-              },
-              bottom: {
-                ...networkGameStateRef.current.paddles.bottom,
-                height: PADDLE_THICKNESS,
-                width: PADDLE_LENGTH
-              },
-              // Keep local control of player's paddle
-              [multiplayerState.playerSide]: prevState.paddles[multiplayerState.playerSide as keyof typeof prevState.paddles]
+          }
+        };
+
+        // Clear trails in multiplayer - server doesn't send trail data
+        newState.trails = {
+          ball: [],
+          leftPaddle: [],
+          rightPaddle: [],
+          topPaddle: [],
+          bottomPaddle: []
+        };
+
+        // Handle local player input and send to server
+        const playerSide = multiplayerStateRef.current?.playerSide;
+
+        if (playerSide === 'left' || localTestMode) {
+          const freezeEffect = newState.activeEffects.find(e => e.type === 'freeze_opponent');
+          const isLeftFrozen = freezeEffect && freezeEffect.excludePaddle !== 'left';
+
+          if (!isLeftFrozen) {
+            const oldY = newState.paddles.left.y;
+            let newY = oldY;
+
+            // Handle mouse control for left paddle
+            if (mouseY !== null) {
+              const targetY = mouseY - newState.paddles.left.height / 2;
+              newY = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.left.height, targetY));
             }
-          };
+
+            // Check if reverse controls is active
+            const reverseControlsEffect = newState.activeEffects.find(e => e.type === 'reverse_controls');
+            const shouldReverseLeftControls = reverseControlsEffect && reverseControlsEffect.activator !== 'left';
+
+            let wPressed = keys.w;
+            let sPressed = keys.s;
+
+            if (shouldReverseLeftControls) {
+              wPressed = keys.s;
+              sPressed = keys.w;
+            }
+
+            if (wPressed) {
+              newState.paddles.left.velocity -= 1.2;
+              newState.paddles.left.velocity = Math.max(-newState.paddles.left.speed * 1.5, newState.paddles.left.velocity);
+              newY += newState.paddles.left.velocity;
+            } else if (sPressed) {
+              newState.paddles.left.velocity += 1.2;
+              newState.paddles.left.velocity = Math.min(newState.paddles.left.speed * 1.5, newState.paddles.left.velocity);
+              newY += newState.paddles.left.velocity;
+            } else if (mouseY === null) {
+              newState.paddles.left.velocity *= 0.8;
+              if (Math.abs(newState.paddles.left.velocity) < 0.1) {
+                newState.paddles.left.velocity = 0;
+              }
+              newY += newState.paddles.left.velocity;
+            }
+
+            newY = Math.max(0, Math.min(canvasSize.height - newState.paddles.left.height, newY));
+
+            if (Math.abs(newY - oldY) > 0.5 && !localTestMode) {
+              updatePaddlePosition(newY, newState.paddles.left.velocity, newY);
+            }
+          }
         }
 
-        // Store predicted state for next frame
-        predictedGameStateRef.current = predictedState;
+        if (playerSide === 'right' || localTestMode) {
+          const freezeEffect = newState.activeEffects.find(e => e.type === 'freeze_opponent');
+          const isRightFrozen = freezeEffect && freezeEffect.excludePaddle !== 'right';
+
+          if (!isRightFrozen) {
+            const oldY = newState.paddles.right.y;
+            let newY = oldY;
+
+            // Handle mouse control for right paddle
+            if (mouseY !== null) {
+              const targetY = mouseY - newState.paddles.right.height / 2;
+              newY = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.right.height, targetY));
+            }
+
+            const reverseControlsEffect = newState.activeEffects.find(e => e.type === 'reverse_controls');
+            const shouldReverseRightControls = reverseControlsEffect && reverseControlsEffect.activator !== 'right';
+
+            let upPressed = keys.ArrowUp;
+            let downPressed = keys.ArrowDown;
+
+            if (shouldReverseRightControls) {
+              upPressed = keys.ArrowDown;
+              downPressed = keys.ArrowUp;
+            }
+
+            if (upPressed) {
+              newState.paddles.right.velocity -= 1.2;
+              newState.paddles.right.velocity = Math.max(-newState.paddles.right.speed * 1.5, newState.paddles.right.velocity);
+              newY += newState.paddles.right.velocity;
+            } else if (downPressed) {
+              newState.paddles.right.velocity += 1.2;
+              newState.paddles.right.velocity = Math.min(newState.paddles.right.speed * 1.5, newState.paddles.right.velocity);
+              newY += newState.paddles.right.velocity;
+            } else if (mouseY === null) {
+              newState.paddles.right.velocity *= 0.8;
+              if (Math.abs(newState.paddles.right.velocity) < 0.1) {
+                newState.paddles.right.velocity = 0;
+              }
+              newY += newState.paddles.right.velocity;
+            }
+
+            newY = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, newY));
+
+            if (Math.abs(newY - oldY) > 0.5 && !localTestMode) {
+              updatePaddlePositionRef.current?.(newY, newState.paddles.right.velocity, newY);
+            }
+          }
+        }
+
+        // Return immediately - skip all client-side AI physics and collision detection
+        // Server is authoritative for everything except local player input
+        return newState;
       }
 
       // Ensure trails object exists to prevent crashes
@@ -4628,7 +4673,7 @@ const Pong404: React.FC = () => {
         }
 
         // Clamp right paddle position
-        newState.paddles.right.y = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.right.height, newState.paddles.right.y));
+        newState.paddles.right.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, newState.paddles.right.y));
 
         // In player mode, make the left paddle AI-controlled (always, since player controls right)
         if (newState.gameMode === 'player') {
@@ -4638,13 +4683,13 @@ const Pong404: React.FC = () => {
 
           // Use the same spinner AI as auto mode for consistency
           const updatePaddleWithSpinner = (paddle: any, isLeft: boolean, frameCount: number) => {
-            // Different reaction delays for each paddle to make them feel like different humans
-            const reactionDelay = isLeft ? HUMAN_REACTION_DELAY : HUMAN_REACTION_DELAY + 3;
+            // Same reaction delay for both paddles
+            const reactionDelay = HUMAN_REACTION_DELAY + 3;
 
             // Add reaction delay - only update target every few frames
             if (frameCount % reactionDelay === 0) {
-              // Different inaccuracy levels for each paddle
-              const baseInaccuracy = isLeft ? 12 : 18; // Left player slightly more accurate
+              // Same inaccuracy level for both paddles
+              const baseInaccuracy = 18;
               const inaccuracy = (Math.random() - 0.5) * baseInaccuracy;
 
               // Add prediction error - sometimes aim where ball was, not where it's going
@@ -4706,19 +4751,19 @@ const Pong404: React.FC = () => {
               paddle.velocity *= 0.7;
             }
 
-            // Different friction rates for each paddle
-            const friction = isLeft ? PADDLE_FRICTION : PADDLE_FRICTION * 0.95;
+            // Same friction rate for both paddles
+            const friction = PADDLE_FRICTION * 0.95;
             paddle.velocity *= friction;
 
-            // Slightly different max speeds for each paddle
-            const maxSpeed = isLeft ? paddle.speed : paddle.speed * 0.9;
+            // Same max speed for both paddles
+            const maxSpeed = paddle.speed * 0.9;
             paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
 
             // Update position
             paddle.y += paddle.velocity;
 
             // Keep paddle within bounds
-            paddle.y = Math.max(32, Math.min(canvasSize.height - 32 - paddle.height, paddle.y));
+            paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
           };
 
           // Check if left paddle is frozen (all paddles except the one who last touched)
@@ -4844,7 +4889,7 @@ const Pong404: React.FC = () => {
           paddle.x += paddle.velocity;
 
           // Keep paddle within bounds
-          paddle.x = Math.max(32, Math.min(canvasSize.width - 32 - paddle.width, paddle.x));
+          paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
         };
 
         if (newState.paddles.top) {
@@ -4930,7 +4975,7 @@ const Pong404: React.FC = () => {
           }
 
           // Clamp left paddle position
-          newState.paddles.left.y = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.left.height,newState.paddles.left.y));
+          newState.paddles.left.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.left.height, newState.paddles.left.y));
 
           // Add left paddle trail point
           if (Math.abs(newState.paddles.left.velocity) > 0.01) {
@@ -5001,7 +5046,7 @@ const Pong404: React.FC = () => {
           }
 
           // Clamp right paddle position
-          newState.paddles.right.y = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.right.height, newState.paddles.right.y));
+          newState.paddles.right.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, newState.paddles.right.y));
 
           // Add right paddle trail point
           if (Math.abs(newState.paddles.right.velocity) > 0.01) {
@@ -5069,7 +5114,7 @@ const Pong404: React.FC = () => {
           }
 
           // Clamp top paddle position
-          newState.paddles.top.x = Math.max(32, Math.min(canvasSize.width - 32 - newState.paddles.top.width, newState.paddles.top.x));
+          newState.paddles.top.x = Math.max(0, Math.min(canvasSize.width - newState.paddles.top.width, newState.paddles.top.x));
 
           // Add top paddle trail point
           const now = Date.now();
@@ -5134,7 +5179,7 @@ const Pong404: React.FC = () => {
           }
 
           // Clamp bottom paddle position
-          newState.paddles.bottom.x = Math.max(32, Math.min(canvasSize.width - 32 - newState.paddles.bottom.width, newState.paddles.bottom.x));
+          newState.paddles.bottom.x = Math.max(0, Math.min(canvasSize.width - newState.paddles.bottom.width, newState.paddles.bottom.x));
 
           // Add bottom paddle trail point
           const now = Date.now();
@@ -5155,33 +5200,34 @@ const Pong404: React.FC = () => {
 
         // PADDLE-TO-PADDLE COLLISION DETECTION - Prevent paddles from overlapping
         // Check corner collisions between vertical and horizontal paddles
+        // Paddles can now move to edges (0px) but still collide with each other
 
         // Left paddle vs Top paddle (left side, top corner)
-        if (newState.paddles.left.y <= 32 + newState.paddles.top.height &&
-            newState.paddles.left.x <= 32 + newState.paddles.top.x + newState.paddles.top.width) {
+        if (newState.paddles.left.y <= newState.paddles.top.height &&
+            newState.paddles.left.x <= newState.paddles.top.x + newState.paddles.top.width) {
           // Push left paddle down to avoid overlap
-          newState.paddles.left.y = Math.max(newState.paddles.left.y, 32 + newState.paddles.top.height);
+          newState.paddles.left.y = Math.max(newState.paddles.left.y, newState.paddles.top.height);
         }
 
         // Left paddle vs Bottom paddle (left side, bottom corner)
-        if (newState.paddles.left.y + newState.paddles.left.height >= canvasSize.height - 32 - newState.paddles.bottom.height &&
-            newState.paddles.left.x <= 32 + newState.paddles.bottom.x + newState.paddles.bottom.width) {
+        if (newState.paddles.left.y + newState.paddles.left.height >= canvasSize.height - newState.paddles.bottom.height &&
+            newState.paddles.left.x <= newState.paddles.bottom.x + newState.paddles.bottom.width) {
           // Push left paddle up to avoid overlap
-          newState.paddles.left.y = Math.min(newState.paddles.left.y, canvasSize.height - 32 - newState.paddles.bottom.height - newState.paddles.left.height);
+          newState.paddles.left.y = Math.min(newState.paddles.left.y, canvasSize.height - newState.paddles.bottom.height - newState.paddles.left.height);
         }
 
         // Right paddle vs Top paddle (right side, top corner)
-        if (newState.paddles.right.y <= 32 + newState.paddles.top.height &&
+        if (newState.paddles.right.y <= newState.paddles.top.height &&
             newState.paddles.right.x + newState.paddles.right.width >= newState.paddles.top.x) {
           // Push right paddle down to avoid overlap
-          newState.paddles.right.y = Math.max(newState.paddles.right.y, 32 + newState.paddles.top.height);
+          newState.paddles.right.y = Math.max(newState.paddles.right.y, newState.paddles.top.height);
         }
 
         // Right paddle vs Bottom paddle (right side, bottom corner)
-        if (newState.paddles.right.y + newState.paddles.right.height >= canvasSize.height - 32 - newState.paddles.bottom.height &&
+        if (newState.paddles.right.y + newState.paddles.right.height >= canvasSize.height - newState.paddles.bottom.height &&
             newState.paddles.right.x + newState.paddles.right.width >= newState.paddles.bottom.x) {
           // Push right paddle up to avoid overlap
-          newState.paddles.right.y = Math.min(newState.paddles.right.y, canvasSize.height - 32 - newState.paddles.bottom.height - newState.paddles.right.height);
+          newState.paddles.right.y = Math.min(newState.paddles.right.y, canvasSize.height - newState.paddles.bottom.height - newState.paddles.right.height);
         }
 
         // Top paddle vs Left paddle (already handled above)
@@ -5193,11 +5239,10 @@ const Pong404: React.FC = () => {
         // Bottom paddle vs Right paddle (already handled above)
 
         // Re-clamp all paddles after collision resolution to ensure they stay in bounds
-        // Account for 32px spacing for 24px ball (was 12px for 12px ball)
-        newState.paddles.left.y = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.left.height, newState.paddles.left.y));
-        newState.paddles.right.y = Math.max(32, Math.min(canvasSize.height - 32 - newState.paddles.right.height, newState.paddles.right.y));
-        newState.paddles.top.x = Math.max(32, Math.min(canvasSize.width - 32 - newState.paddles.top.width, newState.paddles.top.x));
-        newState.paddles.bottom.x = Math.max(32, Math.min(canvasSize.width - 32 - newState.paddles.bottom.width, newState.paddles.bottom.x));
+        newState.paddles.left.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.left.height, newState.paddles.left.y));
+        newState.paddles.right.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, newState.paddles.right.y));
+        newState.paddles.top.x = Math.max(0, Math.min(canvasSize.width - newState.paddles.top.width, newState.paddles.top.x));
+        newState.paddles.bottom.x = Math.max(0, Math.min(canvasSize.width - newState.paddles.bottom.width, newState.paddles.bottom.x));
 
         // AI CONTROL FOR NON-HUMAN PADDLES IN MULTIPLAYER
         const currentPlayerSide = multiplayerStateRef.current?.playerSide;
@@ -5241,7 +5286,7 @@ const Pong404: React.FC = () => {
             }
 
             // Keep within bounds
-            paddle.y = Math.max(32, Math.min(canvasSize.height - 32 - paddle.height, paddle.y));
+            paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
           } else {
             // Paddle is frozen - stop all movement
             newState.paddles.left.velocity = 0;
@@ -5298,7 +5343,7 @@ const Pong404: React.FC = () => {
             }
 
             // Keep within bounds
-            paddle.y = Math.max(32, Math.min(canvasSize.height - 32 - paddle.height, paddle.y));
+            paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
           } else {
             // Paddle is frozen - stop all movement
             newState.paddles.right.velocity = 0;
@@ -5389,7 +5434,7 @@ const Pong404: React.FC = () => {
           const maxSpeed = paddle.speed * 0.9;
           paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
           paddle.x += paddle.velocity;
-          paddle.x = Math.max(32, Math.min(canvasSize.width - 32 - paddle.width, paddle.x));
+          paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
         };
 
         // Apply AI to top paddle (only if no player is controlling it)
@@ -5576,7 +5621,7 @@ const Pong404: React.FC = () => {
           const maxSpeed = paddle.speed;
           paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
           paddle.x += paddle.velocity;
-          paddle.x = Math.max(32, Math.min(canvasSize.width - 32 - paddle.width, paddle.x));
+          paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
         };
 
         if (newState.paddles.top) {
@@ -5900,11 +5945,11 @@ const Pong404: React.FC = () => {
             if (side === 'left' || side === 'right') {
               // Vertical paddles - add erratic Y movement
               paddle.y += randomOffset;
-              paddle.y = Math.max(32, Math.min(canvasSize.height - 32 - paddle.height, paddle.y));
+              paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
             } else {
               // Horizontal paddles - add erratic X movement
               paddle.x += randomOffset;
-              paddle.x = Math.max(32, Math.min(canvasSize.width - 32 - paddle.width, paddle.x));
+              paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
             }
           });
         }
@@ -7188,12 +7233,12 @@ const Pong404: React.FC = () => {
     ctx.fillStyle = cache.curvature;
     ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
-    // [ROCKET] OPTIMIZED Scanlines - Use cached gradient
+    // [ROCKET] OPTIMIZED Scanlines - Use cached gradient (no animation)
     ctx.globalCompositeOperation = 'multiply';
     ctx.globalAlpha = 1;
 
-    // Pre-calculate scanline pattern once per 4 frames for better performance
-    const scanlineOffset = frameCount % 2;
+    // Static scanline pattern - no animation to prevent flickering
+    const scanlineOffset = 0;
 
     // Create scanline gradient once and cache it
     if (!cache.scanline) {
@@ -7205,7 +7250,7 @@ const Pong404: React.FC = () => {
 
     ctx.fillStyle = cache.scanline;
 
-    // Draw scanlines every 2 pixels with pattern offset
+    // Draw scanlines every 2 pixels with static pattern
     for (let y = scanlineOffset; y < canvasSize.height; y += 4) {
       ctx.fillRect(0, y, canvasSize.width, 1);
     }
@@ -7231,86 +7276,15 @@ const Pong404: React.FC = () => {
     ctx.fillStyle = cache.vignette;
     ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
-    // [ROCKET] OPTIMIZED Screen Flicker using precalculated values
-    const flickerIndex = Math.floor((time * 47) % 60);
-    const flicker = PRECALC_CONSTANTS.flickerValues[flickerIndex];
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.fillStyle = `rgba(255, 255, 255, ${flicker})`;
-    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+    // Screen flicker disabled - no animation
 
-    // 6. Phosphor Glow - Only around key elements, very minimal
-    if (frameCount % 3 === 0) { // Every 3rd frame only
-      ctx.globalCompositeOperation = 'screen';
-      ctx.globalAlpha = 0.08;
-      const currentColors = COLOR_PALETTE[gameState.colorIndex];
-      ctx.shadowColor = currentColors.foreground;
-      ctx.shadowBlur = 2;
-      ctx.fillStyle = currentColors.foreground;
+    // Phosphor Glow disabled - no frame-based flickering
+    // RGB Bleed Effect disabled - no frame-based flickering
 
-      ctx.shadowBlur = 0;
-    }
-
-    // 6.5. Enhanced RGB Bleed Effect - More prominent chromatic aberration simulation
-    // frameCount already declared above, reuse it
-    if (frameCount % 1 === 0) { // Every frame for more visible effect
-      ctx.globalCompositeOperation = 'screen';
-      ctx.globalAlpha = 0.08; // More prominent effect
-
-      const currentColors = COLOR_PALETTE[gameState.colorIndex];
-      const rgbColor = hexToRgb(currentColors.foreground);
-
-      // Create more noticeable horizontal red/blue shift for RGB bleed
-      const bleedOffset = 2; // 2 pixel offset for more visible effect
-
-      // Red channel shift (left) - more prominent
-      ctx.fillStyle = `rgba(${rgbColor.r}, 0, 0, 0.5)`;
-      ctx.fillRect(-bleedOffset, 0, canvasSize.width + bleedOffset, canvasSize.height);
-
-      // Blue channel shift (right) - more prominent
-      ctx.fillStyle = `rgba(0, 0, ${rgbColor.b}, 0.5)`;
-      ctx.fillRect(bleedOffset, 0, canvasSize.width - bleedOffset, canvasSize.height);
-
-      // Green stays in place but enhanced for better contrast
-      ctx.fillStyle = `rgba(0, ${Math.min(255, rgbColor.g + 20)}, 0, 0.3)`;
-      ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
-    }
-
-    // 7. Enhanced CRT Noise - Static and interference patterns
-    if (Math.random() < 0.4) { // 40% chance per frame for static noise
-      ctx.globalCompositeOperation = 'screen';
-      ctx.globalAlpha = 0.025;
-
-      // Random static noise (white noise)
-      for (let i = 0; i < 15; i++) {
-        const x = Math.random() * canvasSize.width;
-        const y = Math.random() * canvasSize.height;
-        const brightness = Math.random() * 255;
-        ctx.fillStyle = `rgb(${brightness}, ${brightness}, ${brightness})`;
-        ctx.fillRect(x, y, Math.random() < 0.3 ? 2 : 1, Math.random() < 0.2 ? 2 : 1);
-      }
-
-      // Colored noise (RGB static)
-      for (let i = 0; i < 8; i++) {
-        const x = Math.random() * canvasSize.width;
-        const y = Math.random() * canvasSize.height;
-        const r = Math.random() * 255;
-        const g = Math.random() * 255;
-        const b = Math.random() * 255;
-        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-        ctx.fillRect(x, y, 1, 1);
-      }
-    }
+    // CRT Noise disabled - no flickering static
 
 
-    // 8. Refresh Line - Very occasionally
-    if (Math.random() < 0.008) { // 0.8% chance per frame
-      const refreshY = (time * 300) % canvasSize.height;
-      ctx.globalCompositeOperation = 'screen';
-      ctx.globalAlpha = 0.05;
-      const currentColors = COLOR_PALETTE[gameState.colorIndex];
-      ctx.fillStyle = currentColors.foreground;
-      ctx.fillRect(0, refreshY, canvasSize.width, 1);
-    }
+    // Refresh Line disabled - no flickering line animation
 
     ctx.restore();
   }, [gameState.colorIndex]);
@@ -7323,6 +7297,9 @@ const Pong404: React.FC = () => {
 
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
+
+    // Disable anti-aliasing to prevent sub-pixel rendering flicker
+    ctx.imageSmoothingEnabled = false;
 
     // 📊 FPS Counter calculation (efficient)
     frameCountRef.current++;
@@ -7637,7 +7614,8 @@ const Pong404: React.FC = () => {
       const isHumanControlled = (gameState.gameMode === 'multiplayer' && currentPlayerSide === side) ||
                                 (gameState.gameMode === 'player' && side === 'right');
       ctx.fillStyle = isHumanControlled ? humanPlayerColor : currentColors.foreground;
-      ctx.fillRect(x, y, width, height);
+      // Round to whole pixels to prevent sub-pixel anti-aliasing flicker
+      ctx.fillRect(Math.round(x), Math.round(y), width, height);
     };
 
     // Draw all four paddles
@@ -8674,10 +8652,7 @@ const Pong404: React.FC = () => {
 
     }
 
-    // Apply CRT shader effect (if enabled) - but only do expensive pixel distortion occasionally
-    if (crtEffect) {
-      applyCRTEffect(ctx, canvasSize);
-    }
+    // CRT shader completely disabled
 
     // Debug collision zones - always visible - DISABLED
     if (false) {
