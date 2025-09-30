@@ -40,6 +40,7 @@ const GlobalAmbientMusic: React.FC = () => {
     isPlaying: false,
     volume: 0.6,
   });
+  const [isAnalysisReady, setIsAnalysisReady] = useState(false);
 
   const currentPieceRef = useRef<any>(null);
   const isInitializedRef = useRef(false);
@@ -69,6 +70,7 @@ const GlobalAmbientMusic: React.FC = () => {
       Tone.getDestination().connect(fftRef.current);
 
       isInitializedRef.current = true;
+      setIsAnalysisReady(true); // Trigger analysis loop to start
     } catch (error) {
       console.error('[GENERATIVE MUSIC] Failed to start Tone.js:', error);
     }
@@ -1270,10 +1272,25 @@ const GlobalAmbientMusic: React.FC = () => {
         if (currentPieceRef.current.stop) {
           currentPieceRef.current.stop().catch(console.error);
         } else if (Array.isArray(currentPieceRef.current)) {
-          currentPieceRef.current.forEach(({ synth, pattern }) => {
-            if (pattern) pattern.stop();
-            if (synth.dispose) synth.dispose();
-            else if (synth.stop) synth.stop();
+          currentPieceRef.current.forEach((item) => {
+            if (!item) return;
+
+            // Handle old format: { synth, pattern }
+            if (item.synth || item.pattern) {
+              if (item.pattern?.stop) item.pattern.stop();
+              if (item.synth?.dispose) item.synth.dispose();
+              else if (item.synth?.stop) item.synth.stop();
+            } else {
+              // Handle new format: object with multiple audio nodes
+              Object.values(item).forEach((node: any) => {
+                try {
+                  if (node?.stop) node.stop();
+                  if (node?.dispose) node.dispose();
+                } catch (e) {
+                  // Ignore disposal errors
+                }
+              });
+            }
           });
         }
       }
@@ -1282,7 +1299,9 @@ const GlobalAmbientMusic: React.FC = () => {
 
   // Music analysis loop - runs continuously to extract audio features
   useEffect(() => {
-    if (!isInitializedRef.current) return;
+    if (!isAnalysisReady) {
+      return;
+    }
 
     let animationFrameId: number;
     let previousVolume = 0;
@@ -1290,6 +1309,10 @@ const GlobalAmbientMusic: React.FC = () => {
 
     const analyzeMusic = () => {
       if (analyserRef.current && fftRef.current) {
+        // Check if Tone is actually playing
+        const isTransportRunning = Tone.getTransport().state === 'started';
+        const contextState = Tone.getContext().state;
+
         // Get waveform for volume
         const waveform = analyserRef.current.getValue() as Float32Array;
 
@@ -1355,6 +1378,8 @@ const GlobalAmbientMusic: React.FC = () => {
 
         // Store analysis data
         analysisDataRef.current = { volume, disharmonic, beat };
+
+        // Music analysis running - disharmonic RGB bleed active in CRT shader
       }
 
       animationFrameId = requestAnimationFrame(analyzeMusic);
@@ -1365,7 +1390,7 @@ const GlobalAmbientMusic: React.FC = () => {
     return () => {
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [isAnalysisReady]);
 
   // Global functions to control music from anywhere
   useEffect(() => {
@@ -1404,36 +1429,36 @@ const GlobalAmbientMusic: React.FC = () => {
       const pongAudioContext = (window as any).pongAudioContext;
       const analyzer = (window as any).pongAudioAnalyzer;
 
-      console.log(`[VISUALIZER] Connection attempt ${connectionAttempts}: pongAudioContext=${!!pongAudioContext} analyzer=${!!analyzer} toneInitialized=${isInitializedRef.current}`);
+      // Visualizer connection attempt
 
       if (analyzer && pongAudioContext && isInitializedRef.current) {
         try {
           // Get Tone's raw audio context
           const toneContext = Tone.getContext().rawContext as AudioContext;
-          console.log('[VISUALIZER] Tone context:', toneContext);
+          // Tone context connected
 
           // Create a MediaStreamDestination in Tone's context
           const mediaStreamDest = toneContext.createMediaStreamDestination();
-          console.log('[VISUALIZER] Created MediaStreamDestination');
+          // Created MediaStreamDestination
 
           // Get Tone's master destination and connect it
           const toneDest = Tone.getDestination();
-          console.log('[VISUALIZER] Tone destination:', toneDest);
+          // Tone destination ready
 
           // Use Tone's connect method to connect to the MediaStreamDestination
           toneDest.connect(mediaStreamDest as any);
-          console.log('[VISUALIZER] Step 1: Connected Tone destination to MediaStreamDestination');
+          // Step 1: Connected Tone destination to MediaStreamDestination
 
           // Create a MediaStreamSource in Pong's context from Tone's stream
           const mediaStreamSource = pongAudioContext.createMediaStreamSource(mediaStreamDest.stream);
-          console.log('[VISUALIZER] Step 2: Created MediaStreamSource from Tone stream');
+          // Step 2: Created MediaStreamSource from Tone stream
 
           // Connect the source to Pong's analyzer
           mediaStreamSource.connect(analyzer);
-          console.log('[VISUALIZER] Step 3: Connected MediaStreamSource to Pong analyzer');
+          // Step 3: Connected MediaStreamSource to Pong analyzer
 
           hasConnected = true;
-          console.log('[VISUALIZER] ✅ Successfully connected Tone.js to Pong visualizer via MediaStream');
+          // Successfully connected Tone.js to Pong visualizer via MediaStream
         } catch (e) {
           console.error('[VISUALIZER] Error connecting Tone.js:', e);
         }

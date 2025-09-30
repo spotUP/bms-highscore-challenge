@@ -107,18 +107,19 @@ void main(void) {
     float edgeDetect = length(texture(uTexture, uv + vec2(0.002, 0.0)).rgb - texture(uTexture, uv - vec2(0.002, 0.0)).rgb);
     float fringeBoost = edgeDetect * 0.5; // More discrete boost
 
-    // Music-reactive RGB bleed - disharmonics make RGB channels separate more
-    float disharmonicBleed = uDisharmonic * 0.003; // Scale disharmonic value (0-1) to pixel offset
-    vec2 dynamicOffset = baseOffset + vec2(disharmonicBleed, 0.0);
+    // Music-reactive RGB bleed - subtle pulsing based on disharmonics
+    float baseBleed = 0.002; // Subtle base separation
+    float disharmonicBleed = uDisharmonic * 0.015; // Subtle animation
+    vec2 dynamicOffset = vec2(baseBleed + disharmonicBleed, 0.0); // Base + animated
 
-    float r = texture(uTexture, uv - dynamicOffset - rgbMisalign * vec2(1.0, 0.0) - vec2(fringeBoost * 0.0005, 0.0)).r;
+    // Simple RGB separation - only affected by disharmonic
+    float r = texture(uTexture, uv - dynamicOffset).r;
     float g = texture(uTexture, uv).g;
-    float b = texture(uTexture, uv + dynamicOffset + rgbMisalign * vec2(1.0, 0.0) + vec2(fringeBoost * 0.0005, 0.0)).b;
+    float b = texture(uTexture, uv + dynamicOffset).b;
     vec4 aberratedColor = vec4(r, g, b, 1.0);
 
-    // Blend chromatic aberration - increase blend amount with disharmonics
-    float blendAmount = 0.15 + uDisharmonic * 0.25; // 15% base, up to 40% with disharmonics
-    vec4 color = mix(originalColor, aberratedColor, blendAmount);
+    // Always use the aberrated color so we can see the width change
+    vec4 color = aberratedColor;
 
     // Phosphor bloom/glow effect - bright pixels bleed outward
     float brightness = dot(color.rgb, vec3(0.299, 0.587, 0.114)); // Luminance
