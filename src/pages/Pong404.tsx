@@ -1728,22 +1728,30 @@ const Pong404: React.FC = () => {
             return prev; // Ignore updates for your own paddle
           }
 
-          // Calculate lag compensation if timestamp is provided
+          // Enhanced lag compensation with extrapolation
           let compensatedY = data.y;
           if (data.ts && data.velocity) {
             const networkDelay = now - data.ts;
-            // Predict where paddle should be now based on velocity and network delay
-            compensatedY = data.y + (data.velocity * networkDelay / 1000);
+            // Extrapolate position based on velocity and time elapsed
+            // Add 50ms extra extrapolation for smoother opponent movement
+            const extrapolationTime = (networkDelay + 50) / 1000;
+            compensatedY = data.y + (data.velocity * extrapolationTime);
           }
 
           if (data.side === 'left') {
-            newState.paddles.left.y = compensatedY;
+            // Smooth interpolation: blend current position with new position
+            const currentY = prev.paddles.left.y;
+            const smoothingFactor = 0.3; // Lower = smoother, higher = more responsive
+            newState.paddles.left.y = currentY + (compensatedY - currentY) * smoothingFactor;
             newState.paddles.left.velocity = data.velocity || 0;
             newState.paddles.left.targetY = data.targetY || compensatedY;
             // Clamp to bounds (using fixed canvas size)
             newState.paddles.left.y = Math.max(0, Math.min(newState.paddles.left.y, canvasSize.height - newState.paddles.left.height));
           } else if (data.side === 'right') {
-            newState.paddles.right.y = compensatedY;
+            // Smooth interpolation: blend current position with new position
+            const currentY = prev.paddles.right.y;
+            const smoothingFactor = 0.3; // Lower = smoother, higher = more responsive
+            newState.paddles.right.y = currentY + (compensatedY - currentY) * smoothingFactor;
             newState.paddles.right.velocity = data.velocity || 0;
             newState.paddles.right.targetY = data.targetY || compensatedY;
             // Clamp to bounds (using fixed canvas size)
@@ -2034,64 +2042,35 @@ const Pong404: React.FC = () => {
     }
   }, [multiplayerState.playerId, multiplayerState.roomId]);
 
-  // Paddle update throttling - 60Hz for smooth multiplayer
-  const PADDLE_UPDATE_RATE = 1000 / 60; // 60Hz for paddle updates (16.67ms)
-  const lastPaddleUpdateRef = useRef<number>(0);
-  const pendingPaddleUpdateRef = useRef<NodeJS.Timeout | null>(null);
+  // Send paddle updates immediately for zero-latency feel
   const lastPaddlePositionRef = useRef<number>(0);
+  const lastPaddleUpdateTimeRef = useRef<number>(0);
+  const paddleUpdateSequenceRef = useRef<number>(0);
 
-  // Send paddle update via WebSocket with throttling
+  // Send paddle update via WebSocket - NO THROTTLING for instant response
   const updatePaddlePosition = useCallback((y: number, velocity = 0, targetY?: number) => {
     if (wsRef.current?.readyState === WebSocket.OPEN && multiplayerState.isConnected) {
       const now = Date.now();
-      const timeSinceLastUpdate = now - lastPaddleUpdateRef.current;
-      const positionChange = Math.abs(y - lastPaddlePositionRef.current);
 
-      // Send immediately if ANY movement or enough time has passed (0.5px threshold for maximum responsiveness)
-      if (positionChange > 0.5 || timeSinceLastUpdate >= PADDLE_UPDATE_RATE) {
-        // Cancel pending update
-        if (pendingPaddleUpdateRef.current) {
-          clearTimeout(pendingPaddleUpdateRef.current);
-          pendingPaddleUpdateRef.current = null;
-        }
+      // Only send if position actually changed (no threshold - send every pixel)
+      if (y !== lastPaddlePositionRef.current) {
+        paddleUpdateSequenceRef.current++;
 
+        // Send unreliable message for paddle updates (order doesn't matter, latest wins)
         wsRef.current.send(JSON.stringify({
           t: 'up', // update_paddle
           p: multiplayerState.playerId,
           d: {
             y,
-            v: velocity, // shortened velocity
-            tY: targetY || y, // shortened targetY
-            ts: now // timestamp for lag compensation
+            v: velocity, // velocity for prediction
+            tY: targetY || y, // target for smoothing
+            ts: now, // timestamp for lag compensation
+            seq: paddleUpdateSequenceRef.current // sequence to ignore out-of-order
           }
         }));
 
-        lastPaddleUpdateRef.current = now;
         lastPaddlePositionRef.current = y;
-      } else {
-        // Throttle small movements
-        if (!pendingPaddleUpdateRef.current) {
-          const delay = PADDLE_UPDATE_RATE - timeSinceLastUpdate;
-          pendingPaddleUpdateRef.current = setTimeout(() => {
-            pendingPaddleUpdateRef.current = null;
-
-            if (wsRef.current?.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify({
-                t: 'up', // update_paddle
-                p: multiplayerState.playerId,
-                d: {
-                  y,
-                  v: velocity, // shortened velocity
-                  tY: targetY || y, // shortened targetY
-                  ts: Date.now() // timestamp for lag compensation
-                }
-              }));
-
-              lastPaddleUpdateRef.current = Date.now();
-              lastPaddlePositionRef.current = y;
-            }
-          }, delay);
-        }
+        lastPaddleUpdateTimeRef.current = now;
       }
     }
   }, [multiplayerState.playerId, multiplayerState.isConnected, multiplayerState.playerSide]);
@@ -4946,7 +4925,7 @@ const Pong404: React.FC = () => {
 
             newY = Math.max(0, Math.min(canvasSize.height - newState.paddles.left.height, newY));
 
-            if (Math.abs(newY - oldY) > 0.5 && !localTestMode) {
+            if (newY !== oldY && !localTestMode) { // Send every pixel change
               updatePaddlePosition(newY, newState.paddles.left.velocity, newY);
             }
           }
@@ -4995,7 +4974,7 @@ const Pong404: React.FC = () => {
 
             newY = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, newY));
 
-            if (Math.abs(newY - oldY) > 0.5 && !localTestMode) {
+            if (newY !== oldY && !localTestMode) { // Send every pixel change
               updatePaddlePositionRef.current?.(newY, newState.paddles.right.velocity, newY);
             }
           }
@@ -5623,7 +5602,7 @@ const Pong404: React.FC = () => {
             });
           }
 
-            if (Math.abs(newState.paddles.left.y - oldY) > 0.5 && !localTestMode) {
+            if (newState.paddles.left.y !== oldY && !localTestMode) { // Send every pixel change
               updatePaddlePosition(newState.paddles.left.y, newState.paddles.left.velocity, newState.paddles.left.y);
             }
           } else {
@@ -5694,7 +5673,7 @@ const Pong404: React.FC = () => {
             });
           }
 
-          if (Math.abs(newState.paddles.right.y - oldY) > 0.5 && !localTestMode) {
+          if (newState.paddles.right.y !== oldY && !localTestMode) { // Send every pixel change
             updatePaddlePositionRef.current?.(newState.paddles.right.y, newState.paddles.right.velocity, newState.paddles.right.y);
             }
           } else {

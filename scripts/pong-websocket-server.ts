@@ -414,6 +414,7 @@ interface Player {
   ws: any;
   roomId: string;
   lastSeen: number;
+  lastPaddleSequence?: number; // Track sequence to ignore out-of-order updates
 }
 
 interface GameRoom {
@@ -668,6 +669,13 @@ class PongWebSocketServer {
 
     const room = this.rooms.get(player.roomId);
     if (!room) return;
+
+    // Check sequence number to ignore out-of-order updates
+    if (data.seq && player.lastPaddleSequence && data.seq <= player.lastPaddleSequence) {
+      // This is an old update that arrived out of order - ignore it
+      return;
+    }
+    player.lastPaddleSequence = data.seq;
 
     player.lastSeen = Date.now();
 
