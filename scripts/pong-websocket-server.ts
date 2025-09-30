@@ -1124,11 +1124,10 @@ class PongWebSocketServer {
     const mainRoom = this.createNewRoom('main');
     this.rooms.set('main', mainRoom);
 
-    // Auto-start 4-AI game for testing collision detection
-    mainRoom.isActive = true;
-    mainRoom.gameState.isPlaying = true;
-    console.log(`[⌂] Persistent main room created`);
-    console.log(`[🤖] 4-AI game started automatically for testing`);
+    // Don't auto-start game - wait for players to join
+    mainRoom.isActive = false;
+    mainRoom.gameState.isPlaying = false;
+    console.log(`[⌂] Persistent main room created (idle until players join)`);
   }
 
   private startGameLoop() {
