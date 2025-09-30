@@ -25,7 +25,7 @@ interface GenerativeMusicState {
 
 const GlobalAmbientMusic: React.FC = () => {
   const [musicState, setMusicState] = useState<GenerativeMusicState>({
-    currentPieceId: null,
+    currentPieceId: 'earth-approach',
     isPlaying: false,
     volume: 0.6,
   });
@@ -1190,8 +1190,13 @@ const GlobalAmbientMusic: React.FC = () => {
   // Initialize on first user interaction
   useEffect(() => {
     const handleFirstInteraction = async () => {
-      console.log('[GENERATIVE MUSIC] Audio context initialized, ready for user selection');
+      console.log('[GENERATIVE MUSIC] Audio context initialized, starting Earth Approach');
       await initializeTone();
+
+      // Auto-start Earth Approach on first interaction
+      if (musicState.currentPieceId === 'earth-approach' && !musicState.isPlaying) {
+        await startPiece('earth-approach');
+      }
 
       document.removeEventListener('click', handleFirstInteraction);
       document.removeEventListener('keydown', handleFirstInteraction);
@@ -1207,7 +1212,7 @@ const GlobalAmbientMusic: React.FC = () => {
       document.removeEventListener('keydown', handleFirstInteraction);
       document.removeEventListener('touchstart', handleFirstInteraction);
     };
-  }, [initializeTone]);
+  }, [initializeTone, musicState.currentPieceId, musicState.isPlaying, startPiece]);
 
   // Handle page visibility changes
   useEffect(() => {

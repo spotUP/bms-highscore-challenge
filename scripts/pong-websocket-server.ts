@@ -1917,8 +1917,8 @@ class PongWebSocketServer {
     // Check ball collision with pickups (reverse loop to avoid index issues when splicing)
     for (let i = gameState.pickups.length - 1; i >= 0; i--) {
       const pickup = gameState.pickups[i];
-      const pickupCenterX = pickup.x + (pickup.size || 24) / 2;
-      const pickupCenterY = pickup.y + (pickup.size || 24) / 2;
+      const pickupCenterX = pickup.x + (pickup.size || 72) / 2;
+      const pickupCenterY = pickup.y + (pickup.size || 72) / 2;
       let collected = false;
 
       // Check main ball collision
@@ -1928,7 +1928,7 @@ class PongWebSocketServer {
         Math.pow(ballCenterX - pickupCenterX, 2) + Math.pow(ballCenterY - pickupCenterY, 2)
       );
 
-      if (ballDistance < (gameState.ball.size + (pickup.size || 24)) / 2) {
+      if (ballDistance < (gameState.ball.size + (pickup.size || 72)) / 2) {
         collected = true;
       }
 
@@ -1941,7 +1941,7 @@ class PongWebSocketServer {
             Math.pow(extraBallCenterX - pickupCenterX, 2) + Math.pow(extraBallCenterY - pickupCenterY, 2)
           );
 
-          if (extraBallDistance < (extraBall.size + (pickup.size || 24)) / 2) {
+          if (extraBallDistance < (extraBall.size + (pickup.size || 72)) / 2) {
             collected = true;
             break;
           }
@@ -1972,10 +1972,10 @@ class PongWebSocketServer {
     const pickupTypes: Pickup['type'][] = ['speed_up', 'speed_down', 'big_ball', 'small_ball', 'drunk_ball', 'grow_paddle', 'shrink_paddle', 'reverse_controls', 'invisible_ball', 'freeze_opponent'];
     const type = pickupTypes[Math.floor(Math.random() * pickupTypes.length)];
 
-    // Pickup size is 24x24 (2 pixels at 12x12 scale)
+    // Pickup size is 72x72 (6 pixels at 12x12 scale)
     // Paddles are at edges with 44px safe zone (per paddle collision code)
-    // Add 24px for pickup size to avoid spawning on paddles
-    const padding = 68; // 44px paddle zone + 24px pickup size
+    // Add 72px for pickup size to avoid spawning on paddles
+    const padding = 116; // 44px paddle zone + 72px pickup size
 
     const pickup: Pickup = {
       id: Math.random().toString(36).substr(2, 9),
@@ -1983,7 +1983,7 @@ class PongWebSocketServer {
       y: Math.random() * (canvasSize.height - padding * 2) + padding,
       type,
       createdAt: Date.now(),
-      size: 24
+      size: 72
     };
 
     gameState.pickups.push(pickup);

@@ -7170,17 +7170,23 @@ const Pong404: React.FC = () => {
 
       if (shouldStartGame) {
         console.log('[ROCKET] STARTING GAME FROM START SCREEN!');
-        // Try to connect to multiplayer WebSocket
-        if (!multiplayerState.isConnected && connectionStatus !== 'error') {
+        // Try to connect to multiplayer WebSocket (allow retry even if connectionStatus is 'error')
+        if (!multiplayerState.isConnected) {
           try {
             connectWebSocket();
+            // Reset game state when reconnecting
             setGameState(prev => ({
               ...prev,
               showStartScreen: false,
               gameMode: 'multiplayer',
               isPlaying: true,
-                ball: {
+              score: { left: 0, right: 0, top: 0, bottom: 0 },
+              winner: null,
+              gameEnded: false,
+              ball: {
                 ...prev.ball,
+                x: canvasSize.width / 2,
+                y: canvasSize.height / 2,
                 dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
                 dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
               }
@@ -8023,8 +8029,13 @@ const Pong404: React.FC = () => {
 
       // Draw pixelated pattern with NO gaps between pixels
       const drawPixelatedPattern = (pattern: string, x: number, y: number, size: number, color: string) => {
-        const pixelSize = 12; // Match score pixel size as per CLAUDE.md
-        const gridSize = Math.floor(size / pixelSize);
+        // Always use 12x12 grid for patterns, but scale pixel size based on pickup size
+        const gridSize = 12;
+        const pixelSize = size / gridSize; // Scale pixel size to fit pickup size
+
+        // Round coordinates to prevent sub-pixel rendering gaps
+        const roundedX = Math.round(x);
+        const roundedY = Math.round(y);
 
         ctx.fillStyle = color;
 
@@ -8080,7 +8091,7 @@ const Pong404: React.FC = () => {
           for (let row = 0; row < 12; row++) {
             for (let col = 0; col < 12; col++) {
               if (precalcPattern[row][col]) {
-                ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
               }
             }
           }
@@ -8095,7 +8106,7 @@ const Pong404: React.FC = () => {
                 if ((row < 4 && col >= 6 && col <= 8) ||
                     (row >= 4 && row < 8 && col >= 3 && col <= 5) ||
                     (row >= 8 && col >= 6 && col <= 8)) {
-                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                 }
               }
             }
@@ -8106,7 +8117,7 @@ const Pong404: React.FC = () => {
               for (let col = 0; col < gridSize; col++) {
                 if (row === 3 || row === 6 || row === 9) {
                   if (Math.sin(col * 0.8) > 0) {
-                    ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                    ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                   }
                 }
               }
@@ -8121,7 +8132,7 @@ const Pong404: React.FC = () => {
               for (let col = 0; col < gridSize; col++) {
                 const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
                 if (dist <= radius && dist >= radius - 1.5) {
-                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                 }
               }
             }
@@ -8144,7 +8155,7 @@ const Pong404: React.FC = () => {
                 const angle = Math.atan2(row - gridSize/2, col - gridSize/2);
                 const dist = Math.sqrt((col - gridSize/2) ** 2 + (row - gridSize/2) ** 2);
                 if (Math.sin(angle * 3 + dist * 0.5) > 0.5) {
-                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                 }
               }
             }
@@ -8155,7 +8166,7 @@ const Pong404: React.FC = () => {
               for (let col = 0; col < gridSize; col++) {
                 if ((row >= 2 && row <= 6 && col >= 5 && col <= 7) || // Stem
                     (row >= 0 && row <= 4 && Math.abs(col - 6) <= row)) { // Arrow head
-                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                 }
               }
             }
@@ -8166,7 +8177,7 @@ const Pong404: React.FC = () => {
               for (let col = 0; col < gridSize; col++) {
                 if ((row >= 2 && row <= 8 && col >= 5 && col <= 7) || // Stem
                     (row >= 6 && row <= 10 && Math.abs(col - 6) <= (10 - row))) { // Arrow head
-                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                 }
               }
             }
@@ -8179,7 +8190,7 @@ const Pong404: React.FC = () => {
                     (row >= 3 && row <= 7 && col === 1) ||
                     (row >= 4 && row <= 6 && col >= 8 && col <= 11) || // Right arrow
                     (row >= 3 && row <= 7 && col === 11)) {
-                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                 }
               }
             }
@@ -8191,7 +8202,7 @@ const Pong404: React.FC = () => {
                 if ((row + col) % 3 === 0 &&
                     ((row === 2 || row === gridSize - 3) && col >= 2 && col <= gridSize - 3) ||
                     ((col === 2 || col === gridSize - 3) && row >= 2 && row <= gridSize - 3)) {
-                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                 }
               }
             }
@@ -8202,7 +8213,7 @@ const Pong404: React.FC = () => {
               for (let col = 0; col < gridSize; col++) {
                 if ((row >= 4 && row <= 7 && col >= 1 && col <= 10) || // Horizontal
                     (col >= 4 && col <= 7 && row >= 1 && row <= 10)) { // Vertical
-                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                 }
               }
             }
@@ -8212,7 +8223,7 @@ const Pong404: React.FC = () => {
             for (let row = 0; row < gridSize; row++) {
               for (let col = 0; col < gridSize; col++) {
                 if (Math.abs(row - col) <= 1 || Math.abs(row - (gridSize - col - 1)) <= 1) {
-                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                 }
               }
             }
@@ -8222,7 +8233,7 @@ const Pong404: React.FC = () => {
             for (let row = 0; row < gridSize; row++) {
               for (let col = 0; col < gridSize; col++) {
                 if ((row + col) % 3 === 0) {
-                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                 }
               }
             }
@@ -8235,7 +8246,7 @@ const Pong404: React.FC = () => {
                 const centerY = gridSize / 2;
                 const distanceFromCenter = Math.abs(row - centerY) + Math.abs(col - centerX);
                 if (distanceFromCenter >= 3 && distanceFromCenter <= 4) {
-                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                 }
               }
             }
@@ -8254,7 +8265,7 @@ const Pong404: React.FC = () => {
                     (Math.abs(dy) <= 1 && Math.abs(dx) <= 4) || // Horizontal line
                     (Math.abs(dx - dy) <= 1 && Math.abs(dx) <= 3) || // Diagonal 1
                     (Math.abs(dx + dy) <= 1 && Math.abs(dx) <= 3)) { // Diagonal 2
-                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                 }
               }
             }
@@ -8275,7 +8286,7 @@ const Pong404: React.FC = () => {
                 // Add small particles/dots to represent wind
                 if ((col === 2 || col === 5 || col === 8 || col === 11) &&
                     (row === 3 || row === 6 || row === 9)) {
-                  ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
                 }
               }
             }
@@ -8847,18 +8858,18 @@ const Pong404: React.FC = () => {
         ctx.fillText('Press ANY KEY to retry', playFieldWidth / 2, playFieldHeight - 160);
       }
 
-      // Always show spectator/player status when connected (outside of fade)
+      // Show spectator status when connected (player side text removed)
       if (connectionStatus === 'connected' || multiplayerState.isConnected) {
         const currentMultiplayerState = latestMultiplayerStateRef.current;
-        const playerSideText = currentMultiplayerState.playerSide === 'spectator'
-          ? 'SPECTATING'
-          : `YOU: ${currentMultiplayerState.playerSide.toUpperCase()} PADDLE`;
 
-        ctx.fillStyle = currentColors.foreground;
-        ctx.textAlign = 'center';
-        ctx.font = 'bold 12px "Press Start 2P", monospace';
-        ctx.fillText('MULTIPLAYER MODE', playFieldWidth / 2, playFieldHeight - 180);
-        ctx.fillText(playerSideText, playFieldWidth / 2, playFieldHeight - 160);
+        // Only show spectator status, not player paddle position
+        if (currentMultiplayerState.playerSide === 'spectator') {
+          ctx.fillStyle = currentColors.foreground;
+          ctx.textAlign = 'center';
+          ctx.font = 'bold 12px "Press Start 2P", monospace';
+          ctx.fillText('MULTIPLAYER MODE', playFieldWidth / 2, playFieldHeight - 180);
+          ctx.fillText('SPECTATING', playFieldWidth / 2, playFieldHeight - 160);
+        }
       }
 
     }
