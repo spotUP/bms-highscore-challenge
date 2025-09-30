@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import * as Tone from 'tone';
+
+// Dynamic Tone.js import - don't load until user interaction
+let Tone: any = null;
 
 // Generative music pieces using Tone.js (no external samples required)
 const AVAILABLE_PIECES = [
@@ -42,12 +44,20 @@ const GlobalAmbientMusic: React.FC = () => {
   const currentPieceRef = useRef<any>(null);
   const isInitializedRef = useRef(false);
   const sampleLibraryRef = useRef<any>(null);
-  const analyserRef = useRef<Tone.Analyser | null>(null);
-  const fftRef = useRef<Tone.FFT | null>(null);
+  const analyserRef = useRef<any | null>(null);
+  const fftRef = useRef<any | null>(null);
   const analysisDataRef = useRef<MusicAnalysisData>({ volume: 0, disharmonic: 0, beat: 0 });
 
   const initializeTone = useCallback(async () => {
     if (isInitializedRef.current) return;
+
+    // Load Tone.js dynamically on first user interaction
+    if (!Tone) {
+      console.log('[GENERATIVE MUSIC] Loading Tone.js...');
+      const ToneModule = await import('tone');
+      Tone = ToneModule.default || ToneModule;
+      console.log('[GENERATIVE MUSIC] Tone.js loaded');
+    }
 
     try {
       await Tone.start();
