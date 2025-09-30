@@ -1969,6 +1969,30 @@ class PongWebSocketServer {
       ballChanged = true;
     }
 
+    // Black Hole Physics - Strong gravitational pull
+    if (gameState.blackHoles && gameState.blackHoles.length > 0) {
+      for (const blackHole of gameState.blackHoles) {
+        const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
+        const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
+
+        const dx = blackHole.x - ballCenterX;
+        const dy = blackHole.y - ballCenterY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < blackHole.radius && distance > 0) {
+          // Strong gravity - inverse square law with high strength
+          const gravity = Math.min((blackHole.strength / (distance * distance)) * 1000, 2.0);
+          const normalizedX = dx / distance;
+          const normalizedY = dy / distance;
+
+          // Pull ball toward black hole
+          gameState.ball.dx += normalizedX * gravity * 0.15;
+          gameState.ball.dy += normalizedY * gravity * 0.15;
+          ballChanged = true;
+        }
+      }
+    }
+
     // Calculate where the ball WILL BE after this frame
     const nextX = gameState.ball.isAiming ? gameState.ball.x : gameState.ball.x + gameState.ball.dx;
     const nextY = gameState.ball.isAiming ? gameState.ball.y : gameState.ball.y + gameState.ball.dy;
@@ -2342,6 +2366,21 @@ class PongWebSocketServer {
   }
 
   private handleScoring(gameState: GameState, boundaryHit: 'left' | 'right' | 'top' | 'bottom'): void {
+    // Great Wall Defense - Protect the wall from scoring
+    if (gameState.ball.hasGreatWall && gameState.ball.greatWallSide === boundaryHit) {
+      console.log(`🛡️ GREAT WALL DEFENSE: ${boundaryHit} wall protected - ball bounces back!`);
+
+      // Bounce ball back instead of scoring
+      if (boundaryHit === 'left' || boundaryHit === 'right') {
+        gameState.ball.dx = -gameState.ball.dx;
+        gameState.ball.x = boundaryHit === 'left' ? 20 : 780 - gameState.ball.size;
+      } else {
+        gameState.ball.dy = -gameState.ball.dy;
+        gameState.ball.y = boundaryHit === 'top' ? 20 : 780 - gameState.ball.size;
+      }
+      return; // Don't score - wall is protected!
+    }
+
     let scoringPlayer: 'left' | 'right' | 'top' | 'bottom';
 
     // Determine who gets the score based on last touch
