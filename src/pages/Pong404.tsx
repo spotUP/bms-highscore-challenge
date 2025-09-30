@@ -10104,10 +10104,10 @@ const Pong404: React.FC = () => {
   // Universal input handler to initialize audio on any user interaction
   useEffect(() => {
     const handleAnyUserInput = async (e: Event) => {
-      await initializeAudio();
-
       // Dismiss audio prompt on click or touch
       if ((e.type === 'click' || e.type === 'mousedown' || e.type === 'touchstart') && showAudioPrompt && !audioPromptDismissedRef.current) {
+        // Initialize audio ONLY when dismissing prompt (after user interaction)
+        await initializeAudio();
         console.log('[MUSIC] DISMISSING AUDIO PROMPT WITH MOUSE CLICK');
         audioPromptDismissedRef.current = true;
         setShowAudioPrompt(false);
@@ -10214,8 +10214,8 @@ const Pong404: React.FC = () => {
   // Global mouse move handler to track mouse outside canvas
   useEffect(() => {
     const handleGlobalMouseMove = async (e: MouseEvent | PointerEvent) => {
-      // Initialize audio on first mouse interaction
-      await initializeAudio();
+      // Don't initialize audio on mouse move - only on click/key press
+      // await initializeAudio();
 
       // Start ambient sounds immediately on first interaction (including title screen)
       if (!ambienceActiveRef.current && audioContextRef.current) {
