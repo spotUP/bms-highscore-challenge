@@ -7233,78 +7233,9 @@ const Pong404: React.FC = () => {
           }, 50);
         }
 
-        // Check pickup collisions (server handles this in multiplayer)
-        if (newState.gameMode !== 'multiplayer') {
-        const ballCenterX = newState.ball.x + newState.ball.size / 2;
-        const ballCenterY = newState.ball.y + newState.ball.size / 2;
-
-        for (let i = newState.pickups.length - 1; i >= 0; i--) {
-          const pickup = newState.pickups[i];
-          const pickupCenterX = pickup.x + pickup.size / 2;
-          const pickupCenterY = pickup.y + pickup.size / 2;
-
-          const distance = Math.sqrt(
-            Math.pow(ballCenterX - pickupCenterX, 2) +
-            Math.pow(ballCenterY - pickupCenterY, 2)
-          );
-
-          if (distance < (newState.ball.size / 2 + pickup.size / 2)) {
-            applyPickupEffectRef.current?.(pickup, newState);
-
-            // Announce the pickup with speech synthesis
-            const pickupData = PICKUP_TYPES.find(p => p.type === pickup.type);
-            if (pickupData) {
-              setTimeout(() => speakRobotic(pickupData.description), 100);
-              // Track when this announcement was made to delay countdown
-              setPickupAnnouncementTimes(prev => ({
-                ...prev,
-                [pickup.type]: Date.now()
-              }));
-            }
-
-            newState.pickups.splice(i, 1); // Remove this pickup
-
-            // Change colors on pickup!
-            newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
-          }
-        }
-
-        // 🟠 Check extra ball pickup collisions
-        for (let i = newState.pickups.length - 1; i >= 0; i--) {
-          const pickup = newState.pickups[i];
-          const pickupCenterX = pickup.x + pickup.size / 2;
-          const pickupCenterY = pickup.y + pickup.size / 2;
-
-          // Check collision with each extra ball
-          for (const extraBall of newState.extraBalls) {
-            const ballCenterX = extraBall.x + extraBall.size / 2;
-            const ballCenterY = extraBall.y + extraBall.size / 2;
-
-            const distance = Math.sqrt(
-              Math.pow(ballCenterX - pickupCenterX, 2) +
-              Math.pow(ballCenterY - pickupCenterY, 2)
-            );
-
-            if (distance < (extraBall.size / 2 + pickup.size / 2)) {
-              applyPickupEffectRef.current?.(pickup, newState);
-
-              // Announce the pickup with speech synthesis
-              const pickupData = PICKUP_TYPES.find(p => p.type === pickup.type);
-              if (pickupData) {
-                setTimeout(() => speakRobotic(pickupData.description), 100);
-                setPickupAnnouncementTimes(prev => ({
-                  ...prev,
-                  [pickup.type]: Date.now()
-                }));
-              }
-
-              newState.pickups.splice(i, 1); // Remove this pickup
-              newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
-              break; // Exit inner loop since pickup is consumed
-            }
-          }
-        }
-        } // End multiplayer check for pickup collisions
+        // NOTE: Pickup collision detection removed from client
+        // Server handles ALL pickup collision detection and applies effects
+        // Client only renders pickups and receives updated game state from server
 
         // Check coin collisions
         for (let i = newState.coins.length - 1; i >= 0; i--) {
