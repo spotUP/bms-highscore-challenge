@@ -10096,11 +10096,13 @@ const Pong404: React.FC = () => {
         setShowAudioPrompt(false);
 
         // Don't process game start on this click - just dismiss the prompt
+        e.preventDefault();
+        e.stopPropagation();
         return;
       }
 
-      // Handle start screen click to start game
-      if ((e.type === 'click' || e.type === 'mousedown' || e.type === 'touchstart') && gameState.showStartScreen) {
+      // Handle start screen click to start game (only if audio prompt is not shown)
+      if ((e.type === 'click' || e.type === 'mousedown' || e.type === 'touchstart') && gameState.showStartScreen && !showAudioPrompt) {
         console.log('[ROCKET] STARTING GAME FROM START SCREEN VIA MOUSE CLICK!');
         // Try to connect to multiplayer WebSocket
         if (!multiplayerState.isConnected) {
