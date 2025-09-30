@@ -258,10 +258,10 @@ const PICKUP_TYPES = [
   { type: 'great_wall', pattern: 'brick', color: '#00ccff', description: 'Great Wall Defense!', scale: 'c-phrygian', note: 1 },
 ];
 
-// WebSocket server URL - using working Render service
+// WebSocket server URL - using correct Render service
 const WS_SERVER_URL = import.meta.env.DEV
   ? 'ws://localhost:3002'
-  : 'wss://pong-websocket-server-1.onrender.com';
+  : 'wss://pong-websocket-server.onrender.com';
 
 const COLOR_PALETTE = [
   { background: '#1a0b3d', foreground: '#ff006e' }, // Deep Purple & Hot Pink
