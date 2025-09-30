@@ -2031,26 +2031,25 @@ const Pong404: React.FC = () => {
               networkState.colorIndex = message.data.colorIndex;
             }
 
-            // Update paddles from server AI - but preserve local player's paddle for instant response
+            // Update paddles from server AI
             if (message.data.paddles) {
-              const playerSide = multiplayerStateRef.current?.playerSide;
               networkState.paddles = {
-                left: (playerSide === 'left') ? prevState.paddles.left : (message.data.paddles.left ? {
+                left: message.data.paddles.left ? {
                   ...prevState.paddles.left,
                   ...message.data.paddles.left
-                } : prevState.paddles.left),
-                right: (playerSide === 'right') ? prevState.paddles.right : (message.data.paddles.right ? {
+                } : prevState.paddles.left,
+                right: message.data.paddles.right ? {
                   ...prevState.paddles.right,
                   ...message.data.paddles.right
-                } : prevState.paddles.right),
-                top: (playerSide === 'top') ? prevState.paddles.top : (message.data.paddles.top ? {
+                } : prevState.paddles.right,
+                top: message.data.paddles.top ? {
                   ...prevState.paddles.top,
                   ...message.data.paddles.top
-                } : prevState.paddles.top),
-                bottom: (playerSide === 'bottom') ? prevState.paddles.bottom : (message.data.paddles.bottom ? {
+                } : prevState.paddles.top,
+                bottom: message.data.paddles.bottom ? {
                   ...prevState.paddles.bottom,
                   ...message.data.paddles.bottom
-                } : prevState.paddles.bottom)
+                } : prevState.paddles.bottom
               };
             }
 
@@ -4958,6 +4957,7 @@ const Pong404: React.FC = () => {
             }
 
             newY = Math.max(0, Math.min(canvasSize.height - newState.paddles.left.height, newY));
+            newState.paddles.left.y = newY;
 
             if (newY !== oldY && !localTestMode) { // Send every pixel change
               updatePaddlePosition(newY, newState.paddles.left.velocity, newY);
@@ -5007,6 +5007,7 @@ const Pong404: React.FC = () => {
             }
 
             newY = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, newY));
+            newState.paddles.right.y = newY;
 
             if (newY !== oldY && !localTestMode) { // Send every pixel change
               updatePaddlePositionRef.current?.(newY, newState.paddles.right.velocity, newY);
