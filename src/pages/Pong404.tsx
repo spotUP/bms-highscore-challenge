@@ -10361,7 +10361,8 @@ const Pong404: React.FC = () => {
             position: 'absolute',
             top: '50%',
             left: '50%',
-            transform: 'translate(-50%, -50%)',
+            // Enable hardware acceleration for smooth rendering
+            transform: 'translate(-50%, -50%) translateZ(0)',
             padding: '40px 60px',
             background: 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 50%, #0a0a0a 100%)',
             borderRadius: '20px',
@@ -10373,8 +10374,6 @@ const Pong404: React.FC = () => {
               inset 0 0 2px rgba(0,0,0,0.5),
               0 20px 60px rgba(0,0,0,0.9)
             `,
-            // Enable hardware acceleration for smooth rendering
-            transform: 'translate(-50%, -50%) translateZ(0)',
             willChange: 'transform',
             backfaceVisibility: 'hidden' as const,
             width: `calc(min(calc(100vw - 8px), calc((100vh - 8px) * 4 / 3)) + 120px)`,
