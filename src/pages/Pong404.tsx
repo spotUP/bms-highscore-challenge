@@ -4866,43 +4866,24 @@ const Pong404: React.FC = () => {
         // Use network state directly - no interpolation or prediction to prevent jitter
         const playerSide = multiplayerStateRef.current?.playerSide;
 
-        // Start with server state for all paddles
-        newState = {
-          ...networkGameStateRef.current,
-          paddles: {
-            left: {
-              ...networkGameStateRef.current.paddles.left,
-              height: PADDLE_LENGTH,
-              width: PADDLE_THICKNESS
-            },
-            right: {
-              ...networkGameStateRef.current.paddles.right,
-              height: PADDLE_LENGTH,
-              width: PADDLE_THICKNESS
-            },
-            top: {
-              ...networkGameStateRef.current.paddles.top,
-              height: PADDLE_THICKNESS,
-              width: PADDLE_LENGTH
-            },
-            bottom: {
-              ...networkGameStateRef.current.paddles.bottom,
-              height: PADDLE_THICKNESS,
-              width: PADDLE_LENGTH
-            }
-          }
-        };
+        // Use server state for everything except local player's paddle
+        newState = { ...networkGameStateRef.current };
 
-        // THEN copy local player paddle from prevState (which has keyboard updates already applied)
-        if (playerSide === 'left') {
-          newState.paddles.left = { ...prevState.paddles.left, height: PADDLE_LENGTH, width: PADDLE_THICKNESS };
-        } else if (playerSide === 'right') {
-          newState.paddles.right = { ...prevState.paddles.right, height: PADDLE_LENGTH, width: PADDLE_THICKNESS };
-        } else if (playerSide === 'top') {
-          newState.paddles.top = { ...prevState.paddles.top, height: PADDLE_THICKNESS, width: PADDLE_LENGTH };
-        } else if (playerSide === 'bottom') {
-          newState.paddles.bottom = { ...prevState.paddles.bottom, height: PADDLE_THICKNESS, width: PADDLE_LENGTH };
-        }
+        // Initialize paddles from server, but keep local paddle from previous frame
+        newState.paddles = {
+          left: playerSide === 'left'
+            ? { ...prevState.paddles.left, height: PADDLE_LENGTH, width: PADDLE_THICKNESS }
+            : { ...networkGameStateRef.current.paddles.left, height: PADDLE_LENGTH, width: PADDLE_THICKNESS },
+          right: playerSide === 'right'
+            ? { ...prevState.paddles.right, height: PADDLE_LENGTH, width: PADDLE_THICKNESS }
+            : { ...networkGameStateRef.current.paddles.right, height: PADDLE_LENGTH, width: PADDLE_THICKNESS },
+          top: playerSide === 'top'
+            ? { ...prevState.paddles.top, height: PADDLE_THICKNESS, width: PADDLE_LENGTH }
+            : { ...networkGameStateRef.current.paddles.top, height: PADDLE_THICKNESS, width: PADDLE_LENGTH },
+          bottom: playerSide === 'bottom'
+            ? { ...prevState.paddles.bottom, height: PADDLE_THICKNESS, width: PADDLE_LENGTH }
+            : { ...networkGameStateRef.current.paddles.bottom, height: PADDLE_THICKNESS, width: PADDLE_LENGTH }
+        };
 
         // Preserve client-side trails (trails are visual-only and managed locally)
         // Always carry over previous trail points from prevState
