@@ -42,13 +42,26 @@ uniform float uBrightness;
 uniform float uResolutionX;
 uniform float uResolutionY;
 
-// CRT barrel distortion
+// CRT barrel distortion with 4:3 aspect ratio correction
 vec2 curveRemapUV(vec2 uv) {
-    uv = uv * 2.0 - 1.0;
-    vec2 offset = abs(uv.yx) / vec2(uCurvature, uCurvature);
-    uv = uv + uv * offset * offset;
-    uv = uv * 0.5 + 0.5;
-    return uv;
+    // Center coordinates (range -1 to 1)
+    vec2 centered = uv * 2.0 - 1.0;
+
+    // Correct for 4:3 display aspect ratio (being stretched from square 800x800)
+    // Since we're stretching horizontally, compress X coordinate before distortion
+    centered.x *= 0.75; // 3/4 = 0.75
+
+    // Apply classic barrel distortion
+    // This creates gentle outward curvature like a real CRT
+    float curveAmount = 1.0 / uCurvature;
+    float r2 = centered.x * centered.x + centered.y * centered.y;
+    centered = centered * (1.0 + curveAmount * r2);
+
+    // Restore aspect ratio after distortion
+    centered.x /= 0.75;
+
+    // Return to 0-1 range
+    return centered * 0.5 + 0.5;
 }
 
 // Scanline effect

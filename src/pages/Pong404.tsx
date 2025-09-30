@@ -8969,6 +8969,13 @@ const Pong404: React.FC = () => {
       pixiContainerRef.current.appendChild(app.canvas);
       pixiAppRef.current = app;
 
+      // Style the PixiJS canvas to fill the container and center properly
+      // Use object-fit to maintain aspect ratio without distortion
+      app.canvas.style.width = '100%';
+      app.canvas.style.height = '100%';
+      app.canvas.style.display = 'block';
+      app.canvas.style.objectFit = 'fill';
+
       // Create sprite that we'll update each frame
       let texture = Texture.from(canvasRef.current);
       const sprite = new Sprite(texture);
@@ -8978,7 +8985,7 @@ const Pong404: React.FC = () => {
 
       // Create and apply CRT filter with subtle authentic effects
       const filter = new CRTFilter({
-        curvature: 6.0,               // Subtle screen curve
+        curvature: 50.0,              // Very minimal screen curve (higher = less curve)
         scanlineIntensity: 0.15,      // Subtle scanlines
         vignetteIntensity: 0.3,       // Gentle edge darkening
         noiseIntensity: 0.03,         // Subtle CRT noise
@@ -9253,10 +9260,10 @@ const Pong404: React.FC = () => {
           style={{
             background: COLOR_PALETTE[gameState.colorIndex].background,
             outline: 'none',
-            // Force square aspect ratio - use the smaller of width/height available
-            width: `min(calc(100vw - 8px), calc(100vh - 8px))`,
-            height: `min(calc(100vw - 8px), calc(100vh - 8px))`,
-            aspectRatio: '1',
+            // Force 4:3 aspect ratio like classic CRT monitors
+            width: `min(calc(100vw - 8px), calc((100vh - 8px) * 4 / 3))`,
+            height: `min(calc(100vh - 8px), calc((100vw - 8px) * 3 / 4))`,
+            aspectRatio: '4 / 3',
             cursor: cursorHidden ? 'none' : 'default',
             // Disable text smoothing and antialiasing for pixelated text
             fontSmooth: 'never',
@@ -9569,10 +9576,10 @@ const Pong404: React.FC = () => {
           position: 'absolute',
           top: 0,
           left: 0,
-          // Force square aspect ratio - use the smaller of width/height available
-          width: `min(calc(100vw - 8px), calc(100vh - 8px))`,
-          height: `min(calc(100vw - 8px), calc(100vh - 8px))`,
-          aspectRatio: '1',
+          // Match canvas sizing exactly - 4:3 aspect ratio
+          width: `min(calc(100vw - 8px), calc((100vh - 8px) * 4 / 3))`,
+          height: `min(calc(100vh - 8px), calc((100vw - 8px) * 3 / 4))`,
+          aspectRatio: '4 / 3',
           cursor: cursorHidden ? 'none' : 'default',
           imageRendering: 'pixelated',
           pointerEvents: 'none', // Let events pass through to canvas
