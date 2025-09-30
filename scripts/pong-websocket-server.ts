@@ -265,7 +265,7 @@ interface Pickup {
   id: string;
   x: number;
   y: number;
-  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall';
   createdAt: number;
   size?: number;
 }
@@ -279,7 +279,7 @@ interface Coin {
 }
 
 interface ActiveEffect {
-  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall';
   startTime: number;
   duration: number;
   originalValue?: any;
@@ -1541,6 +1541,187 @@ class PongWebSocketServer {
       }
     }
 
+    // ========================================
+    // BALL PHYSICS MODIFIERS
+    // Apply special ball physics effects before movement
+    // ========================================
+    const currentTime = Date.now();
+
+    // Apply drunk ball effect - controlled chaos
+    if (gameState.ball.isDrunk) {
+      gameState.ball.drunkAngle += 0.3 + Math.random() * 0.2; // Slower rotation
+
+      // Gentle wobble motion
+      const chaosX = Math.sin(gameState.ball.drunkAngle) * 1.5 + Math.cos(gameState.ball.drunkAngle * 1.5) * 0.5;
+      const chaosY = Math.cos(gameState.ball.drunkAngle * 1.2) * 1.5 + Math.sin(gameState.ball.drunkAngle * 1.8) * 0.5;
+
+      // Occasional small direction changes
+      if (Math.random() < 0.03) { // 3% chance per frame for small direction change
+        gameState.ball.dx += (Math.random() - 0.5) * 2;
+        gameState.ball.dy += (Math.random() - 0.5) * 2;
+      }
+
+      // Gentle velocity modulation
+      gameState.ball.dx += chaosX * 0.15 + (Math.random() - 0.5) * 0.5;
+      gameState.ball.dy += chaosY * 0.15 + (Math.random() - 0.5) * 0.5;
+
+      // Mild speed variations
+      if (Math.random() < 0.02) { // 2% chance for speed change
+        const speedMultiplier = 0.7 + Math.random() * 0.6; // Between 0.7x and 1.3x speed
+        gameState.ball.dx *= speedMultiplier;
+        gameState.ball.dy *= speedMultiplier;
+      }
+
+      // Occasional complete direction reversal
+      if (Math.random() < 0.02) { // 2% chance to reverse direction
+        gameState.ball.dx *= -1;
+        gameState.ball.dy *= -1;
+      }
+
+      // Gentle wobbly trajectory
+      const wobble = Math.sin(gameState.ball.drunkAngle * 2) * 1;
+      gameState.ball.dx += wobble * 0.1;
+      gameState.ball.dy += Math.cos(gameState.ball.drunkAngle * 2.5) * 1 * 0.1;
+
+      // Cap drunk ball speed to prevent it from getting too fast
+      const maxDrunkSpeed = 10; // Maximum speed for drunk ball
+      const currentSpeed = Math.sqrt(gameState.ball.dx * gameState.ball.dx + gameState.ball.dy * gameState.ball.dy);
+      if (currentSpeed > maxDrunkSpeed) {
+        const speedRatio = maxDrunkSpeed / currentSpeed;
+        gameState.ball.dx *= speedRatio;
+        gameState.ball.dy *= speedRatio;
+      }
+
+      ballChanged = true;
+    }
+
+    // Apply teleporting ball effect - random position changes
+    if (gameState.ball.isTeleporting) {
+      const timeSinceLastTeleport = currentTime - gameState.ball.lastTeleportTime;
+
+      // Teleport every 800-1500ms for strategic challenge
+      if (timeSinceLastTeleport > 800 + Math.random() * 700) {
+        // Keep ball in bounds with some padding
+        const padding = 50;
+        gameState.ball.x = padding + Math.random() * (canvasSize.width - padding * 2);
+        gameState.ball.y = padding + Math.random() * (canvasSize.height - padding * 2);
+
+        // Also randomize direction and speed slightly on teleport
+        const speedVariation = 0.8 + Math.random() * 0.4; // 0.8x to 1.2x speed
+        gameState.ball.dx *= speedVariation;
+        gameState.ball.dy *= speedVariation;
+
+        // Sometimes reverse direction
+        if (Math.random() < 0.3) {
+          gameState.ball.dx *= -1;
+        }
+        if (Math.random() < 0.3) {
+          gameState.ball.dy *= -1;
+        }
+
+        gameState.ball.lastTeleportTime = currentTime;
+        ballChanged = true;
+      }
+    }
+
+    // Check if ball is stuck bouncing vertically and give it a sideways push
+    const horizontalSpeed = Math.abs(gameState.ball.dx);
+    const verticalSpeed = Math.abs(gameState.ball.dy);
+
+    // If ball is moving much more vertically than horizontally, it might be stuck
+    if (verticalSpeed > horizontalSpeed * 3) {
+      // Start tracking if we haven't already
+      if (gameState.ball.stuckCheckStartTime === 0) {
+        gameState.ball.stuckCheckStartTime = currentTime;
+        gameState.ball.stuckCheckStartX = gameState.ball.x;
+      } else {
+        // Check if ball hasn't moved much horizontally in 2 seconds
+        const timeSinceCheck = currentTime - gameState.ball.stuckCheckStartTime;
+        const horizontalDistance = Math.abs(gameState.ball.x - gameState.ball.stuckCheckStartX);
+
+        if (timeSinceCheck > 2000 && horizontalDistance < 100) {
+          // Ball is stuck! Give it a sideways push
+          const pushDirection = Math.random() > 0.5 ? 1 : -1; // Random left or right
+          const pushStrength = 8 + Math.random() * 4; // 8-12 speed units
+          gameState.ball.dx = pushDirection * pushStrength;
+
+          // Reset stuck tracking
+          gameState.ball.stuckCheckStartTime = 0;
+          gameState.ball.stuckCheckStartX = 0;
+          ballChanged = true;
+        }
+      }
+    } else {
+      // Ball is moving well horizontally, reset stuck tracking
+      gameState.ball.stuckCheckStartTime = 0;
+      gameState.ball.stuckCheckStartX = 0;
+    }
+
+    // Wind Physics
+    if (gameState.ball.hasWind) {
+      // Apply wind force - creates a sideways push effect
+      const windForce = 0.3;
+      const windDirection = Math.sin(currentTime * 0.005) * windForce; // Oscillating wind
+      gameState.ball.dx += windDirection;
+      gameState.ball.dy += windDirection * 0.5; // Less vertical influence
+      ballChanged = true;
+    }
+
+    // Balloon Ball Physics (Floating Ball)
+    if (gameState.ball.isFloating) {
+      // Ball floats upward against gravity
+      gameState.ball.dy -= 0.2; // Upward force
+      gameState.ball.dx *= 0.99; // Slight horizontal drag
+      ballChanged = true;
+    }
+
+    // Magnet Ball Physics
+    if (gameState.ball.isMagnetic) {
+      // Ball is attracted to nearest paddle
+      const paddleDistances = [
+        { side: 'left', distance: Math.abs(gameState.ball.x - 30) },
+        { side: 'right', distance: Math.abs(gameState.ball.x - (canvasSize.width - 30)) },
+        { side: 'top', distance: Math.abs(gameState.ball.y - 30) },
+        { side: 'bottom', distance: Math.abs(gameState.ball.y - (canvasSize.height - 30)) }
+      ];
+
+      const nearestPaddle = paddleDistances.reduce((min, curr) =>
+        curr.distance < min.distance ? curr : min
+      );
+
+      // Apply magnetic force toward nearest paddle
+      const magnetForce = 0.3;
+      if (nearestPaddle.side === 'left') {
+        gameState.ball.dx -= magnetForce;
+      } else if (nearestPaddle.side === 'right') {
+        gameState.ball.dx += magnetForce;
+      } else if (nearestPaddle.side === 'top') {
+        gameState.ball.dy -= magnetForce;
+      } else if (nearestPaddle.side === 'bottom') {
+        gameState.ball.dy += magnetForce;
+      }
+      ballChanged = true;
+    }
+
+    // Slippery Ball Physics
+    if (gameState.ball.isSlippery) {
+      // Add random wobble to ball movement
+      gameState.ball.dx += (Math.random() - 0.5) * 0.5;
+      gameState.ball.dy += (Math.random() - 0.5) * 0.5;
+      ballChanged = true;
+    }
+
+    // Hypnotic Ball Physics
+    if (gameState.ball.isHypnotic) {
+      const elapsed = currentTime - gameState.hypnoStartTime;
+      const hypnoFreq = 0.005;
+
+      // Add spiral movement
+      gameState.ball.x += Math.cos(elapsed * hypnoFreq) * 2;
+      gameState.ball.y += Math.sin(elapsed * hypnoFreq * 1.3) * 2;
+      ballChanged = true;
+    }
+
     // Calculate where the ball WILL BE after this frame
     const nextX = gameState.ball.isAiming ? gameState.ball.x : gameState.ball.x + gameState.ball.dx;
     const nextY = gameState.ball.isAiming ? gameState.ball.y : gameState.ball.y + gameState.ball.dy;
@@ -2463,6 +2644,23 @@ class PongWebSocketServer {
         gameState.ball.bounciness = 1.2;
         effect.duration = 8000; // 8 seconds
         break;
+      case 'wind':
+        gameState.ball.hasWind = true;
+        effect.duration = 4000;
+        break;
+      case 'great_wall':
+        // Protect the losing side's wall
+        const scores = [
+          { side: 'left' as const, score: gameState.score.left },
+          { side: 'right' as const, score: gameState.score.right },
+          { side: 'top' as const, score: gameState.score.top },
+          { side: 'bottom' as const, score: gameState.score.bottom }
+        ];
+        const losingSide = scores.reduce((min, curr) => curr.score < min.score ? curr : min);
+        gameState.ball.hasGreatWall = true;
+        gameState.ball.greatWallSide = losingSide.side;
+        effect.duration = 8000;
+        break;
       default:
         // For any unimplemented pickup, give it a default 5 second duration
         effect.duration = 5000;
@@ -2667,6 +2865,15 @@ class PongWebSocketServer {
         if (effect.originalValue !== undefined) {
           gameState.ball.bounciness = effect.originalValue;
         }
+        break;
+
+      case 'wind':
+        gameState.ball.hasWind = false;
+        break;
+
+      case 'great_wall':
+        gameState.ball.hasGreatWall = false;
+        gameState.ball.greatWallSide = null;
         break;
 
       // For other effects, no cleanup needed (visual effects, etc.)

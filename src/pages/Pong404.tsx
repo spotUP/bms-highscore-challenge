@@ -7233,7 +7233,8 @@ const Pong404: React.FC = () => {
           }, 50);
         }
 
-        // Check pickup collisions
+        // Check pickup collisions (server handles this in multiplayer)
+        if (newState.gameMode !== 'multiplayer') {
         const ballCenterX = newState.ball.x + newState.ball.size / 2;
         const ballCenterY = newState.ball.y + newState.ball.size / 2;
 
@@ -7303,6 +7304,7 @@ const Pong404: React.FC = () => {
             }
           }
         }
+        } // End multiplayer check for pickup collisions
 
         // Check coin collisions
         for (let i = newState.coins.length - 1; i >= 0; i--) {
