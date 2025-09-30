@@ -1323,68 +1323,35 @@ const Pong404: React.FC = () => {
       return;
     }
 
-    // First check if server is available
-    console.log('[SEARCH] Checking server availability...');
-    setConnectionStatus('connecting');
-    setConnectionMessage('[SEARCH] Checking server availability...');
+    // For production servers (Render), skip health check and connect directly
+    // The WebSocket connection itself will wake up the server
+    const isProduction = !WS_SERVER_URL.includes('localhost');
 
-    const isServerAvailable = await checkServerAvailability();
-    setServerAvailable(isServerAvailable);
-
-    if (!isServerAvailable) {
-      console.log('[FIRE] Server not available, warming up...');
+    if (isProduction) {
+      console.log('[FIRE] Connecting to production server (may need warmup)...');
       setConnectionStatus('warming');
+      setConnectionMessage('[FIRE] Waking up server... This may take 30-60 seconds');
+      setTimeout(() => speakRobotic('SERVER IS WAKING UP PLEASE WAIT'), 500);
       setCurrentPhase('warming');
+      // Skip health check, go straight to WebSocket connection
+    } else {
+      // For localhost, check if server is running first
+      console.log('[SEARCH] Checking server availability...');
+      setConnectionStatus('connecting');
+      setConnectionMessage('[SEARCH] Checking server availability...');
 
-      if (WS_SERVER_URL.includes('localhost')) {
-        // Local server - try to start it
+      const isServerAvailable = await checkServerAvailability();
+      setServerAvailable(isServerAvailable);
+
+      if (!isServerAvailable) {
+        console.log('[BOLT] Local server not available, trying to start...');
+        setConnectionStatus('warming');
+        setCurrentPhase('warming');
         setConnectionMessage('[BOLT] Starting local WebSocket server...');
         const serverStarted = await startLocalServer();
         if (!serverStarted) {
           setConnectionStatus('error');
           setConnectionMessage('[ERROR] Please start the WebSocket server: npx tsx scripts/pong-websocket-server.ts');
-          return;
-        }
-      } else {
-        // Remote server (Render) - it's suspended and needs to warm up
-        setConnectionMessage('[FIRE] Waking up server... This may take 30-60 seconds');
-        setTimeout(() => speakRobotic('SERVER IS WAKING UP PLEASE WAIT'), 500);
-
-        // Keep retrying the health check to wake up the server
-        const maxWarmupAttempts = 20; // 20 attempts = up to 100 seconds
-        let warmupAttempt = 0;
-
-        while (warmupAttempt < maxWarmupAttempts) {
-          warmupAttempt++;
-          const elapsed = warmupAttempt * 5;
-
-          if (warmupAttempt <= 6) {
-            setConnectionMessage(`[FIRE] Waking up server... ${elapsed}s elapsed`);
-          } else if (warmupAttempt <= 12) {
-            setCurrentPhase('booting');
-            setConnectionMessage(`[ROCKET] Server booting... ${elapsed}s elapsed`);
-          } else {
-            setCurrentPhase('finalizing');
-            setConnectionMessage(`[HOURGLASS] Almost ready... ${elapsed}s elapsed`);
-          }
-
-          await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds between attempts
-
-          const isNowAvailable = await checkServerAvailability();
-          if (isNowAvailable) {
-            setServerAvailable(true);
-            setConnectionMessage('[CHECK] Server ready! Connecting...');
-            setTimeout(() => speakRobotic('SERVER READY CONNECTING NOW'), 500);
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Brief pause before connecting
-            break;
-          }
-        }
-
-        // Final check after warmup attempts
-        if (warmupAttempt >= maxWarmupAttempts) {
-          setConnectionStatus('error');
-          setConnectionMessage('[ERROR] Server failed to wake up. Please try again or contact support.');
-          setTimeout(() => speakRobotic('SERVER TIMEOUT PLEASE TRY AGAIN'), 500);
           return;
         }
       }
@@ -1403,10 +1370,13 @@ const Pong404: React.FC = () => {
       wsRef.current = null;
     }
 
-    setConnectionStatus('connecting');
-    setConnectionMessage('Initializing connection to multiplayer server...');
+    if (!isProduction) {
+      setConnectionStatus('connecting');
+      setConnectionMessage('Initializing connection to multiplayer server...');
+      setCurrentPhase('initializing');
+    }
+    // For production, warming state was already set above
     setConnectionStartTime(Date.now());
-    setCurrentPhase('initializing');
 
     // Progressive timeout stages with enhanced feedback
     const warmingTimeout = setTimeout(() => {
