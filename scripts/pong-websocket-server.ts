@@ -206,20 +206,20 @@ class ServerCollisionDetector {
 
   // 🏆 Ball-wall collision detection for scoring
   static detectBallWall(ball: Ball, canvasWidth: number, canvasHeight: number): CollisionResult | null {
-    // Check each wall boundary
-    if (ball.x + ball.size < -ball.size) {
+    // Check if ball goes past canvas boundaries (fixed to trigger at edge, not 2x past)
+    if (ball.x + ball.size < 0) {
       return this.createWallCollisionResult(ball, 'left', canvasWidth, canvasHeight);
     }
 
-    if (ball.x > canvasWidth + ball.size) {
+    if (ball.x > canvasWidth) {
       return this.createWallCollisionResult(ball, 'right', canvasWidth, canvasHeight);
     }
 
-    if (ball.y + ball.size < -ball.size) {
+    if (ball.y + ball.size < 0) {
       return this.createWallCollisionResult(ball, 'top', canvasWidth, canvasHeight);
     }
 
-    if (ball.y > canvasHeight + ball.size) {
+    if (ball.y > canvasHeight) {
       return this.createWallCollisionResult(ball, 'bottom', canvasWidth, canvasHeight);
     }
 
@@ -1737,34 +1737,9 @@ class PongWebSocketServer {
       ballChanged = true;
     }
 
-    // Portal Ball Physics
-    if (gameState.ball.hasPortal) {
-      const ballRight = gameState.ball.x + gameState.ball.size;
-      const ballLeft = gameState.ball.x;
-      const ballBottom = gameState.ball.y + gameState.ball.size;
-      const ballTop = gameState.ball.y;
-
-      // Check if ball hits any wall and teleport to opposite side
-      if (ballRight < 0) {
-        // Ball went off left edge, teleport to right
-        gameState.ball.x = canvasSize.width - gameState.ball.size;
-        ballChanged = true;
-      } else if (ballLeft > canvasSize.width) {
-        // Ball went off right edge, teleport to left
-        gameState.ball.x = 0;
-        ballChanged = true;
-      }
-
-      if (ballBottom < 0) {
-        // Ball went off top edge, teleport to bottom
-        gameState.ball.y = canvasSize.height - gameState.ball.size;
-        ballChanged = true;
-      } else if (ballTop > canvasSize.height) {
-        // Ball went off bottom edge, teleport to top
-        gameState.ball.y = 0;
-        ballChanged = true;
-      }
-    }
+    // Portal Ball Physics - REMOVED
+    // Portal ball was causing balls to teleport to opposite edge instead of scoring
+    // This pickup has been disabled
 
     // Mirror Mode Physics
     if (gameState.ball.isMirror) {
@@ -2325,16 +2300,16 @@ class PongWebSocketServer {
     // 🏆 COMPREHENSIVE BOUNDARY COLLISION DETECTION WITH DEBUG LOGGING
     const wallCollision = ServerCollisionDetector.detectBallWall(ballForCollision, canvasSize.width, canvasSize.height);
 
-    // Always log boundary check results for debugging
-    if (frameCount % 800 < 100) { // Every ~13 frames at 60fps - less frequent than other logs
-      const ballBounds = {
-        left: ballForCollision.x,
-        right: ballForCollision.x + ballForCollision.size,
-        top: ballForCollision.y,
-        bottom: ballForCollision.y + ballForCollision.size
-      };
-      console.log(`🏆 BOUNDARY CHECK: Ball bounds L=${ballBounds.left.toFixed(1)} R=${ballBounds.right.toFixed(1)} T=${ballBounds.top.toFixed(1)} B=${ballBounds.bottom.toFixed(1)}`);
-      console.log(`🏆 CANVAS BOUNDS: 0-${canvasSize.width} x 0-${canvasSize.height} | Collision detected: ${wallCollision ? wallCollision.side : 'NONE'}`);
+    // Always log when ball is near boundary
+    const nearLeft = ballForCollision.x < 50;
+    const nearRight = ballForCollision.x + ballForCollision.size > canvasSize.width - 50;
+    const nearTop = ballForCollision.y < 50;
+    const nearBottom = ballForCollision.y + ballForCollision.size > canvasSize.height - 50;
+
+    if (nearLeft || nearRight || nearTop || nearBottom) {
+      console.log(`⚠️ NEAR BOUNDARY: Ball at (${ballForCollision.x.toFixed(1)}, ${ballForCollision.y.toFixed(1)}), velocity (${gameState.ball.dx.toFixed(2)}, ${gameState.ball.dy.toFixed(2)})`);
+      console.log(`  Near: L=${nearLeft} R=${nearRight} T=${nearTop} B=${nearBottom}`);
+      console.log(`  Wall collision detected: ${wallCollision ? wallCollision.side : 'NONE'}`);
     }
 
     if (wallCollision && wallCollision.hit) {
@@ -2521,11 +2496,11 @@ class PongWebSocketServer {
       'speed_up', 'speed_down', 'big_ball', 'small_ball', 'drunk_ball', 'grow_paddle', 'shrink_paddle',
       'reverse_controls', 'invisible_ball', 'freeze_opponent', 'multi_ball', 'super_speed', 'coin_shower',
       'teleport_ball', 'gravity_in_space', 'super_striker', 'sticky_paddles', 'machine_gun', 'dynamic_playfield',
-      'switch_sides', 'blocker', 'time_warp', 'portal_ball', 'mirror_mode', 'quantum_ball', 'black_hole',
+      'switch_sides', 'blocker', 'time_warp', 'mirror_mode', 'quantum_ball', 'black_hole',
       'lightning_storm', 'invisible_paddles', 'ball_trail_mine', 'paddle_swap', 'disco_mode', 'pac_man',
       'banana_peel', 'rubber_ball', 'drunk_paddles', 'magnet_ball', 'balloon_ball', 'earthquake',
       'confetti_cannon', 'hypno_ball', 'conga_line', 'arkanoid', 'attractor', 'repulsor', 'great_wall'
-    ];
+    ]; // Removed 'portal_ball' - was preventing scoring
     const type = pickupTypes[Math.floor(Math.random() * pickupTypes.length)];
 
     // Pickup size is 72x72 (6 pixels at 12x12 scale)
@@ -2844,11 +2819,9 @@ class PongWebSocketServer {
         effect.duration = 20000; // 20 seconds
         break;
       case 'portal_ball':
-        // Create portals for ball teleportation
-        gameState.ball.hasPortal = true;
-        gameState.ball.portalX = Math.random() * 600 + 100;
-        gameState.ball.portalY = Math.random() * 400 + 100;
-        effect.duration = 15000; // 15 seconds
+        // Portal ball pickup disabled - was preventing scoring
+        // Do nothing when this pickup is collected
+        effect.duration = 0;
         break;
       case 'mirror_mode':
         // Create mirror balls
@@ -3112,6 +3085,7 @@ class PongWebSocketServer {
         break;
 
       case 'portal_ball':
+        console.log('🌀 PORTAL PICKUP EXPIRED: Ball will no longer teleport at edges');
         gameState.ball.hasPortal = false;
         break;
 
