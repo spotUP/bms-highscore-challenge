@@ -323,8 +323,10 @@ interface GameState {
     mirrorBalls: any[];
     isQuantum: boolean;
     quantumPositions: { x: number; y: number }[];
+    quantumLastJump?: number;
     hasTrailMines: boolean;
     trailMines: any[];
+    lastMineDropTime?: number;
     isSlippery: boolean;
     bounciness: number;
     isMagnetic: boolean;
@@ -397,9 +399,11 @@ interface GameState {
   nextPaddleSwapTime: number;
   pacMans: any[];
   paddlesDrunk: boolean;
+  paddlesDrunkAngle?: number;
   drunkStartTime: number;
   earthquakeActive: boolean;
   earthquakeStartTime: number;
+  lastLightningTime?: number;
   confetti: any[];
   hypnoStartTime: number;
   congaBalls: any[];
@@ -1711,7 +1715,7 @@ class PongWebSocketServer {
       ballChanged = true;
     }
 
-    // Hypnotic Ball Physics
+    // Hypnotic Ball Physics (Enhanced)
     if (gameState.ball.isHypnotic) {
       const elapsed = currentTime - gameState.hypnoStartTime;
       const hypnoFreq = 0.005;
@@ -1719,6 +1723,249 @@ class PongWebSocketServer {
       // Add spiral movement
       gameState.ball.x += Math.cos(elapsed * hypnoFreq) * 2;
       gameState.ball.y += Math.sin(elapsed * hypnoFreq * 1.3) * 2;
+
+      // Enhanced: Add hypnotic sine wave patterns
+      gameState.ball.dx += Math.sin(elapsed * hypnoFreq * 2) * 0.3;
+      gameState.ball.dy += Math.cos(elapsed * hypnoFreq * 2) * 0.3;
+
+      // Enhanced: Periodic direction reversals
+      if (Math.sin(elapsed * hypnoFreq * 0.5) > 0.98) {
+        gameState.ball.dx *= -0.8;
+        gameState.ball.dy *= -0.8;
+      }
+
+      ballChanged = true;
+    }
+
+    // Portal Ball Physics
+    if (gameState.ball.hasPortal) {
+      const ballRight = gameState.ball.x + gameState.ball.size;
+      const ballLeft = gameState.ball.x;
+      const ballBottom = gameState.ball.y + gameState.ball.size;
+      const ballTop = gameState.ball.y;
+
+      // Check if ball hits any wall and teleport to opposite side
+      if (ballRight < 0) {
+        // Ball went off left edge, teleport to right
+        gameState.ball.x = canvasSize.width - gameState.ball.size;
+        ballChanged = true;
+      } else if (ballLeft > canvasSize.width) {
+        // Ball went off right edge, teleport to left
+        gameState.ball.x = 0;
+        ballChanged = true;
+      }
+
+      if (ballBottom < 0) {
+        // Ball went off top edge, teleport to bottom
+        gameState.ball.y = canvasSize.height - gameState.ball.size;
+        ballChanged = true;
+      } else if (ballTop > canvasSize.height) {
+        // Ball went off bottom edge, teleport to top
+        gameState.ball.y = 0;
+        ballChanged = true;
+      }
+    }
+
+    // Mirror Mode Physics
+    if (gameState.ball.isMirror) {
+      // Initialize mirror balls if not exists
+      if (!gameState.ball.mirrorBalls) {
+        gameState.ball.mirrorBalls = [];
+      }
+
+      // Ensure we have 3 mirror balls
+      while (gameState.ball.mirrorBalls.length < 3) {
+        gameState.ball.mirrorBalls.push({ x: 0, y: 0 });
+      }
+
+      // Update mirror ball positions to follow main ball symmetrically
+      const centerX = canvasSize.width / 2;
+      const centerY = canvasSize.height / 2;
+      const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
+      const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
+      const offsetX = ballCenterX - centerX;
+      const offsetY = ballCenterY - centerY;
+      const angle = Math.atan2(offsetY, offsetX);
+      const distance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
+
+      // Mirror balls positioned at 120 degree intervals
+      for (let i = 0; i < 3; i++) {
+        const mirrorAngle = angle + ((i + 1) * Math.PI * 2 / 3);
+        gameState.ball.mirrorBalls[i].x = centerX + Math.cos(mirrorAngle) * distance - gameState.ball.size * 0.4;
+        gameState.ball.mirrorBalls[i].y = centerY + Math.sin(mirrorAngle) * distance - gameState.ball.size * 0.4;
+      }
+
+      ballChanged = true;
+    }
+
+    // Quantum Ball Physics
+    if (gameState.ball.isQuantum) {
+      // Initialize quantum positions if not exists
+      if (!gameState.ball.quantumPositions || gameState.ball.quantumPositions.length === 0) {
+        gameState.ball.quantumPositions = [];
+        for (let i = 0; i < 3; i++) {
+          gameState.ball.quantumPositions.push({
+            x: gameState.ball.x + (Math.random() - 0.5) * 100,
+            y: gameState.ball.y + (Math.random() - 0.5) * 100
+          });
+        }
+      }
+
+      // Initialize quantum timer if not exists
+      if (!gameState.ball.quantumLastJump) {
+        gameState.ball.quantumLastJump = currentTime;
+      }
+
+      // Every 500ms, randomly jump to one of the quantum positions
+      if (currentTime - gameState.ball.quantumLastJump > 500) {
+        const randomPos = gameState.ball.quantumPositions[Math.floor(Math.random() * gameState.ball.quantumPositions.length)];
+        gameState.ball.x = randomPos.x;
+        gameState.ball.y = randomPos.y;
+        gameState.ball.quantumLastJump = currentTime;
+
+        // Occasionally update quantum positions (20% chance)
+        if (Math.random() < 0.2) {
+          for (let i = 0; i < gameState.ball.quantumPositions.length; i++) {
+            gameState.ball.quantumPositions[i] = {
+              x: gameState.ball.x + (Math.random() - 0.5) * 100,
+              y: gameState.ball.y + (Math.random() - 0.5) * 100
+            };
+          }
+        }
+
+        ballChanged = true;
+      }
+    }
+
+    // Ball Trail Mine Physics
+    if (gameState.ball.hasTrailMines) {
+      // Initialize trail mines array if not exists
+      if (!gameState.ball.trailMines) {
+        gameState.ball.trailMines = [];
+      }
+
+      // Initialize mine drop timer if not exists
+      if (!gameState.ball.lastMineDropTime) {
+        gameState.ball.lastMineDropTime = currentTime;
+      }
+
+      // Drop mines every 200ms along ball path
+      if (currentTime - gameState.ball.lastMineDropTime > 200) {
+        gameState.ball.trailMines.push({
+          x: gameState.ball.x + gameState.ball.size / 2,
+          y: gameState.ball.y + gameState.ball.size / 2,
+          spawnTime: currentTime
+        });
+        gameState.ball.lastMineDropTime = currentTime;
+      }
+
+      // Check ball collision with mines (slow ball on hit)
+      gameState.ball.trailMines = gameState.ball.trailMines.filter((mine: any) => {
+        const dx = (gameState.ball.x + gameState.ball.size / 2) - mine.x;
+        const dy = (gameState.ball.y + gameState.ball.size / 2) - mine.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // If ball hits mine (within 15px), slow it down and remove mine
+        if (distance < 15) {
+          gameState.ball.dx *= 0.7;
+          gameState.ball.dy *= 0.7;
+          ballChanged = true;
+          return false; // Remove mine
+        }
+
+        // Remove old mines after 5 seconds
+        return currentTime - mine.spawnTime < 5000;
+      });
+    }
+
+    // Drunk Paddles Physics
+    if (gameState.paddlesDrunk) {
+      // Initialize drunk angle if not exists
+      if (!gameState.paddlesDrunkAngle) {
+        gameState.paddlesDrunkAngle = 0;
+      }
+
+      // Update drunk angle
+      gameState.paddlesDrunkAngle += 0.1;
+
+      // Add random erratic movement to ALL paddles
+      const drunkIntensity = 3;
+
+      // Left paddle
+      gameState.paddles.left.y += Math.sin(gameState.paddlesDrunkAngle) * drunkIntensity;
+      gameState.paddles.left.y = Math.max(0, Math.min(canvasSize.height - gameState.paddles.left.height, gameState.paddles.left.y));
+
+      // Right paddle
+      gameState.paddles.right.y += Math.cos(gameState.paddlesDrunkAngle * 1.3) * drunkIntensity;
+      gameState.paddles.right.y = Math.max(0, Math.min(canvasSize.height - gameState.paddles.right.height, gameState.paddles.right.y));
+
+      // Top paddle
+      gameState.paddles.top.x += Math.sin(gameState.paddlesDrunkAngle * 1.5) * drunkIntensity;
+      gameState.paddles.top.x = Math.max(0, Math.min(canvasSize.width - gameState.paddles.top.width, gameState.paddles.top.x));
+
+      // Bottom paddle
+      gameState.paddles.bottom.x += Math.cos(gameState.paddlesDrunkAngle * 1.7) * drunkIntensity;
+      gameState.paddles.bottom.x = Math.max(0, Math.min(canvasSize.width - gameState.paddles.bottom.width, gameState.paddles.bottom.x));
+
+      // Random direction changes (5% chance per frame)
+      if (Math.random() < 0.05) {
+        gameState.paddlesDrunkAngle += Math.PI / 2;
+      }
+    }
+
+    // Lightning Storm Physics
+    if (gameState.lightningStrikes && Array.isArray(gameState.lightningStrikes)) {
+      // Initialize lightning timer if not exists
+      if (!gameState.lastLightningTime) {
+        gameState.lastLightningTime = currentTime;
+      }
+
+      // Spawn random lightning strikes every 300-800ms
+      if (currentTime - gameState.lastLightningTime > 300 + Math.random() * 500) {
+        gameState.lightningStrikes.push({
+          x: Math.random() * canvasSize.width,
+          y: Math.random() * canvasSize.height,
+          spawnTime: currentTime
+        });
+        gameState.lastLightningTime = currentTime;
+      }
+
+      // Check if ball is near lightning (50px) and randomize ball direction
+      gameState.lightningStrikes = gameState.lightningStrikes.filter((strike: any) => {
+        const dx = (gameState.ball.x + gameState.ball.size / 2) - strike.x;
+        const dy = (gameState.ball.y + gameState.ball.size / 2) - strike.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // If ball is near lightning, randomize direction
+        if (distance < 50) {
+          const randomAngle = Math.random() * Math.PI * 2;
+          const speed = Math.sqrt(gameState.ball.dx * gameState.ball.dx + gameState.ball.dy * gameState.ball.dy);
+          gameState.ball.dx = Math.cos(randomAngle) * speed;
+          gameState.ball.dy = Math.sin(randomAngle) * speed;
+          ballChanged = true;
+        }
+
+        // Remove old strikes after 500ms
+        return currentTime - strike.spawnTime < 500;
+      });
+    }
+
+    // Earthquake Physics
+    if (gameState.earthquakeActive) {
+      // Initialize earthquake start time if not exists
+      if (!gameState.earthquakeStartTime) {
+        gameState.earthquakeStartTime = currentTime;
+      }
+
+      // Calculate earthquake intensity (decreases over time)
+      const elapsed = currentTime - gameState.earthquakeStartTime;
+      const maxDuration = 8000; // 8 seconds
+      const intensity = Math.max(0, 1 - elapsed / maxDuration);
+
+      // Add random wobble to ball trajectory
+      gameState.ball.dx += (Math.random() - 0.5) * 0.5 * intensity;
+      gameState.ball.dy += (Math.random() - 0.5) * 0.5 * intensity;
+
       ballChanged = true;
     }
 
