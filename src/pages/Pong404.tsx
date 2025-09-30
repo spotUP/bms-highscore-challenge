@@ -10370,8 +10370,13 @@ const Pong404: React.FC = () => {
               0 0 0 12px #2a2a2a,
               0 0 0 14px #0a0a0a,
               inset 0 0 30px rgba(0,0,0,0.8),
+              inset 0 0 2px rgba(0,0,0,0.5),
               0 20px 60px rgba(0,0,0,0.9)
             `,
+            // Enable hardware acceleration for smooth rendering
+            transform: 'translate(-50%, -50%) translateZ(0)',
+            willChange: 'transform',
+            backfaceVisibility: 'hidden' as const,
             width: `calc(min(calc(100vw - 8px), calc((100vh - 8px) * 4 / 3)) + 120px)`,
             height: `calc(min(calc(100vh - 8px), calc((100vw - 8px) * 3 / 4)) + 80px)`,
             pointerEvents: 'none',
