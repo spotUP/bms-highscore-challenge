@@ -1914,20 +1914,44 @@ class PongWebSocketServer {
       pickupsChanged = true;
     }
 
-    // Check ball collision with pickups
-    gameState.pickups.forEach((pickup, index) => {
-      const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
-      const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
+    // Check ball collision with pickups (reverse loop to avoid index issues when splicing)
+    for (let i = gameState.pickups.length - 1; i >= 0; i--) {
+      const pickup = gameState.pickups[i];
       const pickupCenterX = pickup.x + (pickup.size || 24) / 2;
       const pickupCenterY = pickup.y + (pickup.size || 24) / 2;
-      const distance = Math.sqrt(
+      let collected = false;
+
+      // Check main ball collision
+      const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
+      const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
+      const ballDistance = Math.sqrt(
         Math.pow(ballCenterX - pickupCenterX, 2) + Math.pow(ballCenterY - pickupCenterY, 2)
       );
 
-      if (distance < (gameState.ball.size + (pickup.size || 24)) / 2) {
+      if (ballDistance < (gameState.ball.size + (pickup.size || 24)) / 2) {
+        collected = true;
+      }
+
+      // Check extra balls collision
+      if (!collected && gameState.extraBalls) {
+        for (const extraBall of gameState.extraBalls) {
+          const extraBallCenterX = extraBall.x + extraBall.size / 2;
+          const extraBallCenterY = extraBall.y + extraBall.size / 2;
+          const extraBallDistance = Math.sqrt(
+            Math.pow(extraBallCenterX - pickupCenterX, 2) + Math.pow(extraBallCenterY - pickupCenterY, 2)
+          );
+
+          if (extraBallDistance < (extraBall.size + (pickup.size || 24)) / 2) {
+            collected = true;
+            break;
+          }
+        }
+      }
+
+      if (collected) {
         // Pickup collected!
         this.applyPickupEffect(gameState, pickup);
-        gameState.pickups.splice(index, 1);
+        gameState.pickups.splice(i, 1);
 
         // Create pickup effect animation
         gameState.pickupEffect = {
@@ -1939,7 +1963,7 @@ class PongWebSocketServer {
 
         pickupsChanged = true;
       }
-    });
+    }
 
     return pickupsChanged;
   }
@@ -1948,10 +1972,15 @@ class PongWebSocketServer {
     const pickupTypes: Pickup['type'][] = ['speed_up', 'speed_down', 'big_ball', 'small_ball', 'drunk_ball', 'grow_paddle', 'shrink_paddle', 'reverse_controls', 'invisible_ball', 'freeze_opponent'];
     const type = pickupTypes[Math.floor(Math.random() * pickupTypes.length)];
 
+    // Pickup size is 24x24 (2 pixels at 12x12 scale)
+    // Paddles are at edges with 44px safe zone (per paddle collision code)
+    // Add 24px for pickup size to avoid spawning on paddles
+    const padding = 68; // 44px paddle zone + 24px pickup size
+
     const pickup: Pickup = {
       id: Math.random().toString(36).substr(2, 9),
-      x: Math.random() * (canvasSize.width - 192) + 96,  // 48px + 48px padding on each side
-      y: Math.random() * (canvasSize.height - 192) + 96, // 48px + 48px padding on each side
+      x: Math.random() * (canvasSize.width - padding * 2) + padding,
+      y: Math.random() * (canvasSize.height - padding * 2) + padding,
       type,
       createdAt: Date.now(),
       size: 24

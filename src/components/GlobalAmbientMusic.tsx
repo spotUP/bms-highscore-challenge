@@ -1270,6 +1270,61 @@ const GlobalAmbientMusic: React.FC = () => {
     };
   }, [musicState, startPiece, stopCurrentPiece, setVolume]);
 
+  // Connect Tone.js destination to Pong audio analyzer for visualizer
+  useEffect(() => {
+    let hasConnected = false;
+    let connectionAttempts = 0;
+
+    const connectToVisualizer = () => {
+      if (hasConnected) return;
+      connectionAttempts++;
+
+      const pongAudioContext = (window as any).pongAudioContext;
+      const analyzer = (window as any).pongAudioAnalyzer;
+
+      console.log(`[VISUALIZER] Connection attempt ${connectionAttempts}: pongAudioContext=${!!pongAudioContext} analyzer=${!!analyzer} toneInitialized=${isInitializedRef.current}`);
+
+      if (analyzer && pongAudioContext && isInitializedRef.current) {
+        try {
+          // Get Tone's raw audio context
+          const toneContext = Tone.getContext().rawContext as AudioContext;
+          console.log('[VISUALIZER] Tone context:', toneContext);
+
+          // Create a MediaStreamDestination in Tone's context
+          const mediaStreamDest = toneContext.createMediaStreamDestination();
+          console.log('[VISUALIZER] Created MediaStreamDestination');
+
+          // Get Tone's master destination and connect it
+          const toneDest = Tone.getDestination();
+          console.log('[VISUALIZER] Tone destination:', toneDest);
+
+          // Use Tone's connect method to connect to the MediaStreamDestination
+          toneDest.connect(mediaStreamDest as any);
+          console.log('[VISUALIZER] Step 1: Connected Tone destination to MediaStreamDestination');
+
+          // Create a MediaStreamSource in Pong's context from Tone's stream
+          const mediaStreamSource = pongAudioContext.createMediaStreamSource(mediaStreamDest.stream);
+          console.log('[VISUALIZER] Step 2: Created MediaStreamSource from Tone stream');
+
+          // Connect the source to Pong's analyzer
+          mediaStreamSource.connect(analyzer);
+          console.log('[VISUALIZER] Step 3: Connected MediaStreamSource to Pong analyzer');
+
+          hasConnected = true;
+          console.log('[VISUALIZER] ✅ Successfully connected Tone.js to Pong visualizer via MediaStream');
+        } catch (e) {
+          console.error('[VISUALIZER] Error connecting Tone.js:', e);
+        }
+      }
+    };
+
+    // Try to connect periodically in case analyzer loads later
+    const interval = setInterval(connectToVisualizer, 1000);
+    connectToVisualizer(); // Try immediately too
+
+    return () => clearInterval(interval);
+  }, []);
+
   return null;
 };
 

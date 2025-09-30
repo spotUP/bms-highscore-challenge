@@ -1779,7 +1779,9 @@ const Pong404: React.FC = () => {
             if (messageData.winner !== undefined) networkState.winner = messageData.winner;
             if (messageData.gameEnded !== undefined) networkState.gameEnded = messageData.gameEnded;
 
-            if (messageData.pickups) networkState.pickups = messageData.pickups;
+            if (messageData.pickups) {
+              networkState.pickups = messageData.pickups;
+            }
             if (messageData.coins) networkState.coins = messageData.coins;
             // Sync nextPickupTime from server (server controls pickup timing in multiplayer)
             if (messageData.nextPickupTime !== undefined) {
@@ -2371,6 +2373,10 @@ const Pong404: React.FC = () => {
   const delayNodeRef = useRef<DelayNode | null>(null);
   const echoGainRef = useRef<GainNode | null>(null);
 
+  // Audio visualizer
+  const analyserNodeRef = useRef<AnalyserNode | null>(null);
+  const frequencyDataRef = useRef<Uint8Array | null>(null);
+
   // Ambient spaceship sounds
   const ambienceOscillatorsRef = useRef<OscillatorNode[]>([]);
   const ambienceGainsRef = useRef<GainNode[]>([]);
@@ -2419,6 +2425,22 @@ const Pong404: React.FC = () => {
     // Connect echo feedback loop
     delay.connect(echoGain);
     echoGain.connect(delay);
+
+    // Create audio analyzer for visualizer
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 128; // Small FFT for performance (64 frequency bars)
+    analyser.smoothingTimeConstant = 0.8; // Smooth transitions
+    analyserNodeRef.current = analyser;
+
+    // Create frequency data array
+    frequencyDataRef.current = new Uint8Array(analyser.frequencyBinCount);
+
+    // Connect analyser to destination to capture all audio
+    analyser.connect(audioContext.destination);
+
+    // Store analyzer and audio context reference globally so music system can connect to it
+    (window as any).pongAudioAnalyzer = analyser;
+    (window as any).pongAudioContext = audioContext;
   }, [createImpulseResponse]);
 
   // Initialize audio on user interaction
@@ -2523,7 +2545,12 @@ const Pong404: React.FC = () => {
         if (!speechMasterGainRef.current) {
           speechMasterGainRef.current = audioContextRef.current!.createGain();
           speechMasterGainRef.current.gain.setValueAtTime(0.08, audioContextRef.current!.currentTime); // Lower robot voice volume to prevent distortion
-          speechMasterGainRef.current.connect(audioContextRef.current!.destination);
+          // Connect to analyzer for visualizer, then to destination
+          if (analyserNodeRef.current) {
+            speechMasterGainRef.current.connect(analyserNodeRef.current);
+          } else {
+            speechMasterGainRef.current.connect(audioContextRef.current!.destination);
+          }
         } else {
           // Reset volume level to prevent distortion buildup
           speechMasterGainRef.current.gain.setValueAtTime(0.08, audioContextRef.current!.currentTime);
@@ -2635,7 +2662,12 @@ const Pong404: React.FC = () => {
     if (!beepsMasterGainRef.current) {
       beepsMasterGainRef.current = ctx.createGain();
       beepsMasterGainRef.current.gain.setValueAtTime(0.15, ctx.currentTime); // Much lower level for beeps
-      beepsMasterGainRef.current.connect(ctx.destination);
+      // Connect to analyzer for visualizer, then to destination
+      if (analyserNodeRef.current) {
+        beepsMasterGainRef.current.connect(analyserNodeRef.current);
+      } else {
+        beepsMasterGainRef.current.connect(ctx.destination);
+      }
     }
 
     // Create oscillator and main gain
@@ -2763,7 +2795,12 @@ const Pong404: React.FC = () => {
     if (!ambienceMasterGainRef.current) {
       ambienceMasterGainRef.current = ctx.createGain();
       ambienceMasterGainRef.current.gain.setValueAtTime(0.35, ctx.currentTime); // Atmospheric volume for focus
-      ambienceMasterGainRef.current.connect(ctx.destination);
+      // Connect to analyzer for visualizer, then to destination
+      if (analyserNodeRef.current) {
+        ambienceMasterGainRef.current.connect(analyserNodeRef.current);
+      } else {
+        ambienceMasterGainRef.current.connect(ctx.destination);
+      }
 
       // Add gentle atmospheric breathing - very slow volume modulation
       const addAtmosphericBreathing = () => {
@@ -2932,7 +2969,12 @@ const Pong404: React.FC = () => {
     if (!ambienceMasterGainRef.current) {
       ambienceMasterGainRef.current = ctx.createGain();
       ambienceMasterGainRef.current.gain.setValueAtTime(0.4, ctx.currentTime);
-      ambienceMasterGainRef.current.connect(ctx.destination);
+      // Connect to analyzer for visualizer, then to destination
+      if (analyserNodeRef.current) {
+        ambienceMasterGainRef.current.connect(analyserNodeRef.current);
+      } else {
+        ambienceMasterGainRef.current.connect(ctx.destination);
+      }
     }
 
     // Clear existing oscillators
@@ -3094,7 +3136,12 @@ const Pong404: React.FC = () => {
         if (!speechMasterGainRef.current) {
           speechMasterGainRef.current = audioContextRef.current!.createGain();
           speechMasterGainRef.current.gain.setValueAtTime(0.08, audioContextRef.current!.currentTime); // Lower robot voice volume to prevent distortion
-          speechMasterGainRef.current.connect(audioContextRef.current!.destination);
+          // Connect to analyzer for visualizer, then to destination
+          if (analyserNodeRef.current) {
+            speechMasterGainRef.current.connect(analyserNodeRef.current);
+          } else {
+            speechMasterGainRef.current.connect(audioContextRef.current!.destination);
+          }
         } else {
           // Reset volume level to prevent distortion buildup
           speechMasterGainRef.current.gain.setValueAtTime(0.08, audioContextRef.current!.currentTime);
@@ -3199,7 +3246,7 @@ const Pong404: React.FC = () => {
   const [touchY, setTouchY] = useState<number | null>(null);
   const [touchX, setTouchX] = useState<number | null>(null);
   const [controlSide, setControlSide] = useState<'left' | 'right' | 'top' | 'bottom' | null>(null);
-  const [cursorHidden, setCursorHidden] = useState(false);
+  const [cursorHidden, setCursorHidden] = useState(true);
 
   const [infoTextFadeStart, setInfoTextFadeStart] = useState<number | null>(null);
 
@@ -7421,6 +7468,62 @@ const Pong404: React.FC = () => {
     ctx.fillStyle = currentColors.background;
     ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
+    // [VISUALIZER] Audio visualizer - frequency bars and edge glow
+    if (analyserNodeRef.current && frequencyDataRef.current) {
+      analyserNodeRef.current.getByteFrequencyData(frequencyDataRef.current);
+
+      const barCount = 32; // Number of frequency bars
+      const barWidth = canvasSize.width / barCount;
+      const dataStep = Math.floor(frequencyDataRef.current.length / barCount);
+
+      // Calculate average bass frequency for edge glow
+      let bassSum = 0;
+      for (let i = 0; i < 8; i++) {
+        bassSum += frequencyDataRef.current[i];
+      }
+      const bassAverage = bassSum / 8 / 255; // Normalize to 0-1
+
+      // Edge glow effect - reacts to bass
+      if (bassAverage > 0.1) {
+        const glowIntensity = Math.floor(bassAverage * 100);
+        const glowColor = currentColors.foreground;
+        ctx.strokeStyle = glowColor;
+        ctx.lineWidth = 4 + (bassAverage * 8); // 4-12px thickness
+        ctx.globalAlpha = bassAverage * 0.15; // Very subtle (reduced from 0.3)
+        ctx.strokeRect(0, 0, canvasSize.width, canvasSize.height);
+        ctx.globalAlpha = 1.0; // Reset alpha
+      }
+
+      // Frequency bars centered horizontally (mirrored from center)
+      ctx.fillStyle = currentColors.foreground;
+      ctx.globalAlpha = 0.08; // Very subtle transparency (reduced from 0.15)
+
+      const centerX = canvasSize.width / 2;
+      const maxBarHeight = 150; // Increased from 50 to 150 for higher bars
+
+      for (let i = 0; i < barCount / 2; i++) {
+        const dataIndex = i * dataStep;
+        const value = frequencyDataRef.current[dataIndex] / 255; // Normalize to 0-1
+        const barHeight = Math.pow(value, 0.5) * maxBarHeight; // Apply power curve for more sensitivity
+
+        const x = i * barWidth;
+
+        // Left half - bars extending upward from center
+        ctx.fillRect(x, centerX - barHeight, barWidth - 2, barHeight);
+
+        // Left half - bars extending downward from center
+        ctx.fillRect(x, centerX, barWidth - 2, barHeight);
+
+        // Right half - mirrored bars extending upward from center
+        ctx.fillRect(canvasSize.width - x - barWidth + 2, centerX - barHeight, barWidth - 2, barHeight);
+
+        // Right half - mirrored bars extending downward from center
+        ctx.fillRect(canvasSize.width - x - barWidth + 2, centerX, barWidth - 2, barHeight);
+      }
+
+      ctx.globalAlpha = 1.0; // Reset alpha
+    }
+
     // [AUDIO] AUDIO INTERACTION PROMPT (first load only)
     if (showAudioPrompt) {
       // Draw playfield borders - same as gameplay area
@@ -7448,6 +7551,8 @@ const Pong404: React.FC = () => {
       ctx.font = 'bold 32px "Press Start 2P", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = currentColors.foreground;
       ctx.fillText('AUDIO REQUIRED', canvasSize.width / 2, canvasSize.height / 2 - 80);
 
       // Instructions
@@ -7462,6 +7567,7 @@ const Pong404: React.FC = () => {
       // Small footer
       ctx.font = 'bold 12px "Press Start 2P", monospace';
       ctx.fillText('Required for browser audio policy compliance', canvasSize.width / 2, canvasSize.height / 2 + 120);
+      ctx.shadowBlur = 0;
 
       return; // Don't render anything else when showing audio prompt
     }
@@ -7493,6 +7599,8 @@ const Pong404: React.FC = () => {
       ctx.font = 'bold 48px "Press Start 2P", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = currentColors.foreground;
       ctx.fillText('4-PLAYER PONG', canvasSize.width / 2, canvasSize.height / 2 - 200);
 
       // Controls section
@@ -7525,15 +7633,18 @@ const Pong404: React.FC = () => {
       if (isVisible) {
         // Use a bright attention-grabbing color - cyan from the palette
         ctx.fillStyle = '#00f5ff'; // Cyan color for visibility
+        ctx.shadowColor = '#00f5ff';
         ctx.fillText('PRESS ANY KEY TO START', canvasSize.width / 2, canvasSize.height / 2 + 150);
       }
 
       // Reset color back to normal for other elements
       ctx.fillStyle = currentColors.foreground;
+      ctx.shadowColor = currentColors.foreground;
 
       // Footer with CRT status
       ctx.font = '14px "Press Start 2P", monospace';
       ctx.fillText(`CRT EFFECT: ${crtEffect ? 'ON' : 'OFF'}`, canvasSize.width / 2, canvasSize.height / 2 + 200);
+      ctx.shadowBlur = 0;
 
       return; // Don't render game elements when showing start screen
     }
@@ -7657,10 +7768,19 @@ const Pong404: React.FC = () => {
 
       const isHumanControlled = (gameState.gameMode === 'multiplayer' && currentPlayerSide === side) ||
                                 (gameState.gameMode === 'player' && side === 'right');
+      const paddleColor = isHumanControlled ? humanPlayerColor : currentColors.foreground;
+
+      // Draw glow effect
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = paddleColor;
+
       ctx.globalAlpha = 1; // Ensure paddles are fully opaque
-      ctx.fillStyle = isHumanControlled ? humanPlayerColor : currentColors.foreground;
+      ctx.fillStyle = paddleColor;
       // Round to whole pixels to prevent sub-pixel anti-aliasing flicker
       ctx.fillRect(Math.round(x), Math.round(y), width, height);
+
+      // Reset shadow
+      ctx.shadowBlur = 0;
     };
 
     // Draw all four paddles FIRST
@@ -7698,8 +7818,15 @@ const Pong404: React.FC = () => {
       // Check if ball should be invisible
       const invisibleEffect = gameState.activeEffects?.find(e => e.type === 'invisible_ball');
       if (!invisibleEffect) {
+        // Draw glow effect for ball
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = currentColors.foreground;
+
         ctx.fillStyle = currentColors.foreground; // FIX: Set ball color before drawing
         ctx.fillRect(gameState.ball.x, gameState.ball.y, gameState.ball.size, gameState.ball.size);
+
+        // Reset shadow
+        ctx.shadowBlur = 0;
       } else {
         // Draw faint outline for invisible ball
         ctx.globalAlpha = 0.2;
@@ -7896,7 +8023,7 @@ const Pong404: React.FC = () => {
 
       // Draw pixelated pattern with NO gaps between pixels
       const drawPixelatedPattern = (pattern: string, x: number, y: number, size: number, color: string) => {
-        const pixelSize = 8; // Smaller pixels for tighter detail
+        const pixelSize = 12; // Match score pixel size as per CLAUDE.md
         const gridSize = Math.floor(size / pixelSize);
 
         ctx.fillStyle = color;
@@ -8157,7 +8284,10 @@ const Pong404: React.FC = () => {
       };
 
       // Draw the pixelated pattern
-      drawPixelatedPattern(pickup.pattern, pickup.x, pickup.y, pickup.size, currentColors.foreground);
+      // Map pickup type to pattern from PICKUP_TYPES
+      const pickupTypeData = PICKUP_TYPES.find(p => p.type === pickup.type);
+      const pattern = pickupTypeData?.pattern || 'circle'; // Default to circle if type not found
+      drawPixelatedPattern(pattern, pickup.x, pickup.y, pickup.size, currentColors.foreground);
 
       ctx.restore();
     });
@@ -8263,6 +8393,8 @@ const Pong404: React.FC = () => {
 
     // Left player score (left side, middle height)
     ctx.textAlign = 'center';
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = currentColors.foreground;
     ctx.fillText(leftScore, leftScoreX, playFieldHeight / 2);
 
     // Right player score (right side, middle height)
@@ -8273,6 +8405,7 @@ const Pong404: React.FC = () => {
 
     // Bottom player score (center, bottom)
     ctx.fillText(bottomScore, playFieldWidth / 2, bottomScoreY);
+    ctx.shadowBlur = 0;
 
     // 📊 FPS Counter (top-right corner) - should show 60 FPS consistently
     ctx.font = 'bold 12px "Press Start 2P", monospace';
@@ -8280,15 +8413,20 @@ const Pong404: React.FC = () => {
     const fpsDisplay = fpsRef.current === 0 ? 60 : fpsRef.current; // Show 60 during startup
 
     // Color code FPS - green for 60, yellow for 45-59, red for below 45
+    ctx.shadowBlur = 8;
     if (fpsDisplay >= 60) {
       ctx.fillStyle = '#00ff00'; // Bright green for perfect 60 FPS
+      ctx.shadowColor = '#00ff00';
     } else if (fpsDisplay >= 45) {
       ctx.fillStyle = '#ffff00'; // Yellow for good FPS
+      ctx.shadowColor = '#ffff00';
     } else {
       ctx.fillStyle = '#ff0000'; // Red for poor FPS
+      ctx.shadowColor = '#ff0000';
     }
 
     ctx.fillText(`${fpsDisplay} FPS`, playFieldWidth - 20, 30);
+    ctx.shadowBlur = 0;
 
     // Reset color back to foreground for other elements
     ctx.fillStyle = currentColors.foreground;
@@ -8301,12 +8439,14 @@ const Pong404: React.FC = () => {
 
       // Smooth pulsing animation effect
       const time = cachedTimeRef.current * 0.001;
-      const pulseScale = 1 + Math.sin(time * 2) * 0.05; // Gentle pulse between 0.95 and 1.05
+      const pulseScale = 1 + Math.sin(time * 4) * 0.05; // Faster pulse between 0.95 and 1.05
 
       ctx.scale(pulseScale, pulseScale);
 
       // Winner announcement - animated white
       ctx.fillStyle = '#ffffff';
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#ffffff';
       ctx.font = 'bold 64px "Press Start 2P", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -8331,15 +8471,20 @@ const Pong404: React.FC = () => {
       // Continue button prompt - monochrome
       ctx.font = 'bold 16px "Press Start 2P", monospace';
       ctx.fillStyle = '#ffffff';
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
       ctx.fillText('PRESS SPACEBAR TO PLAY AGAIN', playFieldWidth / 2, playFieldHeight - 50);
+      ctx.shadowBlur = 0;
     }
 
     // Draw active effects status with live countdown and robot voice announcements
     if (gameState.activeEffects.length > 0) {
       ctx.font = 'bold 20px "Press Start 2P", monospace';
       ctx.fillStyle = currentColors.foreground;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = currentColors.foreground;
       ctx.textAlign = 'center';
 
       // Track countdown changes for robot voice announcements
@@ -8434,6 +8579,7 @@ const Pong404: React.FC = () => {
 
       // Update previous countdowns
       setPreviousCountdowns(newCountdowns);
+      ctx.shadowBlur = 0;
 
       // Clean up announced countdowns for effects that no longer exist
       const activeEffectTypes = new Set(Object.keys(newCountdowns));
@@ -8988,8 +9134,9 @@ const Pong404: React.FC = () => {
         curvature: 18.0,              // Gentle screen curve (higher = less curve)
         scanlineIntensity: 0.1,       // Very subtle scanlines
         vignetteIntensity: 0.15,      // Very light edge darkening
-        noiseIntensity: 0.02,         // Minimal CRT noise
+        noiseIntensity: 0.05,         // Visible CRT noise/grain
         brightness: 1.25,             // Brighter to compensate for effects
+        chromaticAberration: 0.004,   // More horizontal RGB separation with subtle bleed
       });
 
       crtFilterRef.current = filter;
@@ -9032,8 +9179,9 @@ const Pong404: React.FC = () => {
           (filter.uniforms as any).uResolution = new Float32Array([canvasSize.width, canvasSize.height]);
         }
 
-        // Force texture update from canvas source
-        if (texture.source && texture.source.resource === canvasRef.current) {
+        // Force texture update from canvas source every frame
+        // In PixiJS v8, we need to force update to capture canvas changes
+        if (texture.source) {
           texture.source.update();
         }
       });
@@ -9055,7 +9203,7 @@ const Pong404: React.FC = () => {
 
   // Toggle CRT filter on/off
   useEffect(() => {
-    if (pixiAppRef.current && crtFilterRef.current && pixiAppRef.current.stage.children.length > 0) {
+    if (pixiAppRef.current && pixiAppRef.current.stage && crtFilterRef.current && pixiAppRef.current.stage.children.length > 0) {
       const sprite = pixiAppRef.current.stage.children[0] as Sprite;
       if (sprite) {
         sprite.filters = crtEffect ? [crtFilterRef.current] : [];
@@ -9247,10 +9395,41 @@ const Pong404: React.FC = () => {
         WebkitUserSelect: 'none',
         position: 'fixed',
         top: 0,
-        left: 0
+        left: 0,
+        width: '100%',
+        height: '100%'
       }}
     >
-      <div style={{ position: 'relative' }}>
+      <div style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        height: '100%',
+      }}>
+        {/* TV frame wrapper - only visible when CRT is ON */}
+        {crtEffect && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            padding: '40px 60px',
+            background: 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 50%, #0a0a0a 100%)',
+            borderRadius: '20px',
+            boxShadow: `
+              0 0 0 8px #1a1a1a,
+              0 0 0 12px #2a2a2a,
+              0 0 0 14px #0a0a0a,
+              inset 0 0 30px rgba(0,0,0,0.8),
+              0 20px 60px rgba(0,0,0,0.9)
+            `,
+            width: `calc(min(calc(100vw - 8px), calc((100vh - 8px) * 4 / 3)) + 120px)`,
+            height: `calc(min(calc(100vh - 8px), calc((100vw - 8px) * 3 / 4)) + 80px)`,
+            pointerEvents: 'none',
+          }} />
+        )}
         {/* Canvas for game rendering - hidden when CRT is active (PixiJS shows it instead) */}
         <canvas
           ref={canvasRef}
@@ -9574,8 +9753,9 @@ const Pong404: React.FC = () => {
         ref={pixiContainerRef}
         style={{
           position: 'absolute',
-          top: 0,
-          left: 0,
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
           // Match canvas sizing exactly - 4:3 aspect ratio
           width: `min(calc(100vw - 8px), calc((100vh - 8px) * 4 / 3))`,
           height: `min(calc(100vh - 8px), calc((100vw - 8px) * 3 / 4))`,
