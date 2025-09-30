@@ -1412,16 +1412,17 @@ const Pong404: React.FC = () => {
 
     const finalTimeout = setTimeout(() => {
       if (wsRef.current?.readyState === WebSocket.CONNECTING) {
-        setConnectionMessage('Connection timeout - retrying...');
+        setConnectionMessage('[FIRE] Server still warming up, retrying...');
         wsRef.current.close();
         setConnectionStatus('retrying');
         setRetryCount(prev => prev + 1);
-        // Auto-retry after short delay
+        // Longer delay for production server warmup
+        const retryDelay = isProduction ? 8000 : 3000;
         setTimeout(() => {
           connectWebSocket();
-        }, 3000);
+        }, retryDelay);
       }
-    }, 45000); // Final timeout at 45 seconds
+    }, isProduction ? 90000 : 45000); // 90 seconds for production, 45 for localhost
 
     const connectToWebSocket = () => {
       try {
@@ -1549,8 +1550,17 @@ const Pong404: React.FC = () => {
           if (encouragementTimeout) clearTimeout(encouragementTimeout);
           if (finalTimeout) clearTimeout(finalTimeout);
 
-          setConnectionStatus('error');
-          setConnectionMessage('Failed to connect to server - server may be sleeping or unreachable');
+          // For production, treat errors as "still warming up" and retry
+          if (isProduction) {
+            setConnectionStatus('warming');
+            setConnectionMessage('[FIRE] Server warming up, retrying in 8 seconds...');
+            setTimeout(() => {
+              connectWebSocket();
+            }, 8000);
+          } else {
+            setConnectionStatus('error');
+            setConnectionMessage('Failed to connect to server - server may be sleeping or unreachable');
+          }
         };
 
       } catch (error) {
