@@ -10109,6 +10109,11 @@ const Pong404: React.FC = () => {
         audioPromptDismissedRef.current = true;
         setShowAudioPrompt(false);
 
+        // Show start screen after dismissing audio prompt (matching spacebar behavior)
+        if (!isSpectatorMode) {
+          setGameState(prev => ({ ...prev, showStartScreen: true }));
+        }
+
         // Don't process game start on this click - just dismiss the prompt
         e.preventDefault();
         e.stopPropagation();
