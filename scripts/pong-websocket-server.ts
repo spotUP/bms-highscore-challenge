@@ -644,6 +644,9 @@ class PongWebSocketServer {
 
     // RESET and START fresh game when human players join (server-authoritative)
     if (room.players.size >= 1) {
+      // Activate room for game loop processing
+      room.isActive = true;
+
       // Reset all game state for fresh human game
       room.gameState.score = { left: 0, right: 0, top: 0, bottom: 0 };
       room.gameState.winner = null;
@@ -968,7 +971,7 @@ class PongWebSocketServer {
       players: new Map(),
       gamemaster: null,
       lastUpdate: Date.now(),
-      isActive: true,
+      isActive: false, // Start inactive - activate when first player joins
       canvasSize: { width: 800, height: 800 }
     };
   }
@@ -1109,9 +1112,16 @@ class PongWebSocketServer {
         }
       });
 
-      // Clean up inactive rooms
+      // Deactivate rooms with no players (except main room which persists)
       this.rooms.forEach((room, roomId) => {
-        if (now - room.lastUpdate > timeout && room.players.size === 0) {
+        if (room.players.size === 0 && room.isActive) {
+          console.log(`[~] Deactivating empty room ${roomId}`);
+          room.isActive = false;
+          room.gameState.isPlaying = false;
+        }
+
+        // Clean up non-main rooms after timeout
+        if (roomId !== 'main' && now - room.lastUpdate > timeout && room.players.size === 0) {
           console.log(`[~] Cleaning up inactive room ${roomId}`);
           this.rooms.delete(roomId);
         }
@@ -2728,6 +2738,9 @@ class PongWebSocketServer {
 
     // Send periodic heartbeat to all connected clients
     setInterval(() => {
+      // Skip heartbeat if no players connected
+      if (this.players.size === 0) return;
+
       this.players.forEach((player) => {
         if (player.ws.readyState === 1) { // WebSocket.OPEN
           try {
