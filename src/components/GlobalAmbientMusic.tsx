@@ -53,15 +53,12 @@ const GlobalAmbientMusic: React.FC = () => {
 
     // Load Tone.js dynamically on first user interaction
     if (!Tone) {
-      console.log('[GENERATIVE MUSIC] Loading Tone.js...');
       const ToneModule = await import('tone');
       Tone = ToneModule.default || ToneModule;
-      console.log('[GENERATIVE MUSIC] Tone.js loaded');
     }
 
     try {
       await Tone.start();
-      console.log('[GENERATIVE MUSIC] Tone.js audio context started');
 
       // Create analyzers for music reactivity
       analyserRef.current = new Tone.Analyser('waveform', 256);
@@ -1110,7 +1107,7 @@ const GlobalAmbientMusic: React.FC = () => {
 
     // Stop current piece if playing
     if (currentPieceRef.current) {
-      console.log('[GENERATIVE MUSIC] Stopping current piece...');
+      // Stopping current piece
       try {
         if (currentPieceRef.current.stop) {
           await currentPieceRef.current.stop();
@@ -1143,14 +1140,14 @@ const GlobalAmbientMusic: React.FC = () => {
         Tone.getTransport().cancel();
 
         currentPieceRef.current = null;
-        console.log('[GENERATIVE MUSIC] Previous piece stopped cleanly');
+        // Previous piece stopped cleanly
       } catch (error) {
         console.error('Error stopping previous piece:', error);
       }
     }
 
     try {
-      console.log(`[GENERATIVE MUSIC] Starting piece: ${pieceId}`);
+      // Starting piece
 
       // Set target volume immediately
       const targetVolume = Tone.gainToDb(musicState.volume);
@@ -1163,7 +1160,7 @@ const GlobalAmbientMusic: React.FC = () => {
       // Start Tone.Transport fresh
       if (Tone.getTransport().state !== 'started') {
         Tone.getTransport().start();
-        console.log('[GENERATIVE MUSIC] Tone.Transport started');
+        // Tone.Transport started
       }
 
       setMusicState(prev => ({
@@ -1172,7 +1169,7 @@ const GlobalAmbientMusic: React.FC = () => {
         isPlaying: true,
       }));
 
-      console.log(`[GENERATIVE MUSIC] Successfully started: ${pieceId}`);
+      // Successfully started piece
     } catch (error) {
       console.error(`[GENERATIVE MUSIC] Error starting piece "${pieceId}":`, error);
     }
@@ -1180,7 +1177,7 @@ const GlobalAmbientMusic: React.FC = () => {
 
   const stopCurrentPiece = useCallback(async () => {
     if (currentPieceRef.current) {
-      console.log('[GENERATIVE MUSIC] Stopping current piece...');
+      // Stopping current piece
       try {
         if (currentPieceRef.current.stop) {
           // Alex Bainter piece
@@ -1197,12 +1194,12 @@ const GlobalAmbientMusic: React.FC = () => {
         // Stop transport
         if (Tone.getTransport().state === 'started') {
           Tone.getTransport().stop();
-          console.log('[GENERATIVE MUSIC] Tone.Transport stopped');
+          // Tone.Transport stopped
         }
 
         currentPieceRef.current = null;
         setMusicState(prev => ({ ...prev, isPlaying: false }));
-        console.log('[GENERATIVE MUSIC] Piece stopped successfully');
+        // Piece stopped successfully
       } catch (error) {
         console.error('[GENERATIVE MUSIC] Error stopping piece:', error);
       }
@@ -1222,7 +1219,7 @@ const GlobalAmbientMusic: React.FC = () => {
   useEffect(() => {
     const handleFirstInteraction = async () => {
       const pieceName = AVAILABLE_PIECES.find(p => p.id === musicState.currentPieceId)?.title || musicState.currentPieceId;
-      console.log('[GENERATIVE MUSIC] Audio context initialized, starting', pieceName);
+      // Audio context initialized, starting
       await initializeTone();
 
       // Auto-start the randomly selected piece on first interaction
@@ -1252,12 +1249,12 @@ const GlobalAmbientMusic: React.FC = () => {
       if (document.hidden) {
         if (isInitializedRef.current && Tone.getContext().state === 'running') {
           await Tone.getContext().suspend();
-          console.log('[GENERATIVE MUSIC] Audio context suspended');
+          // Audio context suspended
         }
       } else {
         if (isInitializedRef.current && Tone.getContext().state === 'suspended') {
           await Tone.getContext().resume();
-          console.log('[GENERATIVE MUSIC] Audio context resumed');
+          // Audio context resumed
         }
       }
     };
@@ -1388,7 +1385,7 @@ const GlobalAmbientMusic: React.FC = () => {
       },
     };
 
-    console.log('[GENERATIVE MUSIC] Global window object set with', AVAILABLE_PIECES.length, 'pieces');
+    // Global window object set
 
     return () => {
       delete (window as any).generativeMusic;

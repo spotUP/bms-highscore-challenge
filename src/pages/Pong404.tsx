@@ -7393,6 +7393,10 @@ const Pong404: React.FC = () => {
           console.log('🔧 Enabling local test mode - switching to player mode');
           // Use setTimeout to ensure state updates happen after audio prompt dismissal
           setTimeout(() => {
+            // Start paddle animation
+            paddleAnimationStartTimeRef.current = Date.now();
+            setPaddleAnimationProgress(0);
+
             setGameState(prevState => ({
               ...prevState,
               gameMode: 'player',
@@ -7432,6 +7436,10 @@ const Pong404: React.FC = () => {
 
         if (isSpectatorMode) {
           // Skip start screen for spectator mode - go directly to multiplayer
+          // Start paddle animation
+          paddleAnimationStartTimeRef.current = Date.now();
+          setPaddleAnimationProgress(0);
+
           connectWebSocket();
           setGameState(prev => ({
             ...prev,
@@ -7471,6 +7479,10 @@ const Pong404: React.FC = () => {
 
         if (isSpectatorMode) {
           // Skip start screen for spectator mode - go directly to multiplayer
+          // Start paddle animation
+          paddleAnimationStartTimeRef.current = Date.now();
+          setPaddleAnimationProgress(0);
+
           connectWebSocket();
           setGameState(prev => ({
             ...prev,
@@ -7719,6 +7731,10 @@ const Pong404: React.FC = () => {
         case 'r':
           e.preventDefault();
           // Reset game completely
+          // Start paddle animation
+          paddleAnimationStartTimeRef.current = Date.now();
+          setPaddleAnimationProgress(0);
+
           setGameState(prev => ({
             ...prev,
             winner: null,
@@ -7782,6 +7798,10 @@ const Pong404: React.FC = () => {
 
       if (shouldStartGame) {
         console.log('[ROCKET] STARTING GAME FROM START SCREEN!');
+        // Start paddle animation
+        paddleAnimationStartTimeRef.current = Date.now();
+        setPaddleAnimationProgress(0);
+
         // Try to connect to multiplayer WebSocket (allow retry even if connectionStatus is 'error')
         if (!multiplayerState.isConnected) {
           try {
@@ -7907,6 +7927,10 @@ const Pong404: React.FC = () => {
   useEffect(() => {
     if (isSpectatorMode) {
       console.log('[SPECTATOR] Auto-initializing spectator mode');
+      // Start paddle animation
+      paddleAnimationStartTimeRef.current = Date.now();
+      setPaddleAnimationProgress(0);
+
       // Skip all prompts and directly connect to multiplayer WebSocket
       setGameState(prev => ({
         ...prev,
@@ -8313,7 +8337,7 @@ const Pong404: React.FC = () => {
       // Draw each border with appropriate color
       // Left border
       ctx.strokeStyle = protectedSide === 'left' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'left' ? glowIntensity : 5 + musicData.volume * 15; // Reduced from 10-40 to 5-20
+      ctx.shadowBlur = protectedSide === 'left' ? glowIntensity : 2 + musicData.volume * 5; // Subtle glow 2-7px
       ctx.shadowColor = protectedSide === 'left' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'left' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
       ctx.beginPath();
@@ -8323,7 +8347,7 @@ const Pong404: React.FC = () => {
 
       // Right border
       ctx.strokeStyle = protectedSide === 'right' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'right' ? glowIntensity : 5 + musicData.volume * 15; // Reduced from 10-40 to 5-20
+      ctx.shadowBlur = protectedSide === 'right' ? glowIntensity : 2 + musicData.volume * 5; // Subtle glow 2-7px
       ctx.shadowColor = protectedSide === 'right' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'right' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
       ctx.beginPath();
@@ -8333,7 +8357,7 @@ const Pong404: React.FC = () => {
 
       // Top border
       ctx.strokeStyle = protectedSide === 'top' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'top' ? glowIntensity : 5 + musicData.volume * 15; // Reduced from 10-40 to 5-20
+      ctx.shadowBlur = protectedSide === 'top' ? glowIntensity : 2 + musicData.volume * 5; // Subtle glow 2-7px
       ctx.shadowColor = protectedSide === 'top' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'top' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
       ctx.beginPath();
@@ -8343,7 +8367,7 @@ const Pong404: React.FC = () => {
 
       // Bottom border
       ctx.strokeStyle = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'bottom' ? glowIntensity : 5 + musicData.volume * 15; // Reduced from 10-40 to 5-20
+      ctx.shadowBlur = protectedSide === 'bottom' ? glowIntensity : 2 + musicData.volume * 5; // Subtle glow 2-7px
       ctx.shadowColor = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'bottom' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
       ctx.beginPath();
@@ -8357,7 +8381,7 @@ const Pong404: React.FC = () => {
       ctx.setLineDash([]); // Solid lines for borders
 
       // Add music-reactive glow to border
-      ctx.shadowBlur = 5 + musicData.volume * 15; // Pulse with music volume (5-20px, reduced from 10-40)
+      ctx.shadowBlur = 2 + musicData.volume * 5; // Subtle glow 2-7px
       ctx.shadowColor = currentColors.foreground;
 
       ctx.strokeRect(
@@ -8473,8 +8497,8 @@ const Pong404: React.FC = () => {
 
     // Helper function to draw a paddle
     const drawPaddle = (paddle: any, side: string, x: number, y: number) => {
-      // Don't draw paddles on start screen or before animation starts
-      if (gameState.showStartScreen || paddleAnimationProgress === 0) {
+      // Don't draw paddles on start screen or connection screens
+      if (gameState.showStartScreen) {
         return;
       }
 
@@ -8482,8 +8506,18 @@ const Pong404: React.FC = () => {
       const width = paddle.width || (side === 'left' || side === 'right' ? PADDLE_THICKNESS : PADDLE_LENGTH);
       const height = paddle.height || (side === 'left' || side === 'right' ? PADDLE_LENGTH : PADDLE_THICKNESS);
 
-      // Apply animation scale (grow from center with bounce)
-      const scale = paddleAnimationProgress;
+      // Calculate animation progress directly (not using state to avoid timing issues)
+      let scale = 1;
+      if (paddleAnimationStartTimeRef.current > 0) {
+        const elapsed = Date.now() - paddleAnimationStartTimeRef.current;
+        const duration = 500; // 500ms animation
+        const progress = Math.min(elapsed / duration, 1);
+
+        // Bouncy easing: elastic overshoot
+        scale = progress < 1
+          ? 1 - Math.pow(1 - progress, 3) * Math.cos(progress * Math.PI * 2.5)
+          : 1;
+      }
 
       const isHumanControlled = (gameState.gameMode === 'multiplayer' && currentPlayerSide === side) ||
                                 (gameState.gameMode === 'player' && side === 'right');
@@ -8500,7 +8534,7 @@ const Pong404: React.FC = () => {
       const scaledY = centerY - scaledHeight / 2;
 
       // Draw music-reactive glow effect
-      ctx.shadowBlur = 8 + musicData.volume * 25; // Pulse with music volume (8-33px)
+      ctx.shadowBlur = 3 + musicData.volume * 7; // Subtle glow 3-10px
       ctx.shadowColor = paddleColor;
 
       ctx.globalAlpha = 1; // Ensure paddles are fully opaque
@@ -8548,7 +8582,7 @@ const Pong404: React.FC = () => {
       const invisibleEffect = gameState.activeEffects?.find(e => e.type === 'invisible_ball');
       if (!invisibleEffect) {
         // Draw music-reactive glow effect for ball
-        ctx.shadowBlur = 10 + musicData.volume * 30; // Pulse with music volume (10-40px)
+        ctx.shadowBlur = 3 + musicData.volume * 7; // Subtle glow 3-10px
         ctx.shadowColor = currentColors.foreground;
 
         ctx.fillStyle = currentColors.foreground; // FIX: Set ball color before drawing
@@ -9035,7 +9069,7 @@ const Pong404: React.FC = () => {
       const pattern = pickupTypeData?.pattern || 'circle'; // Default to circle if type not found
 
       // Add music-reactive glow to pickups
-      ctx.shadowBlur = 8 + musicData.volume * 25; // Pulse with music volume (8-33px)
+      ctx.shadowBlur = 3 + musicData.volume * 7; // Subtle glow 3-10px
       ctx.shadowColor = currentColors.foreground;
 
       drawPixelatedPattern(pattern, pickup.x, pickup.y, pickup.size, currentColors.foreground);
@@ -10117,6 +10151,10 @@ const Pong404: React.FC = () => {
       // Handle start screen click to start game (only if audio prompt is not shown)
       if ((e.type === 'click' || e.type === 'mousedown' || e.type === 'touchstart') && gameState.showStartScreen && !showAudioPrompt) {
         console.log('[ROCKET] STARTING GAME FROM START SCREEN VIA MOUSE CLICK!');
+        // Start paddle animation
+        paddleAnimationStartTimeRef.current = Date.now();
+        setPaddleAnimationProgress(0);
+
         // Try to connect to multiplayer WebSocket
         if (!multiplayerState.isConnected) {
           try {
@@ -10418,6 +10456,10 @@ const Pong404: React.FC = () => {
           // Handle start screen - start game on click
           if (gameState.showStartScreen) {
             await initializeAudio();
+            // Start paddle animation
+            paddleAnimationStartTimeRef.current = Date.now();
+            setPaddleAnimationProgress(0);
+
             // Start ambient sounds immediately on first click interaction
             if (!ambienceActiveRef.current && audioContextRef.current) {
               setTimeout(() => {
@@ -10524,6 +10566,10 @@ const Pong404: React.FC = () => {
 
           // Handle start screen - start game on touch
           if (gameState.showStartScreen) {
+            // Start paddle animation
+            paddleAnimationStartTimeRef.current = Date.now();
+            setPaddleAnimationProgress(0);
+
             // Start ambient sounds immediately on first touch interaction
             if (!ambienceActiveRef.current && audioContextRef.current) {
               setTimeout(() => {
