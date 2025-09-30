@@ -8985,11 +8985,11 @@ const Pong404: React.FC = () => {
 
       // Create and apply CRT filter with subtle authentic effects
       const filter = new CRTFilter({
-        curvature: 50.0,              // Very minimal screen curve (higher = less curve)
-        scanlineIntensity: 0.15,      // Subtle scanlines
-        vignetteIntensity: 0.3,       // Gentle edge darkening
-        noiseIntensity: 0.03,         // Subtle CRT noise
-        brightness: 1.1,              // Slightly brighter
+        curvature: 18.0,              // Gentle screen curve (higher = less curve)
+        scanlineIntensity: 0.1,       // Very subtle scanlines
+        vignetteIntensity: 0.15,      // Very light edge darkening
+        noiseIntensity: 0.02,         // Minimal CRT noise
+        brightness: 1.25,             // Brighter to compensate for effects
       });
 
       crtFilterRef.current = filter;

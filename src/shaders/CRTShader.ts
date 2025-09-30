@@ -64,9 +64,11 @@ vec2 curveRemapUV(vec2 uv) {
     return centered * 0.5 + 0.5;
 }
 
-// Scanline effect
+// Scanline effect - uses screen position for even distribution
 float scanline(vec2 uv) {
-    return sin(uv.y * uResolutionY * 2.0) * uScanlineIntensity + (1.0 - uScanlineIntensity);
+    // Use a fixed scanline count for consistent spacing regardless of stretching
+    float scanlineCount = 600.0; // Number of scanlines
+    return sin(uv.y * scanlineCount * 3.14159) * uScanlineIntensity + (1.0 - uScanlineIntensity);
 }
 
 // Vignette effect
