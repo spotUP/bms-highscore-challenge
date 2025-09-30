@@ -330,6 +330,9 @@ interface GameState {
     isMagnetic: boolean;
     isFloating: boolean;
     isHypnotic: boolean;
+    hasWind: boolean;
+    hasGreatWall: boolean;
+    greatWallSide: 'left' | 'right' | 'top' | 'bottom' | null;
   };
   paddles: {
     left: { y: number; height: number; width: number; speed: number; velocity: number; targetY: number; originalHeight: number };
@@ -1018,7 +1021,10 @@ class PongWebSocketServer {
         bounciness: 1,
         isMagnetic: false,
         isFloating: false,
-        isHypnotic: false
+        isHypnotic: false,
+        hasWind: false,
+        hasGreatWall: false,
+        greatWallSide: null
       },
       paddles: {
         left: { x: BORDER_THICKNESS * 2, y: 250, height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: 32, velocity: 0, targetY: 250, originalHeight: PADDLE_LENGTH },
