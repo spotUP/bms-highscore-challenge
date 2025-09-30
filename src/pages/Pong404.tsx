@@ -1795,24 +1795,28 @@ const Pong404: React.FC = () => {
 
           // ONLY update the network state ref - let the game loop handle rendering
           // This prevents competing state updates that cause flickering
+          // IMPORTANT: Preserve local player paddle from current game state
+          const playerSide = multiplayerState.playerSide;
+          const currentState = currentGameStateRef.current;
+
           networkGameStateRef.current = {
             ...message.data,
             // Enforce correct paddle dimensions
             paddles: {
-              left: {
+              left: playerSide === 'left' && currentState ? currentState.paddles.left : {
                 ...message.data.paddles.left,
                 x: message.data.paddles.left?.x ?? (BORDER_THICKNESS * 2),
                 width: PADDLE_THICKNESS,
                 height: PADDLE_LENGTH
               },
-              right: {
+              right: playerSide === 'right' && currentState ? currentState.paddles.right : {
                 ...message.data.paddles.right,
                 x: message.data.paddles.right?.x ?? (canvasSize.width - BORDER_THICKNESS - PADDLE_THICKNESS),
                 width: PADDLE_THICKNESS,
                 height: PADDLE_LENGTH
               },
-              top: message.data.paddles.top || networkGameStateRef.current?.paddles.top,
-              bottom: message.data.paddles.bottom || networkGameStateRef.current?.paddles.bottom
+              top: playerSide === 'top' && currentState ? currentState.paddles.top : (message.data.paddles.top || networkGameStateRef.current?.paddles.top),
+              bottom: playerSide === 'bottom' && currentState ? currentState.paddles.bottom : (message.data.paddles.bottom || networkGameStateRef.current?.paddles.bottom)
             }
           };
           lastNetworkReceiveTimeRef.current = Date.now();
@@ -2077,6 +2081,14 @@ const Pong404: React.FC = () => {
 
   // Track previous game state for delta compression
   const previousGameStateRef = useRef<GameState | null>(null);
+
+  // Track current game state for accessing in WebSocket handlers
+  const currentGameStateRef = useRef<GameState>(gameState);
+
+  // Keep ref updated with latest game state
+  useEffect(() => {
+    currentGameStateRef.current = gameState;
+  }, [gameState]);
 
   // Network update throttling - 30Hz for responsive multiplayer
   const NETWORK_UPDATE_RATE = 1000 / 30; // 33.33ms between updates
