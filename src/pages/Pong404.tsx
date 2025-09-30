@@ -2031,25 +2031,26 @@ const Pong404: React.FC = () => {
               networkState.colorIndex = message.data.colorIndex;
             }
 
-            // Update paddles from server AI
+            // Update paddles from server AI - but preserve local player's paddle for instant response
             if (message.data.paddles) {
+              const playerSide = multiplayerStateRef.current?.playerSide;
               networkState.paddles = {
-                left: message.data.paddles.left ? {
+                left: (playerSide === 'left') ? prevState.paddles.left : (message.data.paddles.left ? {
                   ...prevState.paddles.left,
                   ...message.data.paddles.left
-                } : prevState.paddles.left,
-                right: message.data.paddles.right ? {
+                } : prevState.paddles.left),
+                right: (playerSide === 'right') ? prevState.paddles.right : (message.data.paddles.right ? {
                   ...prevState.paddles.right,
                   ...message.data.paddles.right
-                } : prevState.paddles.right,
-                top: message.data.paddles.top ? {
+                } : prevState.paddles.right),
+                top: (playerSide === 'top') ? prevState.paddles.top : (message.data.paddles.top ? {
                   ...prevState.paddles.top,
                   ...message.data.paddles.top
-                } : prevState.paddles.top,
-                bottom: message.data.paddles.bottom ? {
+                } : prevState.paddles.top),
+                bottom: (playerSide === 'bottom') ? prevState.paddles.bottom : (message.data.paddles.bottom ? {
                   ...prevState.paddles.bottom,
                   ...message.data.paddles.bottom
-                } : prevState.paddles.bottom
+                } : prevState.paddles.bottom)
               };
             }
 
