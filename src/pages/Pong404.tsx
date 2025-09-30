@@ -5138,69 +5138,7 @@ const Pong404: React.FC = () => {
         }
       }
 
-      // 🌀 PHYSICS FORCES MANAGEMENT - Random attractors and repulsors
-      if (newState.isPlaying) {
-        const currentTime = Date.now();
-
-        // Ensure physics forces array exists
-        if (!newState.physicsForces) {
-          newState.physicsForces = [];
-        }
-        if (!newState.nextForceSpawnTime) {
-          newState.nextForceSpawnTime = currentTime + Math.random() * 60000 + 60000;
-        }
-
-        // Spawn new physics forces randomly
-        if (currentTime > newState.nextForceSpawnTime) {
-          const forceType = Math.random() < 0.5 ? 'attractor' : 'repulsor';
-          const margin = 100;
-          const x = margin + Math.random() * (canvasSize.width - 2 * margin);
-          const y = margin + Math.random() * (canvasSize.height - 2 * margin);
-
-          const newForce: PhysicsForce = {
-            id: `force_${currentTime}_${Math.random()}`,
-            x,
-            y,
-            type: forceType,
-            strength: 80 + Math.random() * 60, // 80-140 strength
-            radius: 60 + Math.random() * 40, // 60-100 radius
-            spawnTime: currentTime,
-            lifespan: 8000 + Math.random() * 7000, // 8-15 seconds
-            animationPhase: 0,
-            pulseSpeed: 0.05 + Math.random() * 0.03, // 0.05-0.08 speed
-            color: forceType === 'attractor' ? '#00ffff' : '#ff0066',
-            hasPlayedSound: false
-          };
-
-          newState.physicsForces.push(newForce);
-          newState.nextForceSpawnTime = currentTime + Math.random() * 60000 + 60000; // 60-120 seconds (1-2 minutes)
-        }
-
-        // Update existing physics forces
-        newState.physicsForces = newState.physicsForces.filter(force => {
-          const age = currentTime - force.spawnTime;
-
-          // Remove expired forces
-          if (age > force.lifespan) {
-            return false;
-          }
-
-          // Update animation phase
-          force.animationPhase += force.pulseSpeed;
-
-          // Play spawn sound effect if not played yet
-          if (!force.hasPlayedSound && age > 100) {
-            force.hasPlayedSound = true;
-            // Play sound effect using existing audio system
-            if (playMelodyNoteRef.current) {
-              const frequency = force.type === 'attractor' ? 800 : 400;
-              playMelodyNoteRef.current(frequency, 0.3, 'sine', 150);
-            }
-          }
-
-          return true;
-        });
-      }
+      // Physics forces removed - now only available as pickups, not random events
 
       // Check if we're in a pause state
       if (newState.isPaused) {
