@@ -8639,7 +8639,7 @@ const Pong404: React.FC = () => {
         // Pulsing animation with more complex waves
         const pulse = Math.sin(force.animationPhase) * 0.4 + 1;
         const secondaryPulse = Math.cos(force.animationPhase * 1.3) * 0.2 + 1;
-        const size = 25 * pulse * secondaryPulse;
+        const size = Math.max(1, 25 * pulse * secondaryPulse); // Ensure positive size
 
         // Fade out near end of life with more dramatic effect
         const alpha = lifeProgress > 0.7 ? 1 - Math.pow((lifeProgress - 0.7) / 0.3, 2) : 1;
@@ -9118,8 +9118,8 @@ const Pong404: React.FC = () => {
     if (gameState.pickupEffect.isActive) {
       const elapsed = Date.now() - gameState.pickupEffect.startTime;
       const progress = elapsed / 1000; // 1 second duration
-      const radius = progress * 50; // Expanding circle
-      const alpha = 1 - progress; // Fading out
+      const radius = Math.max(0, progress * 50); // Expanding circle (prevent negative)
+      const alpha = Math.max(0, 1 - progress); // Fading out
 
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = currentColors.foreground;
