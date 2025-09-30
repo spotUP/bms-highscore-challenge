@@ -1043,6 +1043,8 @@ const Pong404: React.FC = () => {
   const [currentPhase, setCurrentPhase] = useState<'initializing' | 'warming' | 'booting' | 'finalizing'>('initializing');
   const [isCRTEnabled, setIsCRTEnabled] = useState(false);
   const [showFPS, setShowFPS] = useState(false);
+  const [paddleAnimationProgress, setPaddleAnimationProgress] = useState(0); // 0 to 1
+  const paddleAnimationStartTimeRef = useRef<number>(0);
 
   // Playfield size - same as canvas (border is drawn inside, not outside)
   const playFieldWidth = canvasSize.width;
@@ -1656,6 +1658,11 @@ const Pong404: React.FC = () => {
 
         // NOW start the game since we've successfully joined the room
         console.log('[GAME] Successfully joined room, starting multiplayer game');
+
+        // Start paddle animation
+        paddleAnimationStartTimeRef.current = Date.now();
+        setPaddleAnimationProgress(0);
+
         setGameState(prev => ({
           ...prev,
           showStartScreen: false,
@@ -8485,13 +8492,31 @@ const Pong404: React.FC = () => {
 
     // Helper function to draw a paddle
     const drawPaddle = (paddle: any, side: string, x: number, y: number) => {
+      // Don't draw paddles on start screen or before animation starts
+      if (gameState.showStartScreen || paddleAnimationProgress === 0) {
+        return;
+      }
+
       // Use fallback dimensions if paddle dimensions are invalid (multiplayer server may not send them)
       const width = paddle.width || (side === 'left' || side === 'right' ? PADDLE_THICKNESS : PADDLE_LENGTH);
       const height = paddle.height || (side === 'left' || side === 'right' ? PADDLE_LENGTH : PADDLE_THICKNESS);
 
+      // Apply animation scale (grow from center with bounce)
+      const scale = paddleAnimationProgress;
+
       const isHumanControlled = (gameState.gameMode === 'multiplayer' && currentPlayerSide === side) ||
                                 (gameState.gameMode === 'player' && side === 'right');
       const paddleColor = isHumanControlled ? humanPlayerColor : currentColors.foreground;
+
+      // Calculate center point for scaling
+      const centerX = x + width / 2;
+      const centerY = y + height / 2;
+
+      // Apply scale animation (grow from center)
+      const scaledWidth = width * scale;
+      const scaledHeight = height * scale;
+      const scaledX = centerX - scaledWidth / 2;
+      const scaledY = centerY - scaledHeight / 2;
 
       // Draw music-reactive glow effect
       ctx.shadowBlur = 8 + musicData.volume * 25; // Pulse with music volume (8-33px)
@@ -8500,7 +8525,7 @@ const Pong404: React.FC = () => {
       ctx.globalAlpha = 1; // Ensure paddles are fully opaque
       ctx.fillStyle = paddleColor;
       // Round to whole pixels to prevent sub-pixel anti-aliasing flicker
-      ctx.fillRect(Math.round(x), Math.round(y), width, height);
+      ctx.fillRect(Math.round(scaledX), Math.round(scaledY), scaledWidth, scaledHeight);
 
       // Reset shadow
       ctx.shadowBlur = 0;
@@ -9843,6 +9868,20 @@ const Pong404: React.FC = () => {
       timeUpdateCountRef.current++;
       if (timeUpdateCountRef.current % 4 === 0) {
         cachedTimeRef.current = Date.now();
+      }
+
+      // Update paddle animation progress
+      if (paddleAnimationProgress < 1 && paddleAnimationStartTimeRef.current > 0) {
+        const elapsed = currentTime - paddleAnimationStartTimeRef.current;
+        const duration = 500; // 500ms animation
+        const progress = Math.min(elapsed / duration, 1);
+
+        // Bouncy easing: elastic overshoot
+        const eased = progress < 1
+          ? 1 - Math.pow(1 - progress, 3) * Math.cos(progress * Math.PI * 2.5)
+          : 1;
+
+        setPaddleAnimationProgress(eased);
       }
 
       // Update game logic - optimized state updates
