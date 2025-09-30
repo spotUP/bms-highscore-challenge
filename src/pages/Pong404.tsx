@@ -4844,26 +4844,44 @@ const Pong404: React.FC = () => {
         // Client only renders and handles local player input
 
         // Use network state directly - no interpolation or prediction to prevent jitter
+        const playerSide = multiplayerStateRef.current?.playerSide;
+
         newState = {
           ...networkGameStateRef.current,
           paddles: {
-            // Use server state for all paddles
-            left: {
+            // Preserve local player paddle for instant response, use server state for others
+            left: playerSide === 'left' ? {
+              ...prevState.paddles.left, // Keep local paddle position
+              height: PADDLE_LENGTH,
+              width: PADDLE_THICKNESS
+            } : {
               ...networkGameStateRef.current.paddles.left,
               height: PADDLE_LENGTH,
               width: PADDLE_THICKNESS
             },
-            right: {
+            right: playerSide === 'right' ? {
+              ...prevState.paddles.right, // Keep local paddle position
+              height: PADDLE_LENGTH,
+              width: PADDLE_THICKNESS
+            } : {
               ...networkGameStateRef.current.paddles.right,
               height: PADDLE_LENGTH,
               width: PADDLE_THICKNESS
             },
-            top: {
+            top: playerSide === 'top' ? {
+              ...prevState.paddles.top, // Keep local paddle position
+              height: PADDLE_THICKNESS,
+              width: PADDLE_LENGTH
+            } : {
               ...networkGameStateRef.current.paddles.top,
               height: PADDLE_THICKNESS,
               width: PADDLE_LENGTH
             },
-            bottom: {
+            bottom: playerSide === 'bottom' ? {
+              ...prevState.paddles.bottom, // Keep local paddle position
+              height: PADDLE_THICKNESS,
+              width: PADDLE_LENGTH
+            } : {
               ...networkGameStateRef.current.paddles.bottom,
               height: PADDLE_THICKNESS,
               width: PADDLE_LENGTH
@@ -4882,7 +4900,7 @@ const Pong404: React.FC = () => {
         };
 
         // Handle local player input and send to server
-        const playerSide = multiplayerStateRef.current?.playerSide;
+        // playerSide already declared above for paddle preservation
 
         if (playerSide === 'left' || localTestMode) {
           const freezeEffect = newState.activeEffects.find(e => e.type === 'freeze_opponent');
