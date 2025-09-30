@@ -784,9 +784,9 @@ const Pong404: React.FC = () => {
   const frameCountRef = useRef<number>(0);
   const lastFpsUpdateRef = useRef<number>(Date.now());
 
-  // [TARGET] Frame Rate Control - Lower FPS for mobile devices
+  // [TARGET] Frame Rate Control - Always 60 FPS for smooth gameplay
   const lastFrameTimeRef = useRef<number>(0);
-  const targetFPS = isMobile ? 30 : 60; // 30 FPS on mobile, 60 FPS on desktop
+  const targetFPS = 60; // Always target 60 FPS for consistent gameplay
   const targetFrameTime = 1000 / targetFPS; // 16.67ms per frame
 
   // [BOLT] Performance: Cached time values to reduce Date.now() calls
