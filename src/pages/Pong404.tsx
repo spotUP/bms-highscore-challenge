@@ -1723,6 +1723,11 @@ const Pong404: React.FC = () => {
           const now = Date.now();
           const data = message.data;
 
+          // Don't update your own paddle - local prediction is authoritative for smoother gameplay
+          if (data.side === multiplayerState.playerSide) {
+            return prev; // Ignore updates for your own paddle
+          }
+
           // Calculate lag compensation if timestamp is provided
           let compensatedY = data.y;
           if (data.ts && data.velocity) {
