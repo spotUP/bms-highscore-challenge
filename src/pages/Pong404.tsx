@@ -1042,6 +1042,7 @@ const Pong404: React.FC = () => {
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [currentPhase, setCurrentPhase] = useState<'initializing' | 'warming' | 'booting' | 'finalizing'>('initializing');
   const [isCRTEnabled, setIsCRTEnabled] = useState(false);
+  const [showFPS, setShowFPS] = useState(false);
 
   // Playfield size - same as canvas (border is drawn inside, not outside)
   const playFieldWidth = canvasSize.width;
@@ -7658,6 +7659,11 @@ const Pong404: React.FC = () => {
             document.exitFullscreen();
           }
           break;
+        case 'p':
+          e.preventDefault();
+          // Toggle FPS display
+          setShowFPS(prev => !prev);
+          break;
         case '2':
           e.preventDefault();
           console.log('[TARGET] 2 KEY PRESSED (FORWARD):', {
@@ -8200,7 +8206,7 @@ const Pong404: React.FC = () => {
       ctx.font = 'bold 32px "Press Start 2P", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 4; // Reduced from 8 for subtler glow
       ctx.shadowColor = currentColors.foreground;
       ctx.fillText('AUDIO REQUIRED', canvasSize.width / 2, canvasSize.height / 2 - 80);
 
@@ -8248,7 +8254,7 @@ const Pong404: React.FC = () => {
       ctx.font = 'bold 48px "Press Start 2P", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 4; // Reduced from 8 for subtler glow
       ctx.shadowColor = currentColors.foreground;
       ctx.fillText('SPACE BLAZERS', canvasSize.width / 2, canvasSize.height / 2 - 200);
 
@@ -8309,7 +8315,7 @@ const Pong404: React.FC = () => {
       // Electric pulsing effect - use time for animation
       const pulseTime = Date.now() / 200; // Faster pulse
       const pulseIntensity = 0.5 + Math.sin(pulseTime) * 0.5; // 0 to 1
-      const glowIntensity = 20 + pulseIntensity * 40; // 20-60px blur
+      const glowIntensity = 10 + pulseIntensity * 20; // 10-30px blur (reduced from 20-60)
 
       // Electric blue color with pulsing opacity
       const electricBlue = `rgba(0, 204, 255, ${0.7 + pulseIntensity * 0.3})`;
@@ -8319,7 +8325,7 @@ const Pong404: React.FC = () => {
       // Draw each border with appropriate color
       // Left border
       ctx.strokeStyle = protectedSide === 'left' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'left' ? glowIntensity : 10 + musicData.volume * 30;
+      ctx.shadowBlur = protectedSide === 'left' ? glowIntensity : 5 + musicData.volume * 15; // Reduced from 10-40 to 5-20
       ctx.shadowColor = protectedSide === 'left' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'left' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
       ctx.beginPath();
@@ -8329,7 +8335,7 @@ const Pong404: React.FC = () => {
 
       // Right border
       ctx.strokeStyle = protectedSide === 'right' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'right' ? glowIntensity : 10 + musicData.volume * 30;
+      ctx.shadowBlur = protectedSide === 'right' ? glowIntensity : 5 + musicData.volume * 15; // Reduced from 10-40 to 5-20
       ctx.shadowColor = protectedSide === 'right' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'right' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
       ctx.beginPath();
@@ -8339,7 +8345,7 @@ const Pong404: React.FC = () => {
 
       // Top border
       ctx.strokeStyle = protectedSide === 'top' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'top' ? glowIntensity : 10 + musicData.volume * 30;
+      ctx.shadowBlur = protectedSide === 'top' ? glowIntensity : 5 + musicData.volume * 15; // Reduced from 10-40 to 5-20
       ctx.shadowColor = protectedSide === 'top' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'top' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
       ctx.beginPath();
@@ -8349,7 +8355,7 @@ const Pong404: React.FC = () => {
 
       // Bottom border
       ctx.strokeStyle = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'bottom' ? glowIntensity : 10 + musicData.volume * 30;
+      ctx.shadowBlur = protectedSide === 'bottom' ? glowIntensity : 5 + musicData.volume * 15; // Reduced from 10-40 to 5-20
       ctx.shadowColor = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'bottom' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
       ctx.beginPath();
@@ -8363,7 +8369,7 @@ const Pong404: React.FC = () => {
       ctx.setLineDash([]); // Solid lines for borders
 
       // Add music-reactive glow to border
-      ctx.shadowBlur = 10 + musicData.volume * 30; // Pulse with music volume (10-40px)
+      ctx.shadowBlur = 5 + musicData.volume * 15; // Pulse with music volume (5-20px, reduced from 10-40)
       ctx.shadowColor = currentColors.foreground;
 
       ctx.strokeRect(
@@ -9154,21 +9160,24 @@ const Pong404: React.FC = () => {
     ctx.textAlign = 'right';
     const fpsDisplay = fpsRef.current === 0 ? 60 : fpsRef.current; // Show 60 during startup
 
-    // Color code FPS - green for 60, yellow for 45-59, red for below 45
-    ctx.shadowBlur = 8;
-    if (fpsDisplay >= 60) {
-      ctx.fillStyle = '#00ff00'; // Bright green for perfect 60 FPS
-      ctx.shadowColor = '#00ff00';
-    } else if (fpsDisplay >= 45) {
-      ctx.fillStyle = '#ffff00'; // Yellow for good FPS
-      ctx.shadowColor = '#ffff00';
-    } else {
-      ctx.fillStyle = '#ff0000'; // Red for poor FPS
-      ctx.shadowColor = '#ff0000';
-    }
+    // Draw FPS counter (only if enabled with 'P' key)
+    if (showFPS) {
+      // Color code FPS - green for 60, yellow for 45-59, red for below 45
+      ctx.shadowBlur = 4; // Reduced from 8 for subtler glow
+      if (fpsDisplay >= 60) {
+        ctx.fillStyle = '#00ff00'; // Bright green for perfect 60 FPS
+        ctx.shadowColor = '#00ff00';
+      } else if (fpsDisplay >= 45) {
+        ctx.fillStyle = '#ffff00'; // Yellow for good FPS
+        ctx.shadowColor = '#ffff00';
+      } else {
+        ctx.fillStyle = '#ff0000'; // Red for poor FPS
+        ctx.shadowColor = '#ff0000';
+      }
 
-    ctx.fillText(`${fpsDisplay} FPS`, playFieldWidth - 20, 30);
-    ctx.shadowBlur = 0;
+      ctx.fillText(`${fpsDisplay} FPS`, playFieldWidth - 20, 30);
+      ctx.shadowBlur = 0;
+    }
 
     // Reset color back to foreground for other elements
     ctx.fillStyle = currentColors.foreground;
@@ -9225,7 +9234,7 @@ const Pong404: React.FC = () => {
     if (robotText && gameState.isPlaying && !gameState.showStartScreen) {
       ctx.font = 'bold 20px "Press Start 2P", monospace';
       ctx.fillStyle = currentColors.foreground;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 4; // Reduced from 8 for subtler glow
       ctx.shadowColor = currentColors.foreground;
       ctx.textAlign = 'center';
 
