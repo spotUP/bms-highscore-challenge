@@ -99,15 +99,16 @@ class ServerCollisionDetector {
     obj2: CollisionObject,
     buffer: number = 0
   ): CollisionResult {
-    if (!obj1.vx || !obj1.vy) {
+    // Check if object has velocity (checking for existence AND non-zero)
+    if (!obj1.vx && !obj1.vy) {
       return this.detectAABB(obj1, obj2, buffer);
     }
 
     // Calculate next position
     const nextObj1 = {
       ...obj1,
-      x: obj1.x + obj1.vx,
-      y: obj1.y + obj1.vy
+      x: obj1.x + (obj1.vx || 0),
+      y: obj1.y + (obj1.vy || 0)
     };
 
     // Check if trajectory would cross the object
@@ -264,7 +265,7 @@ interface Pickup {
   id: string;
   x: number;
   y: number;
-  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor';
   createdAt: number;
   size?: number;
 }
@@ -278,11 +279,13 @@ interface Coin {
 }
 
 interface ActiveEffect {
-  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor';
   startTime: number;
   duration: number;
   originalValue?: any;
   side?: string;
+  x?: number; // Position for force fields
+  y?: number;
 }
 
 interface GameState {
@@ -1341,7 +1344,8 @@ class PongWebSocketServer {
 
       // Store target if not exists or recalculate if ball direction/position changed significantly
       if (!paddle.targetPos || Math.abs(paddle.lastPredictedPos - predictedPos) > 20) {
-        const imperfection = (Math.random() - 0.5) * 10;
+        // Increased imperfection for more variety and mistakes
+        const imperfection = (Math.random() - 0.5) * 40; // Increased from 10 to 40
         paddle.targetPos = predictedPos + imperfection - (paddleSize / 2);
         paddle.lastPredictedPos = predictedPos;
       }
@@ -1353,13 +1357,14 @@ class PongWebSocketServer {
       const distance = Math.abs(targetPos + (paddleSize / 2) - paddleCenter);
 
       // Dynamic speed: faster when far, slower when close
-      const minSpeed = 2.0;
-      const maxSpeed = 8.0;
+      // Reduced AI speed to make it less perfect
+      const minSpeed = 1.5; // Reduced from 2.0
+      const maxSpeed = 6.0; // Reduced from 8.0
       const speedMultiplier = Math.min(1, distance / 100); // Scale based on distance
       const speed = minSpeed + (maxSpeed - minSpeed) * speedMultiplier;
 
       // Only move if distance is significant (deadzone larger than max speed to prevent oscillation)
-      const deadzone = 10;
+      const deadzone = 15; // Increased from 10 to make AI less twitchy
       if (distance > deadzone) {
         const direction = (targetPos + (paddleSize / 2)) > paddleCenter ? 1 : -1;
         const movement = direction * speed;
@@ -1443,6 +1448,51 @@ class PongWebSocketServer {
       const gravity = 0.3; // Gravity acceleration
       gameState.ball.dy += gravity; // Apply downward gravity
       ballChanged = true;
+    }
+
+    // Apply attractor and repulsor force fields
+    const ballCenterForForces = {
+      x: gameState.ball.x + gameState.ball.size / 2,
+      y: gameState.ball.y + gameState.ball.size / 2
+    };
+
+    for (const effect of gameState.activeEffects) {
+      if ((effect.type === 'attractor' || effect.type === 'repulsor') && effect.x !== undefined && effect.y !== undefined) {
+        // Calculate distance from ball to force field center
+        const dx = effect.x - ballCenterForForces.x;
+        const dy = effect.y - ballCenterForForces.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // Maximum interaction distance (increased for stronger effect)
+        const maxDistance = 400;
+
+        if (distance > 0 && distance < maxDistance) {
+          // Force strength inversely proportional to distance (stronger when close)
+          // Using squared falloff for more dramatic effect
+          const forceMagnitude = (effect.type === 'attractor' ? 150 : -150) * (1 - (distance / maxDistance) ** 2);
+
+          // Normalize direction vector
+          const dirX = dx / distance;
+          const dirY = dy / distance;
+
+          // Apply force to ball velocity
+          const forceX = dirX * forceMagnitude * 0.01;
+          const forceY = dirY * forceMagnitude * 0.01;
+
+          gameState.ball.dx += forceX;
+          gameState.ball.dy += forceY;
+          ballChanged = true;
+
+          // Clamp ball velocity to prevent it from getting too fast
+          const maxVelocity = 25;
+          const currentSpeed = Math.sqrt(gameState.ball.dx ** 2 + gameState.ball.dy ** 2);
+          if (currentSpeed > maxVelocity) {
+            const scale = maxVelocity / currentSpeed;
+            gameState.ball.dx *= scale;
+            gameState.ball.dy *= scale;
+          }
+        }
+      }
     }
 
     // Handle Super Striker aiming mode
@@ -1547,7 +1597,7 @@ class PongWebSocketServer {
     // Add collision cooldown to prevent multiple collisions per frame
     const now = Date.now();
     if (!gameState.ball.lastCollisionTime) gameState.ball.lastCollisionTime = 0;
-    const collisionCooldown = 200; // 200ms cooldown between collisions (increased to reduce loops)
+    const collisionCooldown = 50; // 50ms cooldown - short enough to catch fast balls
 
     // 🚨 COLLISION DETECTION WITH EXTENSIVE DEBUGGING
     let collisionDetected = false;
@@ -1576,10 +1626,12 @@ class PongWebSocketServer {
           // Set collision cooldown
           gameState.ball.lastCollisionTime = now;
 
-        // Apply enhanced aiming system with anti-loop protection
+        // Improved angle calculation with better control
         const hitPosition = collision.hitPosition;
         const clampedHitPosition = Math.max(0, Math.min(1, hitPosition));
-        let normalizedPosition = (clampedHitPosition - 0.5) * 2; // Convert to range [-1, 1]
+
+        // Convert to range [-1, 1] where 0 is center
+        let normalizedPosition = (clampedHitPosition - 0.5) * 2;
 
         // Anti-loop protection: if ball hits too close to center, add minimum deflection
         const centerThreshold = 0.15; // If within 15% of center
@@ -1591,10 +1643,11 @@ class PongWebSocketServer {
           console.log(`🎯 Anti-loop: Adding deflection ${normalizedPosition.toFixed(3)} to prevent bounce loop`);
         }
 
-        const aimingCurve = Math.sin(normalizedPosition * Math.PI * 0.4); // 0.4 limits max angle
+        // Direct angle calculation with better control curve
+        // Use a quadratic curve for smoother angle progression
         const baseSpeed = 10; // Server ball speed
-        const maxAngle = Math.PI / 3; // 60 degrees maximum deflection
-        const deflectionAngle = aimingCurve * maxAngle;
+        const maxAngle = Math.PI / 3.5; // ~51 degrees maximum deflection (reduced for better gameplay)
+        const deflectionAngle = normalizedPosition * maxAngle * Math.abs(normalizedPosition); // Quadratic curve
 
         // Apply velocity based on paddle side (same as client)
         if (paddle.side === 'left') {
@@ -1969,7 +2022,7 @@ class PongWebSocketServer {
   }
 
   private generatePickup(gameState: GameState, canvasSize: { width: number; height: number }): void {
-    const pickupTypes: Pickup['type'][] = ['speed_up', 'speed_down', 'big_ball', 'small_ball', 'drunk_ball', 'grow_paddle', 'shrink_paddle', 'reverse_controls', 'invisible_ball', 'freeze_opponent'];
+    const pickupTypes: Pickup['type'][] = ['speed_up', 'speed_down', 'big_ball', 'small_ball', 'drunk_ball', 'grow_paddle', 'shrink_paddle', 'reverse_controls', 'invisible_ball', 'freeze_opponent', 'attractor', 'repulsor'];
     const type = pickupTypes[Math.floor(Math.random() * pickupTypes.length)];
 
     // Pickup size is 72x72 (6 pixels at 12x12 scale)
@@ -2185,6 +2238,20 @@ class PongWebSocketServer {
         // Ball attracted to paddles
         gameState.ball.isMagnetic = true;
         effect.duration = 12000; // 12 seconds
+        break;
+      case 'attractor':
+        // Create an attractor force field that pulls the ball towards it
+        effect.x = pickup.x + (pickup.size || 72) / 2;
+        effect.y = pickup.y + (pickup.size || 72) / 2;
+        effect.duration = 10000; // 10 seconds
+        console.log(`🧲 Attractor created at (${effect.x}, ${effect.y})`);
+        break;
+      case 'repulsor':
+        // Create a repulsor force field that pushes the ball away
+        effect.x = pickup.x + (pickup.size || 72) / 2;
+        effect.y = pickup.y + (pickup.size || 72) / 2;
+        effect.duration = 10000; // 10 seconds
+        console.log(`💨 Repulsor created at (${effect.x}, ${effect.y})`);
         break;
       case 'invisible_paddles':
         // Make paddles partially invisible

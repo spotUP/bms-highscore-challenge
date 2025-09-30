@@ -1199,6 +1199,8 @@ const Pong404: React.FC = () => {
   const [crtEffect, setCrtEffect] = useState(true); // CRT shader enabled by default
   const [showAudioPrompt, setShowAudioPrompt] = useState(!isSpectatorMode); // Show audio interaction prompt on first load (skip for spectators)
   const audioPromptDismissedRef = useRef(isSpectatorMode); // Track if audio prompt was dismissed (auto-dismiss for spectators)
+  const [robotText, setRobotText] = useState<string>(''); // Current robot speech text to display
+  const robotTextTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Local multiplayer using localStorage for cross-tab sync
   const connectLocalMultiplayer = useCallback(() => {
@@ -1720,6 +1722,36 @@ const Pong404: React.FC = () => {
 
       case 'game_state_updated':
         if (message.data) {
+          const prevGameState = networkGameStateRef.current;
+
+          // Detect paddle collision by checking if lastTouchedBy changed
+          if (prevGameState && message.data.ball?.lastTouchedBy &&
+              message.data.ball.lastTouchedBy !== prevGameState.ball?.lastTouchedBy) {
+            console.log('[GAME] Paddle collision detected in game_state_updated', {
+              prev: prevGameState.ball?.lastTouchedBy,
+              new: message.data.ball.lastTouchedBy,
+              refExists: !!playMelodyNoteRef.current,
+              refValue: playMelodyNoteRef.current
+            });
+            if (playMelodyNoteRef.current) {
+              playMelodyNoteRef.current('paddle', null, 'both');
+            } else {
+              console.error('[GAME] playMelodyNoteRef.current is null!');
+            }
+          }
+
+          // Detect scoring by checking if any score increased
+          if (prevGameState && message.data.score) {
+            const prevTotal = (prevGameState.score?.left || 0) + (prevGameState.score?.right || 0) +
+                            (prevGameState.score?.top || 0) + (prevGameState.score?.bottom || 0);
+            const newTotal = message.data.score.left + message.data.score.right +
+                           message.data.score.top + message.data.score.bottom;
+            if (newTotal > prevTotal) {
+              console.log('[GAME] Score detected in game_state_updated - playing score sound');
+              playMelodyNoteRef.current?.('score', null, 'both');
+            }
+          }
+
           // ONLY update the network state ref - let the game loop handle rendering
           // This prevents competing state updates that cause flickering
           networkGameStateRef.current = {
@@ -1760,6 +1792,13 @@ const Pong404: React.FC = () => {
                 serverAuth: true, // WebSocket server is authoritative
                 gameMode: multiplayerState.gameMode
               });
+
+              // Detect paddle collision by checking if lastTouchedBy changed
+              if (messageData.ball.lastTouchedBy && messageData.ball.lastTouchedBy !== prevState.ball.lastTouchedBy) {
+                console.log('[GAME] Paddle collision detected via lastTouchedBy change');
+                playMelodyNoteRef.current?.('paddle', null, 'both');
+              }
+
               networkState.ball = { ...prevState.ball, ...messageData.ball };
             }
 
@@ -1770,6 +1809,15 @@ const Pong404: React.FC = () => {
                 serverAuth: true, // WebSocket server is authoritative
                 gameMode: multiplayerState.gameMode
               });
+
+              // Detect scoring by checking if any score increased
+              const prevTotal = prevState.score.left + prevState.score.right + prevState.score.top + prevState.score.bottom;
+              const newTotal = messageData.score.left + messageData.score.right + messageData.score.top + messageData.score.bottom;
+              if (newTotal > prevTotal) {
+                console.log('[GAME] Score detected - playing score sound');
+                playMelodyNoteRef.current?.('score', null, 'both');
+              }
+
               networkState.score = messageData.score;
             }
 
@@ -1872,10 +1920,30 @@ const Pong404: React.FC = () => {
             const networkState = { ...prevState };
 
             if (message.data.ball) {
+              // Detect paddle collision by checking if lastTouchedBy changed
+              if (message.data.ball.lastTouchedBy &&
+                  message.data.ball.lastTouchedBy !== prevState.ball.lastTouchedBy) {
+                console.log('[GAME] Paddle collision detected in server_game_update', {
+                  prev: prevState.ball.lastTouchedBy,
+                  new: message.data.ball.lastTouchedBy
+                });
+                playMelodyNoteRef.current?.('paddle', null, 'both');
+              }
+
               networkState.ball = { ...prevState.ball, ...message.data.ball };
             }
 
             if (message.data.score) {
+              // Detect scoring by checking if any score increased
+              const prevTotal = prevState.score.left + prevState.score.right +
+                               prevState.score.top + prevState.score.bottom;
+              const newTotal = message.data.score.left + message.data.score.right +
+                             message.data.score.top + message.data.score.bottom;
+              if (newTotal > prevTotal) {
+                console.log('[GAME] Score detected in server_game_update - playing score sound');
+                playMelodyNoteRef.current?.('score', null, 'both');
+              }
+
               networkState.score = message.data.score;
             }
 
@@ -2485,6 +2553,17 @@ const Pong404: React.FC = () => {
 
       // Create SAM instance with classic Berzerk-style robotic settings
       const cleanText = text.trim().toUpperCase();
+
+      // Display the text on screen (but skip countdown numbers 0-9)
+      if (!/^[0-9]$/.test(cleanText)) {
+        setRobotText(cleanText);
+
+        // Clear any existing text timeout
+        if (robotTextTimeoutRef.current) {
+          clearTimeout(robotTextTimeoutRef.current);
+        }
+      }
+
       const sam = new SamJs({
         pitch: 64,     // Classic robotic pitch (not too low or high)
         speed: 72,     // Moderate speech speed for clarity
@@ -2565,6 +2644,10 @@ const Pong404: React.FC = () => {
         // Clean up when finished
         source.onended = () => {
           isSpeakingRef.current = false;
+          // Clear text display after a brief delay
+          robotTextTimeoutRef.current = setTimeout(() => {
+            setRobotText('');
+          }, 500);
         };
       } catch (error) {
         console.error('[ROBOT] SAM Web Audio error:', error);
@@ -2629,14 +2712,18 @@ const Pong404: React.FC = () => {
   }, [speakRobotic, getContextualTaunt]);
 
   // Enhanced tone generation with custom volume
-  const playTone = useCallback((frequency: number, duration: number, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both', volume: number = 0.3) => {
+  const playTone = useCallback(async (frequency: number, duration: number, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both', volume: number = 0.3) => {
+    console.log(`[SOUND] playTone called: freq=${frequency}, dur=${duration}, vol=${volume}`);
+
     // Only create AudioContext when actually trying to play a sound (user gesture)
     if (!audioContextRef.current && !audioInitAttempted.current) {
+      console.log('[SOUND] Creating new AudioContext');
       audioInitAttempted.current = true;
       try {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
         initializeAudioEffects(audioContextRef.current);
       } catch (error) {
+        console.error('[SOUND] Failed to create AudioContext:', error);
         // Audio not supported - fail silently
         return;
       }
@@ -2644,16 +2731,25 @@ const Pong404: React.FC = () => {
 
     // Exit early if no audio context
     if (!audioContextRef.current) {
+      console.warn('[SOUND] No audio context available');
       return;
     }
 
+    console.log(`[SOUND] Audio context state: ${audioContextRef.current.state}`);
+
     // Resume audio context if suspended (required for production builds)
     if (audioContextRef.current.state === 'suspended') {
-      audioContextRef.current.resume().catch(() => {
-        // Fail silently if resume fails
+      console.log('[SOUND] Resuming suspended audio context');
+      try {
+        await audioContextRef.current.resume();
+        console.log('[SOUND] Audio context resumed successfully, state:', audioContextRef.current?.state);
+      } catch (error) {
+        console.error('[SOUND] Failed to resume audio context:', error);
         return;
-      });
+      }
     }
+
+    console.log('[SOUND] About to create oscillator and play sound');
 
     const ctx = audioContextRef.current;
     const now = ctx.currentTime;
@@ -2661,7 +2757,7 @@ const Pong404: React.FC = () => {
     // Create dedicated beeps audio bus if it doesn't exist
     if (!beepsMasterGainRef.current) {
       beepsMasterGainRef.current = ctx.createGain();
-      beepsMasterGainRef.current.gain.setValueAtTime(0.15, ctx.currentTime); // Much lower level for beeps
+      beepsMasterGainRef.current.gain.setValueAtTime(0.4, ctx.currentTime); // Increased from 0.15 to make sounds audible
       // Connect to analyzer for visualizer, then to destination
       if (analyserNodeRef.current) {
         beepsMasterGainRef.current.connect(analyserNodeRef.current);
@@ -2718,8 +2814,18 @@ const Pong404: React.FC = () => {
     }
 
     // Start and stop
+    console.log('[SOUND] Starting oscillator:', {
+      frequency,
+      duration,
+      volume,
+      effectType,
+      beepsMasterGainExists: !!beepsMasterGainRef.current,
+      beepsMasterGainValue: beepsMasterGainRef.current?.gain.value,
+      contextState: ctx.state
+    });
     oscillator.start(now);
     oscillator.stop(now + duration);
+    console.log('[SOUND] Oscillator started and scheduled to stop');
 
     // Clean up nodes after oscillator stops to prevent accumulation
     setTimeout(() => {
@@ -2740,11 +2846,27 @@ const Pong404: React.FC = () => {
     playTone(frequency, duration, effectType);
   }, [playTone]);
 
-  // [ROCKET] OPTIMIZED melody system using precalculated frequencies
-  const playMelodyNote = useCallback((eventType: 'paddle' | 'wall' | 'score' | 'pickup', pickupData?: any, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both') => {
-    const now = Date.now();
+  // [ROCKET] OPTIMIZED melody system using Tone.js
+  const playMelodyNote = useCallback(async (eventType: 'paddle' | 'wall' | 'score' | 'pickup', pickupData?: any, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both') => {
+    console.log(`[SOUND] Playing sound for event: ${eventType}`);
 
-    // [MUSIC] Use precalculated frequencies for instant audio response
+    // Dynamically import Tone.js if not available
+    let Tone = (window as any).Tone;
+
+    if (!Tone) {
+      console.log('[SOUND] Tone.js not available yet, trying to import...');
+      try {
+        const ToneModule = await import('tone');
+        Tone = ToneModule.default || ToneModule;
+        (window as any).Tone = Tone;
+        console.log('[SOUND] Tone.js imported successfully');
+      } catch (error) {
+        console.error('[SOUND] Failed to import Tone.js:', error);
+        return;
+      }
+    }
+
+    // Use precalculated frequencies for instant audio response
     let frequency: number;
     let duration: number;
 
@@ -2775,10 +2897,36 @@ const Pong404: React.FC = () => {
         duration = 0.1;
     }
 
-    // [ROCKET] OPTIMIZED: Play single precalculated tone (no harmony computation)
-    playTone(frequency, duration, effectType);
+    console.log(`[SOUND] Playing Tone.js beep: freq=${frequency}Hz, duration=${duration}s`);
 
-  }, [playTone]);
+    try {
+      // Create a simple synth for beep sounds
+      const synth = new Tone.Synth({
+        oscillator: { type: 'square' },
+        envelope: {
+          attack: 0.001,
+          decay: duration / 2,
+          sustain: 0.3,
+          release: duration / 2
+        }
+      }).toDestination();
+
+      synth.volume.value = -10; // Set volume (in dB)
+
+      // Play the note
+      synth.triggerAttackRelease(frequency, duration);
+
+      // Clean up after playing
+      setTimeout(() => {
+        synth.dispose();
+      }, (duration + 0.5) * 1000);
+
+      console.log('[SOUND] Tone.js beep played successfully');
+    } catch (error) {
+      console.error('[SOUND] Error playing Tone.js beep:', error);
+    }
+
+  }, []);
 
   // ATMOSPHERIC DARK DRONE - Inspired by "station - atmospheric dark drone music for focus.mp3"
   // Original cinematic system temporarily disabled to test dark atmospheric approach
@@ -8490,6 +8638,20 @@ const Pong404: React.FC = () => {
       ctx.shadowBlur = 0;
     }
 
+    // Draw robot speech text (always visible when robot is speaking)
+    if (robotText) {
+      ctx.font = 'bold 20px "Press Start 2P", monospace';
+      ctx.fillStyle = currentColors.foreground;
+      ctx.shadowBlur = 8;
+      ctx.shadowColor = currentColors.foreground;
+      ctx.textAlign = 'center';
+
+      // Draw text at same height as pickup callouts (150px)
+      ctx.fillText(robotText, playFieldWidth / 2, 150);
+
+      ctx.shadowBlur = 0;
+    }
+
     // Draw active effects status with live countdown and robot voice announcements
     if (gameState.activeEffects.length > 0) {
       ctx.font = 'bold 20px "Press Start 2P", monospace';
@@ -9287,8 +9449,106 @@ const Pong404: React.FC = () => {
 
   // Universal input handler to initialize audio on any user interaction
   useEffect(() => {
-    const handleAnyUserInput = async () => {
+    const handleAnyUserInput = async (e: Event) => {
       await initializeAudio();
+
+      // Dismiss audio prompt on click or touch
+      if ((e.type === 'click' || e.type === 'mousedown' || e.type === 'touchstart') && showAudioPrompt && !audioPromptDismissedRef.current) {
+        console.log('[MUSIC] DISMISSING AUDIO PROMPT WITH MOUSE CLICK');
+        audioPromptDismissedRef.current = true;
+        setShowAudioPrompt(false);
+
+        if (isSpectatorMode) {
+          // Skip start screen for spectator mode - go directly to multiplayer
+          connectWebSocket();
+          setGameState(prev => ({
+            ...prev,
+            showStartScreen: false,
+            gameMode: 'multiplayer',
+            isPlaying: true,
+            ball: {
+              ...prev.ball,
+              x: canvasSize.width / 2,
+              y: canvasSize.height / 2,
+              dx: 6,
+              dy: 6,
+            }
+          }));
+        } else {
+          setGameState(prev => ({ ...prev, showStartScreen: true }));
+        }
+
+        // Ensure canvas gets focus for keyboard events
+        setTimeout(() => {
+          const canvas = canvasRef.current;
+          if (canvas) {
+            canvas.focus();
+            console.log('[TARGET] CANVAS FOCUSED FOR START SCREEN');
+          }
+        }, 100);
+        return; // Exit early after handling audio prompt
+      }
+
+      // Handle start screen click to start game
+      if ((e.type === 'click' || e.type === 'mousedown' || e.type === 'touchstart') && gameState.showStartScreen) {
+        console.log('[ROCKET] STARTING GAME FROM START SCREEN VIA MOUSE CLICK!');
+        // Try to connect to multiplayer WebSocket
+        if (!multiplayerState.isConnected) {
+          try {
+            connectWebSocket();
+            setGameState(prev => ({
+              ...prev,
+              showStartScreen: false,
+              gameMode: 'multiplayer',
+              isPlaying: true,
+              score: { left: 0, right: 0, top: 0, bottom: 0 },
+              winner: null,
+              gameEnded: false,
+              ball: {
+                ...prev.ball,
+                x: canvasSize.width / 2,
+                y: canvasSize.height / 2,
+                dx: Math.random() > 0.5 ? 6 : -6,
+                dy: (Math.random() - 0.5) * 6 * 0.8
+              }
+            }));
+            setTimeout(() => speakRobotic('CONNECTING TO SERVER'), 100);
+          } catch (error) {
+            console.error('[ERROR] Failed to connect to multiplayer:', error);
+            setGameState(prev => ({
+              ...prev,
+              showStartScreen: false,
+              gameMode: 'player',
+              isPlaying: true,
+              ball: {
+                ...prev.ball,
+                dx: Math.random() > 0.5 ? 6 : -6,
+                dy: (Math.random() - 0.5) * 6 * 0.8
+              }
+            }));
+            setTimeout(() => speakRobotic('CONNECTION FAILED, STARTING SINGLE PLAYER'), 100);
+          }
+        } else {
+          // Already connected, just start the game
+          setGameState(prev => ({
+            ...prev,
+            showStartScreen: false,
+            gameMode: 'multiplayer',
+            isPlaying: true,
+            score: { left: 0, right: 0, top: 0, bottom: 0 },
+            winner: null,
+            gameEnded: false,
+            ball: {
+              ...prev.ball,
+              x: canvasSize.width / 2,
+              y: canvasSize.height / 2,
+              dx: Math.random() > 0.5 ? 6 : -6,
+              dy: (Math.random() - 0.5) * 6 * 0.8
+            }
+          }));
+          setTimeout(() => speakRobotic('MULTIPLAYER GAME STARTING'), 100);
+        }
+      }
     };
 
     // Add listeners for all possible user input events
@@ -9302,7 +9562,7 @@ const Pong404: React.FC = () => {
         document.removeEventListener(eventType, handleAnyUserInput);
       });
     };
-  }, [initializeAudio]);
+  }, [initializeAudio, showAudioPrompt, isSpectatorMode, canvasSize.width, canvasSize.height, connectWebSocket, gameState.showStartScreen, multiplayerState.isConnected, speakRobotic]);
 
   // Global mouse move handler to track mouse outside canvas
   useEffect(() => {
