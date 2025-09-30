@@ -10192,13 +10192,20 @@ const Pong404: React.FC = () => {
     };
 
     // Add listeners for all possible user input events
-    const events = ['click', 'keydown', 'keyup', 'mousedown', 'mouseup', 'touchstart', 'touchend', 'wheel', 'scroll'];
-    events.forEach(eventType => {
+    // Use passive: false for events where we need preventDefault()
+    const eventsWithPreventDefault = ['click', 'mousedown', 'touchstart'];
+    const passiveEvents = ['keydown', 'keyup', 'mouseup', 'touchend', 'wheel', 'scroll'];
+
+    eventsWithPreventDefault.forEach(eventType => {
+      document.addEventListener(eventType, handleAnyUserInput, { once: false, passive: false });
+    });
+
+    passiveEvents.forEach(eventType => {
       document.addEventListener(eventType, handleAnyUserInput, { once: false, passive: true });
     });
 
     return () => {
-      events.forEach(eventType => {
+      [...eventsWithPreventDefault, ...passiveEvents].forEach(eventType => {
         document.removeEventListener(eventType, handleAnyUserInput);
       });
     };
