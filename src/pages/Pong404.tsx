@@ -2039,25 +2039,26 @@ const Pong404: React.FC = () => {
               networkState.colorIndex = message.data.colorIndex;
             }
 
-            // Update paddles from server AI
+            // Update paddles from server AI (but NOT the local player's paddle)
             if (message.data.paddles) {
+              const playerSide = multiplayerStateRef.current?.playerSide;
               networkState.paddles = {
-                left: message.data.paddles.left ? {
+                left: (message.data.paddles.left && playerSide !== 'left') ? {
                   ...prevState.paddles.left,
                   ...message.data.paddles.left
-                } : prevState.paddles.left,
-                right: message.data.paddles.right ? {
+                } : prevState.paddles.left, // Keep local paddle unchanged
+                right: (message.data.paddles.right && playerSide !== 'right') ? {
                   ...prevState.paddles.right,
                   ...message.data.paddles.right
-                } : prevState.paddles.right,
-                top: message.data.paddles.top ? {
+                } : prevState.paddles.right, // Keep local paddle unchanged
+                top: (message.data.paddles.top && playerSide !== 'top') ? {
                   ...prevState.paddles.top,
                   ...message.data.paddles.top
-                } : prevState.paddles.top,
-                bottom: message.data.paddles.bottom ? {
+                } : prevState.paddles.top, // Keep local paddle unchanged
+                bottom: (message.data.paddles.bottom && playerSide !== 'bottom') ? {
                   ...prevState.paddles.bottom,
                   ...message.data.paddles.bottom
-                } : prevState.paddles.bottom
+                } : prevState.paddles.bottom // Keep local paddle unchanged
               };
             }
 
@@ -4866,22 +4867,23 @@ const Pong404: React.FC = () => {
         // Use network state directly - no interpolation or prediction to prevent jitter
         const playerSide = multiplayerStateRef.current?.playerSide;
 
-        // Use server state for everything except local player's paddle
+        // Use server state for everything
         newState = { ...networkGameStateRef.current };
 
-        // Initialize paddles from server, but keep local paddle from previous frame
+        // Override paddles: keep local player paddle from previous frame to avoid network jitter
+        // Server paddles for AI, local paddle for smooth player control
         newState.paddles = {
           left: playerSide === 'left'
-            ? { ...prevState.paddles.left, height: PADDLE_LENGTH, width: PADDLE_THICKNESS }
+            ? prevState.paddles.left // Keep entire local paddle object
             : { ...networkGameStateRef.current.paddles.left, height: PADDLE_LENGTH, width: PADDLE_THICKNESS },
           right: playerSide === 'right'
-            ? { ...prevState.paddles.right, height: PADDLE_LENGTH, width: PADDLE_THICKNESS }
+            ? prevState.paddles.right // Keep entire local paddle object
             : { ...networkGameStateRef.current.paddles.right, height: PADDLE_LENGTH, width: PADDLE_THICKNESS },
           top: playerSide === 'top'
-            ? { ...prevState.paddles.top, height: PADDLE_THICKNESS, width: PADDLE_LENGTH }
+            ? prevState.paddles.top // Keep entire local paddle object
             : { ...networkGameStateRef.current.paddles.top, height: PADDLE_THICKNESS, width: PADDLE_LENGTH },
           bottom: playerSide === 'bottom'
-            ? { ...prevState.paddles.bottom, height: PADDLE_THICKNESS, width: PADDLE_LENGTH }
+            ? prevState.paddles.bottom // Keep entire local paddle object
             : { ...networkGameStateRef.current.paddles.bottom, height: PADDLE_THICKNESS, width: PADDLE_LENGTH }
         };
 
