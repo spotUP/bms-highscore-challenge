@@ -1332,20 +1332,61 @@ const Pong404: React.FC = () => {
     setServerAvailable(isServerAvailable);
 
     if (!isServerAvailable) {
-      console.log('[RED] Server not available, attempting to start...');
-      setConnectionStatus('server_down');
-      setConnectionMessage('[RED] WebSocket server is not running');
+      console.log('[FIRE] Server not available, warming up...');
+      setConnectionStatus('warming');
+      setCurrentPhase('warming');
 
-      // Try to auto-start if localhost
-      const serverStarted = await startLocalServer();
-      if (!serverStarted) {
-        setConnectionStatus('error');
-        if (WS_SERVER_URL.includes('localhost')) {
+      if (WS_SERVER_URL.includes('localhost')) {
+        // Local server - try to start it
+        setConnectionMessage('[BOLT] Starting local WebSocket server...');
+        const serverStarted = await startLocalServer();
+        if (!serverStarted) {
+          setConnectionStatus('error');
           setConnectionMessage('[ERROR] Please start the WebSocket server: npx tsx scripts/pong-websocket-server.ts');
-        } else {
-          setConnectionMessage('[ERROR] Remote server is unavailable. Please try again later.');
+          return;
         }
-        return;
+      } else {
+        // Remote server (Render) - it's suspended and needs to warm up
+        setConnectionMessage('[FIRE] Waking up server... This may take 30-60 seconds');
+        setTimeout(() => speakRobotic('SERVER IS WAKING UP PLEASE WAIT'), 500);
+
+        // Keep retrying the health check to wake up the server
+        const maxWarmupAttempts = 20; // 20 attempts = up to 100 seconds
+        let warmupAttempt = 0;
+
+        while (warmupAttempt < maxWarmupAttempts) {
+          warmupAttempt++;
+          const elapsed = warmupAttempt * 5;
+
+          if (warmupAttempt <= 6) {
+            setConnectionMessage(`[FIRE] Waking up server... ${elapsed}s elapsed`);
+          } else if (warmupAttempt <= 12) {
+            setCurrentPhase('booting');
+            setConnectionMessage(`[ROCKET] Server booting... ${elapsed}s elapsed`);
+          } else {
+            setCurrentPhase('finalizing');
+            setConnectionMessage(`[HOURGLASS] Almost ready... ${elapsed}s elapsed`);
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds between attempts
+
+          const isNowAvailable = await checkServerAvailability();
+          if (isNowAvailable) {
+            setServerAvailable(true);
+            setConnectionMessage('[CHECK] Server ready! Connecting...');
+            setTimeout(() => speakRobotic('SERVER READY CONNECTING NOW'), 500);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Brief pause before connecting
+            break;
+          }
+        }
+
+        // Final check after warmup attempts
+        if (warmupAttempt >= maxWarmupAttempts) {
+          setConnectionStatus('error');
+          setConnectionMessage('[ERROR] Server failed to wake up. Please try again or contact support.');
+          setTimeout(() => speakRobotic('SERVER TIMEOUT PLEASE TRY AGAIN'), 500);
+          return;
+        }
       }
     }
 
