@@ -23,9 +23,18 @@ interface GenerativeMusicState {
   volume: number;
 }
 
+interface MusicAnalysisData {
+  volume: number;      // 0-1 current volume level
+  disharmonic: number; // 0-1 disharmonic intensity (based on spectral analysis)
+  beat: number;        // 0-1 beat intensity
+}
+
 const GlobalAmbientMusic: React.FC = () => {
+  // Pick a random piece at initialization
+  const randomPiece = AVAILABLE_PIECES[Math.floor(Math.random() * AVAILABLE_PIECES.length)];
+
   const [musicState, setMusicState] = useState<GenerativeMusicState>({
-    currentPieceId: 'earth-approach',
+    currentPieceId: randomPiece.id,
     isPlaying: false,
     volume: 0.6,
   });
@@ -33,6 +42,9 @@ const GlobalAmbientMusic: React.FC = () => {
   const currentPieceRef = useRef<any>(null);
   const isInitializedRef = useRef(false);
   const sampleLibraryRef = useRef<any>(null);
+  const analyserRef = useRef<Tone.Analyser | null>(null);
+  const fftRef = useRef<Tone.FFT | null>(null);
+  const analysisDataRef = useRef<MusicAnalysisData>({ volume: 0, disharmonic: 0, beat: 0 });
 
   const initializeTone = useCallback(async () => {
     if (isInitializedRef.current) return;
@@ -40,6 +52,15 @@ const GlobalAmbientMusic: React.FC = () => {
     try {
       await Tone.start();
       console.log('[GENERATIVE MUSIC] Tone.js audio context started');
+
+      // Create analyzers for music reactivity
+      analyserRef.current = new Tone.Analyser('waveform', 256);
+      fftRef.current = new Tone.FFT(512);
+
+      // Connect destination to analyzers
+      Tone.getDestination().connect(analyserRef.current);
+      Tone.getDestination().connect(fftRef.current);
+
       isInitializedRef.current = true;
     } catch (error) {
       console.error('[GENERATIVE MUSIC] Failed to start Tone.js:', error);
@@ -1190,12 +1211,13 @@ const GlobalAmbientMusic: React.FC = () => {
   // Initialize on first user interaction
   useEffect(() => {
     const handleFirstInteraction = async () => {
-      console.log('[GENERATIVE MUSIC] Audio context initialized, starting Earth Approach');
+      const pieceName = AVAILABLE_PIECES.find(p => p.id === musicState.currentPieceId)?.title || musicState.currentPieceId;
+      console.log('[GENERATIVE MUSIC] Audio context initialized, starting', pieceName);
       await initializeTone();
 
-      // Auto-start Earth Approach on first interaction
-      if (musicState.currentPieceId === 'earth-approach' && !musicState.isPlaying) {
-        await startPiece('earth-approach');
+      // Auto-start the randomly selected piece on first interaction
+      if (musicState.currentPieceId && !musicState.isPlaying) {
+        await startPiece(musicState.currentPieceId);
       }
 
       document.removeEventListener('click', handleFirstInteraction);
@@ -1251,6 +1273,93 @@ const GlobalAmbientMusic: React.FC = () => {
     };
   }, []);
 
+  // Music analysis loop - runs continuously to extract audio features
+  useEffect(() => {
+    if (!isInitializedRef.current) return;
+
+    let animationFrameId: number;
+    let previousVolume = 0;
+    let beatHistory: number[] = [];
+
+    const analyzeMusic = () => {
+      if (analyserRef.current && fftRef.current) {
+        // Get waveform for volume
+        const waveform = analyserRef.current.getValue() as Float32Array;
+
+        // Calculate RMS volume
+        let sum = 0;
+        for (let i = 0; i < waveform.length; i++) {
+          sum += waveform[i] * waveform[i];
+        }
+        const rms = Math.sqrt(sum / waveform.length);
+        const volume = Math.min(1, rms * 3); // Scale and clamp
+
+        // Get frequency spectrum for disharmonic/dissonance analysis
+        const spectrum = fftRef.current.getValue() as Float32Array;
+
+        // Detect dissonance using multiple methods for better sensitivity
+        let dissonanceScore = 0;
+        let totalEnergy = 0;
+        let highFreqEnergy = 0;
+
+        // Method 1: High-frequency content (harsh sounds)
+        // Method 2: Spectral flatness (noise vs tonal)
+        // Method 3: Peak density (roughness from close frequencies)
+
+        for (let i = 0; i < spectrum.length; i++) {
+          const freq = (i / spectrum.length) * 22050; // Nyquist frequency
+          const db = spectrum[i];
+          const linearEnergy = Math.pow(10, db / 20); // Convert dB to linear
+
+          totalEnergy += linearEnergy;
+
+          // Weight high frequencies (above 2kHz) - harsh, dissonant sounds
+          if (freq > 2000) {
+            highFreqEnergy += linearEnergy * 2; // Double weight for high frequencies
+          }
+
+          // Look for roughness (adjacent frequency peaks)
+          if (i > 0 && i < spectrum.length - 1) {
+            const prev = spectrum[i - 1];
+            const next = spectrum[i + 1];
+            // If this bin is louder than neighbors, it's a peak
+            if (db > prev && db > next && db > -40) {
+              dissonanceScore += linearEnergy;
+            }
+          }
+        }
+
+        // Normalize and combine metrics
+        const highFreqRatio = totalEnergy > 0 ? highFreqEnergy / totalEnergy : 0;
+        const roughness = dissonanceScore * 0.02;
+
+        // Final dissonance value (more sensitive - triggers at 0.3 instead of needing close to 1.0)
+        const disharmonic = Math.min(1, (highFreqRatio * 3 + roughness * 2) * 0.5);
+
+        // Detect beats by tracking volume changes
+        const volumeChange = Math.abs(volume - previousVolume);
+        beatHistory.push(volumeChange);
+        if (beatHistory.length > 10) beatHistory.shift();
+
+        const avgChange = beatHistory.reduce((a, b) => a + b, 0) / beatHistory.length;
+        const beat = Math.min(1, volumeChange > avgChange * 1.5 ? volumeChange * 5 : 0);
+
+        previousVolume = volume;
+
+        // Store analysis data
+        analysisDataRef.current = { volume, disharmonic, beat };
+      }
+
+      animationFrameId = requestAnimationFrame(analyzeMusic);
+    };
+
+    analyzeMusic();
+
+    return () => {
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
   // Global functions to control music from anywhere
   useEffect(() => {
     (window as any).generativeMusic = {
@@ -1259,6 +1368,7 @@ const GlobalAmbientMusic: React.FC = () => {
       startPiece,
       stopCurrentPiece,
       setVolume,
+      getAnalysisData: () => analysisDataRef.current, // Expose analysis data
       getRandomPiece: () => {
         const randomIndex = Math.floor(Math.random() * AVAILABLE_PIECES.length);
         return AVAILABLE_PIECES[randomIndex];

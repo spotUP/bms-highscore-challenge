@@ -42,6 +42,7 @@ uniform float uBrightness;
 uniform float uResolutionX;
 uniform float uResolutionY;
 uniform float uChromaticAberration;
+uniform float uDisharmonic;
 
 // CRT barrel distortion with 4:3 aspect ratio correction
 vec2 curveRemapUV(vec2 uv) {
@@ -106,13 +107,18 @@ void main(void) {
     float edgeDetect = length(texture(uTexture, uv + vec2(0.002, 0.0)).rgb - texture(uTexture, uv - vec2(0.002, 0.0)).rgb);
     float fringeBoost = edgeDetect * 0.5; // More discrete boost
 
-    float r = texture(uTexture, uv - baseOffset - rgbMisalign * vec2(1.0, 0.0) - vec2(fringeBoost * 0.0005, 0.0)).r;
+    // Music-reactive RGB bleed - disharmonics make RGB channels separate more
+    float disharmonicBleed = uDisharmonic * 0.003; // Scale disharmonic value (0-1) to pixel offset
+    vec2 dynamicOffset = baseOffset + vec2(disharmonicBleed, 0.0);
+
+    float r = texture(uTexture, uv - dynamicOffset - rgbMisalign * vec2(1.0, 0.0) - vec2(fringeBoost * 0.0005, 0.0)).r;
     float g = texture(uTexture, uv).g;
-    float b = texture(uTexture, uv + baseOffset + rgbMisalign * vec2(1.0, 0.0) + vec2(fringeBoost * 0.0005, 0.0)).b;
+    float b = texture(uTexture, uv + dynamicOffset + rgbMisalign * vec2(1.0, 0.0) + vec2(fringeBoost * 0.0005, 0.0)).b;
     vec4 aberratedColor = vec4(r, g, b, 1.0);
 
-    // Blend chromatic aberration at 15% opacity for very subtle effect
-    vec4 color = mix(originalColor, aberratedColor, 0.15);
+    // Blend chromatic aberration - increase blend amount with disharmonics
+    float blendAmount = 0.15 + uDisharmonic * 0.25; // 15% base, up to 40% with disharmonics
+    vec4 color = mix(originalColor, aberratedColor, blendAmount);
 
     // Phosphor bloom/glow effect - bright pixels bleed outward
     float brightness = dot(color.rgb, vec3(0.299, 0.587, 0.114)); // Luminance
@@ -174,9 +180,12 @@ void main(void) {
     float centerBrightness = 1.0 + (1.0 - distFromCenter) * 0.15; // 15% brighter in center
     color.rgb *= centerBrightness;
 
-    // Add slight noise for authenticity
-    float n = noise(uv * uTime * 0.0001) * uNoiseIntensity;
-    color.rgb += vec3(n);
+    // Add white noise for authentic CRT static
+    // Combine temporal noise (flickering) with spatial noise (grain)
+    float temporalNoise = noise(uv * uTime * 0.0001) * uNoiseIntensity * 0.5;
+    float spatialNoise = noise(uv * 1000.0 + uTime * 0.01) * uNoiseIntensity * 0.5;
+    float whiteNoise = temporalNoise + spatialNoise;
+    color.rgb += vec3(whiteNoise);
 
     // #5 - Screen burn-in simulation - faint ghost of static UI elements
     // Simulate burn-in around the edges where score/UI might be
@@ -208,6 +217,7 @@ export interface CRTShaderOptions {
   noiseIntensity?: number;
   brightness?: number;
   chromaticAberration?: number;
+  disharmonic?: number;
 }
 
 export class CRTFilter extends Filter {
@@ -245,6 +255,7 @@ export class CRTFilter extends Filter {
           uResolutionX: { value: 800, type: 'f32' },
           uResolutionY: { value: 800, type: 'f32' },
           uChromaticAberration: { value: options.chromaticAberration || 0.001, type: 'f32' },
+          uDisharmonic: { value: options.disharmonic || 0.0, type: 'f32' },
         },
       },
     });

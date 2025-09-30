@@ -1646,7 +1646,7 @@ class PongWebSocketServer {
         // Direct angle calculation with better control curve
         // Use a quadratic curve for smoother angle progression
         const baseSpeed = 10; // Server ball speed
-        const maxAngle = Math.PI / 3.5; // ~51 degrees maximum deflection (reduced for better gameplay)
+        const maxAngle = Math.PI / 2.2; // ~82 degrees maximum deflection (increased for more interesting gameplay)
         const deflectionAngle = normalizedPosition * maxAngle * Math.abs(normalizedPosition); // Quadratic curve
 
         // Apply velocity based on paddle side (same as client)
@@ -1680,6 +1680,11 @@ class PongWebSocketServer {
 
         // Track ball touch for scoring system
         gameState.ball.lastTouchedBy = paddle.side;
+
+        // Trigger rumble effect for paddle collision (more discrete)
+        gameState.rumbleEffect.isActive = true;
+        gameState.rumbleEffect.startTime = now;
+        gameState.rumbleEffect.intensity = 4; // Reduced from 8 to 4 for more discrete rumble
 
         // Cycle through ball colors on paddle collision (0-7)
         gameState.colorIndex = (gameState.colorIndex + 1) % 8;
@@ -1952,16 +1957,16 @@ class PongWebSocketServer {
   private updatePickups(gameState: GameState, canvasSize: { width: number; height: number }, now: number): boolean {
     let pickupsChanged = false;
 
-    // Generate new pickups
-    if (now >= gameState.nextPickupTime && gameState.pickups.length < 3) {
+    // Generate new pickups (max 2 on playfield, less frequent)
+    if (now >= gameState.nextPickupTime && gameState.pickups.length < 2) {
       this.generatePickup(gameState, canvasSize);
 
-      // Progressive pickup frequency (starts at 8s, decreases to 4s)
+      // Slower pickup frequency (starts at 15s, decreases to 10s)
       const gameTime = now - (gameState.nextPickupTime - 5000); // Game start time estimation
-      const baseInterval = 8000; // 8 seconds
-      const minInterval = 4000; // 4 seconds minimum
+      const baseInterval = 15000; // 15 seconds (increased from 8s)
+      const minInterval = 10000; // 10 seconds minimum (increased from 4s)
       const progressionRate = gameTime / 60000; // Over 1 minute
-      const currentInterval = Math.max(minInterval, baseInterval - (progressionRate * 4000));
+      const currentInterval = Math.max(minInterval, baseInterval - (progressionRate * 5000));
 
       gameState.nextPickupTime = now + currentInterval;
       pickupsChanged = true;
@@ -2022,7 +2027,15 @@ class PongWebSocketServer {
   }
 
   private generatePickup(gameState: GameState, canvasSize: { width: number; height: number }): void {
-    const pickupTypes: Pickup['type'][] = ['speed_up', 'speed_down', 'big_ball', 'small_ball', 'drunk_ball', 'grow_paddle', 'shrink_paddle', 'reverse_controls', 'invisible_ball', 'freeze_opponent', 'attractor', 'repulsor'];
+    const pickupTypes: Pickup['type'][] = [
+      'speed_up', 'speed_down', 'big_ball', 'small_ball', 'drunk_ball', 'grow_paddle', 'shrink_paddle',
+      'reverse_controls', 'invisible_ball', 'freeze_opponent', 'multi_ball', 'super_speed', 'coin_shower',
+      'teleport_ball', 'gravity_in_space', 'super_striker', 'sticky_paddles', 'machine_gun', 'dynamic_playfield',
+      'switch_sides', 'blocker', 'time_warp', 'portal_ball', 'mirror_mode', 'quantum_ball', 'black_hole',
+      'lightning_storm', 'invisible_paddles', 'ball_trail_mine', 'paddle_swap', 'disco_mode', 'pac_man',
+      'banana_peel', 'rubber_ball', 'drunk_paddles', 'magnet_ball', 'balloon_ball', 'earthquake',
+      'confetti_cannon', 'hypno_ball', 'conga_line', 'arkanoid', 'attractor', 'repulsor', 'great_wall'
+    ];
     const type = pickupTypes[Math.floor(Math.random() * pickupTypes.length)];
 
     // Pickup size is 72x72 (6 pixels at 12x12 scale)

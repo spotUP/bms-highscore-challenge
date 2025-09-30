@@ -4,9 +4,8 @@ import SamJs from 'sam-js';
 import { Application, Sprite, Texture } from 'pixi.js';
 import { CRTFilter } from '../shaders/CRTShader';
 import { getDynamicTauntSystem, GameContext, PlayerBehavior } from '../utils/browserTauntSystem';
-import SpaceBlazersLogo from '../components/SpaceBlazersLogo';
-import MusicSelector from '../components/MusicSelector';
 import { CollisionManager, CollisionDetector, CollisionResult } from '../utils/CollisionDetection';
+import GlobalAmbientMusic from '../components/GlobalAmbientMusic';
 
 interface Pickup {
   x: number;
@@ -75,6 +74,8 @@ interface GameState {
     previousTouchedBy: 'left' | 'right' | 'top' | 'bottom' | null;
     hasWind: boolean;
     hasGravity: boolean;
+    hasGreatWall: boolean;
+    greatWallSide: 'left' | 'right' | 'top' | 'bottom' | null;
     isAiming: boolean;
     aimStartTime: number;
     aimX: number;
@@ -207,33 +208,7 @@ const lineIntersectsLine = (x1: number, y1: number, x2: number, y2: number,
   return t >= 0 && t <= 1 && u >= 0 && u <= 1;
 };
 
-// Musical scales for dystopic outer space atmosphere
-const MUSICAL_SCALES = {
-  // Locrian mode - most dissonant, perfect for lost in space feeling
-  locrian: [220.00, 233.08, 246.94, 277.18, 293.66, 311.13, 369.99], // A3 Locrian
-
-  // Phrygian mode - dark and mysterious
-  phrygian: [220.00, 233.08, 261.63, 293.66, 329.63, 349.23, 392.00], // A3 Phrygian
-
-  // Hungarian minor - exotic and unsettling
-  hungarian: [220.00, 246.94, 277.18, 311.13, 329.63, 369.99, 415.30], // A3 Hungarian minor
-
-  // Whole tone scale - dreamy but alien
-  wholetone: [220.00, 246.94, 277.18, 311.13, 349.23, 392.00, 440.00], // A3 Whole tone
-
-  // Diminished scale - tense and unstable
-  diminished: [220.00, 233.08, 261.63, 277.18, 311.13, 329.63, 369.99, 392.00], // A3 Diminished
-};
-
-// Sound pattern sequences for different game events
-let melodyState = {
-  paddleHitIndex: 0,
-  wallHitIndex: 0,
-  scoreIndex: 0,
-  pickupIndex: 0,
-  currentScale: 'locrian',
-  lastScaleChange: 0,
-};
+// Musical scales and melody state moved below (near line 327) to avoid duplication
 
 // Pickup system constants with musical approach
 const PICKUP_TYPES = [
@@ -280,6 +255,7 @@ const PICKUP_TYPES = [
   { type: 'conga_line', pattern: 'conga', color: '#ffa500', description: 'Conga Line!', scale: 'diminished', note: 6 },
   { type: 'arkanoid', pattern: 'bricks', color: '#ff4500', description: 'Arkanoid Mode!', scale: 'wholetone', note: 5 },
   { type: 'wind', pattern: 'wind', color: '#87ceeb', description: 'Wind Blow!', scale: 'wholetone', note: 3 },
+  { type: 'great_wall', pattern: 'brick', color: '#00ccff', description: 'Great Wall Defense!', scale: 'c-phrygian', note: 1 },
 ];
 
 // WebSocket server URL - using working Render service
@@ -323,9 +299,56 @@ const getHumanPlayerColor = (currentColorIndex: number): string => {
 // [ROCKET] PRECALCULATED PERFORMANCE OPTIMIZATIONS
 // Precalculate all expensive operations to eliminate runtime calculations
 
+// [MUSIC] MUSICAL SCALES FOR DYSTOPIAN OUTER SPACE ATMOSPHERE
+const MUSICAL_SCALES = {
+  // C minor pentatonic - matches C-based ambient pieces
+  'c-minor-pentatonic': [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23], // C3 minor pentatonic
+  // C minor (natural) - for C2/C3 drones and atmospheric pieces
+  'c-minor': [130.81, 146.83, 155.56, 174.61, 196.00, 207.65, 233.08, 261.63], // C3 minor
+  // C major - bright, for joyful pieces
+  'c-major': [130.81, 146.83, 164.81, 174.61, 196.00, 220.00, 246.94, 261.63], // C3 major
+  // C Phrygian - dark and mysterious
+  'c-phrygian': [130.81, 138.59, 155.56, 174.61, 196.00, 207.65, 233.08, 261.63], // C3 Phrygian
+  // C Locrian - most dissonant, perfect for lost in space feeling
+  'c-locrian': [130.81, 138.59, 155.56, 164.81, 185.00, 207.65, 233.08, 261.63], // C3 Locrian
+  // G minor - for G-based pieces
+  'g-minor': [196.00, 220.00, 233.08, 261.63, 293.66, 311.13, 349.23, 392.00], // G3 minor
+  // Whole tone - dreamy but alien
+  'wholetone': [130.81, 146.83, 164.81, 185.00, 207.65, 233.08, 261.63], // C3 Whole tone
+  // Diminished - tense and unstable
+  'diminished': [130.81, 146.83, 155.56, 174.61, 185.00, 207.65, 220.00, 246.94], // C3 Diminished
+};
+
+// [MUSIC] LOOKUP TABLE: Match sound effects scale to each generative music piece
+const MUSIC_SCALE_MAP: { [key: string]: keyof typeof MUSICAL_SCALES } = {
+  'space-atmosphere': 'c-minor',           // Uses C2, Eb2, F2, Ab2
+  'cosmic-chords': 'c-major',              // Uses C3-E3-G3-B3 chords (C major 7th)
+  'crystal-cascade': 'c-major',            // Uses C6, D6, E6, G6, A6, C7 (C major pentatonic)
+  'doom-drone': 'c-minor',                 // Heavy C power chords
+  'space-drone': 'c-phrygian',             // Dark C-based atmosphere
+  'homeward-bound': 'c-major',             // Warm, homeward feeling
+  'distant-memories': 'c-minor-pentatonic',// Nostalgic C minor pentatonic
+  'stellar-solitude': 'c-minor',           // Lonely C minor
+  'earths-embrace': 'c-major',             // Warm C major
+  'cosmic-longing': 'c-phrygian',          // Melancholic C phrygian
+  'cosmic-whale': 'c-minor-pentatonic',    // Oceanic C minor pentatonic
+  'earth-approach': 'c-major',             // Joyful C major
+};
+
+// Sound pattern sequences for different game events
+let melodyState = {
+  paddleHitIndex: 0,
+  wallHitIndex: 0,
+  scoreIndex: 0,
+  pickupIndex: 0,
+  currentScale: 'c-minor' as keyof typeof MUSICAL_SCALES, // Default scale
+  lastScaleChange: 0,
+  currentMusicPiece: '' as string, // Track current music piece
+};
+
 // [MUSIC] PRECALCULATED AUDIO CONFIGURATIONS
 const PRECALC_AUDIO = {
-  // Beep frequency table for instant lookup
+  // Beep frequency table for instant lookup (fallback)
   frequencies: {
     paddle: 220,    // A3
     wall: 440,      // A4
@@ -793,6 +816,9 @@ const Pong404: React.FC = () => {
   const updateGameStateRef = useRef<any>(null);
   const updatePaddlePositionRef = useRef<any>(null);
 
+  // Music analysis data for reactive visual effects
+  const musicDataRef = useRef<{ volume: number; disharmonic: number; beat: number }>({ volume: 0, disharmonic: 0, beat: 0 });
+
   // 🎯 CENTRALIZED COLLISION DETECTION SYSTEM
   const collisionManagerRef = useRef<CollisionManager>(new CollisionManager());
 
@@ -1039,6 +1065,8 @@ const Pong404: React.FC = () => {
       previousTouchedBy: null,
       hasWind: false,
       hasGravity: false,
+      hasGreatWall: false,
+      greatWallSide: null,
       isAiming: false,
       aimStartTime: 0,
       aimX: 0,
@@ -2260,6 +2288,9 @@ const Pong404: React.FC = () => {
 
   // Player behavior tracking refs
   const playerBehaviorRef = useRef<Map<string, PlayerBehavior>>(new Map());
+  const windNoiseRef = useRef<any>(null);
+  const electricHumRef = useRef<any>(null);
+  const masterLimiterRef = useRef<any>(null);
   const gameStartTimeRef = useRef<number>(Date.now());
   const lastMoveTimesRef = useRef<Map<string, number>>(new Map());
 
@@ -2866,30 +2897,72 @@ const Pong404: React.FC = () => {
       }
     }
 
-    // Use precalculated frequencies for instant audio response
+    const now = Date.now();
+
+    // Check if music piece changed and update scale to match
+    const currentMusicPiece = (window as any).generativeMusic?.currentState?.currentPieceId || '';
+    if (currentMusicPiece && currentMusicPiece !== melodyState.currentMusicPiece) {
+      const newScale = MUSIC_SCALE_MAP[currentMusicPiece] || 'c-minor';
+      melodyState.currentScale = newScale;
+      melodyState.currentMusicPiece = currentMusicPiece;
+      melodyState.lastScaleChange = now;
+      console.log(`🎵 Music piece changed to '${currentMusicPiece}' - sound effects now use scale: ${newScale}`);
+    }
+
     let frequency: number;
     let duration: number;
+    let harmony: number[] = []; // Additional notes for richer sound
 
-    // Use fast lookup table instead of complex calculations
+    const currentScale = MUSICAL_SCALES[melodyState.currentScale];
+
     switch (eventType) {
       case 'paddle':
-        frequency = PRECALC_AUDIO.frequencies.paddle;
+        // Ascending melody pattern for paddle hits
+        const paddleNote = currentScale[melodyState.paddleHitIndex % currentScale.length];
+        frequency = paddleNote;
         duration = 0.15;
+        // Add harmony (fifth interval for space-like resonance)
+        const fifthIndex = (melodyState.paddleHitIndex + 2) % currentScale.length;
+        harmony = [currentScale[fifthIndex] * 0.7]; // Lower octave fifth
+        melodyState.paddleHitIndex = (melodyState.paddleHitIndex + 1) % currentScale.length;
         break;
 
       case 'wall':
-        frequency = PRECALC_AUDIO.frequencies.wall;
+        // Descending pattern for wall hits (more ominous)
+        const wallNoteIndex = (currentScale.length - 1) - (melodyState.wallHitIndex % currentScale.length);
+        frequency = currentScale[wallNoteIndex];
         duration = 0.12;
+        // Add dissonant harmony (minor second)
+        const dissonantIndex = (wallNoteIndex + 1) % currentScale.length;
+        harmony = [currentScale[dissonantIndex] * 1.1]; // Slightly higher for tension
+        melodyState.wallHitIndex = (melodyState.wallHitIndex + 1) % currentScale.length;
         break;
 
       case 'score':
-        frequency = PRECALC_AUDIO.frequencies.score;
-        duration = 0.8;
+        // Dramatic chord progression for scoring
+        const scoreBase = currentScale[melodyState.scoreIndex % currentScale.length];
+        frequency = scoreBase;
+        duration = 0.8; // Much longer for impact
+        // Rich chord with multiple harmonies
+        harmony = [
+          scoreBase * 0.5,  // Octave below
+          scoreBase * 1.25, // Minor third
+          scoreBase * 1.5,  // Fifth
+          scoreBase * 2.0   // Octave above
+        ];
+        melodyState.scoreIndex = (melodyState.scoreIndex + 2) % currentScale.length; // Jump by 2 for variety
         break;
 
       case 'pickup':
-        frequency = PRECALC_AUDIO.frequencies.pickup;
+        frequency = currentScale[melodyState.pickupIndex % currentScale.length];
         duration = 0.3;
+        // Ethereal harmony for pickups
+        harmony = [
+          frequency * 0.75, // Minor seventh
+          frequency * 1.33, // Fourth
+          frequency * 2.25  // Ninth
+        ];
+        melodyState.pickupIndex = (melodyState.pickupIndex + 3) % currentScale.length; // Jump by 3
         break;
 
       default:
@@ -2897,33 +2970,213 @@ const Pong404: React.FC = () => {
         duration = 0.1;
     }
 
-    console.log(`[SOUND] Playing Tone.js beep: freq=${frequency}Hz, duration=${duration}s`);
+    console.log(`[SOUND] Playing Tone.js melody: freq=${frequency}Hz, scale=${melodyState.currentScale}, harmony=[${harmony.join(',')}]`);
 
     try {
-      // Create a simple synth for beep sounds
-      const synth = new Tone.Synth({
-        oscillator: { type: 'square' },
+      // Create master limiter if it doesn't exist
+      if (!masterLimiterRef.current) {
+        const limiter = new Tone.Limiter(-3).toDestination(); // -3dB threshold
+        const compressor = new Tone.Compressor({
+          threshold: -20,
+          ratio: 4,
+          attack: 0.003,
+          release: 0.1
+        });
+        compressor.connect(limiter);
+        masterLimiterRef.current = { compressor, limiter };
+        console.log('[SOUND] Master limiter initialized');
+      }
+
+      // Create multi-layered reverb for depth and space
+      const reverb = new Tone.Reverb({
+        decay: 3.5,      // Longer 3.5s tail for epic space
+        preDelay: 0.02,  // Slight pre-delay for dimension
+        wet: 1.0
+      });
+
+      // Add convolver for realistic room/hall simulation
+      const convolver = new Tone.Convolver().connect(masterLimiterRef.current.compressor);
+
+      // Ping-pong delay for stereo width
+      const pingPongDelay = new Tone.PingPongDelay({
+        delayTime: '8n',  // Musical timing (eighth note)
+        feedback: 0.5,     // More feedback for rhythmic repeats
+        wet: 1.0
+      });
+
+      // Additional tape-style delay for warmth
+      const feedbackDelay = new Tone.FeedbackDelay({
+        delayTime: 0.15,   // 150ms delay
+        feedback: 0.45,    // Increased feedback
+        wet: 1.0
+      });
+
+      // Freeverb for shimmer and air
+      const freeverb = new Tone.Freeverb({
+        roomSize: 0.8,     // Large room
+        dampening: 2000,   // Warm damping
+        wet: 1.0
+      });
+
+      // MUST wait for reverb to generate impulse response
+      await reverb.generate();
+      console.log('[SOUND] Reverb generated, decay:', reverb.decay);
+
+      // Add filter for warmth and movement
+      const filter = new Tone.Filter({
+        type: 'lowpass',
+        frequency: 2000,
+        rolloff: -12,
+        Q: 2
+      });
+
+      // Add chorus for width and depth
+      const chorus = new Tone.Chorus({
+        frequency: 1.5,
+        delayTime: 3.5,
+        depth: 0.3,
+        spread: 180
+      }).start();
+
+      // Create rich multi-oscillator synth for depth and texture
+      const synth = new Tone.PolySynth(Tone.Synth, {
+        oscillator: {
+          type: 'fatsquare',  // Fatter square wave with detuned oscillators
+          spread: 20,          // Detune amount for width
+          count: 3             // 3 oscillators for thickness
+        },
         envelope: {
-          attack: 0.001,
-          decay: duration / 2,
-          sustain: 0.3,
-          release: duration / 2
+          attack: 0.005,       // Slightly slower attack for warmth
+          decay: duration * 0.4,
+          sustain: 0.4,
+          release: duration * 0.8
         }
-      }).toDestination();
+      });
 
-      synth.volume.value = -10; // Set volume (in dB)
+      synth.volume.value = -8; // Reduced from -2 to prevent distortion when multiple sounds play
 
-      // Play the note
+      // Create gain nodes for multi-layered wet/dry mixing
+      const dryGain = new Tone.Gain(0.3).connect(masterLimiterRef.current.compressor);           // 30% dry (reduced from 0.5)
+      const reverbGain = new Tone.Gain(0.12).connect(masterLimiterRef.current.compressor);        // 12% reverb (reduced from 0.2)
+      const freeverbGain = new Tone.Gain(0.1).connect(masterLimiterRef.current.compressor);     // 10% freeverb shimmer (reduced from 0.15)
+      const pingPongGain = new Tone.Gain(0.12).connect(masterLimiterRef.current.compressor);      // 12% ping-pong (reduced from 0.2)
+      const echoGain = new Tone.Gain(0.1).connect(masterLimiterRef.current.compressor);         // 10% tape delay (reduced from 0.15)
+
+      // Connect effects based on effectType with rich multi-layered processing
+      if (effectType === 'normal') {
+        // Even "normal" gets filter and chorus for texture
+        synth.chain(filter, chorus, dryGain);
+        synth.chain(filter, freeverb, freeverbGain);  // Add shimmer
+      } else if (effectType === 'echo') {
+        // Dry + multiple delay types for rich rhythmic texture
+        synth.chain(filter, chorus, dryGain);
+        synth.chain(filter, pingPongDelay, pingPongGain);  // Stereo ping-pong
+        synth.chain(filter, feedbackDelay, echoGain);      // Warm tape delay
+      } else if (effectType === 'reverb') {
+        // Dry + multiple reverb layers for epic space
+        synth.chain(filter, chorus, dryGain);
+        synth.chain(filter, reverb, reverbGain);          // Main reverb
+        synth.chain(filter, freeverb, freeverbGain);      // Shimmer layer
+      } else if (effectType === 'both') {
+        // Full multi-layered epic soundscape
+        synth.chain(filter, chorus, dryGain);              // 50% dry with texture
+        synth.chain(filter, reverb, reverbGain);           // 20% main reverb
+        synth.chain(filter, freeverb, freeverbGain);       // 15% shimmer
+        synth.chain(filter, pingPongDelay, pingPongGain);  // 20% stereo delay
+        synth.chain(filter, feedbackDelay, echoGain);      // 15% tape delay
+      }
+
+      // Play the main note
       synth.triggerAttackRelease(frequency, duration);
 
-      // Clean up after playing
+      // Play harmony notes with slight delay for richness (like the old system)
+      harmony.forEach((harmonyFreq, index) => {
+        setTimeout(async () => {
+          try {
+            // Create separate reverb/delay for each harmony note with same epic settings
+            const harmonyReverb = new Tone.Reverb({
+              decay: 2.0,
+              preDelay: 0.01,
+              wet: 1.0
+            });
+            const harmonyDelay = new Tone.FeedbackDelay({
+              delayTime: 0.15,
+              feedback: 0.4,
+              wet: 1.0
+            });
+            await harmonyReverb.generate();
+
+            // Create harmony synth
+            const harmonySynth = new Tone.Synth({
+              oscillator: { type: 'square' },
+              envelope: {
+                attack: 0.001,
+                decay: duration * 0.3,
+                sustain: 0.3,
+                release: duration * 0.7
+              }
+            });
+
+            harmonySynth.volume.value = -12; // Lower volume for harmony
+
+            // Create gain nodes for harmony
+            const harmonyDryGain = new Tone.Gain(0.4).connect(masterLimiterRef.current.compressor);
+            const harmonyReverbGain = new Tone.Gain(0.2).connect(masterLimiterRef.current.compressor);
+            const harmonyEchoGain = new Tone.Gain(0.15).connect(masterLimiterRef.current.compressor);
+
+            // Connect with same effect routing
+            if (effectType === 'normal') {
+              harmonySynth.connect(masterLimiterRef.current.compressor);
+            } else if (effectType === 'echo') {
+              harmonySynth.connect(harmonyDryGain);
+              harmonySynth.chain(harmonyDelay, harmonyEchoGain);
+            } else if (effectType === 'reverb') {
+              harmonySynth.connect(harmonyDryGain);
+              harmonySynth.chain(harmonyReverb, harmonyReverbGain);
+            } else if (effectType === 'both') {
+              harmonySynth.connect(harmonyDryGain);
+              harmonySynth.chain(harmonyDelay, harmonyEchoGain);
+              harmonySynth.chain(harmonyReverb, harmonyReverbGain);
+            }
+
+            // Play harmony note
+            harmonySynth.triggerAttackRelease(harmonyFreq, duration * 0.8);
+
+            // Clean up harmony synth and gain nodes
+            setTimeout(() => {
+              harmonySynth.dispose();
+              harmonyReverb.dispose();
+              harmonyDelay.dispose();
+              harmonyDryGain.dispose();
+              harmonyReverbGain.dispose();
+              harmonyEchoGain.dispose();
+            }, (duration + 2.5) * 1000); // Extended cleanup for 2s reverb tail
+          } catch (err) {
+            console.error('[SOUND] Error playing harmony note:', err);
+          }
+        }, index * 20); // 20ms delay between harmony notes for richness
+      });
+
+      // Clean up main synth and all effects after playing
       setTimeout(() => {
         synth.dispose();
-      }, (duration + 0.5) * 1000);
+        reverb.dispose();
+        convolver.dispose();
+        pingPongDelay.dispose();
+        feedbackDelay.dispose();
+        freeverb.dispose();
+        filter.dispose();
+        chorus.dispose();
+        dryGain.dispose();
+        reverbGain.dispose();
+        freeverbGain.dispose();
+        pingPongGain.dispose();
+        echoGain.dispose();
+      }, (duration + 4.0) * 1000); // Extended cleanup for 3.5s reverb tail
 
-      console.log('[SOUND] Tone.js beep played successfully');
+      console.log('[SOUND] Tone.js dystopian melody with harmonies played successfully');
     } catch (error) {
-      console.error('[SOUND] Error playing Tone.js beep:', error);
+      console.error('[SOUND] Error playing Tone.js melody:', error);
     }
 
   }, []);
@@ -3395,6 +3648,8 @@ const Pong404: React.FC = () => {
   const [touchX, setTouchX] = useState<number | null>(null);
   const [controlSide, setControlSide] = useState<'left' | 'right' | 'top' | 'bottom' | null>(null);
   const [cursorHidden, setCursorHidden] = useState(true);
+  const [accumulatedMouseY, setAccumulatedMouseY] = useState<number>(400);
+  const [accumulatedMouseX, setAccumulatedMouseX] = useState<number>(400);
 
   const [infoTextFadeStart, setInfoTextFadeStart] = useState<number | null>(null);
 
@@ -3840,6 +4095,72 @@ const Pong404: React.FC = () => {
       case 'wind':
         gameState.ball.hasWind = true;
         effect.duration = 4000; // 4 seconds
+
+        // Create wind sound effect
+        if (Tone && !windNoiseRef.current) {
+          const noise = new Tone.Noise('pink');
+          const filter = new Tone.Filter({
+            type: 'bandpass',
+            frequency: 600,
+            rolloff: -24,
+            Q: 2
+          });
+          const autoFilter = new Tone.AutoFilter({
+            frequency: 0.3,
+            depth: 0.7
+          }).start();
+          const gain = new Tone.Gain(0.15).toDestination();
+
+          noise.connect(filter);
+          filter.connect(autoFilter);
+          autoFilter.connect(gain);
+
+          noise.start();
+          windNoiseRef.current = { noise, filter, autoFilter, gain };
+          console.log('Wind sound effect started');
+        }
+        break;
+      case 'great_wall':
+        gameState.ball.hasGreatWall = true;
+        effect.duration = 8000; // 8 seconds
+
+        // Determine which side to protect based on who's losing
+        const scores = gameState.score;
+        let minScore = Math.min(scores.left, scores.right, scores.top, scores.bottom);
+        let losingSides = Object.entries(scores).filter(([_, score]) => score === minScore).map(([side, _]) => side as 'left' | 'right' | 'top' | 'bottom');
+        gameState.ball.greatWallSide = losingSides[Math.floor(Math.random() * losingSides.length)];
+        console.log(`Great Wall Defense activated! Protecting ${gameState.ball.greatWallSide} wall`);
+
+        // Create electric humming sound
+        if (Tone && !electricHumRef.current) {
+          const osc1 = new Tone.Oscillator(120, 'sawtooth');
+          const osc2 = new Tone.Oscillator(180, 'sawtooth');
+          const noise = new Tone.Noise('pink');
+
+          const filter = new Tone.Filter({
+            type: 'bandpass',
+            frequency: 150,
+            Q: 3
+          });
+
+          const lfo = new Tone.LFO(2, 0.3, 0.7);
+          lfo.connect(filter.frequency);
+          lfo.start();
+
+          const gain = new Tone.Gain(0.15).toDestination();
+
+          osc1.connect(filter);
+          osc2.connect(filter);
+          noise.connect(filter);
+          filter.connect(gain);
+
+          osc1.start();
+          osc2.start();
+          noise.start();
+
+          electricHumRef.current = { osc1, osc2, noise, filter, lfo, gain };
+          console.log('Electric hum started');
+        }
         break;
     }
 
@@ -4041,6 +4362,38 @@ const Pong404: React.FC = () => {
             break;
           case 'wind':
             gameState.ball.hasWind = false;
+
+            // Stop wind sound effect
+            if (windNoiseRef.current) {
+              windNoiseRef.current.noise.stop();
+              windNoiseRef.current.noise.dispose();
+              windNoiseRef.current.filter.dispose();
+              windNoiseRef.current.autoFilter.dispose();
+              windNoiseRef.current.gain.dispose();
+              windNoiseRef.current = null;
+              console.log('Wind sound effect stopped');
+            }
+            break;
+          case 'great_wall':
+            gameState.ball.hasGreatWall = false;
+            gameState.ball.greatWallSide = null;
+
+            // Stop electric humming
+            if (electricHumRef.current) {
+              electricHumRef.current.osc1.stop();
+              electricHumRef.current.osc2.stop();
+              electricHumRef.current.noise.stop();
+              electricHumRef.current.osc1.dispose();
+              electricHumRef.current.osc2.dispose();
+              electricHumRef.current.noise.dispose();
+              electricHumRef.current.filter.dispose();
+              electricHumRef.current.lfo.dispose();
+              electricHumRef.current.gain.dispose();
+              electricHumRef.current = null;
+              console.log('Electric hum stopped');
+            }
+
+            console.log('Great Wall Defense ended');
             break;
         }
         return false; // Remove effect
@@ -6066,18 +6419,18 @@ const Pong404: React.FC = () => {
 
           if (distance < force.radius && distance > 0.1) {
             // Calculate force based on inverse square law, clamped
-            const forceStrength = Math.min(force.strength / (distance * distance) * 1000, 0.8);
+            const forceStrength = Math.min(force.strength / (distance * distance) * 1000, 0.08); // Reduced from 0.3 to 0.08
             const normalizedX = distanceX / distance;
             const normalizedY = distanceY / distance;
 
             if (force.type === 'attractor') {
               // Pull towards attractor
-              newState.ball.dx += normalizedX * forceStrength * 0.4;
-              newState.ball.dy += normalizedY * forceStrength * 0.4;
+              newState.ball.dx += normalizedX * forceStrength * 0.05; // Reduced from 0.15 to 0.05
+              newState.ball.dy += normalizedY * forceStrength * 0.05;
             } else {
               // Push away from repulsor
-              newState.ball.dx -= normalizedX * forceStrength * 0.4;
-              newState.ball.dy -= normalizedY * forceStrength * 0.4;
+              newState.ball.dx -= normalizedX * forceStrength * 0.05; // Reduced from 0.15 to 0.05
+              newState.ball.dy -= normalizedY * forceStrength * 0.05;
             }
 
             // Play interaction sound effect
@@ -6099,16 +6452,16 @@ const Pong404: React.FC = () => {
             const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
 
             if (distance < attractor.radius && distance > 0.1) {
-              const force = Math.min(attractor.strength / (distance * distance) * 1000, 0.5);
+              const force = Math.min(attractor.strength / (distance * distance) * 1000, 0.06); // Reduced from 0.2 to 0.06
               const normalizedX = distanceX / distance;
               const normalizedY = distanceY / distance;
 
               if (attractor.type === 'attractor') {
-                extraBall.dx += normalizedX * force * 0.3;
-                extraBall.dy += normalizedY * force * 0.3;
+                extraBall.dx += normalizedX * force * 0.05; // Reduced from 0.15 to 0.05
+                extraBall.dy += normalizedY * force * 0.05;
               } else {
-                extraBall.dx -= normalizedX * force * 0.3;
-                extraBall.dy -= normalizedY * force * 0.3;
+                extraBall.dx -= normalizedX * force * 0.05; // Reduced from 0.15 to 0.05
+                extraBall.dy -= normalizedY * force * 0.05;
               }
             }
           });
@@ -6176,6 +6529,140 @@ const Pong404: React.FC = () => {
 
           newState.ball.x += newState.ball.dx * timeMultiplier;
           newState.ball.y += newState.ball.dy * timeMultiplier;
+        }
+
+        // Great Wall defense - wall dodges incoming balls
+        if (newState.ball.hasGreatWall && newState.ball.greatWallSide) {
+          const side = newState.ball.greatWallSide;
+          const ballCenter = {
+            x: newState.ball.x + newState.ball.size / 2,
+            y: newState.ball.y + newState.ball.size / 2
+          };
+          const dodgeDistance = 80; // How far from wall to start dodging
+
+          // Check if ball is approaching the protected wall
+          if (side === 'left' && newState.ball.dx < 0 && ballCenter.x < dodgeDistance) {
+            // Dodge by reflecting ball away
+            newState.ball.dx = Math.abs(newState.ball.dx);
+            newState.ball.x = dodgeDistance;
+
+            // Play electric shock sound
+            if (Tone) {
+              const shock = new Tone.NoiseSynth({
+                noise: { type: 'white' },
+                envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.05 }
+              });
+              const zap = new Tone.Oscillator(1000, 'sine');
+              const zapEnv = new Tone.Envelope({ attack: 0.001, decay: 0.15, sustain: 0, release: 0 });
+
+              const gain = new Tone.Gain(0.3).toDestination();
+              shock.connect(gain);
+              zap.connect(gain);
+
+              shock.triggerAttackRelease(0.1);
+              zap.start();
+              zapEnv.connect(zap.frequency);
+              zapEnv.triggerAttackRelease(0.15);
+
+              setTimeout(() => {
+                zap.stop();
+                shock.dispose();
+                zap.dispose();
+                zapEnv.dispose();
+                gain.dispose();
+              }, 200);
+            }
+          } else if (side === 'right' && newState.ball.dx > 0 && ballCenter.x > canvasSize.width - dodgeDistance) {
+            newState.ball.dx = -Math.abs(newState.ball.dx);
+            newState.ball.x = canvasSize.width - dodgeDistance - newState.ball.size;
+
+            // Play electric shock sound
+            if (Tone) {
+              const shock = new Tone.NoiseSynth({
+                noise: { type: 'white' },
+                envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.05 }
+              });
+              const zap = new Tone.Oscillator(1000, 'sine');
+              const zapEnv = new Tone.Envelope({ attack: 0.001, decay: 0.15, sustain: 0, release: 0 });
+
+              const gain = new Tone.Gain(0.3).toDestination();
+              shock.connect(gain);
+              zap.connect(gain);
+
+              shock.triggerAttackRelease(0.1);
+              zap.start();
+              zapEnv.connect(zap.frequency);
+              zapEnv.triggerAttackRelease(0.15);
+
+              setTimeout(() => {
+                zap.stop();
+                shock.dispose();
+                zap.dispose();
+                zapEnv.dispose();
+                gain.dispose();
+              }, 200);
+            }
+          } else if (side === 'top' && newState.ball.dy < 0 && ballCenter.y < dodgeDistance) {
+            newState.ball.dy = Math.abs(newState.ball.dy);
+            newState.ball.y = dodgeDistance;
+
+            // Play electric shock sound
+            if (Tone) {
+              const shock = new Tone.NoiseSynth({
+                noise: { type: 'white' },
+                envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.05 }
+              });
+              const zap = new Tone.Oscillator(1000, 'sine');
+              const zapEnv = new Tone.Envelope({ attack: 0.001, decay: 0.15, sustain: 0, release: 0 });
+
+              const gain = new Tone.Gain(0.3).toDestination();
+              shock.connect(gain);
+              zap.connect(gain);
+
+              shock.triggerAttackRelease(0.1);
+              zap.start();
+              zapEnv.connect(zap.frequency);
+              zapEnv.triggerAttackRelease(0.15);
+
+              setTimeout(() => {
+                zap.stop();
+                shock.dispose();
+                zap.dispose();
+                zapEnv.dispose();
+                gain.dispose();
+              }, 200);
+            }
+          } else if (side === 'bottom' && newState.ball.dy > 0 && ballCenter.y > canvasSize.height - dodgeDistance) {
+            newState.ball.dy = -Math.abs(newState.ball.dy);
+            newState.ball.y = canvasSize.height - dodgeDistance - newState.ball.size;
+
+            // Play electric shock sound
+            if (Tone) {
+              const shock = new Tone.NoiseSynth({
+                noise: { type: 'white' },
+                envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.05 }
+              });
+              const zap = new Tone.Oscillator(1000, 'sine');
+              const zapEnv = new Tone.Envelope({ attack: 0.001, decay: 0.15, sustain: 0, release: 0 });
+
+              const gain = new Tone.Gain(0.3).toDestination();
+              shock.connect(gain);
+              zap.connect(gain);
+
+              shock.triggerAttackRelease(0.1);
+              zap.start();
+              zapEnv.connect(zap.frequency);
+              zapEnv.triggerAttackRelease(0.15);
+
+              setTimeout(() => {
+                zap.stop();
+                shock.dispose();
+                zap.dispose();
+                zapEnv.dispose();
+                gain.dispose();
+              }, 200);
+            }
+          }
         }
 
         // [GAME] NEW PICKUP PHYSICS UPDATES
@@ -7018,8 +7505,8 @@ const Pong404: React.FC = () => {
       }
 
       // Handle non-spacebar audio prompt dismissal (other keys just dismiss, don't start game)
-      // Exclude 'c' and 'm' keys from starting the game (they toggle CRT/music)
-      if (showAudioPrompt && !audioPromptDismissedRef.current && e.key !== ' ' && e.key.toLowerCase() !== 'c' && e.key.toLowerCase() !== 'm') {
+      // Exclude 'c', 'm', and 'f' keys from starting the game (they toggle CRT/music/fullscreen)
+      if (showAudioPrompt && !audioPromptDismissedRef.current && e.key !== ' ' && e.key.toLowerCase() !== 'c' && e.key.toLowerCase() !== 'm' && e.key.toLowerCase() !== 'f') {
         audioPromptDismissedRef.current = true;
         setShowAudioPrompt(false);
 
@@ -7186,6 +7673,19 @@ const Pong404: React.FC = () => {
             }
           } else {
             console.log('[ERROR] Failed to create or access audio gain nodes');
+          }
+          break;
+        case 'f':
+          e.preventDefault();
+          // Toggle fullscreen
+          if (!document.fullscreenElement) {
+            // Enter fullscreen
+            document.documentElement.requestFullscreen().catch(err => {
+              console.error(`Error attempting to enable fullscreen: ${err.message}`);
+            });
+          } else {
+            // Exit fullscreen
+            document.exitFullscreen();
           }
           break;
         case '2':
@@ -7468,6 +7968,31 @@ const Pong404: React.FC = () => {
     } : { r: 0, g: 0, b: 0 };
   }, []);
 
+  // Helper function to wrap text into multiple lines
+  const wrapText = useCallback((ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] => {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const metrics = ctx.measureText(testLine);
+
+      if (metrics.width > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    return lines;
+  }, []);
+
   // [ROCKET] OPTIMIZED CRT Effect - uses cached time for better performance
   const applyCRTEffect = useCallback((ctx: CanvasRenderingContext2D, canvasSize: { width: number; height: number }) => {
     const time = cachedTimeRef.current * 0.001;
@@ -7642,18 +8167,18 @@ const Pong404: React.FC = () => {
         const glowIntensity = Math.floor(bassAverage * 100);
         const glowColor = currentColors.foreground;
         ctx.strokeStyle = glowColor;
-        ctx.lineWidth = 4 + (bassAverage * 8); // 4-12px thickness
-        ctx.globalAlpha = bassAverage * 0.15; // Very subtle (reduced from 0.3)
+        ctx.lineWidth = 8 + (bassAverage * 16); // 8-24px thickness (doubled from 4-12px)
+        ctx.globalAlpha = bassAverage * 0.4; // More prominent (increased from 0.15)
         ctx.strokeRect(0, 0, canvasSize.width, canvasSize.height);
         ctx.globalAlpha = 1.0; // Reset alpha
       }
 
       // Frequency bars centered horizontally (mirrored from center)
       ctx.fillStyle = currentColors.foreground;
-      ctx.globalAlpha = 0.08; // Very subtle transparency (reduced from 0.15)
+      ctx.globalAlpha = 0.25; // More prominent (increased from 0.08)
 
       const centerX = canvasSize.width / 2;
-      const maxBarHeight = 150; // Increased from 50 to 150 for higher bars
+      const maxBarHeight = 300; // Increased from 150 for much taller bars
 
       for (let i = 0; i < barCount / 2; i++) {
         const dataIndex = i * dataStep;
@@ -7663,16 +8188,16 @@ const Pong404: React.FC = () => {
         const x = i * barWidth;
 
         // Left half - bars extending upward from center
-        ctx.fillRect(x, centerX - barHeight, barWidth - 2, barHeight);
+        ctx.fillRect(x, centerX - barHeight, barWidth - 1, barHeight);
 
         // Left half - bars extending downward from center
-        ctx.fillRect(x, centerX, barWidth - 2, barHeight);
+        ctx.fillRect(x, centerX, barWidth - 1, barHeight);
 
         // Right half - mirrored bars extending upward from center
-        ctx.fillRect(canvasSize.width - x - barWidth + 2, centerX - barHeight, barWidth - 2, barHeight);
+        ctx.fillRect(canvasSize.width - x - barWidth + 1, centerX - barHeight, barWidth - 1, barHeight);
 
         // Right half - mirrored bars extending downward from center
-        ctx.fillRect(canvasSize.width - x - barWidth + 2, centerX, barWidth - 2, barHeight);
+        ctx.fillRect(canvasSize.width - x - barWidth + 1, centerX, barWidth - 1, barHeight);
       }
 
       ctx.globalAlpha = 1.0; // Reset alpha
@@ -7755,7 +8280,7 @@ const Pong404: React.FC = () => {
       ctx.textBaseline = 'middle';
       ctx.shadowBlur = 8;
       ctx.shadowColor = currentColors.foreground;
-      ctx.fillText('4-PLAYER PONG', canvasSize.width / 2, canvasSize.height / 2 - 200);
+      ctx.fillText('SPACE BLAZERS', canvasSize.width / 2, canvasSize.height / 2 - 200);
 
       // Controls section
       ctx.font = 'bold 24px "Press Start 2P", monospace';
@@ -7775,6 +8300,7 @@ const Pong404: React.FC = () => {
       ctx.fillText('OPTIONS:', canvasSize.width / 2 - 300, controlsY + 140);
       ctx.fillText('C - TOGGLE CRT EFFECT', canvasSize.width / 2 - 300, controlsY + 170);
       ctx.fillText('M - TOGGLE MUSIC', canvasSize.width / 2 - 300, controlsY + 200);
+      ctx.fillText('F - TOGGLE FULLSCREEN', canvasSize.width / 2 - 300, controlsY + 230);
 
       // Start instructions with blinking effect
       ctx.font = 'bold 20px "Press Start 2P", monospace';
@@ -7788,7 +8314,7 @@ const Pong404: React.FC = () => {
         // Use a bright attention-grabbing color - cyan from the palette
         ctx.fillStyle = '#00f5ff'; // Cyan color for visibility
         ctx.shadowColor = '#00f5ff';
-        ctx.fillText('PRESS ANY KEY TO START', canvasSize.width / 2, canvasSize.height / 2 + 150);
+        ctx.fillText('PRESS ANY KEY TO START', canvasSize.width / 2, canvasSize.height / 2 + 260);
       }
 
       // Reset color back to normal for other elements
@@ -7803,16 +8329,83 @@ const Pong404: React.FC = () => {
       return; // Don't render game elements when showing start screen
     }
 
-    // Draw playfield borders at the edge of the canvas
-    ctx.strokeStyle = currentColors.foreground;
-    ctx.lineWidth = BORDER_THICKNESS;
-    ctx.setLineDash([]); // Solid lines for borders
-    ctx.strokeRect(
-      BORDER_THICKNESS / 2,
-      BORDER_THICKNESS / 2,
-      canvasSize.width - BORDER_THICKNESS,
-      canvasSize.height - BORDER_THICKNESS
-    );
+    // Draw playfield borders at the edge of the canvas with music-reactive glow
+    const musicData = musicDataRef.current;
+
+    // Check if Great Wall is active and draw individual borders with color highlight
+    if (gameState.ball.hasGreatWall && gameState.ball.greatWallSide) {
+      const protectedSide = gameState.ball.greatWallSide;
+
+      // Electric pulsing effect - use time for animation
+      const pulseTime = Date.now() / 200; // Faster pulse
+      const pulseIntensity = 0.5 + Math.sin(pulseTime) * 0.5; // 0 to 1
+      const glowIntensity = 20 + pulseIntensity * 40; // 20-60px blur
+
+      // Electric blue color with pulsing opacity
+      const electricBlue = `rgba(0, 204, 255, ${0.7 + pulseIntensity * 0.3})`;
+
+      ctx.setLineDash([]); // Solid lines for borders
+
+      // Draw each border with appropriate color
+      // Left border
+      ctx.strokeStyle = protectedSide === 'left' ? electricBlue : currentColors.foreground;
+      ctx.shadowBlur = protectedSide === 'left' ? glowIntensity : 10 + musicData.volume * 30;
+      ctx.shadowColor = protectedSide === 'left' ? electricBlue : currentColors.foreground;
+      ctx.lineWidth = protectedSide === 'left' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
+      ctx.beginPath();
+      ctx.moveTo(BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
+      ctx.lineTo(BORDER_THICKNESS / 2, canvasSize.height - BORDER_THICKNESS / 2);
+      ctx.stroke();
+
+      // Right border
+      ctx.strokeStyle = protectedSide === 'right' ? electricBlue : currentColors.foreground;
+      ctx.shadowBlur = protectedSide === 'right' ? glowIntensity : 10 + musicData.volume * 30;
+      ctx.shadowColor = protectedSide === 'right' ? electricBlue : currentColors.foreground;
+      ctx.lineWidth = protectedSide === 'right' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
+      ctx.beginPath();
+      ctx.moveTo(canvasSize.width - BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
+      ctx.lineTo(canvasSize.width - BORDER_THICKNESS / 2, canvasSize.height - BORDER_THICKNESS / 2);
+      ctx.stroke();
+
+      // Top border
+      ctx.strokeStyle = protectedSide === 'top' ? electricBlue : currentColors.foreground;
+      ctx.shadowBlur = protectedSide === 'top' ? glowIntensity : 10 + musicData.volume * 30;
+      ctx.shadowColor = protectedSide === 'top' ? electricBlue : currentColors.foreground;
+      ctx.lineWidth = protectedSide === 'top' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
+      ctx.beginPath();
+      ctx.moveTo(BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
+      ctx.lineTo(canvasSize.width - BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
+      ctx.stroke();
+
+      // Bottom border
+      ctx.strokeStyle = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
+      ctx.shadowBlur = protectedSide === 'bottom' ? glowIntensity : 10 + musicData.volume * 30;
+      ctx.shadowColor = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
+      ctx.lineWidth = protectedSide === 'bottom' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
+      ctx.beginPath();
+      ctx.moveTo(BORDER_THICKNESS / 2, canvasSize.height - BORDER_THICKNESS / 2);
+      ctx.lineTo(canvasSize.width - BORDER_THICKNESS / 2, canvasSize.height - BORDER_THICKNESS / 2);
+      ctx.stroke();
+    } else {
+      // Normal border drawing when Great Wall is not active
+      ctx.strokeStyle = currentColors.foreground;
+      ctx.lineWidth = BORDER_THICKNESS;
+      ctx.setLineDash([]); // Solid lines for borders
+
+      // Add music-reactive glow to border
+      ctx.shadowBlur = 10 + musicData.volume * 30; // Pulse with music volume (10-40px)
+      ctx.shadowColor = currentColors.foreground;
+
+      ctx.strokeRect(
+        BORDER_THICKNESS / 2,
+        BORDER_THICKNESS / 2,
+        canvasSize.width - BORDER_THICKNESS,
+        canvasSize.height - BORDER_THICKNESS
+      );
+    }
+
+    // Clear shadow for other elements
+    ctx.shadowBlur = 0;
 
 
     // Draw comet trails first (behind everything) - enhanced in spectator mode
@@ -7924,8 +8517,8 @@ const Pong404: React.FC = () => {
                                 (gameState.gameMode === 'player' && side === 'right');
       const paddleColor = isHumanControlled ? humanPlayerColor : currentColors.foreground;
 
-      // Draw glow effect
-      ctx.shadowBlur = 8;
+      // Draw music-reactive glow effect
+      ctx.shadowBlur = 8 + musicData.volume * 25; // Pulse with music volume (8-33px)
       ctx.shadowColor = paddleColor;
 
       ctx.globalAlpha = 1; // Ensure paddles are fully opaque
@@ -7972,8 +8565,8 @@ const Pong404: React.FC = () => {
       // Check if ball should be invisible
       const invisibleEffect = gameState.activeEffects?.find(e => e.type === 'invisible_ball');
       if (!invisibleEffect) {
-        // Draw glow effect for ball
-        ctx.shadowBlur = 10;
+        // Draw music-reactive glow effect for ball
+        ctx.shadowBlur = 10 + musicData.volume * 30; // Pulse with music volume (10-40px)
         ctx.shadowColor = currentColors.foreground;
 
         ctx.fillStyle = currentColors.foreground; // FIX: Set ball color before drawing
@@ -8173,6 +8766,18 @@ const Pong404: React.FC = () => {
       const pulse = PRECALC_CONSTANTS.pulseValues[pulseIndex];
 
       ctx.save();
+
+      // Add disharmonic shake effect
+      const shakeX = (Math.random() - 0.5) * musicData.disharmonic * 8;
+      const shakeY = (Math.random() - 0.5) * musicData.disharmonic * 8;
+
+      // Debug log when disharmonics are detected
+      if (musicData.disharmonic > 0.1) {
+        console.log(`🎵 Disharmonic shake: ${musicData.disharmonic.toFixed(3)} → ±${Math.abs(shakeX).toFixed(1)}px`);
+      }
+
+      ctx.translate(shakeX, shakeY);
+
       ctx.globalAlpha = pulse;
 
       // Draw pixelated pattern with NO gaps between pixels
@@ -8442,11 +9047,19 @@ const Pong404: React.FC = () => {
         }
       };
 
-      // Draw the pixelated pattern
+      // Draw the pixelated pattern with music-reactive glow
       // Map pickup type to pattern from PICKUP_TYPES
       const pickupTypeData = PICKUP_TYPES.find(p => p.type === pickup.type);
       const pattern = pickupTypeData?.pattern || 'circle'; // Default to circle if type not found
+
+      // Add music-reactive glow to pickups
+      ctx.shadowBlur = 8 + musicData.volume * 25; // Pulse with music volume (8-33px)
+      ctx.shadowColor = currentColors.foreground;
+
       drawPixelatedPattern(pattern, pickup.x, pickup.y, pickup.size, currentColors.foreground);
+
+      // Clear shadow
+      ctx.shadowBlur = 0;
 
       ctx.restore();
     });
@@ -8646,8 +9259,15 @@ const Pong404: React.FC = () => {
       ctx.shadowColor = currentColors.foreground;
       ctx.textAlign = 'center';
 
-      // Draw text at same height as pickup callouts (150px)
-      ctx.fillText(robotText, playFieldWidth / 2, 150);
+      // Wrap text to fit within playfield with margins
+      const lines = wrapText(ctx, robotText, playFieldWidth - 100); // 50px margin on each side
+      const lineHeight = 30; // Space between lines for 20px font
+      const startY = 150 - ((lines.length - 1) * lineHeight / 2); // Center vertically around y=150
+
+      // Draw each line of wrapped text
+      lines.forEach((line, index) => {
+        ctx.fillText(line, playFieldWidth / 2, startY + (index * lineHeight));
+      });
 
       ctx.shadowBlur = 0;
     }
@@ -8665,7 +9285,7 @@ const Pong404: React.FC = () => {
 
       gameState.activeEffects.forEach((effect, index) => {
         const remaining = Math.ceil((effect.duration - (Date.now() - effect.startTime)) / 1000);
-        if (remaining > 0) {
+        if (remaining >= 0) {
           const pickupData = PICKUP_TYPES.find(p => p.type === effect.type);
           if (pickupData) {
             const yPos = 150 + (index * 30);
@@ -9231,6 +9851,10 @@ const Pong404: React.FC = () => {
     let lastTime = 0;
 
     const gameLoop = (currentTime: number) => {
+      // Get music analysis data for reactive visual effects
+      const musicData = (window as any).generativeMusic?.getAnalysisData?.() || { volume: 0, disharmonic: 0, beat: 0 };
+      musicDataRef.current = musicData;
+
       // 🕒 Calculate delta time for frame-rate independent physics
       const deltaTime = currentTime - lastFrameTimeRef.current;
       lastFrameTimeRef.current = currentTime;
@@ -9294,6 +9918,8 @@ const Pong404: React.FC = () => {
       app.canvas.style.height = '100%';
       app.canvas.style.display = 'block';
       app.canvas.style.objectFit = 'fill';
+      // Set cursor style on PixiJS canvas to match game state
+      app.canvas.style.cursor = cursorHidden ? 'none' : 'default';
 
       // Create sprite that we'll update each frame
       let texture = Texture.from(canvasRef.current);
@@ -9350,6 +9976,10 @@ const Pong404: React.FC = () => {
         if (filter && filter.uniforms) {
           (filter.uniforms as any).uTime = Date.now() * 0.001;
           (filter.uniforms as any).uResolution = new Float32Array([canvasSize.width, canvasSize.height]);
+
+          // Update CRT filter with music analysis data
+          const musicData = (window as any).generativeMusic?.getAnalysisData?.() || { volume: 0, disharmonic: 0, beat: 0 };
+          (filter.uniforms as any).uDisharmonic = musicData.disharmonic;
         }
 
         // Force texture update from canvas source every frame
@@ -9447,6 +10077,13 @@ const Pong404: React.FC = () => {
     return () => document.removeEventListener('click', handleGlobalClick);
   }, []);
 
+  // Update PixiJS canvas cursor when cursorHidden changes
+  useEffect(() => {
+    if (pixiAppRef.current?.canvas) {
+      pixiAppRef.current.canvas.style.cursor = cursorHidden ? 'none' : 'default';
+    }
+  }, [cursorHidden]);
+
   // Universal input handler to initialize audio on any user interaction
   useEffect(() => {
     const handleAnyUserInput = async (e: Event) => {
@@ -9458,35 +10095,8 @@ const Pong404: React.FC = () => {
         audioPromptDismissedRef.current = true;
         setShowAudioPrompt(false);
 
-        if (isSpectatorMode) {
-          // Skip start screen for spectator mode - go directly to multiplayer
-          connectWebSocket();
-          setGameState(prev => ({
-            ...prev,
-            showStartScreen: false,
-            gameMode: 'multiplayer',
-            isPlaying: true,
-            ball: {
-              ...prev.ball,
-              x: canvasSize.width / 2,
-              y: canvasSize.height / 2,
-              dx: 6,
-              dy: 6,
-            }
-          }));
-        } else {
-          setGameState(prev => ({ ...prev, showStartScreen: true }));
-        }
-
-        // Ensure canvas gets focus for keyboard events
-        setTimeout(() => {
-          const canvas = canvasRef.current;
-          if (canvas) {
-            canvas.focus();
-            console.log('[TARGET] CANVAS FOCUSED FOR START SCREEN');
-          }
-        }, 100);
-        return; // Exit early after handling audio prompt
+        // Don't process game start on this click - just dismiss the prompt
+        return;
       }
 
       // Handle start screen click to start game
@@ -9566,7 +10176,7 @@ const Pong404: React.FC = () => {
 
   // Global mouse move handler to track mouse outside canvas
   useEffect(() => {
-    const handleGlobalMouseMove = async (e: MouseEvent) => {
+    const handleGlobalMouseMove = async (e: MouseEvent | PointerEvent) => {
       // Initialize audio on first mouse interaction
       await initializeAudio();
 
@@ -9578,9 +10188,21 @@ const Pong404: React.FC = () => {
 
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
-        // Calculate mouse position relative to canvas, clamping to canvas bounds
-        const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
-        const x = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+        let y, x;
+
+        // Use movement deltas if pointer is locked, otherwise use absolute position
+        if (document.pointerLockElement === canvasRef.current) {
+          // Accumulate movement deltas
+          y = accumulatedMouseY + e.movementY;
+          x = accumulatedMouseX + e.movementX;
+          setAccumulatedMouseY(y);
+          setAccumulatedMouseX(x);
+        } else {
+          // Use absolute position relative to canvas
+          y = e.clientY - rect.top;
+          x = e.clientX - rect.left;
+        }
+
         setMouseY(y);
         setMouseX(x);
 
@@ -9592,15 +10214,18 @@ const Pong404: React.FC = () => {
           setControlSide('right');
         }
 
-        // Always hide cursor when canvas is active (has focus or during gameplay)
-        const isCanvasActive = document.activeElement === canvasRef.current || gameState.isPlaying;
-        setCursorHidden(isCanvasActive);
+        // Always hide cursor during gameplay
+        setCursorHidden(gameState.isPlaying);
       }
     };
 
     document.addEventListener('mousemove', handleGlobalMouseMove);
-    return () => document.removeEventListener('mousemove', handleGlobalMouseMove);
-  }, [gameState.gameMode, gameState.isPlaying, multiplayerState.playerSide, initializeAudio]);
+    document.addEventListener('pointermove', handleGlobalMouseMove);
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('pointermove', handleGlobalMouseMove);
+    };
+  }, [gameState.gameMode, gameState.isPlaying, multiplayerState.playerSide, initializeAudio, accumulatedMouseY, accumulatedMouseX]);
 
   // Focus canvas on mount and cleanup on unmount
   useEffect(() => {
@@ -9631,6 +10256,35 @@ const Pong404: React.FC = () => {
         clearTimeout(heartbeatTimeoutRef.current);
       }
     };
+  }, []);
+
+  // Pointer lock change handler
+  useEffect(() => {
+    const handlePointerLockChange = () => {
+      if (document.pointerLockElement === canvasRef.current) {
+        // Initialize accumulated position to current canvas center
+        const rect = canvasRef.current?.getBoundingClientRect();
+        if (rect) {
+          setAccumulatedMouseY(rect.height / 2);
+          setAccumulatedMouseX(rect.width / 2);
+        }
+      }
+    };
+
+    document.addEventListener('pointerlockchange', handlePointerLockChange);
+    return () => document.removeEventListener('pointerlockchange', handlePointerLockChange);
+  }, []);
+
+  // Escape key handler for pointer lock
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && document.pointerLockElement) {
+        document.exitPointerLock();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
   }, []);
 
   // Prevent mobile scrolling globally
@@ -9729,28 +10383,9 @@ const Pong404: React.FC = () => {
             if (showAudioPrompt) {
             audioPromptDismissedRef.current = true; // Set ref like keyboard handler
             setShowAudioPrompt(false);
-
-            if (isSpectatorMode) {
-              // Skip start screen for spectator mode - go directly to multiplayer
-              connectWebSocket();
-              setGameState(prev => ({
-                ...prev,
-                showStartScreen: false,
-                gameMode: 'multiplayer',
-                isPlaying: true,
-                ball: {
-                  ...prev.ball,
-                  x: canvasSize.width / 2,
-                  y: canvasSize.height / 2,
-                  dx: 6,
-                  dy: 6,
-                }
-              }));
-            } else {
-              setGameState(prev => ({ ...prev, showStartScreen: true }));
-            }
             // Initialize audio context on user interaction
             await initializeAudio();
+            // Don't process game start on this click - just dismiss the prompt
             return;
           }
 
@@ -9831,6 +10466,10 @@ const Pong404: React.FC = () => {
 
           if (canvasRef.current) {
             canvasRef.current.focus();
+            // Request pointer lock for continuous mouse control
+            if (!document.pointerLockElement) {
+              canvasRef.current.requestPointerLock();
+            }
           }
           setCursorHidden(true);
         }}
@@ -9853,26 +10492,7 @@ const Pong404: React.FC = () => {
           if (showAudioPrompt) {
             audioPromptDismissedRef.current = true;
             setShowAudioPrompt(false);
-
-            if (isSpectatorMode) {
-              // Skip start screen for spectator mode - go directly to multiplayer
-              connectWebSocket();
-              setGameState(prev => ({
-                ...prev,
-                showStartScreen: false,
-                gameMode: 'multiplayer',
-                isPlaying: true,
-                ball: {
-                  ...prev.ball,
-                  x: canvasSize.width / 2,
-                  y: canvasSize.height / 2,
-                  dx: 6,
-                  dy: 6,
-                }
-              }));
-            } else {
-              setGameState(prev => ({ ...prev, showStartScreen: true }));
-            }
+            // Don't process game start on this touch - just dismiss the prompt
             return;
           }
 
@@ -10047,13 +10667,6 @@ const Pong404: React.FC = () => {
         </div>
       )}
 
-      {/* Space Blazers Logo - shown only on start screen */}
-      {gameState.gameMode === 'auto' && gameState.showStartScreen && !showAudioPrompt && (
-        <div className="absolute top-16 left-1/2 transform -translate-x-1/2 z-20">
-          <SpaceBlazersLogo className="scale-75 md:scale-100" />
-        </div>
-      )}
-
       {/* Debug Pickup Button */}
       {gameState.isPlaying && (
         <button
@@ -10074,8 +10687,8 @@ const Pong404: React.FC = () => {
         ← Home
       </Link>
 
-      {/* Music Selector */}
-      <MusicSelector />
+      {/* Ambient Music - only plays on this page */}
+      <GlobalAmbientMusic />
 
     </div>
   );
