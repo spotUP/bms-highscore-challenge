@@ -10098,6 +10098,9 @@ const Pong404: React.FC = () => {
     }
   }, [cursorHidden]);
 
+  // Track if we just dismissed audio prompt to prevent double-trigger
+  const justDismissedAudioRef = useRef<number>(0);
+
   // Universal input handler to initialize audio on any user interaction
   useEffect(() => {
     const handleAnyUserInput = async (e: Event) => {
@@ -10108,6 +10111,7 @@ const Pong404: React.FC = () => {
         console.log('[MUSIC] DISMISSING AUDIO PROMPT WITH MOUSE CLICK');
         audioPromptDismissedRef.current = true;
         setShowAudioPrompt(false);
+        justDismissedAudioRef.current = Date.now(); // Mark that we just dismissed
 
         // Show start screen after dismissing audio prompt (matching spacebar behavior)
         if (!isSpectatorMode) {
@@ -10117,6 +10121,11 @@ const Pong404: React.FC = () => {
         // Don't process game start on this click - just dismiss the prompt
         e.preventDefault();
         e.stopPropagation();
+        return;
+      }
+
+      // Don't process clicks within 500ms of dismissing audio prompt
+      if (Date.now() - justDismissedAudioRef.current < 500) {
         return;
       }
 
