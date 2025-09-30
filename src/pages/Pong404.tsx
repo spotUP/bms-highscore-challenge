@@ -9288,8 +9288,8 @@ const Pong404: React.FC = () => {
       ctx.shadowBlur = 0;
     }
 
-    // Draw robot speech text (always visible when robot is speaking)
-    if (robotText) {
+    // Draw robot speech text (only visible during actual gameplay, not on connection/start screens)
+    if (robotText && gameState.isPlaying && !gameState.showStartScreen) {
       ctx.font = 'bold 20px "Press Start 2P", monospace';
       ctx.fillStyle = currentColors.foreground;
       ctx.shadowBlur = 8;
