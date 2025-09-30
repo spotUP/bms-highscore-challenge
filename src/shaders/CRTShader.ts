@@ -107,9 +107,9 @@ void main(void) {
     float edgeDetect = length(texture(uTexture, uv + vec2(0.002, 0.0)).rgb - texture(uTexture, uv - vec2(0.002, 0.0)).rgb);
     float fringeBoost = edgeDetect * 0.5; // More discrete boost
 
-    // Music-reactive RGB bleed - subtle pulsing based on disharmonics
-    float baseBleed = 0.002; // Subtle base separation
-    float disharmonicBleed = uDisharmonic * 0.015; // Subtle animation
+    // Music-reactive RGB bleed - barely visible pulsing based on disharmonics
+    float baseBleed = 0.0003; // Barely visible base separation
+    float disharmonicBleed = uDisharmonic * 0.002; // Barely visible animation
     vec2 dynamicOffset = vec2(baseBleed + disharmonicBleed, 0.0); // Base + animated
 
     // Simple RGB separation - only affected by disharmonic
