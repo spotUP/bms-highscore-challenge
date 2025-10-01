@@ -2199,11 +2199,28 @@ class PongWebSocketServer {
 
           const collisionResult = ServerCollisionDetector.detectBallPaddle(extraBallForCollision, paddleForCollision);
           if (collisionResult.hit) {
-            // Apply collision response
-            extraBall.x = collisionResult.object1.x;
-            extraBall.y = collisionResult.object1.y;
-            extraBall.dx = collisionResult.object1.dx;
-            extraBall.dy = collisionResult.object1.dy;
+            console.log(`🎾 EXTRA BALL: Hit ${paddle.side} paddle at (${extraBall.x.toFixed(1)}, ${extraBall.y.toFixed(1)})`);
+
+            // SIMPLE BOUNCE - Same as main ball logic
+            // Just reverse the appropriate velocity component and move ball outside paddle
+            const oldDx = extraBall.dx;
+            const oldDy = extraBall.dy;
+
+            if (paddle.side === 'left') {
+              extraBall.dx = Math.abs(extraBall.dx); // Make positive (moving right)
+              extraBall.x = paddle.x + paddle.width + 1;
+            } else if (paddle.side === 'right') {
+              extraBall.dx = -Math.abs(extraBall.dx); // Make negative (moving left)
+              extraBall.x = paddle.x - extraBall.size - 1;
+            } else if (paddle.side === 'top') {
+              extraBall.dy = Math.abs(extraBall.dy); // Make positive (moving down)
+              extraBall.y = paddle.y + paddle.height + 1;
+            } else if (paddle.side === 'bottom') {
+              extraBall.dy = -Math.abs(extraBall.dy); // Make negative (moving up)
+              extraBall.y = paddle.y - extraBall.size - 1;
+            }
+
+            console.log(`🔄 EXTRA BALL VELOCITY CHANGE: (${oldDx.toFixed(2)}, ${oldDy.toFixed(2)}) → (${extraBall.dx.toFixed(2)}, ${extraBall.dy.toFixed(2)})`);
 
             // Track ball touch for scoring system
             extraBall.lastTouchedBy = paddle.side;
@@ -2863,8 +2880,8 @@ class PongWebSocketServer {
         break;
       case 'multi_ball':
         // Add 3 extra balls shooting out from center in different directions
-        const centerX = 400;
-        const centerY = 400;
+        const multiBallCenterX = 400;
+        const multiBallCenterY = 400;
         const baseSpeed = 5; // Base speed for extra balls
 
         for (let i = 0; i < 3; i++) {
@@ -2872,8 +2889,8 @@ class PongWebSocketServer {
           const angle = (i * 2 * Math.PI / 3); // 0, 120, 240 degrees in radians
 
           gameState.extraBalls.push({
-            x: centerX,
-            y: centerY,
+            x: multiBallCenterX,
+            y: multiBallCenterY,
             dx: Math.cos(angle) * baseSpeed,
             dy: Math.sin(angle) * baseSpeed,
             size: gameState.ball.size,
