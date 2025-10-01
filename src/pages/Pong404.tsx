@@ -237,7 +237,6 @@ const PICKUP_TYPES = [
   { type: 'machine_gun', pattern: 'bullets', color: '#ff1493', description: 'Machine Gun!', scale: 'diminished', note: 6 },
   { type: 'dynamic_playfield', pattern: 'expand', color: '#32cd32', description: 'Dynamic Playfield!', scale: 'wholetone', note: 4 },
   { type: 'switch_sides', pattern: 'swap', color: '#ff6347', description: 'Switch Sides!', scale: 'hungarian', note: 5 },
-  { type: 'blocker', pattern: 'wall', color: '#696969', description: 'Blocker!', scale: 'locrian', note: 2 },
   { type: 'time_warp', pattern: 'clock', color: '#4169e1', description: 'Time Warp!', scale: 'diminished', note: 1 },
   { type: 'portal_ball', pattern: 'portal', color: '#ff69b4', description: 'Portal Ball!', scale: 'wholetone', note: 6 },
   { type: 'mirror_mode', pattern: 'mirror', color: '#dda0dd', description: 'Mirror Mode!', scale: 'phrygian', note: 7 },

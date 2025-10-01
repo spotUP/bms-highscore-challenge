@@ -427,7 +427,7 @@ interface Coin {
 }
 
 interface ActiveEffect {
-  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall';
   startTime: number;
   duration: number;
   originalValue?: any;
@@ -2727,8 +2727,10 @@ class PongWebSocketServer {
         }
       }
 
-      gameState.ball.x += gameState.ball.dx;
-      gameState.ball.y += gameState.ball.dy;
+      // Apply time warp factor to ball movement
+      const timeWarpFactor = gameState.timeWarpFactor || 1.0;
+      gameState.ball.x += gameState.ball.dx * timeWarpFactor;
+      gameState.ball.y += gameState.ball.dy * timeWarpFactor;
 
       // Apply balloon_ball floating physics (upward force)
       if (gameState.ball.isFloating) {
@@ -3306,6 +3308,7 @@ class PongWebSocketServer {
         gameState.timeWarpActive = true;
         gameState.timeWarpFactor = Math.random() > 0.5 ? 0.5 : 2.0; // Half speed or double speed
         effect.duration = 8000; // 8 seconds
+        console.log(`⏱️ TIME WARP: ${gameState.timeWarpFactor}x speed (${gameState.timeWarpFactor < 1 ? 'SLOW MOTION' : 'FAST FORWARD'})`);
         break;
       case 'gravity_in_space':
         gameState.ball.hasGravity = true;
@@ -3516,10 +3519,6 @@ class PongWebSocketServer {
         }
         console.log(`💰 COIN SHOWER: Created ${gameState.coins.length} coins:`, JSON.stringify(gameState.coins.slice(0, 2)));
         effect.duration = Infinity; // Never expires - coins stay until collected
-        break;
-      case 'blocker':
-        // Blocker pickup disabled
-        effect.duration = 0;
         break;
       case 'portal_ball':
         // Portal ball pickup disabled - was preventing scoring
@@ -3887,10 +3886,6 @@ class PongWebSocketServer {
 
       case 'coin_shower':
         gameState.coins = [];
-        break;
-
-      case 'blocker':
-        gameState.walls = [];
         break;
 
       case 'portal_ball':
