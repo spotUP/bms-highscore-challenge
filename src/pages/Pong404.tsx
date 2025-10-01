@@ -1243,23 +1243,10 @@ const Pong404: React.FC = () => {
 
   // Trigger Render.com server deploy/wake
   const triggerServerStart = useCallback(async () => {
-    const RENDER_DEPLOY_HOOK = 'https://api.render.com/deploy/srv-d3bcuf3e5dus73cf273g?key=bXyKnAwwSXU';
-    try {
-      console.log('[ROCKET] Triggering Render.com server start/wake...');
-      setConnectionMessage('[ROCKET] Starting server on Render.com...');
-      const response = await fetch(RENDER_DEPLOY_HOOK, { method: 'POST' });
-      if (response.ok) {
-        console.log('[CHECK] Server start triggered successfully');
-        setConnectionMessage('[CHECK] Server starting... waiting 60 seconds for deployment');
-        return true;
-      } else {
-        console.error('[X] Failed to trigger server start:', response.statusText);
-        return false;
-      }
-    } catch (error) {
-      console.error('[X] Error triggering server start:', error);
-      return false;
-    }
+    // Server should be always running - just log a message
+    console.log('[SEARCH] Server should be running at:', WS_SERVER_URL);
+    setConnectionMessage('[SEARCH] Connecting to server...');
+    return true;
   }, []);
 
   // WebSocket connection management
