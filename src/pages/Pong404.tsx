@@ -6918,6 +6918,56 @@ const Pong404: React.FC = () => {
     ctx.fillStyle = currentColors.background;
     ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
+    // [VISUALIZER] Audio visualizer - frequency bars (drawn BEHIND scaled content)
+    if (analyserNodeRef.current && frequencyDataRef.current) {
+      analyserNodeRef.current.getByteFrequencyData(frequencyDataRef.current);
+
+      const barCount = 32; // Number of frequency bars
+      const barWidth = canvasSize.width / barCount;
+      const dataStep = Math.floor(frequencyDataRef.current.length / barCount);
+
+      // Helper function to lighten a hex color
+      const lightenColor = (hex: string, percent: number) => {
+        const num = parseInt(hex.replace('#', ''), 16);
+        const r = Math.min(255, Math.floor((num >> 16) + ((255 - (num >> 16)) * percent)));
+        const g = Math.min(255, Math.floor(((num >> 8) & 0x00FF) + ((255 - ((num >> 8) & 0x00FF)) * percent)));
+        const b = Math.min(255, Math.floor((num & 0x0000FF) + ((255 - (num & 0x0000FF)) * percent)));
+        return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+      };
+
+      // Use lighter shade of background for visualizer
+      const visualizerColor = lightenColor(currentColors.background, 0.25);
+
+      // Frequency bars centered horizontally (mirrored from center)
+      ctx.fillStyle = visualizerColor;
+      ctx.globalAlpha = 0.4;
+
+      const centerX = canvasSize.width / 2;
+      const maxBarHeight = 300;
+
+      for (let i = 0; i < barCount / 2; i++) {
+        const dataIndex = i * dataStep;
+        const value = frequencyDataRef.current[dataIndex] / 255;
+        const barHeight = Math.pow(value, 0.5) * maxBarHeight;
+
+        const x = i * barWidth;
+
+        // Left half - bars extending upward from center
+        ctx.fillRect(x, centerX - barHeight, barWidth - 1, barHeight);
+
+        // Left half - bars extending downward from center
+        ctx.fillRect(x, centerX, barWidth - 1, barHeight);
+
+        // Right half - mirrored bars extending upward from center
+        ctx.fillRect(canvasSize.width - x - barWidth + 1, centerX - barHeight, barWidth - 1, barHeight);
+
+        // Right half - mirrored bars extending downward from center
+        ctx.fillRect(canvasSize.width - x - barWidth + 1, centerX, barWidth - 1, barHeight);
+      }
+
+      ctx.globalAlpha = 1.0; // Reset alpha
+    }
+
     // [AUDIO] AUDIO INTERACTION PROMPT (first load only)
     if (showAudioPrompt) {
       // Draw playfield borders - same as gameplay area
@@ -8843,56 +8893,6 @@ const Pong404: React.FC = () => {
 
     // 📐 Restore canvas state after dynamic playfield scaling (always restore since we always save)
     ctx.restore();
-
-    // [VISUALIZER] Audio visualizer - frequency bars (drawn AFTER scaled content, WITHOUT edge border)
-    if (analyserNodeRef.current && frequencyDataRef.current) {
-      analyserNodeRef.current.getByteFrequencyData(frequencyDataRef.current);
-
-      const barCount = 32; // Number of frequency bars
-      const barWidth = canvasSize.width / barCount;
-      const dataStep = Math.floor(frequencyDataRef.current.length / barCount);
-
-      // Helper function to lighten a hex color
-      const lightenColor = (hex: string, percent: number) => {
-        const num = parseInt(hex.replace('#', ''), 16);
-        const r = Math.min(255, Math.floor((num >> 16) + ((255 - (num >> 16)) * percent)));
-        const g = Math.min(255, Math.floor(((num >> 8) & 0x00FF) + ((255 - ((num >> 8) & 0x00FF)) * percent)));
-        const b = Math.min(255, Math.floor((num & 0x0000FF) + ((255 - (num & 0x0000FF)) * percent)));
-        return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
-      };
-
-      // Use lighter shade of background for visualizer
-      const visualizerColor = lightenColor(currentColors.background, 0.25);
-
-      // Frequency bars centered horizontally (mirrored from center) - NO EDGE BORDER
-      ctx.fillStyle = visualizerColor;
-      ctx.globalAlpha = 0.4; // More visible
-
-      const centerX = canvasSize.width / 2;
-      const maxBarHeight = 300; // Increased from 150 for much taller bars
-
-      for (let i = 0; i < barCount / 2; i++) {
-        const dataIndex = i * dataStep;
-        const value = frequencyDataRef.current[dataIndex] / 255; // Normalize to 0-1
-        const barHeight = Math.pow(value, 0.5) * maxBarHeight; // Apply power curve for more sensitivity
-
-        const x = i * barWidth;
-
-        // Left half - bars extending upward from center
-        ctx.fillRect(x, centerX - barHeight, barWidth - 1, barHeight);
-
-        // Left half - bars extending downward from center
-        ctx.fillRect(x, centerX, barWidth - 1, barHeight);
-
-        // Right half - mirrored bars extending upward from center
-        ctx.fillRect(canvasSize.width - x - barWidth + 1, centerX - barHeight, barWidth - 1, barHeight);
-
-        // Right half - mirrored bars extending downward from center
-        ctx.fillRect(canvasSize.width - x - barWidth + 1, centerX, barWidth - 1, barHeight);
-      }
-
-      ctx.globalAlpha = 1.0; // Reset alpha
-    }
 
   }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, crtEffect, applyCRTEffect, showAudioPrompt]);
 
