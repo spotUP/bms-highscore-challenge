@@ -394,7 +394,7 @@ interface Pickup {
   id: string;
   x: number;
   y: number;
-  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall' | 'labyrinth';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'time_warp' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall' | 'labyrinth';
   createdAt: number;
   size?: number;
 }
@@ -427,7 +427,7 @@ interface Coin {
 }
 
 interface ActiveEffect {
-  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'time_warp' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall';
   startTime: number;
   duration: number;
   originalValue?: any;
@@ -547,8 +547,6 @@ interface GameState {
   discoMode: boolean;
   discoStartTime: number;
   sidesSwitched: boolean;
-  paddleSwapActive: boolean;
-  nextPaddleSwapTime: number;
   pacMans: any[];
   paddlesDrunk: boolean;
   paddlesDrunkAngle?: number;
@@ -1381,8 +1379,6 @@ class PongWebSocketServer {
       discoMode: false,
       discoStartTime: 0,
       sidesSwitched: false,
-      paddleSwapActive: false,
-      nextPaddleSwapTime: 0,
       pacMans: [],
       paddlesDrunk: false,
       drunkStartTime: 0,
@@ -2745,6 +2741,18 @@ class PongWebSocketServer {
         }
       }
 
+      // Update mirror balls to mirror main ball position and velocity
+      if (gameState.ball.isMirror && gameState.ball.mirrorBalls && gameState.ball.mirrorBalls.length > 0) {
+        gameState.ball.mirrorBalls.forEach((mirror) => {
+          // Mirror position: reflected across center of playfield
+          mirror.x = canvasSize.width - gameState.ball.x;
+          mirror.y = canvasSize.height - gameState.ball.y;
+          // Mirror velocity: reversed direction
+          mirror.dx = -gameState.ball.dx;
+          mirror.dy = -gameState.ball.dy;
+        });
+      }
+
       // Update conga line balls to follow main ball
       if (gameState.congaBalls && gameState.congaBalls.length > 0) {
         // Each ball smoothly follows the ball in front of it
@@ -3119,7 +3127,7 @@ class PongWebSocketServer {
       'reverse_controls', 'invisible_ball', 'freeze_opponent', 'multi_ball', 'super_speed', 'coin_shower',
       'gravity_in_space', 'super_striker', 'sticky_paddles', 'machine_gun', 'dynamic_playfield',
       'switch_sides', 'time_warp', 'mirror_mode', 'quantum_ball', 'black_hole',
-      'lightning_storm', 'invisible_paddles', 'ball_trail_mine', 'paddle_swap', 'disco_mode', 'pac_man',
+      'lightning_storm', 'invisible_paddles', 'ball_trail_mine', 'disco_mode', 'pac_man',
       'banana_peel', 'rubber_ball', 'drunk_paddles', 'magnet_ball', 'balloon_ball', 'earthquake',
       'confetti_cannon', 'hypno_ball', 'conga_line', 'arkanoid', 'attractor', 'repulsor', 'great_wall', 'labyrinth'
     ]; // Removed 'portal_ball' and 'blocker' (too complex, needs proper implementation)
@@ -3525,11 +3533,6 @@ class PongWebSocketServer {
         console.log(`💰 COIN SHOWER: Created ${gameState.coins.length} coins:`, JSON.stringify(gameState.coins.slice(0, 2)));
         effect.duration = Infinity; // Never expires - coins stay until collected
         break;
-      case 'portal_ball':
-        // Portal ball pickup disabled - was preventing scoring
-        // Do nothing when this pickup is collected
-        effect.duration = 0;
-        break;
       case 'mirror_mode':
         // Create mirror balls
         gameState.ball.isMirror = true;
@@ -3582,12 +3585,6 @@ class PongWebSocketServer {
         gameState.ball.trailMines = [];
         effect.duration = 15000; // 15 seconds
         break;
-      case 'paddle_swap':
-        // Swap paddle positions
-        gameState.paddleSwapActive = true;
-        gameState.nextPaddleSwapTime = Date.now() + 2000; // First swap in 2 seconds
-        effect.duration = 10000; // 10 seconds
-        break;
       case 'pac_man':
         // Create pac-man enemies
         gameState.pacMans = [];
@@ -3638,24 +3635,29 @@ class PongWebSocketServer {
   private updateActiveEffects(gameState: GameState, now: number): boolean {
     let effectsChanged = false;
 
-    // Update time warp oscillation
+    // Update time warp oscillation - but only if effect hasn't expired
     const timeWarpEffect = gameState.activeEffects.find(e => e.type === 'time_warp');
     if (timeWarpEffect && gameState.timeWarpActive) {
       const elapsed = now - timeWarpEffect.startTime;
-      const progress = elapsed / timeWarpEffect.duration; // 0 to 1
+      const isExpired = elapsed > timeWarpEffect.duration;
 
-      // Oscillate between 0.05x (ULTRA extreme slow) and 6.0x (INSANE fast) using sine wave
-      // Complete 2 full cycles over the duration
-      const cycles = 2;
-      const oscillation = Math.sin(progress * Math.PI * 2 * cycles);
+      // Only update oscillation if effect is still active
+      if (!isExpired) {
+        const progress = elapsed / timeWarpEffect.duration; // 0 to 1
 
-      // Map oscillation from [-1, 1] to [0.05, 6.0] - INSANELY EXTREME range
-      const minSpeed = 0.05;
-      const maxSpeed = 6.0;
-      const range = maxSpeed - minSpeed;
-      gameState.timeWarpFactor = minSpeed + ((oscillation + 1) / 2) * range;
+        // Oscillate between 0.05x (ULTRA extreme slow) and 6.0x (INSANE fast) using sine wave
+        // Complete 2 full cycles over the duration
+        const cycles = 2;
+        const oscillation = Math.sin(progress * Math.PI * 2 * cycles);
 
-      effectsChanged = true;
+        // Map oscillation from [-1, 1] to [0.05, 6.0] - INSANELY EXTREME range
+        const minSpeed = 0.05;
+        const maxSpeed = 6.0;
+        const range = maxSpeed - minSpeed;
+        gameState.timeWarpFactor = minSpeed + ((oscillation + 1) / 2) * range;
+
+        effectsChanged = true;
+      }
     }
 
     // Remove expired effects
@@ -3914,10 +3916,6 @@ class PongWebSocketServer {
         gameState.coins = [];
         break;
 
-      case 'portal_ball':
-        console.log('🌀 PORTAL PICKUP EXPIRED: Ball will no longer teleport at edges');
-        gameState.ball.hasPortal = false;
-        break;
 
       case 'mirror_mode':
         gameState.ball.isMirror = false;
@@ -3942,9 +3940,6 @@ class PongWebSocketServer {
         gameState.ball.trailMines = [];
         break;
 
-      case 'paddle_swap':
-        gameState.paddleSwapActive = false;
-        break;
 
       case 'pac_man':
         gameState.pacMans = [];

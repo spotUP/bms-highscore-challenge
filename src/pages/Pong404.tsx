@@ -240,14 +240,12 @@ const PICKUP_TYPES = [
   { type: 'dynamic_playfield', pattern: 'expand', color: '#32cd32', description: 'Dynamic Playfield!', scale: 'wholetone', note: 4 },
   { type: 'switch_sides', pattern: 'swap', color: '#ff6347', description: 'Switch Sides!', scale: 'hungarian', note: 5 },
   { type: 'time_warp', pattern: 'clock', color: '#4169e1', description: 'Time Warp!', scale: 'diminished', note: 1 },
-  { type: 'portal_ball', pattern: 'portal', color: '#ff69b4', description: 'Portal Ball!', scale: 'wholetone', note: 6 },
   { type: 'mirror_mode', pattern: 'mirror', color: '#dda0dd', description: 'Mirror Mode!', scale: 'phrygian', note: 7 },
   { type: 'quantum_ball', pattern: 'quantum', color: '#00ced1', description: 'Quantum Ball!', scale: 'hungarian', note: 4 },
   { type: 'black_hole', pattern: 'vortex', color: '#2f2f2f', description: 'Black Hole!', scale: 'locrian', note: 0 },
   { type: 'lightning_storm', pattern: 'lightning', color: '#ffff99', description: 'Lightning Storm!', scale: 'diminished', note: 3 },
   { type: 'invisible_paddles', pattern: 'fade', color: '#f0f8ff', description: 'Invisible Paddles!', scale: 'wholetone', note: 2 },
   { type: 'ball_trail_mine', pattern: 'mine', color: '#dc143c', description: 'Ball Trail Mine!', scale: 'hungarian', note: 1 },
-  { type: 'paddle_swap', pattern: 'shuffle', color: '#ffd700', description: 'Paddle Swap!', scale: 'phrygian', note: 5 },
   { type: 'disco_mode', pattern: 'disco', color: '#ff1493', description: 'Disco Mode!', scale: 'wholetone', note: 7 },
   { type: 'pac_man', pattern: 'pacman', color: '#ffff00', description: 'Pac-Man Hunt!', scale: 'diminished', note: 4 },
   { type: 'banana_peel', pattern: 'banana', color: '#ffff99', description: 'Banana Peel!', scale: 'wholetone', note: 2 },
@@ -1073,8 +1071,6 @@ const Pong404: React.FC = () => {
     stickyPaddlesActive: false,
     sidesSwitched: false,
     paddleVisibility: { left: 1.0, right: 1.0, top: 1.0, bottom: 1.0 },
-    paddleSwapActive: false,
-    nextPaddleSwapTime: 0,
     discoMode: false,
     discoStartTime: 0,
     pacMans: [],
@@ -6839,10 +6835,19 @@ const Pong404: React.FC = () => {
 
         ambienceOscillatorsRef.current.forEach((osc) => {
           try {
+            // Force cancel all scheduled values to prevent stuck notes
             osc.detune.cancelScheduledValues(now);
+            osc.frequency.cancelScheduledValues(now);
+
+            // Set current values
             osc.detune.setValueAtTime(osc.detune.value, now);
-            osc.detune.linearRampToValueAtTime(0, now + 1.0); // Smooth return to normal over 1 second
-          } catch (e) {}
+            osc.frequency.setValueAtTime(osc.frequency.value, now);
+
+            // Smooth return to normal pitch over 1 second
+            osc.detune.linearRampToValueAtTime(0, now + 1.0);
+          } catch (e) {
+            console.error('Error restoring oscillator:', e);
+          }
         });
 
         console.log('⏱️ TIME WARP: Restored ambient music to normal pitch');
@@ -7448,6 +7453,23 @@ const Pong404: React.FC = () => {
         }
         ctx.fillStyle = currentColors.foreground;
         ctx.fillRect(extraBall.x, extraBall.y, extraBall.size, extraBall.size);
+      });
+    }
+
+    // 🪞 Draw mirror balls (for mirror mode effect)
+    if (!gameState.isPaused && gameState.ball.isMirror && gameState.ball.mirrorBalls && gameState.ball.mirrorBalls.length > 0) {
+      gameState.ball.mirrorBalls.forEach((mirrorBall: any) => {
+        // Draw mirror ball with semi-transparent effect
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = currentColors.foreground;
+        ctx.fillRect(mirrorBall.x, mirrorBall.y, gameState.ball.size, gameState.ball.size);
+
+        // Draw subtle glow to distinguish from main ball
+        ctx.shadowColor = currentColors.foreground;
+        ctx.shadowBlur = 8;
+        ctx.fillRect(mirrorBall.x, mirrorBall.y, gameState.ball.size, gameState.ball.size);
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1.0;
       });
     }
 

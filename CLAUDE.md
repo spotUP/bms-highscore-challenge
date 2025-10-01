@@ -20,6 +20,32 @@
 
 When adding or enabling a new pickup, follow these 10 steps in order:
 
+## 🗑️ PROCESS FOR REMOVING PICKUPS (IMPORTANT - READ THIS WHEN REMOVING PICKUPS)
+
+When removing a pickup from the game, you MUST remove it from ALL of these locations:
+
+**Server-Side (scripts/pong-websocket-server.ts):**
+1. Remove from `Pickup` type interface (line ~397) - the union of pickup type strings
+2. Remove from `ActiveEffect` type interface (line ~430) - the union of effect type strings
+3. Remove from `pickupTypes` array (line ~3117) - the array that spawns pickups
+4. Remove `case 'pickup_name':` handler from `applyPickupEffect()` method (line ~3142+)
+5. Remove `case 'pickup_name':` handler from `reversePickupEffect()` method (line ~3780+)
+6. Remove any specific state properties from `GameState` interface if the pickup added them (line ~500+)
+7. Remove initialization of those state properties from `createInitialGameState()` (line ~1300+)
+
+**Client-Side (src/pages/Pong404.tsx):**
+8. Remove from `PICKUP_CONFIGS` array (line ~200+) - the visual/audio configuration
+9. Remove any specific state properties from initial game state if added (line ~1000+)
+10. Remove any rendering/gameplay logic specific to that pickup (search codebase)
+
+**Important Notes:**
+- Missing ANY of these locations will cause TypeScript errors or runtime bugs
+- Always search both files for the pickup name to ensure complete removal
+- Check for both snake_case ('pickup_name') and camelCase (pickupName) variants
+- Test after removal to ensure no console errors
+
+## 📦 PROCESS FOR ADDING/ENABLING PICKUPS
+
 **Server-Side (scripts/pong-websocket-server.ts):**
 1. Add pickup name to `pickupTypes` array (line ~3113)
 2. Add `case 'pickup_name':` handler in `applyPickupEffect()` method (line ~3142+)
