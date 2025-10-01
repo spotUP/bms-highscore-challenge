@@ -28,8 +28,8 @@ export default defineConfig(({ mode }) => ({
     }),
   ],
   esbuild: {
-    // Remove console logs and debugger statements in production
-    drop: mode === 'production' ? ['console', 'debugger'] : [],
+    // Keep console logs in production for debugging, only remove debugger statements
+    drop: mode === 'production' ? ['debugger'] : [],
   },
   resolve: {
     alias: {
