@@ -401,369 +401,352 @@ const PRECALC_CONSTANTS = {
 
 // [TARGET] PRECALCULATED PICKUP PATTERNS (eliminates nested loops during gameplay)
 const PRECALC_PICKUP_PATTERNS = {
-  lightning: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) =>
-      (row < 4 && col >= 6 && col <= 8) ||
-      (row >= 4 && row < 8 && col >= 3 && col <= 5) ||
-      (row >= 8 && col >= 6 && col <= 8)
+  lightning: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) =>
+      (row < 2 && col >= 2 && col <= 3) ||
+      (row >= 2 && col >= 1 && col <= 2)
     )
   ),
 
-  waves: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) =>
-      (row === 3 || row === 6 || row === 9) && Math.sin(col * 0.8) > 0
+  waves: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) =>
+      (row === 1 || row === 3) && Math.sin(col * 1.2) > 0
     )
   ),
 
-  circle: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
-      const centerX = 6, centerY = 6, radius = 3;
+  circle: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
+      const centerX = 1.5, centerY = 1.5, radius = 1.2;
       const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
-      return dist <= radius && dist >= radius - 1.5;
+      return dist <= radius && dist >= radius - 0.7;
     })
   ),
 
-  dot: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
-      const dotSize = 3;
-      const startX = Math.floor((12 - dotSize) / 2);
-      const startY = Math.floor((12 - dotSize) / 2);
-      return row >= startY && row < startY + dotSize &&
-             col >= startX && col < startX + dotSize;
+  dot: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
+      return row >= 1 && row <= 2 && col >= 1 && col <= 2;
     })
   ),
 
-  spiral: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
-      const angle = Math.atan2(row - 6, col - 6);
-      const dist = Math.sqrt((col - 6) ** 2 + (row - 6) ** 2);
-      return Math.sin(angle * 3 + dist * 0.5) > 0.5;
+  spiral: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
+      const angle = Math.atan2(row - 1.5, col - 1.5);
+      const dist = Math.sqrt((col - 1.5) ** 2 + (row - 1.5) ** 2);
+      return Math.sin(angle * 2 + dist * 0.8) > 0.3;
     })
   ),
 
-  arrow_up: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) =>
-      (row >= 2 && row <= 6 && col >= 5 && col <= 7) || // Stem
-      (row >= 0 && row <= 4 && Math.abs(col - 6) <= row) // Arrow head
+  arrow_up: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) =>
+      (row >= 1 && row <= 3 && col >= 1 && col <= 2) || // Stem
+      (row === 0 && col >= 1 && col <= 2) // Arrow head
     )
   ),
 
-  arrow_down: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) =>
-      (row >= 2 && row <= 8 && col >= 5 && col <= 7) || // Stem
-      (row >= 6 && row <= 10 && Math.abs(col - 6) <= (10 - row)) // Arrow head
+  arrow_down: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) =>
+      (row >= 0 && row <= 2 && col >= 1 && col <= 2) || // Stem
+      (row === 3 && col >= 1 && col <= 2) // Arrow head
     )
   ),
 
-  double_arrow: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) =>
-      (row >= 4 && row <= 6 && col >= 1 && col <= 4) || // Left arrow
-      (row >= 3 && row <= 7 && col === 1) ||
-      (row >= 4 && row <= 6 && col >= 8 && col <= 11) || // Right arrow
-      (row >= 3 && row <= 7 && col === 11)
+  double_arrow: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) =>
+      (row >= 1 && row <= 2 && col === 0) || // Left arrow
+      (row >= 1 && row <= 2 && col === 3) // Right arrow
     )
   ),
 
-  plus: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) =>
-      (row >= 4 && row <= 7 && col >= 1 && col <= 10) || // Horizontal
-      (col >= 4 && col <= 7 && row >= 1 && row <= 10) // Vertical
+  plus: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) =>
+      (row >= 1 && row <= 2 && col >= 0 && col <= 3) || // Horizontal
+      (col >= 1 && col <= 2 && row >= 0 && row <= 3) // Vertical
     )
   ),
 
-  cross: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) =>
-      Math.abs(row - col) <= 1 || Math.abs(row - (12 - col - 1)) <= 1
+  cross: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) =>
+      Math.abs(row - col) <= 0.5 || Math.abs(row - (3 - col)) <= 0.5
     )
   ),
 
-  stripes: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) =>
-      (row + col) % 3 === 0
+  stripes: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) =>
+      (row + col) % 2 === 0
     )
   ),
 
-  diamond: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
-      const centerX = 6, centerY = 6;
+  diamond: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
+      const centerX = 1.5, centerY = 1.5;
       const distanceFromCenter = Math.abs(row - centerY) + Math.abs(col - centerX);
-      return distanceFromCenter >= 3 && distanceFromCenter <= 4;
+      return distanceFromCenter >= 1.5 && distanceFromCenter <= 2.5;
     })
   ),
 
-  star: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
-      const centerX = 6, centerY = 6;
+  star: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
+      const centerX = 1.5, centerY = 1.5;
       const dx = col - centerX, dy = row - centerY;
-      return (Math.abs(dx) <= 1 && Math.abs(dy) <= 4) || // Vertical line
-             (Math.abs(dy) <= 1 && Math.abs(dx) <= 4) || // Horizontal line
-             (Math.abs(dx - dy) <= 1 && Math.abs(dx) <= 3) || // Diagonal 1
-             (Math.abs(dx + dy) <= 1 && Math.abs(dx) <= 3); // Diagonal 2
+      return (Math.abs(dx) <= 0.5 && Math.abs(dy) <= 1.5) || // Vertical line
+             (Math.abs(dy) <= 0.5 && Math.abs(dx) <= 1.5) || // Horizontal line
+             (Math.abs(dx - dy) <= 0.5 && Math.abs(dx) <= 1) || // Diagonal 1
+             (Math.abs(dx + dy) <= 0.5 && Math.abs(dx) <= 1); // Diagonal 2
     })
   ),
 
-  gravity: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  gravity: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Create a gravity well pattern - concentric circles getting denser towards center
-      const centerX = 6, centerY = 6;
+      const centerX = 1.5, centerY = 1.5;
       const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
-      return (dist <= 5 && ((Math.floor(dist * 2) + row + col) % 3 === 0)) ||
-             (dist <= 2.5); // Dense center
+      return (dist <= 1.8 && ((Math.floor(dist * 2) + row + col) % 2 === 0)) ||
+             (dist <= 0.8); // Dense center
     })
   ),
 
-  target: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  target: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Create a target/crosshair pattern
-      const centerX = 6, centerY = 6;
+      const centerX = 1.5, centerY = 1.5;
       const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
-      return (Math.abs(row - centerY) <= 1 && Math.abs(col - centerX) <= 5) || // Horizontal crosshair
-             (Math.abs(col - centerX) <= 1 && Math.abs(row - centerY) <= 5) || // Vertical crosshair
-             (dist >= 3.5 && dist <= 4.5) || // Outer ring
-             (dist >= 1.5 && dist <= 2.5);   // Inner ring
+      return (Math.abs(row - centerY) <= 0.5 && Math.abs(col - centerX) <= 1.5) || // Horizontal crosshair
+             (Math.abs(col - centerX) <= 0.5 && Math.abs(row - centerY) <= 1.5) || // Vertical crosshair
+             (dist >= 1.2 && dist <= 1.6); // Ring
     })
   ),
 
-  sticky: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  sticky: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Sticky drops pattern
-      return (row === 2 && col >= 5 && col <= 6) || // Top drops
-             (row === 3 && col >= 4 && col <= 7) ||
-             (row === 5 && col >= 3 && col <= 4) || // Left drops
-             (row === 6 && col >= 2 && col <= 5) ||
-             (row === 5 && col >= 7 && col <= 8) || // Right drops
-             (row === 6 && col >= 6 && col <= 9) ||
-             (row === 8 && col >= 4 && col <= 7); // Bottom drops
+      return (row === 0 && col >= 1 && col <= 2) || // Top drop
+             (row === 1 && col >= 1 && col <= 2) ||
+             (row === 2 && (col === 1 || col === 2)) || // Middle drops
+             (row === 3 && col >= 1 && col <= 2); // Bottom drop
     })
   ),
 
-  bullets: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
-      // Machine gun bullets pattern
-      return (row === 2 && col === 2) || (row === 2 && col === 5) || (row === 2 && col === 8) ||
-             (row === 4 && col === 1) || (row === 4 && col === 6) || (row === 4 && col === 9) ||
-             (row === 6 && col === 3) || (row === 6 && col === 7) || (row === 6 && col === 10) ||
-             (row === 8 && col === 2) || (row === 8 && col === 5) || (row === 8 && col === 8) ||
-             (row === 10 && col === 1) || (row === 10 && col === 4) || (row === 10 && col === 7);
+  bullets: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
+      // Machine gun bullets pattern - scattered dots
+      return (row === 0 && (col === 0 || col === 2)) ||
+             (row === 1 && (col === 1 || col === 3)) ||
+             (row === 2 && (col === 0 || col === 2)) ||
+             (row === 3 && (col === 1 || col === 3));
     })
   ),
 
-  expand: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
-      // Expanding arrows pattern
-      const centerX = 6, centerY = 6;
-      return (Math.abs(row - centerY) === 2 && Math.abs(col - centerX) <= 1) || // Vertical arrows
-             (Math.abs(col - centerX) === 2 && Math.abs(row - centerY) <= 1) || // Horizontal arrows
-             (Math.abs(row - centerY) === 4 && col === centerX) || // Far vertical points
-             (Math.abs(col - centerX) === 4 && row === centerY);   // Far horizontal points
+  expand: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
+      // Expanding arrows pattern - arrows pointing outward
+      const centerX = 1.5, centerY = 1.5;
+      return (row === 0 && col >= 1 && col <= 2) || // Top arrow
+             (row === 3 && col >= 1 && col <= 2) || // Bottom arrow
+             (col === 0 && row >= 1 && row <= 2) || // Left arrow
+             (col === 3 && row >= 1 && row <= 2); // Right arrow
     })
   ),
 
-  swap: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
-      // Swap arrows pattern
-      return (row >= 2 && row <= 4 && col >= 1 && col <= 3) || // Top-left arrow
-             (row >= 8 && row <= 10 && col >= 8 && col <= 10) || // Bottom-right arrow
-             (row === 6 && col >= 4 && col <= 7); // Center line
+  swap: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
+      // Swap arrows pattern - diagonal arrows
+      return (row === 0 && col === 0) || (row === 1 && col === 1) || // Top-left to center
+             (row === 2 && col === 2) || (row === 3 && col === 3); // Center to bottom-right
     })
   ),
 
-  wall: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  wall: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Brick wall pattern
       const isEvenRow = row % 2 === 0;
-      const brickPattern = isEvenRow ? (col % 4 === 0 || col % 4 === 1) : (col % 4 === 2 || col % 4 === 3);
-      return brickPattern && row >= 2 && row <= 9;
+      return isEvenRow ? (col % 2 === 0) : (col % 2 === 1);
     })
   ),
 
-  clock: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  clock: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Clock pattern with hands
-      const centerX = 6, centerY = 6;
+      const centerX = 1.5, centerY = 1.5;
       const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
-      return (dist >= 3 && dist <= 4) || // Clock circle
-             (row === centerY && col >= centerX && col <= centerX + 2) || // Hour hand
-             (col === centerX && row >= centerY - 3 && row <= centerY); // Minute hand
+      return (dist >= 1.2 && dist <= 1.5) || // Clock circle
+             (row === 2 && col >= 2 && col <= 3) || // Hour hand (right)
+             (col === 2 && row <= 1); // Minute hand (up)
     })
   ),
 
-  portal: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  portal: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Portal rings pattern
-      const centerX = 6, centerY = 6;
+      const centerX = 1.5, centerY = 1.5;
       const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
-      return (dist >= 1 && dist <= 1.5) || (dist >= 2.5 && dist <= 3) || (dist >= 4 && dist <= 4.5);
+      return (dist >= 0.5 && dist <= 0.8) || (dist >= 1.2 && dist <= 1.5);
     })
   ),
 
-  mirror: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  mirror: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Mirror reflection pattern
-      return col === row || col === (11 - row) || // Diagonal mirrors
-             (row === 6 && col >= 2 && col <= 9); // Center line
+      return col === row || col === (3 - row); // Diagonal mirrors
     })
   ),
 
-  quantum: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  quantum: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Quantum superposition pattern - multiple positions
-      return (row === 3 && (col === 3 || col === 8)) ||
-             (row === 6 && (col === 1 || col === 6 || col === 10)) ||
-             (row === 9 && (col === 4 || col === 7));
+      return (row === 1 && (col === 0 || col === 2)) ||
+             (row === 2 && (col === 1 || col === 3));
     })
   ),
 
-  vortex: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  vortex: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Black hole vortex pattern
-      const centerX = 6, centerY = 6;
+      const centerX = 1.5, centerY = 1.5;
       const angle = Math.atan2(row - centerY, col - centerX);
       const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
-      return Math.sin(angle * 3 + dist * 0.8) > 0.3 && dist <= 5;
+      return Math.sin(angle * 2 + dist * 1.2) > 0.2 && dist <= 1.8;
     })
   ),
 
-  zigzag: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  zigzag: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Zigzag lightning pattern
-      const zigzag = Math.sin(col * 0.5) * 2;
-      return Math.abs(row - 6 - zigzag) <= 1;
+      const zigzag = Math.sin(col * 0.8) * 0.8;
+      return Math.abs(row - 2 - zigzag) <= 0.7;
     })
   ),
 
-  fade: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  fade: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Fading pattern for invisible paddles
-      const centerX = 6, centerY = 6;
+      const centerX = 1.5, centerY = 1.5;
       const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
-      return (row + col) % 3 === 0 && dist <= 4;
+      return (row + col) % 2 === 0 && dist <= 1.5;
     })
   ),
 
-  mine: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  mine: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Mine explosion pattern
-      const centerX = 6, centerY = 6;
-      return (Math.abs(row - centerY) <= 1 && Math.abs(col - centerX) <= 1) || // Center
-             (Math.abs(row - centerY) === 2 && col === centerX) || // Vertical spikes
-             (Math.abs(col - centerX) === 2 && row === centerY) || // Horizontal spikes
-             (Math.abs(row - centerY) === Math.abs(col - centerX) && Math.abs(row - centerY) === 3); // Diagonal spikes
+      const centerX = 1.5, centerY = 1.5;
+      return (Math.abs(row - centerY) <= 0.5 && Math.abs(col - centerX) <= 0.5) || // Center
+             (row === 0 && col >= 1 && col <= 2) || // Top spike
+             (row === 3 && col >= 1 && col <= 2) || // Bottom spike
+             (col === 0 && row >= 1 && row <= 2) || // Left spike
+             (col === 3 && row >= 1 && row <= 2); // Right spike
     })
   ),
 
-  shuffle: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  shuffle: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Shuffle pattern with moving elements
-      return (row % 3 === 0 && col % 3 === 1) || (row % 3 === 1 && col % 3 === 2) || (row % 3 === 2 && col % 3 === 0);
+      return (row % 2 === 0 && col % 2 === 1) || (row % 2 === 1 && col % 2 === 0);
     })
   ),
 
-  disco: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
-      // Disco ball pattern
+  disco: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
+      // Disco ball pattern - checkerboard in circle
       const isDiscoBall = (row + col) % 2 === 0;
-      const centerX = 6, centerY = 6;
+      const centerX = 1.5, centerY = 1.5;
       const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
-      return isDiscoBall && dist <= 4;
+      return isDiscoBall && dist <= 1.5;
     })
   ),
 
-  pacman: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  pacman: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Pac-Man shape (circular with mouth opening)
-      const centerX = 6, centerY = 6;
+      const centerX = 1.5, centerY = 1.5;
       const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
       const angle = Math.atan2(row - centerY, col - centerX);
-      const mouthAngle = Math.PI / 6; // 30 degree mouth opening
-      return dist <= 4 && !(dist >= 2 && Math.abs(angle) < mouthAngle);
+      const mouthAngle = Math.PI / 4; // 45 degree mouth opening
+      return dist <= 1.5 && !(dist >= 0.8 && Math.abs(angle) < mouthAngle);
     })
   ),
 
-  banana: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  banana: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Curved banana shape
-      return (row >= 2 && row <= 9 && col >= 4 && col <= 7) &&
-             !(row <= 3 && col <= 5) && !(row >= 8 && col >= 6);
+      return (row >= 0 && row <= 3 && col >= 1 && col <= 2) &&
+             !(row === 0 && col === 1);
     })
   ),
 
-  bounce: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  bounce: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Bouncing ball with motion lines
-      const centerX = 6, centerY = 6;
+      const centerX = 1.5, centerY = 1.5;
       const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
-      const motionLines = (row === 4 && col >= 1 && col <= 3) || (row === 8 && col >= 9 && col <= 11);
-      return (dist <= 2.5) || motionLines;
+      const motionLines = (row === 1 && col === 0) || (row === 2 && col === 3);
+      return (dist <= 0.8) || motionLines;
     })
   ),
 
-  wobble: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  wobble: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Wobbly paddle pattern
-      const wave = Math.sin((row * Math.PI) / 6) * 1.5;
-      return col >= 5 + wave && col <= 7 + wave;
+      const wave = Math.sin((row * Math.PI) / 2) * 0.5;
+      return col >= 1.5 + wave && col <= 2.5 + wave;
     })
   ),
 
-  magnet: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  magnet: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Horseshoe magnet with N/S poles
-      return (row >= 2 && row <= 9 && (col === 3 || col === 8)) ||
-             (row === 2 && col >= 3 && col <= 8) ||
-             (row >= 7 && row <= 9 && col >= 4 && col <= 7);
+      return (row >= 0 && row <= 2 && (col === 0 || col === 3)) || // Sides
+             (row === 0 && col >= 0 && col <= 3); // Top bar
     })
   ),
 
-  balloon: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  balloon: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Balloon with string
-      const centerX = 6, centerY = 4;
+      const centerX = 1.5, centerY = 1;
       const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
-      const string = col === 6 && row >= 7 && row <= 10;
-      return (dist <= 3) || string;
+      const string = col >= 1 && col <= 2 && row === 3;
+      return (dist <= 1) || string;
     })
   ),
 
-  shake: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  shake: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Earthquake crack pattern
-      return (row === 6 && col % 2 === 0) ||
-             (row === 5 && col % 3 === 1) ||
-             (row === 7 && col % 3 === 2);
+      return (row === 2 && col % 2 === 0) ||
+             (row === 1 && col === 1) ||
+             (row === 3 && col === 2);
     })
   ),
 
-  confetti: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  confetti: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Random confetti pieces
-      return ((row + col * 3) % 7 === 0) || ((row * 2 + col) % 8 === 0);
+      return ((row + col * 2) % 3 === 0) || ((row * 2 + col) % 4 === 0);
     })
   ),
 
-  hypno: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  hypno: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Hypnotic spiral pattern
-      const centerX = 6, centerY = 6;
+      const centerX = 1.5, centerY = 1.5;
       const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
       const angle = Math.atan2(row - centerY, col - centerX);
-      return Math.floor(dist + angle * 2) % 2 === 0 && dist <= 5;
+      return Math.floor(dist + angle * 1.5) % 2 === 0 && dist <= 1.8;
     })
   ),
 
-  conga: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  conga: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Dancing figures in a line
-      return (row >= 4 && row <= 8) &&
-             ((col >= 2 && col <= 3) || (col >= 5 && col <= 6) || (col >= 8 && col <= 9));
+      return row === 2 && col >= 0 && col <= 3;
     })
   ),
 
-  bricks: Array.from({ length: 12 }, (_, row) =>
-    Array.from({ length: 12 }, (_, col) => {
+  bricks: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
       // Arkanoid brick pattern - classic brick layout
-      return (row >= 2 && row <= 9 && col >= 2 && col <= 9) &&
-             ((row % 2 === 0 && col % 3 === 1) || (row % 2 === 1 && col % 3 === 0));
+      return (row >= 1 && row <= 2) &&
+             ((row % 2 === 0 && col % 2 === 0) || (row % 2 === 1 && col % 2 === 1));
     })
   )
 };
@@ -815,6 +798,8 @@ const Pong404: React.FC = () => {
   const playMelodyNoteRef = useRef<any>(null);
   const updateGameStateRef = useRef<any>(null);
   const updatePaddlePositionRef = useRef<any>(null);
+  const updateGameRef = useRef<any>(null);
+  const renderRef = useRef<any>(null);
 
   // Music analysis data for reactive visual effects
   const musicDataRef = useRef<{ volume: number; disharmonic: number; beat: number }>({ volume: 0, disharmonic: 0, beat: 0 });
@@ -826,121 +811,9 @@ const Pong404: React.FC = () => {
   useEffect(() => {
     const collisionManager = collisionManagerRef.current;
 
-    // 🏓 Ball-Paddle Collision Handler - Complete game logic
+    // Ball-Paddle Collision Handler - DISABLED in multiplayer (server handles all physics)
     collisionManager.on('ball-paddle', (result: CollisionResult) => {
-      console.log('🏓 BALL-PADDLE COLLISION DETECTED:', {
-        ballPos: `${result.object1.x},${result.object1.y}`,
-        paddleSide: (result.object2 as any).side,
-        hitPosition: result.hitPosition,
-        normal: result.normal
-      });
-      if (!result.hit) return;
-
-      const paddle = result.object2 as any;
-      const paddleSide = paddle.side || 'unknown';
-
-      // Apply complete collision logic
-      setGameState(prevState => {
-        const newState = { ...prevState };
-
-        // 🏓 STICKY PADDLES: Check if sticky effect is active
-        if (newState.stickyPaddlesActive && !newState.ball.isStuck) {
-          // Stick ball to paddle
-          newState.ball.isStuck = true;
-          newState.ball.stuckToPaddle = paddleSide as any;
-          newState.ball.stuckStartTime = Date.now();
-          newState.ball.dx = 0;
-          newState.ball.dy = 0;
-
-          // Calculate offset relative to paddle
-          const ballCenterX = newState.ball.x + newState.ball.size / 2;
-          const ballCenterY = newState.ball.y + newState.ball.size / 2;
-          const paddleCenterX = paddle.x + paddle.width / 2;
-          const paddleCenterY = paddle.y + paddle.height / 2;
-
-          // Calculate offset based on paddle side
-          if (paddleSide === 'left' || paddleSide === 'right') {
-            newState.ball.stuckOffset = {
-              x: newState.ball.x - (paddleSide === 'left' ? ((BORDER_THICKNESS * 2) + newState.paddles.left.width) : (canvasSize.width - BORDER_THICKNESS - newState.paddles.right.width)),
-              y: ballCenterY - paddleCenterY
-            };
-          } else {
-            newState.ball.stuckOffset = {
-              x: ballCenterX - paddleCenterX,
-              y: newState.ball.y - (paddleSide === 'top' ? ((BORDER_THICKNESS * 2) + newState.paddles.top.height) : (canvasSize.height - BORDER_THICKNESS - newState.paddles.bottom.height))
-            };
-          }
-
-          playMelodyNoteRef.current?.('paddle', null, 'both');
-          return newState;
-        }
-
-        // Enhanced Aiming System - same logic as before
-        const hitPosition = result.hitPosition;
-        const clampedHitPosition = Math.max(0, Math.min(1, hitPosition));
-        const normalizedPosition = (clampedHitPosition - 0.5) * 2; // Convert to range [-1, 1]
-        const aimingCurve = Math.sin(normalizedPosition * Math.PI * 0.4); // 0.4 limits max angle
-        const baseSpeed = BALL_SPEED;
-        const maxAngle = Math.PI / 3; // 60 degrees maximum deflection
-        const deflectionAngle = aimingCurve * maxAngle;
-
-        // Apply velocity based on paddle side
-        if (paddleSide === 'left') {
-          newState.ball.dx = Math.cos(deflectionAngle) * baseSpeed;
-          newState.ball.dy = Math.sin(deflectionAngle) * baseSpeed;
-          newState.ball.x = (BORDER_THICKNESS * 2) + newState.paddles.left.width;
-        } else if (paddleSide === 'right') {
-          newState.ball.dx = -Math.cos(deflectionAngle) * baseSpeed;
-          newState.ball.dy = Math.sin(deflectionAngle) * baseSpeed;
-          newState.ball.x = canvasSize.width - BORDER_THICKNESS - newState.paddles.right.width - newState.ball.size;
-        } else if (paddleSide === 'top') {
-          newState.ball.dx = Math.sin(deflectionAngle) * baseSpeed;
-          newState.ball.dy = Math.cos(deflectionAngle) * baseSpeed;
-          newState.ball.y = (BORDER_THICKNESS * 2) + newState.paddles.top.height;
-        } else if (paddleSide === 'bottom') {
-          newState.ball.dx = Math.sin(deflectionAngle) * baseSpeed;
-          newState.ball.dy = -Math.cos(deflectionAngle) * baseSpeed;
-          newState.ball.y = canvasSize.height - BORDER_THICKNESS - newState.paddles.bottom.height - newState.ball.size;
-        }
-
-        // Add speed variation based on distance from center
-        const distanceFromCenter = Math.abs(clampedHitPosition - 0.5) * 2;
-        const speedVariation = 1 + (distanceFromCenter * 0.2); // 0-20% speed increase
-        newState.ball.dx *= speedVariation;
-        newState.ball.dy *= speedVariation;
-
-        // Change colors on paddle hit
-        newState.colorIndex = (newState.colorIndex + 1) % COLOR_PALETTE.length;
-
-        // Track ball touch for scoring system
-        console.log(`🏓 CENTRALIZED COLLISION: Ball touched by ${paddleSide} paddle`, {
-          previous: newState.ball.lastTouchedBy,
-          new: paddleSide,
-          hitPosition: result.hitPosition,
-          ballPosition: { x: newState.ball.x, y: newState.ball.y }
-        });
-        newState.ball.previousTouchedBy = newState.ball.lastTouchedBy;
-        newState.ball.lastTouchedBy = paddleSide as any;
-
-        // Trigger rumble effect
-        newState.rumbleEffect.isActive = true;
-        newState.rumbleEffect.startTime = Date.now();
-        newState.rumbleEffect.intensity = 8;
-
-        // Track rally and potentially taunt
-        rallyCountRef.current++;
-        if (rallyCountRef.current >= LONG_RALLY_THRESHOLD) {
-          attemptRobotTauntRef.current?.('long_rally');
-          rallyCountRef.current = 0;
-        }
-
-        return newState;
-      });
-
-      // Play paddle hit sound
-      playMelodyNoteRef.current?.('paddle', null, 'both');
-
-      console.log(`🏓 CENTRALIZED COLLISION: Ball hit ${paddleSide} paddle at position ${result.hitPosition.toFixed(2)}`);
+      // Client does NOT handle collisions in multiplayer - server is authoritative
     });
 
     // 🏆 Ball-Wall Collision Handler (Scoring)
@@ -996,8 +869,6 @@ const Pong404: React.FC = () => {
   }, []); // Empty dependency array - run once on mount
 
   const createPickupRef = useRef<any>(null);
-  const applyPickupEffectRef = useRef<any>(null);
-  const updateEffectsRef = useRef<any>(null);
   const initializeAudioRef = useRef<any>(null);
   const speakRoboticRef = useRef<any>(null);
   const predictGameStateRef = useRef<any>(null);
@@ -1746,6 +1617,21 @@ const Pong404: React.FC = () => {
         setTimeout(() => speakRobotic(replacementMessage), 100);
         break;
 
+      case 'side_switched':
+        // Player has switched sides due to switch_sides pickup
+        const { newSide, oldSide } = message.data;
+        console.log(`🔄 Side switched from ${oldSide} to ${newSide}`);
+
+        // Update multiplayer state with new side
+        setMultiplayerState(prev => ({
+          ...prev,
+          playerSide: newSide
+        }));
+
+        // Announce the switch
+        setTimeout(() => speakRobotic(`SIDES SWITCHED! YOU ARE NOW ${newSide.toUpperCase()} PLAYER`), 100);
+        break;
+
       case 'paddle_updated':
         setGameState(prev => {
           const newState = { ...prev };
@@ -1819,6 +1705,458 @@ const Pong404: React.FC = () => {
             if (newTotal > prevTotal) {
               console.log('[GAME] Score detected in game_state_updated - playing score sound');
               playMelodyNoteRef.current?.('score', null, 'both');
+            }
+          }
+
+          // Handle wind sound effect
+          const hadWind = prevGameState?.ball?.hasWind || false;
+          const hasWind = message.data.ball?.hasWind || false;
+
+          if (hasWind && !hadWind) {
+            // Start wind sound effect
+            if (Tone && !windNoiseRef.current) {
+              const noise = new Tone.Noise('pink');
+              const filter = new Tone.Filter({
+                type: 'bandpass',
+                frequency: 600,
+                rolloff: -24,
+                Q: 2
+              });
+              const autoFilter = new Tone.AutoFilter({
+                frequency: 0.3,
+                depth: 0.7
+              }).start();
+              const gain = new Tone.Gain(0.15).toDestination();
+
+              noise.connect(filter);
+              filter.connect(autoFilter);
+              autoFilter.connect(gain);
+
+              noise.start();
+              windNoiseRef.current = { noise, filter, autoFilter, gain };
+              console.log('Wind sound effect started');
+            }
+          } else if (!hasWind && hadWind) {
+            // Stop wind sound effect
+            if (windNoiseRef.current) {
+              windNoiseRef.current.noise.stop();
+              windNoiseRef.current.noise.dispose();
+              windNoiseRef.current.filter.dispose();
+              windNoiseRef.current.autoFilter.dispose();
+              windNoiseRef.current.gain.dispose();
+              windNoiseRef.current = null;
+              console.log('Wind sound effect stopped');
+            }
+          }
+
+          // Handle attractor/repulsor force field sounds
+          const prevEffects = prevGameState?.activeEffects || [];
+          const currentEffects = message.data.activeEffects || [];
+
+          const hadAttractor = prevEffects.some(e => e.type === 'attractor');
+          const hasAttractor = currentEffects.some(e => e.type === 'attractor');
+          const hadRepulsor = prevEffects.some(e => e.type === 'repulsor');
+          const hasRepulsor = currentEffects.some(e => e.type === 'repulsor');
+
+          // Attractor sound (low pulsing hum)
+          if (hasAttractor && !hadAttractor) {
+            if (Tone && !attractorSoundRef.current) {
+              const osc = new Tone.Oscillator({
+                frequency: 80,
+                type: 'sine'
+              });
+              const lfo = new Tone.LFO({
+                frequency: 4,
+                min: 0.3,
+                max: 0.7
+              }).start();
+              const gain = new Tone.Gain(0.2).toDestination();
+
+              osc.connect(gain);
+              lfo.connect(gain.gain);
+              osc.start();
+
+              attractorSoundRef.current = { osc, lfo, gain };
+              console.log('Attractor sound effect started');
+            }
+          } else if (!hasAttractor && hadAttractor) {
+            if (attractorSoundRef.current) {
+              attractorSoundRef.current.osc.stop();
+              attractorSoundRef.current.osc.dispose();
+              attractorSoundRef.current.lfo.stop();
+              attractorSoundRef.current.lfo.dispose();
+              attractorSoundRef.current.gain.dispose();
+              attractorSoundRef.current = null;
+              console.log('Attractor sound effect stopped');
+            }
+          }
+
+          // Repulsor sound (high frequency warble)
+          if (hasRepulsor && !hadRepulsor) {
+            if (Tone && !repulsorSoundRef.current) {
+              const osc = new Tone.Oscillator({
+                frequency: 300,
+                type: 'triangle'
+              });
+              const lfo = new Tone.LFO({
+                frequency: 8,
+                min: 0.2,
+                max: 0.6
+              }).start();
+              const gain = new Tone.Gain(0.15).toDestination();
+
+              osc.connect(gain);
+              lfo.connect(gain.gain);
+              osc.start();
+
+              repulsorSoundRef.current = { osc, lfo, gain };
+              console.log('Repulsor sound effect started');
+            }
+          } else if (!hasRepulsor && hadRepulsor) {
+            if (repulsorSoundRef.current) {
+              repulsorSoundRef.current.osc.stop();
+              repulsorSoundRef.current.osc.dispose();
+              repulsorSoundRef.current.lfo.stop();
+              repulsorSoundRef.current.lfo.dispose();
+              repulsorSoundRef.current.gain.dispose();
+              repulsorSoundRef.current = null;
+              console.log('Repulsor sound effect stopped');
+            }
+          }
+
+          // Handle black hole sound (deep rumbling with filter sweep)
+          const hadBlackHole = prevGameState?.blackHoles && prevGameState.blackHoles.length > 0;
+          const hasBlackHole = message.data.blackHoles && message.data.blackHoles.length > 0;
+
+          if (hasBlackHole && !hadBlackHole) {
+            if (Tone && !blackHoleSoundRef.current) {
+              const osc = new Tone.Oscillator({
+                frequency: 40,
+                type: 'sawtooth'
+              });
+              const filter = new Tone.Filter({
+                type: 'lowpass',
+                frequency: 200,
+                rolloff: -24,
+                Q: 5
+              });
+              const lfo = new Tone.LFO({
+                frequency: 0.5,
+                min: 100,
+                max: 300
+              }).start();
+              const gain = new Tone.Gain(0.25).toDestination();
+
+              osc.connect(filter);
+              filter.connect(gain);
+              lfo.connect(filter.frequency);
+              osc.start();
+
+              blackHoleSoundRef.current = { osc, filter, lfo, gain };
+              console.log('Black hole sound effect started');
+            }
+          } else if (!hasBlackHole && hadBlackHole) {
+            if (blackHoleSoundRef.current) {
+              blackHoleSoundRef.current.osc.stop();
+              blackHoleSoundRef.current.osc.dispose();
+              blackHoleSoundRef.current.filter.dispose();
+              blackHoleSoundRef.current.lfo.stop();
+              blackHoleSoundRef.current.lfo.dispose();
+              blackHoleSoundRef.current.gain.dispose();
+              blackHoleSoundRef.current = null;
+              console.log('Black hole sound effect stopped');
+            }
+          }
+
+          // Handle great wall electric hum sound
+          const hadGreatWall = prevGameState?.ball?.hasGreatWall || false;
+          const hasGreatWall = message.data.ball?.hasGreatWall || false;
+
+          if (hasGreatWall && !hadGreatWall) {
+            // Start electric humming sound
+            if (Tone && !electricHumRef.current) {
+              const osc1 = new Tone.Oscillator(120, 'sawtooth');
+              const osc2 = new Tone.Oscillator(180, 'sawtooth');
+              const noise = new Tone.Noise('pink');
+
+              const filter = new Tone.Filter({
+                type: 'bandpass',
+                frequency: 150,
+                Q: 3
+              });
+
+              const lfo = new Tone.LFO(2, 0.3, 0.7);
+              lfo.connect(filter.frequency);
+              lfo.start();
+
+              const gain = new Tone.Gain(0.15).toDestination();
+
+              osc1.connect(filter);
+              osc2.connect(filter);
+              noise.connect(filter);
+              filter.connect(gain);
+
+              osc1.start();
+              osc2.start();
+              noise.start();
+
+              electricHumRef.current = { osc1, osc2, noise, filter, lfo, gain };
+              console.log('Electric hum started');
+            }
+          } else if (!hasGreatWall && hadGreatWall) {
+            // Stop electric humming
+            if (electricHumRef.current) {
+              electricHumRef.current.osc1.stop();
+              electricHumRef.current.osc2.stop();
+              electricHumRef.current.noise.stop();
+              electricHumRef.current.osc1.dispose();
+              electricHumRef.current.osc2.dispose();
+              electricHumRef.current.noise.dispose();
+              electricHumRef.current.filter.dispose();
+              electricHumRef.current.lfo.stop();
+              electricHumRef.current.lfo.dispose();
+              electricHumRef.current.gain.dispose();
+              electricHumRef.current = null;
+              console.log('Electric hum stopped');
+            }
+          }
+
+          // Handle hypnotic ball sound effect
+          const hadHypnotic = prevGameState?.ball?.isHypnotic || false;
+          const hasHypnotic = message.data.ball?.isHypnotic || false;
+
+          if (hasHypnotic && !hadHypnotic) {
+            // Start hypnotic sound effect
+            if (Tone && !hypnoSoundRef.current) {
+              // Two oscillators at slightly detuned frequencies for beating effect
+              const osc1 = new Tone.Oscillator(432, 'sine');
+              const osc2 = new Tone.Oscillator(437, 'sine');
+
+              // LFO 1 modulating osc1 frequency
+              const lfo1 = new Tone.LFO({
+                frequency: 0.3,
+                min: 412,
+                max: 452
+              });
+              lfo1.connect(osc1.frequency);
+              lfo1.start();
+
+              // LFO 2 modulating osc2 frequency (different rate for complex interaction)
+              const lfo2 = new Tone.LFO({
+                frequency: 0.4,
+                min: 422,
+                max: 452
+              });
+              lfo2.connect(osc2.frequency);
+              lfo2.start();
+
+              // Deep reverb for dreamy quality
+              const reverb = new Tone.Reverb({
+                decay: 8,
+                wet: 0.7
+              });
+
+              // Master gain - subtle, hypnotic
+              const gain = new Tone.Gain(0.2).toDestination();
+
+              osc1.connect(reverb);
+              osc2.connect(reverb);
+              reverb.connect(gain);
+
+              osc1.start();
+              osc2.start();
+
+              hypnoSoundRef.current = { osc1, osc2, lfo1, lfo2, reverb, gain };
+              console.log('Hypnotic sound effect started');
+            }
+          } else if (!hasHypnotic && hadHypnotic) {
+            // Stop hypnotic sound effect
+            if (hypnoSoundRef.current) {
+              hypnoSoundRef.current.osc1.stop();
+              hypnoSoundRef.current.osc2.stop();
+              hypnoSoundRef.current.osc1.dispose();
+              hypnoSoundRef.current.osc2.dispose();
+              hypnoSoundRef.current.lfo1.stop();
+              hypnoSoundRef.current.lfo2.stop();
+              hypnoSoundRef.current.lfo1.dispose();
+              hypnoSoundRef.current.lfo2.dispose();
+              hypnoSoundRef.current.reverb.dispose();
+              hypnoSoundRef.current.gain.dispose();
+              hypnoSoundRef.current = null;
+              console.log('Hypnotic sound effect stopped');
+            }
+          }
+
+          // Handle disco mode Detroit techno music
+          const hadDiscoMode = prevGameState?.discoMode || false;
+          const hasDiscoMode = message.data.discoMode || false;
+
+          if (hasDiscoMode && !hadDiscoMode) {
+            // Start Detroit techno music (130 BPM)
+            if (Tone && !discoMusicRef.current) {
+              console.log('[DISCO] Starting Detroit techno music at 130 BPM');
+
+              // Set tempo to 130 BPM
+              Tone.Transport.bpm.value = 130;
+
+              // Master gain for disco music
+              const masterGain = new Tone.Gain(0.6).toDestination();
+
+              // KICK DRUM - 50Hz sine wave with quick decay, on every beat
+              const kick = new Tone.MembraneSynth({
+                pitchDecay: 0.05,
+                octaves: 4,
+                oscillator: { type: 'sine' },
+                envelope: {
+                  attack: 0.001,
+                  decay: 0.4,
+                  sustain: 0,
+                  release: 0.1
+                }
+              }).connect(masterGain);
+
+              // BASS - 60-120Hz sawtooth with filter, 16th note pattern
+              const bassFilter = new Tone.Filter({
+                type: 'lowpass',
+                frequency: 400,
+                rolloff: -24,
+                Q: 2
+              });
+              const bass = new Tone.MonoSynth({
+                oscillator: { type: 'sawtooth' },
+                filter: {
+                  type: 'lowpass',
+                  frequency: 400,
+                  Q: 2
+                },
+                envelope: {
+                  attack: 0.01,
+                  decay: 0.1,
+                  sustain: 0.4,
+                  release: 0.1
+                },
+                filterEnvelope: {
+                  attack: 0.01,
+                  decay: 0.2,
+                  sustain: 0.3,
+                  release: 0.2,
+                  baseFrequency: 200,
+                  octaves: 2
+                }
+              }).connect(bassFilter);
+              bassFilter.connect(masterGain);
+
+              // LEAD SYNTH - 200-800Hz square wave with resonant filter sweep
+              const synthFilter = new Tone.Filter({
+                type: 'lowpass',
+                frequency: 800,
+                rolloff: -24,
+                Q: 8
+              });
+              const synthLFO = new Tone.LFO({
+                frequency: '8n',
+                min: 400,
+                max: 2000
+              }).start();
+              synthLFO.connect(synthFilter.frequency);
+
+              const leadSynth = new Tone.PolySynth(Tone.Synth, {
+                oscillator: { type: 'square' },
+                envelope: {
+                  attack: 0.005,
+                  decay: 0.1,
+                  sustain: 0.3,
+                  release: 0.3
+                }
+              }).connect(synthFilter);
+              synthFilter.connect(masterGain);
+
+              // HI-HAT - Noise bursts on 8th notes with bandpass filter
+              const hihatFilter = new Tone.Filter({
+                type: 'bandpass',
+                frequency: 10000,
+                rolloff: -24,
+                Q: 1
+              });
+              const hihat = new Tone.NoiseSynth({
+                noise: { type: 'white' },
+                envelope: {
+                  attack: 0.001,
+                  decay: 0.05,
+                  sustain: 0,
+                  release: 0.05
+                }
+              }).connect(hihatFilter);
+              hihatFilter.connect(masterGain);
+
+              // PATTERN SEQUENCER
+              const seq = new Tone.Sequence((time, step) => {
+                // Kick on every beat (4/4 time)
+                if (step % 4 === 0) {
+                  kick.triggerAttackRelease('C1', '8n', time);
+                }
+
+                // Hi-hat on 8th notes
+                hihat.triggerAttackRelease('16n', time);
+
+                // Bass pattern - repetitive 16th note pattern
+                const bassNotes = ['A1', 'A1', 'A2', 'A1', 'F1', 'F1', 'F2', 'F1'];
+                const bassNote = bassNotes[step % 8];
+                bass.triggerAttackRelease(bassNote, '16n', time);
+
+                // Lead synth stabs on specific beats
+                if (step % 8 === 0) {
+                  leadSynth.triggerAttackRelease(['C4', 'E4', 'G4'], '8n', time);
+                } else if (step % 8 === 4) {
+                  leadSynth.triggerAttackRelease(['A3', 'C4', 'E4'], '8n', time);
+                }
+              }, Array.from({ length: 16 }, (_, i) => i), '16n');
+
+              // Start the sequence
+              seq.start(0);
+              Tone.Transport.start();
+
+              discoMusicRef.current = { kick, bass, synth: leadSynth, hihat, seq, gain: masterGain };
+
+              // Mute ambient/background music during disco mode
+              if (ambienceMasterGainRef.current) {
+                ambienceMasterGainRef.current.gain.exponentialRampToValueAtTime(0.001, Tone.context.currentTime + 0.5);
+              }
+
+              // Mute global generative music if it exists
+              if ((window as any).generativeMusic?.setVolume) {
+                (window as any).generativeMusic.setVolume(0);
+              }
+
+              console.log('[DISCO] Detroit techno music started successfully');
+            }
+          } else if (!hasDiscoMode && hadDiscoMode) {
+            // Stop disco mode music and restore previous music
+            if (discoMusicRef.current) {
+              console.log('[DISCO] Stopping Detroit techno music');
+
+              discoMusicRef.current.seq.stop();
+              discoMusicRef.current.seq.dispose();
+              discoMusicRef.current.kick.dispose();
+              discoMusicRef.current.bass.dispose();
+              discoMusicRef.current.synth.dispose();
+              discoMusicRef.current.hihat.dispose();
+              discoMusicRef.current.gain.dispose();
+              discoMusicRef.current = null;
+
+              Tone.Transport.stop();
+
+              // Restore ambient/background music
+              if (ambienceMasterGainRef.current) {
+                ambienceMasterGainRef.current.gain.exponentialRampToValueAtTime(0.35, Tone.context.currentTime + 1.0);
+              }
+
+              // Restore global generative music if it exists
+              if ((window as any).generativeMusic?.setVolume) {
+                (window as any).generativeMusic.setVolume(1);
+              }
+
+              console.log('[DISCO] Restored previous music');
             }
           }
 
@@ -1919,6 +2257,189 @@ const Pong404: React.FC = () => {
             // Update color index from server
             if (messageData.colorIndex !== undefined) {
               networkState.colorIndex = messageData.colorIndex;
+            }
+
+            // Handle disco mode state changes
+            if (messageData.discoMode !== undefined) {
+              const hadDiscoMode = prevState.discoMode || false;
+              const hasDiscoMode = messageData.discoMode;
+
+              if (hasDiscoMode && !hadDiscoMode) {
+                // Start disco mode music
+                if ((window as any).Tone && !discoMusicRef.current) {
+                  const Tone = (window as any).Tone;
+                  console.log('[DISCO] Starting Detroit techno music at 130 BPM (delta update)');
+
+                  // Set tempo to 130 BPM
+                  Tone.Transport.bpm.value = 130;
+
+                  // Master gain for disco music
+                  const masterGain = new Tone.Gain(0.6).toDestination();
+
+                  // KICK DRUM - 50Hz sine wave with quick decay, on every beat
+                  const kick = new Tone.MembraneSynth({
+                    pitchDecay: 0.05,
+                    octaves: 4,
+                    oscillator: { type: 'sine' },
+                    envelope: {
+                      attack: 0.001,
+                      decay: 0.4,
+                      sustain: 0,
+                      release: 0.1
+                    }
+                  }).connect(masterGain);
+
+                  // BASS - 60-120Hz sawtooth with filter, 16th note pattern
+                  const bassFilter = new Tone.Filter({
+                    type: 'lowpass',
+                    frequency: 400,
+                    rolloff: -24,
+                    Q: 2
+                  });
+                  const bass = new Tone.MonoSynth({
+                    oscillator: { type: 'sawtooth' },
+                    filter: {
+                      type: 'lowpass',
+                      frequency: 400,
+                      Q: 2
+                    },
+                    envelope: {
+                      attack: 0.01,
+                      decay: 0.1,
+                      sustain: 0.4,
+                      release: 0.1
+                    },
+                    filterEnvelope: {
+                      attack: 0.01,
+                      decay: 0.2,
+                      sustain: 0.3,
+                      release: 0.2,
+                      baseFrequency: 200,
+                      octaves: 2
+                    }
+                  }).connect(bassFilter);
+                  bassFilter.connect(masterGain);
+
+                  // LEAD SYNTH - 200-800Hz square wave with resonant filter sweep
+                  const synthFilter = new Tone.Filter({
+                    type: 'lowpass',
+                    frequency: 800,
+                    rolloff: -24,
+                    Q: 8
+                  });
+                  const synthLFO = new Tone.LFO({
+                    frequency: '8n',
+                    min: 400,
+                    max: 2000
+                  }).start();
+                  synthLFO.connect(synthFilter.frequency);
+
+                  const leadSynth = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: 'square' },
+                    envelope: {
+                      attack: 0.005,
+                      decay: 0.1,
+                      sustain: 0.3,
+                      release: 0.3
+                    }
+                  }).connect(synthFilter);
+                  synthFilter.connect(masterGain);
+
+                  // HI-HAT - Noise bursts on 8th notes with bandpass filter
+                  const hihatFilter = new Tone.Filter({
+                    type: 'bandpass',
+                    frequency: 10000,
+                    rolloff: -24,
+                    Q: 1
+                  });
+                  const hihat = new Tone.NoiseSynth({
+                    noise: { type: 'white' },
+                    envelope: {
+                      attack: 0.001,
+                      decay: 0.05,
+                      sustain: 0,
+                      release: 0.05
+                    }
+                  }).connect(hihatFilter);
+                  hihatFilter.connect(masterGain);
+
+                  // PATTERN SEQUENCER
+                  const seq = new Tone.Sequence((time, step) => {
+                    // Kick on every beat (4/4 time)
+                    if (step % 4 === 0) {
+                      kick.triggerAttackRelease('C1', '8n', time);
+                    }
+
+                    // Hi-hat on 8th notes
+                    hihat.triggerAttackRelease('16n', time);
+
+                    // Bass pattern - repetitive 16th note pattern
+                    const bassNotes = ['A1', 'A1', 'A2', 'A1', 'F1', 'F1', 'F2', 'F1'];
+                    const bassNote = bassNotes[step % 8];
+                    bass.triggerAttackRelease(bassNote, '16n', time);
+
+                    // Lead synth stabs on specific beats
+                    if (step % 8 === 0) {
+                      leadSynth.triggerAttackRelease(['C4', 'E4', 'G4'], '8n', time);
+                    } else if (step % 8 === 4) {
+                      leadSynth.triggerAttackRelease(['A3', 'C4', 'E4'], '8n', time);
+                    }
+                  }, Array.from({ length: 16 }, (_, i) => i), '16n');
+
+                  // Start the sequence
+                  seq.start(0);
+                  Tone.Transport.start();
+
+                  discoMusicRef.current = { kick, bass, synth: leadSynth, hihat, seq, gain: masterGain };
+
+                  // Mute ambient/background music during disco mode
+                  if (ambienceMasterGainRef.current) {
+                    ambienceMasterGainRef.current.gain.exponentialRampToValueAtTime(0.001, Tone.context.currentTime + 0.5);
+                  }
+
+                  // Mute global generative music if it exists
+                  if ((window as any).generativeMusic?.setVolume) {
+                    (window as any).generativeMusic.setVolume(0);
+                  }
+
+                  console.log('[DISCO] Detroit techno music started successfully (delta update)');
+                }
+              } else if (!hasDiscoMode && hadDiscoMode) {
+                // Stop disco mode music and restore previous music
+                if (discoMusicRef.current) {
+                  const Tone = (window as any).Tone;
+                  console.log('[DISCO] Stopping Detroit techno music (delta update)');
+
+                  discoMusicRef.current.seq.stop();
+                  discoMusicRef.current.seq.dispose();
+                  discoMusicRef.current.kick.dispose();
+                  discoMusicRef.current.bass.dispose();
+                  discoMusicRef.current.synth.dispose();
+                  discoMusicRef.current.hihat.dispose();
+                  discoMusicRef.current.gain.dispose();
+                  discoMusicRef.current = null;
+
+                  Tone.Transport.stop();
+
+                  // Restore ambient/background music
+                  if (ambienceMasterGainRef.current) {
+                    ambienceMasterGainRef.current.gain.exponentialRampToValueAtTime(0.35, Tone.context.currentTime + 1.0);
+                  }
+
+                  // Restore global generative music if it exists
+                  if ((window as any).generativeMusic?.setVolume) {
+                    (window as any).generativeMusic.setVolume(1);
+                  }
+
+                  console.log('[DISCO] Restored previous music (delta update)');
+                }
+              }
+
+              networkState.discoMode = messageData.discoMode;
+            }
+
+            if (messageData.discoStartTime !== undefined) {
+              networkState.discoStartTime = messageData.discoStartTime;
             }
 
             // Store network state and timing - let the game loop handle rendering from the ref
@@ -2314,9 +2835,14 @@ const Pong404: React.FC = () => {
 
   // Player behavior tracking refs
   const playerBehaviorRef = useRef<Map<string, PlayerBehavior>>(new Map());
-  const windNoiseRef = useRef<any>(null);
+  const windNoiseRef = useRef<{ noise: any; filter: any; autoFilter: any; gain: any } | null>(null);
+  const attractorSoundRef = useRef<{ osc: any; lfo: any; gain: any } | null>(null);
+  const repulsorSoundRef = useRef<{ osc: any; lfo: any; gain: any } | null>(null);
+  const blackHoleSoundRef = useRef<{ osc: any; filter: any; lfo: any; gain: any } | null>(null);
   const electricHumRef = useRef<any>(null);
   const masterLimiterRef = useRef<any>(null);
+  const discoMusicRef = useRef<{ kick: any; bass: any; synth: any; hihat: any; seq: any; gain: any } | null>(null);
+  const hypnoSoundRef = useRef<{ osc1: any; osc2: any; lfo1: any; lfo2: any; reverb: any; gain: any } | null>(null);
   const gameStartTimeRef = useRef<number>(Date.now());
   const lastMoveTimesRef = useRef<Map<string, number>>(new Map());
 
@@ -3652,6 +4178,41 @@ const Pong404: React.FC = () => {
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
         }
+        // Cleanup disco music on unmount
+        if (discoMusicRef.current) {
+          try {
+            const Tone = (window as any).Tone;
+            discoMusicRef.current.seq.stop();
+            discoMusicRef.current.seq.dispose();
+            discoMusicRef.current.kick.dispose();
+            discoMusicRef.current.bass.dispose();
+            discoMusicRef.current.synth.dispose();
+            discoMusicRef.current.hihat.dispose();
+            discoMusicRef.current.gain.dispose();
+            discoMusicRef.current = null;
+            if (Tone) Tone.Transport.stop();
+          } catch (e) {
+            console.error('[DISCO] Error cleaning up disco music:', e);
+          }
+        }
+        // Cleanup hypnotic sound on unmount
+        if (hypnoSoundRef.current) {
+          try {
+            hypnoSoundRef.current.osc1.stop();
+            hypnoSoundRef.current.osc2.stop();
+            hypnoSoundRef.current.osc1.dispose();
+            hypnoSoundRef.current.osc2.dispose();
+            hypnoSoundRef.current.lfo1.stop();
+            hypnoSoundRef.current.lfo2.stop();
+            hypnoSoundRef.current.lfo1.dispose();
+            hypnoSoundRef.current.lfo2.dispose();
+            hypnoSoundRef.current.reverb.dispose();
+            hypnoSoundRef.current.gain.dispose();
+            hypnoSoundRef.current = null;
+          } catch (e) {
+            console.error('[HYPNO] Error cleaning up hypnotic sound:', e);
+          }
+        }
       }, 100);
     };
   }, []); // Empty dependency array = only on mount/unmount
@@ -3711,766 +4272,12 @@ const Pong404: React.FC = () => {
     };
   }, [canvasSize]);
 
-  const applyPickupEffect = useCallback((pickup: Pickup, gameState: GameState) => {
-    const effect: ActiveEffect = {
-      type: pickup.type,
-      startTime: Date.now(),
-      duration: 8000, // 8 seconds for most effects
-    };
-
-    switch (pickup.type) {
-      case 'speed_up':
-        gameState.ball.dx *= 1.5;
-        gameState.ball.dy *= 1.5;
-        effect.duration = 6000;
-        break;
-      case 'speed_down':
-        gameState.ball.dx *= 0.4;
-        gameState.ball.dy *= 0.4;
-        effect.duration = 6000;
-        break;
-      case 'big_ball':
-        effect.originalValue = gameState.ball.size;
-        gameState.ball.size = 18;
-        break;
-      case 'small_ball':
-        effect.originalValue = gameState.ball.size;
-        gameState.ball.size = 6;
-        break;
-      case 'drunk_ball':
-        gameState.ball.isDrunk = true;
-        gameState.ball.drunkAngle = 0;
-        effect.duration = 4000; // 4 seconds - halved duration
-        break;
-      case 'grow_paddle':
-        const targetSide = Math.random() > 0.5 ? 'left' : 'right';
-        effect.side = targetSide;
-        effect.originalValue = gameState.paddles[targetSide].height;
-        gameState.paddles[targetSide].height = Math.min(150, gameState.paddles[targetSide].height * 1.5);
-        break;
-      case 'shrink_paddle':
-        const shrinkSide = Math.random() > 0.5 ? 'left' : 'right';
-        effect.side = shrinkSide;
-        effect.originalValue = gameState.paddles[shrinkSide].height;
-        gameState.paddles[shrinkSide].height = Math.max(30, gameState.paddles[shrinkSide].height * 0.6);
-        break;
-      case 'reverse_controls':
-        // Store who activated it so we can exclude them from the reversal
-        effect.activator = gameState.ball.lastTouchedBy || 'none';
-        effect.duration = 6000; // 6 seconds
-        console.log(`[EFFECT] REVERSE CONTROLS activated by: ${effect.activator}`);
-        break;
-      case 'invisible_ball':
-        // Visual effect handled in render
-        effect.duration = 4000;
-        break;
-      case 'freeze_opponent':
-        // Freeze all paddles except the one who last touched the ball
-        effect.excludePaddle = gameState.ball.lastTouchedBy || 'none';
-        effect.duration = 3000; // 3 seconds
-        console.log(`[EFFECT] FREEZE OPPONENT activated - all paddles frozen except: ${effect.excludePaddle}`);
-        break;
-      case 'super_speed':
-        gameState.ball.dx *= 2.5;
-        gameState.ball.dy *= 2.5;
-        effect.duration = 3000;
-        break;
-      case 'coin_shower':
-        // Spawn 5-8 coins randomly on the playfield
-        const coinCount = 5 + Math.floor(Math.random() * 4);
-        for (let i = 0; i < coinCount; i++) {
-          const coin: Coin = {
-            x: 100 + Math.random() * (canvasSize.width - 200),
-            y: 100 + Math.random() * (canvasSize.height - 200),
-            size: 48, // 3x bigger (was 16)
-            spawnTime: Date.now()
-          };
-          gameState.coins.push(coin);
-        }
-        console.log(`[COIN] COIN SHOWER spawned ${coinCount} collectible coins! Hit them with the ball to collect!`);
-        effect.duration = 3000; // Show "Coin Shower!" text for 3 seconds
-        break;
-
-      case 'teleport_ball':
-        // Ball will randomly teleport during the effect duration
-        gameState.ball.isTeleporting = true;
-        gameState.ball.lastTeleportTime = Date.now();
-        effect.duration = 6000; // 6 seconds of teleporting
-        break;
-      case 'multi_ball':
-        // Spawn 2 extra balls with random directions for 10 seconds
-        for (let i = 0; i < 2; i++) {
-          const angle = (Math.random() * 2 * Math.PI);
-          const speed = BALL_SPEED * (0.8 + Math.random() * 0.4); // Slightly varied speed
-          const extraBall = {
-            x: gameState.ball.x + (Math.random() - 0.5) * 50, // Spawn near main ball
-            y: gameState.ball.y + (Math.random() - 0.5) * 50,
-            dx: Math.cos(angle) * speed,
-            dy: Math.sin(angle) * speed,
-            size: 12, // Same size as main ball
-            originalSize: 12,
-            isDrunk: false,
-            drunkAngle: 0,
-            isTeleporting: false,
-            lastTeleportTime: 0,
-            stuckCheckStartTime: 0,
-            stuckCheckStartX: 0,
-            lastTouchedBy: null,
-            previousTouchedBy: null,
-            hasGravity: false,
-            isAiming: false,
-            aimStartTime: 0,
-            aimX: 0,
-            aimY: 0,
-            aimTargetX: 0,
-            aimTargetY: 0,
-            id: `extra_${Date.now()}_${i}`, // Unique ID for each extra ball
-          };
-          gameState.extraBalls.push(extraBall);
-        }
-        effect.duration = 10000; // 10 seconds of multi-ball chaos
-        break;
-      case 'gravity_in_space':
-        gameState.ball.hasGravity = true;
-        gameState.gravityStartTime = Date.now(); // Track when gravity challenge started
-        effect.duration = 6000; // 6 seconds of gravity challenge
-        break;
-      case 'super_striker':
-        // Pause the ball and enter aiming mode
-        gameState.ball.isAiming = true;
-        gameState.ball.aimStartTime = Date.now();
-        gameState.ball.aimX = gameState.ball.x; // Store ball position
-        gameState.ball.aimY = gameState.ball.y;
-        gameState.ball.dx = 0; // Stop the ball
-        gameState.ball.dy = 0;
-        effect.duration = 4000; // 4 seconds to aim
-        break;
-
-      case 'sticky_paddles':
-        // Ball will stick to paddles for 3 seconds before shooting
-        gameState.ball.isStuck = false; // Initialize (will be set when ball hits paddle)
-        gameState.stickyPaddlesActive = true; // Enable sticky behavior
-        effect.duration = 15000; // Effect lasts 15 seconds
-        break;
-
-      case 'machine_gun':
-        // Rapidly fire balls for 3 seconds
-        gameState.machineGunActive = true;
-        gameState.machineGunStartTime = Date.now();
-        gameState.machineGunShooter = gameState.ball.lastTouchedBy;
-        effect.duration = 3000; // 3 seconds of machine gun
-        break;
-
-      case 'dynamic_playfield':
-        // Grow and shrink playfield with easing for 15 seconds
-        gameState.playfieldScaleStart = gameState.playfieldScale;
-        gameState.playfieldScaleTarget = 0.7 + Math.random() * 0.6; // Scale between 0.7-1.3
-        gameState.playfieldScaleTime = Date.now();
-        effect.duration = 15000; // 15 seconds
-        break;
-
-      case 'switch_sides':
-        // All players switch sides and keep their scores
-        const tempLeftScore = gameState.score.left;
-        const tempRightScore = gameState.score.right;
-        const tempTopScore = gameState.score.top;
-        const tempBottomScore = gameState.score.bottom;
-
-        gameState.score.left = tempRightScore;
-        gameState.score.right = tempLeftScore;
-        gameState.score.top = tempBottomScore;
-        gameState.score.bottom = tempTopScore;
-        gameState.sidesSwitched = !gameState.sidesSwitched;
-        effect.duration = 3000; // Show effect for 3 seconds
-        break;
-
-      case 'blocker':
-        // Add random walls that block the ball
-        gameState.walls = [];
-        for (let i = 0; i < 3; i++) {
-          const wall = {
-            x: 150 + Math.random() * (canvasSize.width - 300),
-            y: 150 + Math.random() * (canvasSize.height - 300),
-            width: 60 + Math.random() * 40,
-            height: 15,
-            angle: Math.random() * Math.PI * 2
-          };
-          gameState.walls.push(wall);
-        }
-        effect.duration = 12000; // 12 seconds
-        break;
-
-      case 'time_warp':
-        // Slow down or speed up time
-        gameState.timeWarpActive = true;
-        gameState.timeWarpFactor = Math.random() > 0.5 ? 0.5 : 2.0; // Half speed or double speed
-        effect.duration = 8000; // 8 seconds
-        break;
-
-      case 'portal_ball':
-        // Ball creates portals when it hits walls
-        gameState.ball.hasPortal = true;
-        effect.duration = 10000; // 10 seconds
-        break;
-
-      case 'mirror_mode':
-        // Ball creates mirror copies
-        gameState.ball.isMirror = true;
-        gameState.ball.mirrorBalls = [];
-        effect.duration = 8000; // 8 seconds
-        break;
-
-      case 'quantum_ball':
-        // Ball exists in multiple positions simultaneously
-        gameState.ball.isQuantum = true;
-        gameState.ball.quantumPositions = [];
-        for (let i = 0; i < 3; i++) {
-          gameState.ball.quantumPositions.push({
-            x: gameState.ball.x + (Math.random() - 0.5) * 100,
-            y: gameState.ball.y + (Math.random() - 0.5) * 100
-          });
-        }
-        effect.duration = 6000; // 6 seconds
-        break;
-
-      case 'black_hole':
-        // Create black holes that attract the ball
-        gameState.blackHoles = [];
-        for (let i = 0; i < 2; i++) {
-          gameState.blackHoles.push({
-            x: 200 + Math.random() * (canvasSize.width - 400),
-            y: 200 + Math.random() * (canvasSize.height - 400),
-            size: 30,
-            force: 0.8
-          });
-        }
-        effect.duration = 10000; // 10 seconds
-        break;
-
-      case 'lightning_storm':
-        // Random lightning strikes affect ball trajectory
-        gameState.lightningStrikes = [];
-        effect.duration = 8000; // 8 seconds
-        break;
-
-      case 'invisible_paddles':
-        // Make paddles gradually invisible
-        Object.keys(gameState.paddleVisibility).forEach(side => {
-          gameState.paddleVisibility[side as keyof typeof gameState.paddleVisibility] = 0.1;
-        });
-        effect.duration = 6000; // 6 seconds
-        break;
-
-      case 'ball_trail_mine':
-        // Ball leaves explosive trail mines
-        gameState.ball.hasTrailMines = true;
-        gameState.ball.trailMines = [];
-        effect.duration = 8000; // 8 seconds
-        break;
-
-      case 'paddle_swap':
-        // Randomly swap paddle positions
-        gameState.paddleSwapActive = true;
-        gameState.nextPaddleSwapTime = Date.now() + 2000; // First swap in 2 seconds
-        effect.duration = 10000; // 10 seconds
-        break;
-
-      case 'disco_mode':
-        // Flashing disco colors and effects
-        gameState.discoMode = true;
-        gameState.discoStartTime = Date.now();
-        effect.duration = 12000; // 12 seconds
-        break;
-
-      case 'pac_man':
-        // 3 Pac-Mans chase the ball and remove scores
-        gameState.pacMans = [];
-        for (let i = 0; i < 3; i++) {
-          gameState.pacMans.push({
-            x: 100 + Math.random() * (canvasSize.width - 200),
-            y: 100 + Math.random() * (canvasSize.height - 200),
-            dx: (Math.random() - 0.5) * 3,
-            dy: (Math.random() - 0.5) * 3,
-            size: 20,
-            mouth: 0
-          });
-        }
-        effect.duration = 15000; // 15 seconds
-        break;
-
-      case 'banana_peel':
-        // Ball becomes slippery and unpredictable
-        gameState.ball.isSlippery = true;
-        effect.duration = 8000; // 8 seconds
-        break;
-
-      case 'rubber_ball':
-        // Ball bounces with extra force
-        gameState.ball.bounciness = 1.5;
-        effect.duration = 10000; // 10 seconds
-        break;
-
-      case 'drunk_paddles':
-        // Paddles move erratically
-        gameState.paddlesDrunk = true;
-        gameState.drunkStartTime = Date.now();
-        effect.duration = 8000; // 8 seconds
-        break;
-
-      case 'magnet_ball':
-        // Ball is attracted to paddles
-        gameState.ball.isMagnetic = true;
-        effect.duration = 8000; // 8 seconds
-        break;
-
-      case 'balloon_ball':
-        // Ball floats upward with gravity
-        gameState.ball.isFloating = true;
-        effect.duration = 8000; // 8 seconds
-        break;
-
-      case 'earthquake':
-        // Screen shakes and paddles wobble
-        gameState.earthquakeActive = true;
-        gameState.earthquakeStartTime = Date.now();
-        effect.duration = 6000; // 6 seconds
-        break;
-
-      case 'confetti_cannon':
-        // Spawn colorful confetti particles (fewer on mobile for performance)
-        gameState.confetti = [];
-        const confettiCount = isMobile ? 25 : 50; // Half particles on mobile
-        for (let i = 0; i < confettiCount; i++) {
-          gameState.confetti.push({
-            x: gameState.ball.x,
-            y: gameState.ball.y,
-            dx: (Math.random() - 0.5) * 8,
-            dy: (Math.random() - 0.5) * 8,
-            color: `hsl(${Math.random() * 360}, 70%, 60%)`,
-            life: 3000
-          });
-        }
-        effect.duration = 3000; // 3 seconds
-        break;
-
-      case 'hypno_ball':
-        // Ball moves in hypnotic patterns
-        gameState.ball.isHypnotic = true;
-        gameState.hypnoStartTime = Date.now();
-        effect.duration = 8000; // 8 seconds
-        break;
-
-      case 'conga_line':
-        // Multiple balls follow in a conga line
-        gameState.congaBalls = [];
-        for (let i = 0; i < 5; i++) {
-          gameState.congaBalls.push({
-            x: gameState.ball.x - (i + 1) * 30,
-            y: gameState.ball.y,
-            size: 8,
-            trail: []
-          });
-        }
-        effect.duration = 10000; // 10 seconds
-        break;
-
-      case 'arkanoid':
-        // 🧱 ARKANOID MODE: Add 16 bricks in + formation
-        gameState.arkanoidBricks = [];
-        gameState.arkanoidActive = true;
-        gameState.arkanoidBricksHit = 0;
-        gameState.arkanoidMode = true;
-
-        // Create + formation with 16 bricks
-        const centerX = canvasSize.width / 2;
-        const centerY = canvasSize.height / 2;
-        const brickWidth = 40;
-        const brickHeight = 20;
-        const spacing = 5;
-
-        // Horizontal line of the + (7 bricks)
-        for (let i = -3; i <= 3; i++) {
-          gameState.arkanoidBricks.push({
-            x: centerX + i * (brickWidth + spacing) - brickWidth / 2,
-            y: centerY - brickHeight / 2,
-            width: brickWidth,
-            height: brickHeight,
-            id: `h_${i}`,
-            color: `hsl(${(i + 3) * 51}, 70%, 60%)`, // Different colors
-            hits: 0
-          });
-        }
-
-        // Vertical line of the + (9 bricks, excluding center overlap)
-        for (let i = -4; i <= 4; i++) {
-          if (i !== 0) { // Skip center to avoid overlap
-            gameState.arkanoidBricks.push({
-              x: centerX - brickWidth / 2,
-              y: centerY + i * (brickHeight + spacing) - brickHeight / 2,
-              width: brickWidth,
-              height: brickHeight,
-              id: `v_${i}`,
-              color: `hsl(${(i + 4) * 40}, 70%, 60%)`, // Different colors
-              hits: 0
-            });
-          }
-        }
-
-        effect.duration = 0; // Runs until all bricks are cleared
-        break;
-      case 'wind':
-        gameState.ball.hasWind = true;
-        effect.duration = 4000; // 4 seconds
-
-        // Create wind sound effect
-        if (Tone && !windNoiseRef.current) {
-          const noise = new Tone.Noise('pink');
-          const filter = new Tone.Filter({
-            type: 'bandpass',
-            frequency: 600,
-            rolloff: -24,
-            Q: 2
-          });
-          const autoFilter = new Tone.AutoFilter({
-            frequency: 0.3,
-            depth: 0.7
-          }).start();
-          const gain = new Tone.Gain(0.15).toDestination();
-
-          noise.connect(filter);
-          filter.connect(autoFilter);
-          autoFilter.connect(gain);
-
-          noise.start();
-          windNoiseRef.current = { noise, filter, autoFilter, gain };
-          console.log('Wind sound effect started');
-        }
-        break;
-      case 'great_wall':
-        gameState.ball.hasGreatWall = true;
-        effect.duration = 8000; // 8 seconds
-
-        // Determine which side to protect based on who's losing
-        const scores = gameState.score;
-        let minScore = Math.min(scores.left, scores.right, scores.top, scores.bottom);
-        let losingSides = Object.entries(scores).filter(([_, score]) => score === minScore).map(([side, _]) => side as 'left' | 'right' | 'top' | 'bottom');
-        gameState.ball.greatWallSide = losingSides[Math.floor(Math.random() * losingSides.length)];
-        console.log(`Great Wall Defense activated! Protecting ${gameState.ball.greatWallSide} wall`);
-
-        // Create electric humming sound
-        if (Tone && !electricHumRef.current) {
-          const osc1 = new Tone.Oscillator(120, 'sawtooth');
-          const osc2 = new Tone.Oscillator(180, 'sawtooth');
-          const noise = new Tone.Noise('pink');
-
-          const filter = new Tone.Filter({
-            type: 'bandpass',
-            frequency: 150,
-            Q: 3
-          });
-
-          const lfo = new Tone.LFO(2, 0.3, 0.7);
-          lfo.connect(filter.frequency);
-          lfo.start();
-
-          const gain = new Tone.Gain(0.15).toDestination();
-
-          osc1.connect(filter);
-          osc2.connect(filter);
-          noise.connect(filter);
-          filter.connect(gain);
-
-          osc1.start();
-          osc2.start();
-          noise.start();
-
-          electricHumRef.current = { osc1, osc2, noise, filter, lfo, gain };
-          console.log('Electric hum started');
-        }
-        break;
-    }
-
-    gameState.activeEffects.push(effect);
-
-    // Trigger pickup visual effect
-    gameState.pickupEffect = {
-      isActive: true,
-      startTime: Date.now(),
-      x: pickup.x,
-      y: pickup.y,
-    };
-
-    // Play pickup sound with musical approach
-    const pickupData = PICKUP_TYPES.find(p => p.type === pickup.type);
-    if (pickupData) {
-      playMelodyNote('pickup', pickupData, 'both');
-    }
-  }, [playBeep]);
-
-  const updateEffects = useCallback((gameState: GameState) => {
-    const now = Date.now();
-    gameState.activeEffects = (gameState.activeEffects || []).filter(effect => {
-      if (now - effect.startTime >= effect.duration) {
-        // Remove effect and restore original values
-        switch (effect.type) {
-          case 'big_ball':
-          case 'small_ball':
-            gameState.ball.size = effect.originalValue || gameState.ball.originalSize;
-            break;
-          case 'drunk_ball':
-            gameState.ball.isDrunk = false;
-            gameState.ball.drunkAngle = 0;
-            break;
-          case 'teleport_ball':
-            gameState.ball.isTeleporting = false;
-            break;
-          case 'grow_paddle':
-          case 'shrink_paddle':
-            if (effect.side && effect.originalValue) {
-              gameState.paddles[effect.side].height = effect.originalValue;
-            }
-            break;
-          case 'multi_ball':
-            gameState.extraBalls = [];
-            break;
-          case 'gravity_in_space':
-            // Check if player survived the full gravity challenge
-            const gravityDuration = Date.now() - gameState.gravityStartTime;
-            const survivedFullChallenge = gravityDuration >= 5800; // Close to 6 seconds (allow small margin)
-
-            if (survivedFullChallenge && gameState.gravityStartTime > 0) {
-              // Award 2 points for surviving gravity challenge!
-              if (gameState.gameMode === 'player' || gameState.gameMode === 'auto') {
-                // Single player - award to left paddle
-                gameState.score.left += 2;
-                setTimeout(() => speakRobotic('GRAVITY CHALLENGE SURVIVED, BONUS TWO POINTS'), 500);
-              } else {
-                // Multiplayer - award to last player who touched the ball
-                const lastPlayer = gameState.ball.lastTouchedBy || 'left';
-                gameState.score[lastPlayer] += 2;
-                setTimeout(() => speakRobotic(`${lastPlayer.toUpperCase()} PLAYER SURVIVES GRAVITY, BONUS TWO POINTS`), 500);
-              }
-            }
-
-            gameState.ball.hasGravity = false;
-            gameState.gravityStartTime = 0; // Reset tracking
-            break;
-          case 'super_striker':
-            gameState.ball.isAiming = false;
-            // If still aiming when time expires, launch ball in current aim direction
-            if (gameState.ball.isAiming) {
-              const aimDx = gameState.ball.aimTargetX - gameState.ball.x;
-              const aimDy = gameState.ball.aimTargetY - gameState.ball.y;
-              const aimDistance = Math.sqrt(aimDx * aimDx + aimDy * aimDy);
-              if (aimDistance > 0) {
-                const speed = BALL_SPEED;
-                gameState.ball.dx = (aimDx / aimDistance) * speed;
-                gameState.ball.dy = (aimDy / aimDistance) * speed;
-              } else {
-                // Default direction if no aim target
-                gameState.ball.dx = BALL_SPEED;
-                gameState.ball.dy = 0;
-              }
-            }
-            break;
-
-          case 'machine_gun':
-            gameState.machineGunActive = false;
-            gameState.machineGunBalls = [];
-            break;
-
-          case 'sticky_paddles':
-            gameState.stickyPaddlesActive = false;
-            gameState.ball.isStuck = false;
-            gameState.ball.stuckTime = 0;
-            break;
-
-          case 'dynamic_playfield':
-            gameState.playfieldScale = 1.0;
-            gameState.playfieldScaleTarget = 1.0;
-            break;
-
-          case 'blocker':
-            gameState.walls = [];
-            break;
-
-          case 'time_warp':
-            gameState.timeWarpActive = false;
-            gameState.timeWarpFactor = 1.0;
-            break;
-
-          case 'portal_ball':
-            gameState.ball.hasPortal = false;
-            break;
-
-          case 'mirror_mode':
-            gameState.ball.isMirror = false;
-            gameState.ball.mirrorBalls = [];
-            break;
-
-          case 'quantum_ball':
-            gameState.ball.isQuantum = false;
-            gameState.ball.quantumPositions = [];
-            break;
-
-          case 'black_hole':
-            gameState.blackHoles = [];
-            break;
-
-          case 'lightning_storm':
-            gameState.lightningStrikes = [];
-            break;
-
-          case 'invisible_paddles':
-            Object.keys(gameState.paddleVisibility).forEach(side => {
-              gameState.paddleVisibility[side as keyof typeof gameState.paddleVisibility] = 1.0;
-            });
-            break;
-
-          case 'ball_trail_mine':
-            gameState.ball.hasTrailMines = false;
-            gameState.ball.trailMines = [];
-            break;
-
-          case 'paddle_swap':
-            gameState.paddleSwapActive = false;
-            break;
-
-          case 'disco_mode':
-            gameState.discoMode = false;
-            break;
-
-          case 'pac_man':
-            gameState.pacMans = [];
-            break;
-
-          case 'banana_peel':
-            gameState.ball.isSlippery = false;
-            break;
-
-          case 'rubber_ball':
-            gameState.ball.bounciness = 1.0;
-            break;
-
-          case 'drunk_paddles':
-            gameState.paddlesDrunk = false;
-            break;
-
-          case 'magnet_ball':
-            gameState.ball.isMagnetic = false;
-            break;
-
-          case 'balloon_ball':
-            gameState.ball.isFloating = false;
-            break;
-
-          case 'earthquake':
-            gameState.earthquakeActive = false;
-            break;
-
-          case 'confetti_cannon':
-            gameState.confetti = [];
-            break;
-
-          case 'hypno_ball':
-            gameState.ball.isHypnotic = false;
-            break;
-
-          case 'conga_line':
-            gameState.congaBalls = [];
-            break;
-
-          case 'arkanoid':
-            gameState.arkanoidBricks = [];
-            gameState.arkanoidActive = false;
-            gameState.arkanoidMode = false;
-            gameState.arkanoidBricksHit = 0;
-            break;
-          case 'wind':
-            gameState.ball.hasWind = false;
-
-            // Stop wind sound effect
-            if (windNoiseRef.current) {
-              windNoiseRef.current.noise.stop();
-              windNoiseRef.current.noise.dispose();
-              windNoiseRef.current.filter.dispose();
-              windNoiseRef.current.autoFilter.dispose();
-              windNoiseRef.current.gain.dispose();
-              windNoiseRef.current = null;
-              console.log('Wind sound effect stopped');
-            }
-            break;
-          case 'great_wall':
-            gameState.ball.hasGreatWall = false;
-            gameState.ball.greatWallSide = null;
-
-            // Stop electric humming
-            if (electricHumRef.current) {
-              electricHumRef.current.osc1.stop();
-              electricHumRef.current.osc2.stop();
-              electricHumRef.current.noise.stop();
-              electricHumRef.current.osc1.dispose();
-              electricHumRef.current.osc2.dispose();
-              electricHumRef.current.noise.dispose();
-              electricHumRef.current.filter.dispose();
-              electricHumRef.current.lfo.dispose();
-              electricHumRef.current.gain.dispose();
-              electricHumRef.current = null;
-              console.log('Electric hum stopped');
-            }
-
-            console.log('Great Wall Defense ended');
-            break;
-        }
-        return false; // Remove effect
-      }
-      return true; // Keep effect
-    });
-
-    // Update pickup effect
-    if (gameState.pickupEffect.isActive) {
-      if (now - gameState.pickupEffect.startTime >= 1000) { // 1 second duration
-        gameState.pickupEffect.isActive = false;
-      }
-    }
-  }, []);
-
-  // Clear all pickup effects immediately (used when scoring)
-  const clearAllPickupEffects = useCallback((gameState: GameState) => {
-    gameState.activeEffects.forEach(effect => {
-      // Restore original values immediately
-      switch (effect.type) {
-        case 'big_ball':
-        case 'small_ball':
-          gameState.ball.size = effect.originalValue || gameState.ball.originalSize;
-          break;
-        case 'drunk_ball':
-          gameState.ball.isDrunk = false;
-          gameState.ball.drunkAngle = 0;
-          break;
-        case 'teleport_ball':
-          gameState.ball.isTeleporting = false;
-          break;
-        case 'grow_paddle':
-        case 'shrink_paddle':
-          if (effect.side && effect.originalValue) {
-            gameState.paddles[effect.side].height = effect.originalValue;
-          }
-          break;
-      }
-    });
-    // Clear all active effects
-    gameState.activeEffects = [];
-  }, []);
-
   // Keep function refs updated for performance optimization
   useEffect(() => {
     playMelodyNoteRef.current = playMelodyNote;
     updateGameStateRef.current = updateGameState;
     updatePaddlePositionRef.current = updatePaddlePosition;
     createPickupRef.current = createPickup;
-    applyPickupEffectRef.current = applyPickupEffect;
-    updateEffectsRef.current = updateEffects;
     initializeAudioRef.current = initializeAudio;
     speakRoboticRef.current = speakRobotic;
     predictGameStateRef.current = predictGameState;
@@ -4478,256 +4285,8 @@ const Pong404: React.FC = () => {
     attemptRobotTauntRef.current = attemptRobotTaunt;
     checkRandomTauntRef.current = checkRandomTaunt;
     multiplayerStateRef.current = multiplayerState;
-  }, [playMelodyNote, updateGameState, updatePaddlePosition, createPickup, applyPickupEffect, updateEffects, initializeAudio, speakRobotic, predictGameState, interpolateGameState, attemptRobotTaunt, checkRandomTaunt, multiplayerState]);
+  }, [playMelodyNote, updateGameState, updatePaddlePosition, createPickup, initializeAudio, speakRobotic, predictGameState, interpolateGameState, attemptRobotTaunt, checkRandomTaunt, multiplayerState]);
 
-  // Debug function to cycle through pickup effects
-  const cycleDebugPickup = useCallback(() => {
-    if (!gameState.isPlaying) return; // Only work during gameplay
-    if (gameState.gameMode === 'multiplayer') {
-      console.log('[DISABLED] Pickup debugger disabled in multiplayer mode (server-authoritative)');
-      return;
-    }
-
-    console.log(`[DEBUG] PICKUP START: index=${debugPickupIndex}, total=${PICKUP_TYPES.length}`);
-    const currentPickup = PICKUP_TYPES[debugPickupIndex];
-    if (currentPickup && applyPickupEffectRef.current) {
-      // Apply the pickup effect through state update
-      setGameState(prevState => {
-        const newState = { ...prevState };
-
-        // Reset all active effects first to start clean
-        newState.activeEffects = [];
-
-        // Reset ball properties to defaults
-        newState.ball.size = newState.ball.originalSize;
-        newState.ball.isDrunk = false;
-        newState.ball.drunkAngle = 0;
-        newState.ball.isTeleporting = false;
-        newState.ball.hasWind = false;
-        newState.ball.hasGravity = false;
-        newState.ball.isAiming = false;
-        newState.ball.isStuck = false;
-        newState.ball.hasPortal = false;
-        newState.ball.isMirror = false;
-        newState.ball.mirrorBalls = [];
-        newState.ball.isQuantum = false;
-        newState.ball.quantumPositions = [];
-        newState.ball.hasTrailMines = false;
-        newState.ball.trailMines = [];
-        newState.ball.isSlippery = false;
-        newState.ball.bounciness = 1.0;
-        newState.ball.isMagnetic = false;
-        newState.ball.isFloating = false;
-        newState.ball.isHypnotic = false;
-
-        // NOTE: Paddle dimensions are server-authoritative - do not reset client-side
-        // Server will maintain correct paddle dimensions via gameState updates
-
-        // Reset other game state properties
-        newState.extraBalls = [];
-        newState.coins = [];
-        // Clear existing pickups to avoid interference during debug testing
-        newState.pickups = [];
-        newState.paddlesDrunk = false;
-        newState.stickyPaddlesActive = false;
-        newState.machineGunActive = false;
-        newState.sidesSwitched = false;
-        newState.walls = [];
-        newState.timeWarpActive = false;
-        newState.timeWarpFactor = 1.0;
-        newState.winner = null;
-        newState.gameEnded = false;
-
-        // Create a fake pickup object
-        const fakePickup: Pickup = {
-          x: newState.ball.x,
-          y: newState.ball.y,
-          size: 20,
-          type: currentPickup.type
-        };
-
-        // Apply the pickup effect to the clean state
-        console.log(`[DEBUG] PICKUP: ${currentPickup.type} - ${currentPickup.description}`);
-
-        applyPickupEffectRef.current?.(fakePickup, newState);
-
-        // Log only if effect was actually applied
-        if (newState.activeEffects.length > 0) {
-          console.log(`[SUCCESS] Effect applied: ${newState.activeEffects[newState.activeEffects.length - 1].type}`);
-        } else {
-          console.log(`[WARNING] No active effect created for ${currentPickup.type}`);
-        }
-
-        return newState;
-      });
-
-      // Announce the pickup
-      setTimeout(() => speakRobotic(`DEBUG: ${currentPickup.description}`), 100);
-
-      // Cycle to next pickup
-      setDebugPickupIndex((prev) => {
-        const next = (prev + 1) % PICKUP_TYPES.length;
-        console.log(`[CYCLE] INDEX CHANGE: ${prev} → ${next} (${PICKUP_TYPES[prev]?.type} → ${PICKUP_TYPES[next]?.type})`);
-        return next;
-      });
-
-      // Debug mode disabled - random pickup spawning will continue normally
-    }
-  }, [debugPickupIndex, gameState.isPlaying, speakRobotic]);
-
-  // Debug function to cycle backward through pickup effects
-  const cycleDebugPickupBackward = useCallback(() => {
-    if (!gameState.isPlaying) return; // Only work during gameplay
-    if (gameState.gameMode === 'multiplayer') {
-      console.log('[DISABLED] Pickup debugger disabled in multiplayer mode (server-authoritative)');
-      return;
-    }
-    console.log(`[DEBUG] PICKUP BACKWARD: index=${debugPickupIndex}, total=${PICKUP_TYPES.length}`);
-    const currentPickup = PICKUP_TYPES[debugPickupIndex];
-    if (currentPickup && applyPickupEffectRef.current) {
-      // Apply the pickup effect through state update
-      setGameState(prevState => {
-        const newState = { ...prevState };
-        // Reset all active effects first to start clean
-        newState.activeEffects = [];
-        // Reset ball properties to defaults
-        newState.ball.size = newState.ball.originalSize;
-        newState.ball.isDrunk = false;
-        newState.ball.drunkAngle = 0;
-        newState.ball.isTeleporting = false;
-        newState.ball.hasWind = false;
-        newState.ball.hasGravity = false;
-        newState.ball.isAiming = false;
-        newState.ball.isStuck = false;
-        newState.ball.hasPortal = false;
-        newState.ball.isMirror = false;
-        newState.ball.mirrorBalls = [];
-        newState.ball.isQuantum = false;
-        newState.ball.quantumPositions = [];
-        newState.ball.hasTrailMines = false;
-        newState.ball.trailMines = [];
-        newState.ball.isSlippery = false;
-        newState.ball.bounciness = 1.0;
-        newState.ball.isMagnetic = false;
-        newState.ball.isFloating = false;
-        newState.ball.isHypnotic = false;
-        // NOTE: Paddle dimensions are server-authoritative - do not reset client-side
-        // Server will maintain correct paddle dimensions via gameState updates
-        // Reset other game state properties
-        newState.extraBalls = [];
-        newState.coins = [];
-        // Clear existing pickups to avoid interference during debug testing
-        newState.pickups = [];
-        newState.paddlesDrunk = false;
-        newState.stickyPaddlesActive = false;
-        newState.machineGunActive = false;
-        newState.sidesSwitched = false;
-
-        // Create a fake pickup for the effect system
-        const fakePickup: Pickup = {
-          id: 'debug-pickup',
-          type: currentPickup.type,
-          x: canvasSize.width / 2,
-          y: canvasSize.height / 2,
-          size: 12,
-          description: currentPickup.description,
-          spawnTime: Date.now(),
-        };
-        // Apply the pickup effect to the clean state
-        console.log(`[DEBUG] PICKUP BACKWARD: ${currentPickup.type} - ${currentPickup.description}`);
-        applyPickupEffectRef.current?.(fakePickup, newState);
-        // Log only if effect was actually applied
-        if (newState.activeEffects.length > 0) {
-          console.log(`[SUCCESS] Effect applied: ${newState.activeEffects[newState.activeEffects.length - 1].type}`);
-        } else {
-          console.log(`[WARNING] No active effect created for ${currentPickup.type}`);
-        }
-        return newState;
-      });
-      // Announce the pickup
-      setTimeout(() => speakRobotic(`DEBUG: ${currentPickup.description}`), 100);
-      // Cycle to previous pickup
-      setDebugPickupIndex((prev) => {
-        const next = (prev - 1 + PICKUP_TYPES.length) % PICKUP_TYPES.length;
-        console.log(`[CYCLE] BACKWARD: ${prev} → ${next} (${PICKUP_TYPES[prev]?.type} → ${PICKUP_TYPES[next]?.type})`);
-        return next;
-      });
-      // Debug mode disabled - random pickup spawning will continue normally
-    }
-  }, [debugPickupIndex, gameState.isPlaying, speakRobotic]);
-
-  // Helper function to apply debug pickup effects
-  const applyDebugPickupEffect = useCallback((pickupType: any) => {
-    setGameState(prevState => {
-      // Check conditions using prevState to avoid stale closures
-      if (!prevState.isPlaying || prevState.gameMode === 'multiplayer') {
-        console.log('[ERROR] Effect blocked - game not playing or in multiplayer');
-        return prevState; // No change
-      }
-      const newState = { ...prevState };
-      // Reset all active effects first to start clean
-      newState.activeEffects = [];
-      // Reset ball properties to defaults
-      newState.ball.size = newState.ball.originalSize;
-      newState.ball.isDrunk = false;
-      newState.ball.drunkAngle = 0;
-      newState.ball.isTeleporting = false;
-      newState.ball.hasWind = false;
-      newState.ball.hasGravity = false;
-      newState.ball.isAiming = false;
-      newState.ball.isStuck = false;
-      newState.ball.hasPortal = false;
-      newState.ball.isMirror = false;
-      newState.ball.mirrorBalls = [];
-      newState.ball.isQuantum = false;
-      newState.ball.quantumPositions = [];
-      newState.ball.hasTrailMines = false;
-      newState.ball.trailMines = [];
-      newState.ball.isSlippery = false;
-      newState.ball.bounciness = 1.0;
-      newState.ball.isMagnetic = false;
-      newState.ball.isFloating = false;
-      newState.ball.isHypnotic = false;
-      // NOTE: Paddle dimensions are server-authoritative - do not reset client-side
-      // Server will maintain correct paddle dimensions via gameState updates
-      // Reset other game state properties
-      newState.extraBalls = [];
-      newState.coins = [];
-      newState.pickups = [];
-      newState.paddlesDrunk = false;
-      newState.stickyPaddlesActive = false;
-      newState.machineGunActive = false;
-      newState.sidesSwitched = false;
-
-      // Create a fake pickup for the effect system
-      const fakePickup: Pickup = {
-        id: 'debug-pickup',
-        type: pickupType.type,
-        x: canvasSize.width / 2,
-        y: canvasSize.height / 2,
-        size: 12,
-        description: pickupType.description,
-        spawnTime: Date.now(),
-      };
-
-      // Apply the pickup effect to the clean state
-      console.log(`[DEBUG] APPLYING DEBUG EFFECT: ${pickupType.type} - ${pickupType.description}`);
-      applyPickupEffectRef.current?.(fakePickup, newState);
-
-      // Log result
-      if (newState.activeEffects.length > 0) {
-        console.log(`[SUCCESS] Effect applied: ${newState.activeEffects[newState.activeEffects.length - 1].type}`);
-      } else {
-        console.log(`[WARNING] No active effect created for ${pickupType.type}`);
-      }
-
-      return newState;
-    });
-
-    // Announce the pickup
-    setTimeout(() => speakRobotic(`DEBUG: ${pickupType.description}`), 100);
-    // Debug mode disabled - random pickup spawning will continue normally
-  }, [canvasSize, speakRobotic]);
 
   // Helper function for last-touch scoring
   const handleLastTouchScoring = useCallback((newState: GameState, boundaryHit: 'left' | 'right' | 'top' | 'bottom') => {
@@ -4779,8 +4338,6 @@ const Pong404: React.FC = () => {
     if (newState.ball.hasGravity && newState.gravityStartTime > 0) {
       newState.gravityStartTime = 0; // Forfeit gravity bonus - ball was lost
     }
-
-    clearAllPickupEffects(newState);
 
     // Robot taunt chance when someone scores - with player context
     attemptRobotTauntRef.current?.('scoring', scoringPlayer);
@@ -4842,7 +4399,7 @@ const Pong404: React.FC = () => {
     newState.ball.dy = boundaryHit === 'top' || boundaryHit === 'bottom'
         ? (boundaryHit === 'top' ? -BALL_SPEED : BALL_SPEED)
         : (Math.random() > 0.5 ? BALL_SPEED : -BALL_SPEED);
-  }, [clearAllPickupEffects, canvasSize.width, canvasSize.height, speakRobotic]);
+  }, [canvasSize.width, canvasSize.height, speakRobotic]);
 
   // Game logic
   const updateGame = useCallback(() => {
@@ -6268,7 +5825,7 @@ const Pong404: React.FC = () => {
 
       return newState;
     });
-  }, [gameState, canvasSize, keys, localTestMode, mouseY, mouseX, touchY, controlSide, handleLastTouchScoring, multiplayerState.isConnected, clearAllPickupEffects, playMelodyNote, updateEffects, checkRandomTaunt, speakRobotic]);
+  }, [gameState, canvasSize, keys, localTestMode, mouseY, mouseX, touchY, controlSide, handleLastTouchScoring, multiplayerState.isConnected, playMelodyNote, checkRandomTaunt, speakRobotic]);
 
   // Game loop is handled by requestAnimationFrame in the rendering useEffect below
   // Removed direct updateGame() call that was causing infinite re-renders
@@ -6590,60 +6147,11 @@ const Pong404: React.FC = () => {
             localTestMode
           });
 
-          if (gameState.isPlaying && gameState.gameMode !== 'multiplayer') {
-            // Use setDebugPickupIndex with a function to get the most current value
-            setDebugPickupIndex(currentIndex => {
-              const nextIndex = (currentIndex + 1) % PICKUP_TYPES.length;
-              const nextPickup = PICKUP_TYPES[nextIndex];
-              console.log(`[REFRESH] FORWARD: ${currentIndex} → ${nextIndex} (${nextPickup?.type})`);
-
-              if (nextPickup) {
-                // Apply the effect immediately
-                setTimeout(() => applyDebugPickupEffect(nextPickup), 0);
-                console.log(`✅ Applied effect for index ${nextIndex}: ${nextPickup.type}`);
-              }
-
-              return nextIndex;
-            });
-          } else {
-            console.log('[ERROR] Cannot advance - conditions not met:', {
-              isPlaying: gameState.isPlaying,
-              gameMode: gameState.gameMode,
-              notMultiplayer: gameState.gameMode !== 'multiplayer'
-            });
-          }
+          console.log('[DISABLED] Debug pickup controls disabled - server handles all pickups');
           break;
         case '1':
           e.preventDefault();
-          console.log('[TARGET] 1 KEY PRESSED (BACKWARD):', {
-            isPlaying: gameState.isPlaying,
-            gameMode: gameState.gameMode,
-            debugPickupIndex,
-            localTestMode
-          });
-
-          if (gameState.isPlaying && gameState.gameMode !== 'multiplayer') {
-            // Use setDebugPickupIndex with a function to get the most current value
-            setDebugPickupIndex(currentIndex => {
-              const prevIndex = (currentIndex - 1 + PICKUP_TYPES.length) % PICKUP_TYPES.length;
-              const prevPickup = PICKUP_TYPES[prevIndex];
-              console.log(`[REFRESH] BACKWARD: ${currentIndex} → ${prevIndex} (${prevPickup?.type})`);
-
-              if (prevPickup) {
-                // Apply the effect immediately
-                setTimeout(() => applyDebugPickupEffect(prevPickup), 0);
-                console.log(`✅ Applied effect for index ${prevIndex}: ${prevPickup.type}`);
-              }
-
-              return prevIndex;
-            });
-          } else {
-            console.log('[ERROR] Cannot go back - conditions not met:', {
-              isPlaying: gameState.isPlaying,
-              gameMode: gameState.gameMode,
-              notMultiplayer: gameState.gameMode !== 'multiplayer'
-            });
-          }
+          console.log('[DISABLED] Debug pickup controls disabled - server handles all pickups');
           break;
         case 'r':
           e.preventDefault();
@@ -7690,9 +7198,9 @@ const Pong404: React.FC = () => {
 
       // Draw pixelated pattern with NO gaps between pixels
       const drawPixelatedPattern = (pattern: string, x: number, y: number, size: number, color: string) => {
-        // Always use 12x12 grid for patterns, but scale pixel size based on pickup size
-        const gridSize = 12;
-        const pixelSize = size / gridSize; // Scale pixel size to fit pickup size
+        // Use 4x4 grid for patterns with 4x4 pixel size (16x16 total)
+        const gridSize = 4;
+        const pixelSize = 4; // Fixed 4x4 pixel size
 
         // Round coordinates to prevent sub-pixel rendering gaps
         const roundedX = Math.round(x);
@@ -7749,8 +7257,8 @@ const Pong404: React.FC = () => {
         const precalcPattern = PRECALC_PICKUP_PATTERNS[patternMap[pattern] as keyof typeof PRECALC_PICKUP_PATTERNS];
         if (precalcPattern) {
           // [ROCKET] INSTANT rendering using precalculated 2D boolean array (no nested calculations)
-          for (let row = 0; row < 12; row++) {
-            for (let col = 0; col < 12; col++) {
+          for (let row = 0; row < 4; row++) {
+            for (let col = 0; col < 4; col++) {
               if (precalcPattern[row][col]) {
                 ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
               }
@@ -8750,6 +8258,15 @@ const Pong404: React.FC = () => {
 
   }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, crtEffect, applyCRTEffect, showAudioPrompt]);
 
+  // Update function refs when functions change (prevents game loop restart)
+  useEffect(() => {
+    updateGameRef.current = updateGame;
+  }, [updateGame]);
+
+  useEffect(() => {
+    renderRef.current = render;
+  }, [render]);
+
   // High-performance 60fps game loop
   useEffect(() => {
     // Always run the game loop (paddles should be moveable at all times, even during pauses)
@@ -8758,6 +8275,12 @@ const Pong404: React.FC = () => {
     let lastTime = 0;
 
     const gameLoop = (currentTime: number) => {
+      // FPS debug logging (only log once per second)
+      if (Math.floor(currentTime / 1000) !== Math.floor(lastTime / 1000)) {
+        console.log(`[FPS DEBUG] Game loop running, refs valid: updateGame=${!!updateGameRef.current}, render=${!!renderRef.current}`);
+      }
+      lastTime = currentTime;
+
       // Get music analysis data for reactive visual effects
       const musicData = (window as any).generativeMusic?.getAnalysisData?.() || { volume: 0, disharmonic: 0, beat: 0 };
       musicDataRef.current = musicData;
@@ -8787,11 +8310,15 @@ const Pong404: React.FC = () => {
         setPaddleAnimationProgress(eased);
       }
 
-      // Update game logic - optimized state updates
-      updateGame();
+      // Update game logic - optimized state updates (using ref to avoid recreating game loop)
+      if (updateGameRef.current) {
+        updateGameRef.current();
+      }
 
-      // Render immediately - optimized canvas operations
-      render();
+      // Render immediately - optimized canvas operations (using ref to avoid recreating game loop)
+      if (renderRef.current) {
+        renderRef.current();
+      }
 
       // Schedule next frame - requestAnimationFrame naturally caps at display refresh rate
       animationFrameRef.current = requestAnimationFrame(gameLoop);
@@ -8806,7 +8333,7 @@ const Pong404: React.FC = () => {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [gameState.isPlaying, gameState.gameEnded, gameState.winner, gameState.showStartScreen, showAudioPrompt, updateGame, render]);
+  }, []); // Empty deps - game loop should run continuously without restarts
 
 
   // Prevent React strict mode from causing duplicate WebSocket connections
@@ -9643,16 +9170,6 @@ const Pong404: React.FC = () => {
         </div>
       )}
 
-      {/* Debug Pickup Button */}
-      {gameState.isPlaying && (
-        <button
-          onClick={cycleDebugPickup}
-          className="fixed bottom-4 right-4 bg-gray-800 bg-opacity-80 text-white font-arcade text-xs px-3 py-2 rounded border border-gray-600 hover:bg-gray-700 z-10 transition-all"
-          style={{ color: COLOR_PALETTE[gameState.colorIndex].foreground }}
-        >
-          [1]/[2] Pickups: {PICKUP_TYPES[debugPickupIndex]?.description || 'Unknown'}
-        </button>
-      )}
 
       {/* Hidden back link for navigation (accessible via keyboard) */}
       <Link
