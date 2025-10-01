@@ -9392,6 +9392,28 @@ const Pong404: React.FC = () => {
             pointerEvents: 'none',
           }} />
         )}
+
+        {/* Debug pickup indicator */}
+        {isDebugMode && (
+          <div style={{
+            position: 'absolute',
+            top: '20px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0, 0, 0, 0.8)',
+            color: '#00ff00',
+            padding: '10px 20px',
+            borderRadius: '8px',
+            fontFamily: 'monospace',
+            fontSize: '14px',
+            border: '2px solid #00ff00',
+            zIndex: 1000,
+            pointerEvents: 'none'
+          }}>
+            DEBUG: [{debugPickupIndex + 1}/{PICKUP_TYPES.length}] {PICKUP_TYPES[debugPickupIndex].type} - {PICKUP_TYPES[debugPickupIndex].description}
+          </div>
+        )}
+
         {/* Canvas for game rendering - hidden when CRT is active (PixiJS shows it instead) */}
         <canvas
           ref={canvasRef}
