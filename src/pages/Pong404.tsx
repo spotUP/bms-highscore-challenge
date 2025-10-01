@@ -2952,7 +2952,7 @@ const Pong404: React.FC = () => {
   const masterLimiterRef = useRef<any>(null);
   const discoMusicRef = useRef<{ kick: any; bass: any; synth: any; hihat: any; seq: any; gain: any } | null>(null);
   const hypnoSoundRef = useRef<{ osc1: any; osc2: any; lfo1: any; lfo2: any; reverb: any; gain: any } | null>(null);
-  const timeWarpSoundRef = useRef<{ osc: OscillatorNode; gain: GainNode } | null>(null);
+  const timeWarpSoundRef = useRef<{ osc: OscillatorNode; gain: GainNode; dryGain: GainNode; wetGain: GainNode } | null>(null);
   const gameStartTimeRef = useRef<number>(Date.now());
   const lastMoveTimesRef = useRef<Map<string, number>>(new Map());
 
@@ -6787,6 +6787,8 @@ const Pong404: React.FC = () => {
     const ctx = audioContextRef.current;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
+    const dryGain = ctx.createGain();
+    const wetGain = ctx.createGain();
 
     // Base frequency that changes with speed
     // 0.5x speed = 200Hz (low, slow)
@@ -6795,32 +6797,53 @@ const Pong404: React.FC = () => {
     osc.frequency.value = baseFreq;
     osc.type = 'sine';
 
-    // Volume based on speed
+    // Volume
     gain.gain.value = 0.15;
 
-    // Connect audio graph
+    // Reverb mix based on speed - more reverb for slower speeds
+    // 0.5x speed = 80% wet (lots of reverb for slow motion feel)
+    // 2.0x speed = 20% wet (less reverb for fast forward)
+    const reverbAmount = speed < 1 ? 0.8 : 0.2;
+    dryGain.gain.value = 1 - reverbAmount;
+    wetGain.gain.value = reverbAmount;
+
+    // Connect audio graph with reverb
     osc.connect(gain);
-    if (beepsMasterGainRef.current) {
-      gain.connect(beepsMasterGainRef.current);
+
+    // Split into dry/wet paths
+    gain.connect(dryGain);
+    gain.connect(wetGain);
+
+    // Connect wet path to reverb if available
+    if (reverbNodeRef.current) {
+      wetGain.connect(reverbNodeRef.current);
+      reverbNodeRef.current.connect(beepsMasterGainRef.current || ctx.destination);
     } else {
-      gain.connect(ctx.destination);
+      wetGain.connect(beepsMasterGainRef.current || ctx.destination);
     }
 
-    osc.start();
-    timeWarpSoundRef.current = { osc, gain };
+    // Connect dry path directly
+    dryGain.connect(beepsMasterGainRef.current || ctx.destination);
 
-    console.log(`⏱️ TIME WARP SOUND: Started at ${baseFreq}Hz (speed: ${speed}x)`);
+    osc.start();
+    timeWarpSoundRef.current = { osc, gain, dryGain, wetGain };
+
+    console.log(`⏱️ TIME WARP SOUND: Started at ${baseFreq}Hz (speed: ${speed}x, reverb: ${(reverbAmount * 100).toFixed(0)}%)`);
   }, []);
 
   const updateTimeWarpSound = useCallback((speed: number) => {
-    if (!timeWarpSoundRef.current) return;
+    if (!timeWarpSoundRef.current || !audioContextRef.current) return;
+
+    const now = audioContextRef.current.currentTime;
 
     // Update frequency smoothly
     const baseFreq = speed < 1 ? 200 : 800;
-    timeWarpSoundRef.current.osc.frequency.setValueAtTime(
-      baseFreq,
-      audioContextRef.current!.currentTime
-    );
+    timeWarpSoundRef.current.osc.frequency.setValueAtTime(baseFreq, now);
+
+    // Update reverb mix based on new speed
+    const reverbAmount = speed < 1 ? 0.8 : 0.2;
+    timeWarpSoundRef.current.dryGain.gain.setValueAtTime(1 - reverbAmount, now);
+    timeWarpSoundRef.current.wetGain.gain.setValueAtTime(reverbAmount, now);
   }, []);
 
   const stopTimeWarpSound = useCallback(() => {
