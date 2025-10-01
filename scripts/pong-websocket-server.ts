@@ -394,7 +394,7 @@ interface Pickup {
   id: string;
   x: number;
   y: number;
-  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall' | 'labyrinth';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall' | 'labyrinth';
   createdAt: number;
   size?: number;
 }
@@ -427,7 +427,7 @@ interface Coin {
 }
 
 interface ActiveEffect {
-  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall';
   startTime: number;
   duration: number;
   originalValue?: any;
@@ -724,9 +724,6 @@ class PongWebSocketServer {
         break;
       case 'reset_paddle_sizes':
         this.handleResetPaddleSizes(playerId, roomId);
-        break;
-      case 'super_striker_aim':
-        this.handleSuperStrikerAim(playerId, roomId, data);
         break;
       default:
         console.log('[?] Unknown message type:', fullType, 'original:', type);
@@ -1062,34 +1059,6 @@ class PongWebSocketServer {
     });
   }
 
-  private handleSuperStrikerAim(playerId: string, roomId: string, data: any) {
-    const player = this.players.get(playerId);
-    if (!player) return;
-
-    const room = this.rooms.get(roomId);
-    if (!room) return;
-
-    // Check if super_striker is active and this player activated it
-    const strikerEffect = room.gameState.activeEffects.find(e => e.type === 'super_striker');
-    if (!strikerEffect || strikerEffect.activator !== player.side) return;
-
-    // Check if ball is still in aiming mode
-    if (!room.gameState.ball.isAiming) return;
-
-    // Update aim direction based on player input
-    const aimAngle = data.angle; // Angle in radians
-    const speed = 15; // Super striker speed
-
-    // Set ball velocity based on aim angle
-    room.gameState.ball.dx = Math.cos(aimAngle) * speed;
-    room.gameState.ball.dy = Math.sin(aimAngle) * speed;
-    room.gameState.ball.isAiming = false;
-
-    // Remove the effect immediately after firing
-    room.gameState.activeEffects = room.gameState.activeEffects.filter(e => e.type !== 'super_striker');
-
-    console.log(`🎯 SUPER STRIKER fired by ${player.side} at angle ${aimAngle} (${(aimAngle * 180 / Math.PI).toFixed(1)}°)`);
-  }
 
   private handleTestPickup(playerId: string, roomId: string, pickupType: string) {
     const room = this.rooms.get(roomId);
@@ -1547,6 +1516,11 @@ class PongWebSocketServer {
 
       // ALWAYS broadcast paddle positions - players should be able to move at all times
       // Force broadcast every frame to ensure smooth client updates
+      // Log machine gun balls before broadcast
+      if (gameState.machineGunBalls && gameState.machineGunBalls.length > 0) {
+        console.log(`🔫 BROADCASTING ${gameState.machineGunBalls.length} machine gun balls to clients`);
+      }
+
       // (Since client runs at 90 FPS and server at 60 FPS, we need frequent updates)
       this.broadcastToRoom(roomId, {
         type: 'server_game_update',
@@ -1565,7 +1539,9 @@ class PongWebSocketServer {
           isPaused: gameState.isPaused,
           showStartScreen: gameState.showStartScreen,
           colorIndex: gameState.colorIndex,
-          extraBalls: gameState.extraBalls
+          extraBalls: gameState.extraBalls,
+          machineGunBalls: gameState.machineGunBalls,
+          machineGunActive: gameState.machineGunActive
         }
       });
 
@@ -2026,12 +2002,22 @@ class PongWebSocketServer {
             console.log(`🌀 BALL SPIN: ${oldSpin.toFixed(2)} + ${newVelocity.spin.toFixed(2)} = ${gameState.ball.spin.toFixed(2)} (velocity: ${paddleWithVelocity.velocity.toFixed(2)})`);
 
             // 🌀 Announce curve ball if significant spin was applied
-            if (Math.abs(gameState.ball.spin) > 2.5) {
+            if (Math.abs(gameState.ball.spin) > 0.8) {
+              const compliments = [
+                'CURVE BALL!',
+                'NICE SPIN!',
+                'CURVED IT!',
+                'WHAT A CURVE!',
+                'SPIN MASTER!',
+                'CURVING!',
+                'BENT IT!'
+              ];
+              const compliment = compliments[Math.floor(Math.random() * compliments.length)];
               this.broadcastToRoom(roomId, {
                 type: 'robot_speech',
-                data: { text: 'CURVE BALL!' }
+                data: { text: compliment }
               });
-              console.log(`🌀 CURVE BALL ANNOUNCED! Spin: ${newVelocity.spin.toFixed(2)}`);
+              console.log(`🌀 CURVE BALL ANNOUNCED! Spin: ${gameState.ball.spin.toFixed(2)} - "${compliment}"`);
             }
 
             // Position ball outside paddle to prevent overlap
@@ -2349,19 +2335,6 @@ class PongWebSocketServer {
       ballChanged = true;
     }
 
-    // Apply teleporting behavior
-    if (gameState.ball.isTeleporting) {
-      const now = Date.now();
-      const timeSinceLastTeleport = now - (gameState.ball.lastTeleportTime || 0);
-      
-      if (timeSinceLastTeleport > 1000 + Math.random() * 500) {
-        const padding = 100;
-        gameState.ball.x = padding + Math.random() * (canvasSize.width - padding * 2);
-        gameState.ball.y = padding + Math.random() * (canvasSize.height - padding * 2);
-        gameState.ball.lastTeleportTime = now;
-        ballChanged = true;
-      }
-    }
 
     // Update extra balls (multi_ball)
     if (gameState.extraBalls && gameState.extraBalls.length > 0) {
@@ -2402,30 +2375,27 @@ class PongWebSocketServer {
         };
         const paddles: Paddle[] = [leftPaddle, rightPaddle, topPaddle, bottomPaddle];
 
-        // Create collision object with CURRENT position (before movement)
-        const extraBallForCollision = {
+        // Create collision object with CURRENT position (before movement) - MATCH main ball format
+        const extraBallForCollision: Ball = {
           x: extraBall.x,
           y: extraBall.y,
+          size: extraBall.size,
           width: extraBall.size,
           height: extraBall.size,
-          dx: extraBall.dx,
-          dy: extraBall.dy,
           vx: extraBall.dx,
           vy: extraBall.dy,
           lastTouchedBy: extraBall.lastTouchedBy
         };
 
         for (const paddle of paddles) {
-          const paddleForCollision = {
+          // MATCH main ball paddle format exactly - must include velocity
+          const paddleForCollision: Paddle = {
             x: paddle.x,
             y: paddle.y,
             width: paddle.width,
             height: paddle.height,
-            dx: 0,
-            dy: 0,
-            vx: 0,
-            vy: 0,
-            side: paddle.side
+            side: paddle.side,
+            velocity: paddle.velocity || 0
           };
 
           const collisionResult = ServerCollisionDetector.detectBallPaddle(extraBallForCollision, paddleForCollision);
@@ -2528,6 +2498,163 @@ class PongWebSocketServer {
       // Remove extra balls that hit walls (in reverse order to preserve indices)
       for (let i = extraBallsToRemove.length - 1; i >= 0; i--) {
         gameState.extraBalls.splice(extraBallsToRemove[i], 1);
+      }
+    }
+
+    // 🔫 MACHINE GUN: Rapidly fire balls from the shooter's paddle
+    if (gameState.machineGunActive && gameState.machineGunShooter) {
+      const now = Date.now();
+      const timeSinceStart = now - gameState.machineGunStartTime;
+      const fireInterval = 150; // Fire every 150ms (6.6 balls per second)
+      const ballsFired = Math.floor(timeSinceStart / fireInterval);
+      const expectedBallCount = ballsFired;
+
+      if (frameCount % 60 === 0) {
+        console.log(`🔫 MACHINE GUN STATUS: active=${gameState.machineGunActive}, shooter=${gameState.machineGunShooter}, timeSince=${timeSinceStart}ms, ballsFired=${ballsFired}, currentBalls=${gameState.machineGunBalls.length}`);
+      }
+
+      // Fire balls if we haven't reached the expected count yet
+      if (gameState.machineGunBalls.length < expectedBallCount) {
+        const shooter = gameState.machineGunShooter;
+        const ballSize = 10; // Smaller balls
+        const speed = 8; // Slower speed so they're visible longer
+        let startX = 400;
+        let startY = 300;
+        let dx = 0;
+        let dy = 0;
+
+        // Position and velocity based on shooter side with WIDE angle spread
+        if (shooter === 'left') {
+          startX = 50;
+          startY = gameState.paddles.left.y + gameState.paddles.left.height / 2 - ballSize / 2;
+          // Wide angle: -60 to +60 degrees (120 degree cone)
+          const angle = (Math.random() - 0.5) * (Math.PI / 1.5); // ±60 degrees
+          const baseAngle = 0; // Shoot right
+          const finalAngle = baseAngle + angle;
+          dx = Math.cos(finalAngle) * speed;
+          dy = Math.sin(finalAngle) * speed;
+        } else if (shooter === 'right') {
+          startX = canvasSize.width - 50 - ballSize;
+          startY = gameState.paddles.right.y + gameState.paddles.right.height / 2 - ballSize / 2;
+          // Wide angle: -60 to +60 degrees (120 degree cone)
+          const angle = (Math.random() - 0.5) * (Math.PI / 1.5);
+          const baseAngle = Math.PI; // Shoot left
+          const finalAngle = baseAngle + angle;
+          dx = Math.cos(finalAngle) * speed;
+          dy = Math.sin(finalAngle) * speed;
+        } else if (shooter === 'top') {
+          startX = gameState.paddles.top.x + gameState.paddles.top.width / 2 - ballSize / 2;
+          startY = 70;
+          // Wide angle: -60 to +60 degrees (120 degree cone)
+          const angle = (Math.random() - 0.5) * (Math.PI / 1.5);
+          const baseAngle = Math.PI / 2; // Shoot down
+          const finalAngle = baseAngle + angle;
+          dx = Math.cos(finalAngle) * speed;
+          dy = Math.sin(finalAngle) * speed;
+        } else if (shooter === 'bottom') {
+          startX = gameState.paddles.bottom.x + gameState.paddles.bottom.width / 2 - ballSize / 2;
+          startY = canvasSize.height - 70 - ballSize;
+          // Wide angle: -60 to +60 degrees (120 degree cone)
+          const angle = (Math.random() - 0.5) * (Math.PI / 1.5);
+          const baseAngle = -Math.PI / 2; // Shoot up
+          const finalAngle = baseAngle + angle;
+          dx = Math.cos(finalAngle) * speed;
+          dy = Math.sin(finalAngle) * speed;
+        }
+
+        // Create new machine gun ball
+        gameState.machineGunBalls.push({
+          x: startX,
+          y: startY,
+          dx,
+          dy,
+          size: ballSize,
+          spin: 0,
+          lastTouchedBy: shooter
+        });
+
+        console.log(`🔫 MACHINE GUN: Fired ball #${gameState.machineGunBalls.length} from ${shooter}`);
+        ballChanged = true;
+      }
+
+      // Update machine gun balls (same logic as extra balls)
+      const mgBallsToRemove: number[] = [];
+      for (let i = 0; i < gameState.machineGunBalls.length; i++) {
+        const mgBall = gameState.machineGunBalls[i];
+
+        // Create paddle collision objects
+        const leftPaddle = { x: BORDER_THICKNESS * 2, y: gameState.paddles.left.y, width: gameState.paddles.left.width, height: gameState.paddles.left.height, side: 'left' as const, velocity: gameState.paddles.left.velocity || 0 };
+        const rightPaddle = { x: canvasSize.width - gameState.paddles.right.width - (BORDER_THICKNESS * 2), y: gameState.paddles.right.y, width: gameState.paddles.right.width, height: gameState.paddles.right.height, side: 'right' as const, velocity: gameState.paddles.right.velocity || 0 };
+        const topPaddle = { x: gameState.paddles.top.x, y: 60, width: gameState.paddles.top.width, height: gameState.paddles.top.height, side: 'top' as const, velocity: gameState.paddles.top.velocity || 0 };
+        const bottomPaddle = { x: gameState.paddles.bottom.x, y: 728, width: gameState.paddles.bottom.width, height: gameState.paddles.bottom.height, side: 'bottom' as const, velocity: gameState.paddles.bottom.velocity || 0 };
+        const paddles: Paddle[] = [leftPaddle, rightPaddle, topPaddle, bottomPaddle];
+
+        // Check paddle collisions
+        const mgBallForCollision: Ball = {
+          x: mgBall.x,
+          y: mgBall.y,
+          size: mgBall.size,
+          width: mgBall.size,
+          height: mgBall.size,
+          vx: mgBall.dx,
+          vy: mgBall.dy,
+          lastTouchedBy: mgBall.lastTouchedBy
+        };
+
+        for (const paddle of paddles) {
+          const collision = ServerCollisionDetector.detectBallPaddle(mgBallForCollision, paddle);
+          if (collision.hit) {
+            // Apply physics
+            const newVelocity = ServerCollisionDetector.applyArkanoidPhysics(mgBall, paddle, collision.hitPosition);
+            mgBall.dx = newVelocity.dx;
+            mgBall.dy = newVelocity.dy;
+            mgBall.spin = newVelocity.spin;
+            mgBall.lastTouchedBy = paddle.side;
+
+            // Position ball outside paddle
+            if (paddle.side === 'left') mgBall.x = paddle.x + paddle.width + 1;
+            else if (paddle.side === 'right') mgBall.x = paddle.x - mgBall.size - 1;
+            else if (paddle.side === 'top') mgBall.y = paddle.y + paddle.height + 1;
+            else if (paddle.side === 'bottom') mgBall.y = paddle.y - mgBall.size - 1;
+
+            ballChanged = true;
+            break;
+          }
+        }
+
+        // Apply Magnus effect to machine gun balls
+        if (mgBall.spin && Math.abs(mgBall.spin) > 0.1) {
+          const curved = ServerCollisionDetector.applyMagnusEffect({ dx: mgBall.dx, dy: mgBall.dy, spin: mgBall.spin });
+          mgBall.dx = curved.dx;
+          mgBall.dy = curved.dy;
+          mgBall.spin *= ServerCollisionDetector['SPIN_DECAY'];
+        }
+
+        // Move ball
+        mgBall.x += mgBall.dx;
+        mgBall.y += mgBall.dy;
+
+        // Check wall collision (scoring)
+        const wallCollision = ServerCollisionDetector.detectBallWall(
+          { x: mgBall.x, y: mgBall.y, size: mgBall.size, width: mgBall.size, height: mgBall.size, vx: mgBall.dx, vy: mgBall.dy, lastTouchedBy: mgBall.lastTouchedBy },
+          canvasSize.width,
+          canvasSize.height
+        );
+
+        if (wallCollision && wallCollision.hit) {
+          console.log(`🔫 MACHINE GUN BALL: Hit ${wallCollision.side} boundary`);
+          this.handleScoring(gameState, wallCollision.side, mgBall.lastTouchedBy, null);
+          mgBallsToRemove.push(i);
+          ballChanged = true;
+          continue;
+        }
+
+        ballChanged = true;
+      }
+
+      // Remove machine gun balls that scored
+      for (let i = mgBallsToRemove.length - 1; i >= 0; i--) {
+        gameState.machineGunBalls.splice(mgBallsToRemove[i], 1);
       }
     }
 
@@ -2950,7 +3077,7 @@ class PongWebSocketServer {
     const pickupTypes: Pickup['type'][] = [
       'speed_up', 'speed_down', 'big_ball', 'small_ball', 'drunk_ball', 'grow_paddle', 'shrink_paddle',
       'reverse_controls', 'invisible_ball', 'freeze_opponent', 'multi_ball', 'super_speed', 'coin_shower',
-      'teleport_ball', 'gravity_in_space', 'super_striker', 'sticky_paddles', 'machine_gun', 'dynamic_playfield',
+      'gravity_in_space', 'super_striker', 'sticky_paddles', 'machine_gun', 'dynamic_playfield',
       'switch_sides', 'time_warp', 'mirror_mode', 'quantum_ball', 'black_hole',
       'lightning_storm', 'invisible_paddles', 'ball_trail_mine', 'paddle_swap', 'disco_mode', 'pac_man',
       'banana_peel', 'rubber_ball', 'drunk_paddles', 'magnet_ball', 'balloon_ball', 'earthquake',
@@ -3083,6 +3210,9 @@ class PongWebSocketServer {
         gameState.machineGunStartTime = Date.now();
         gameState.machineGunShooter = gameState.ball.lastTouchedBy;
         effect.duration = 3000; // 3 seconds of machine gun
+        effect.activator = gameState.ball.lastTouchedBy || 'none';
+        console.log(`🔫 MACHINE GUN activated by: ${gameState.machineGunShooter} at ${Date.now()}`);
+        this.broadcastRobotSpeech(roomId, 'MACHINE GUN!');
         break;
       case 'dynamic_playfield':
         // Grow and shrink playfield with easing for 15 seconds
@@ -3222,14 +3352,6 @@ class PongWebSocketServer {
         console.log(`🎾 MULTI-BALL: Added 3 extra balls shooting from center, total extraBalls: ${gameState.extraBalls.length}`);
         // No duration - multiball stays active until all extra balls are removed by scoring
         effect.duration = Infinity;
-        break;
-      case 'teleport_ball':
-        // Teleport ball to random location
-        gameState.ball.x = 200 + Math.random() * 400;
-        gameState.ball.y = 150 + Math.random() * 300;
-        gameState.ball.isTeleporting = true;
-        gameState.ball.lastTeleportTime = Date.now();
-        effect.duration = 2000; // Visual effect for 2 seconds
         break;
       case 'rubber_ball':
         // Increase ball bounciness
@@ -3624,9 +3746,6 @@ class PongWebSocketServer {
         // The effect expires when extraBalls.length === 0 (checked elsewhere)
         break;
 
-      case 'teleport_ball':
-        gameState.ball.isTeleporting = false;
-        break;
 
       case 'rubber_ball':
         if (effect.originalValue !== undefined) {

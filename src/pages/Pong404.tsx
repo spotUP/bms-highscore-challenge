@@ -136,6 +136,10 @@ interface GameState {
   nextForceSpawnTime: number;
   gravityStartTime: number;
   extraBalls: any[];
+  machineGunBalls: any[];
+  machineGunActive: boolean;
+  machineGunStartTime: number;
+  machineGunShooter: 'left' | 'right' | 'top' | 'bottom' | null;
   paddlesDrunk: boolean;
   drunkStartTime: number;
 }
@@ -4635,73 +4639,10 @@ const Pong404: React.FC = () => {
           bottomPaddle: prevState.trails?.bottomPaddle || []
         };
 
-        // Handle super striker aiming
+        // Handle super striker aiming (auto-fires after 3 seconds, no manual control)
         const strikerEffect = newState.activeEffects.find(e => e.type === 'super_striker');
         if (strikerEffect && newState.ball.isAiming && strikerEffect.activator === playerSide) {
-          // Player is in super striker aiming mode - freeze paddle and allow aiming
-          const ballCenterX = newState.ball.x + newState.ball.size / 2;
-          const ballCenterY = newState.ball.y + newState.ball.size / 2;
-
-          // Calculate aim target based on mouse/touch or keyboard
-          let aimTargetX = ballCenterX + 100;
-          let aimTargetY = ballCenterY;
-
-          if (mouseX !== null && mouseY !== null) {
-            // Use mouse/touch position for aiming
-            aimTargetX = mouseX;
-            aimTargetY = mouseY;
-          } else {
-            // Use keyboard for aiming (arrow keys or WASD based on side)
-            if (playerSide === 'left') {
-              if (keys.w) aimTargetY -= 5;
-              if (keys.s) aimTargetY += 5;
-              if (keys.a) aimTargetX -= 5;
-              if (keys.d) aimTargetX += 5;
-            } else if (playerSide === 'right') {
-              if (keys.ArrowUp) aimTargetY -= 5;
-              if (keys.ArrowDown) aimTargetY += 5;
-              if (keys.ArrowLeft) aimTargetX -= 5;
-              if (keys.ArrowRight) aimTargetX += 5;
-            } else if (playerSide === 'top') {
-              if (keys.w) aimTargetY -= 5;
-              if (keys.s) aimTargetY += 5;
-              if (keys.a) aimTargetX -= 5;
-              if (keys.d) aimTargetX += 5;
-            } else if (playerSide === 'bottom') {
-              if (keys.ArrowUp) aimTargetY -= 5;
-              if (keys.ArrowDown) aimTargetY += 5;
-              if (keys.ArrowLeft) aimTargetX -= 5;
-              if (keys.ArrowRight) aimTargetX += 5;
-            }
-
-            // Store accumulated aim position
-            aimTargetX = (newState.ball.aimTargetX || ballCenterX + 100) + (aimTargetX - ballCenterX);
-            aimTargetY = (newState.ball.aimTargetY || ballCenterY) + (aimTargetY - ballCenterY);
-          }
-
-          // Update aim target in game state for rendering
-          newState.ball.aimTargetX = aimTargetX;
-          newState.ball.aimTargetY = aimTargetY;
-
-          // Fire on spacebar press
-          if (keys[' ']) {
-            const angle = Math.atan2(aimTargetY - ballCenterY, aimTargetX - ballCenterX);
-
-            // Play fire sound
-            playMelodyNoteRef.current?.('powerup', null, 'both');
-
-            // Send aim to server
-            if (multiplayerStateRef.current?.socket && multiplayerStateRef.current.roomId) {
-              multiplayerStateRef.current.socket.send(JSON.stringify({
-                type: 'super_striker_aim',
-                playerId: multiplayerStateRef.current.playerId,
-                roomId: multiplayerStateRef.current.roomId,
-                data: { angle }
-              }));
-            }
-          }
-
-          // Skip normal paddle controls while aiming
+          // Skip normal paddle controls while ball is frozen for super striker
           return newState;
         }
 
@@ -7403,12 +7344,10 @@ const Pong404: React.FC = () => {
         ctx.stroke();
         ctx.setLineDash([]); // Reset dash
 
-        // Draw target crosshair
+        // Draw target crosshair (vertical line only)
         ctx.strokeStyle = '#ff4500';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(aimTargetX - 10, aimTargetY);
-        ctx.lineTo(aimTargetX + 10, aimTargetY);
         ctx.moveTo(aimTargetX, aimTargetY - 10);
         ctx.lineTo(aimTargetX, aimTargetY + 10);
         ctx.stroke();
@@ -7425,6 +7364,19 @@ const Pong404: React.FC = () => {
         }
         ctx.fillStyle = currentColors.foreground;
         ctx.fillRect(extraBall.x, extraBall.y, extraBall.size, extraBall.size);
+      });
+    }
+
+    // 🔫 Draw machine gun balls
+    if (!gameState.isPaused) {
+      const mgBalls = gameState.machineGunBalls || [];
+      if (mgBalls.length > 0) {
+        console.log(`[MACHINE GUN] Rendering ${mgBalls.length} machine gun balls:`, mgBalls);
+      }
+      mgBalls.forEach((mgBall: any) => {
+        console.log(`[MACHINE GUN] Drawing ball at (${mgBall.x}, ${mgBall.y}) size ${mgBall.size}`);
+        ctx.fillStyle = '#ff8800'; // Orange machine gun balls
+        ctx.fillRect(mgBall.x, mgBall.y, mgBall.size, mgBall.size);
       });
     }
 
@@ -8847,10 +8799,6 @@ const Pong404: React.FC = () => {
     let lastTime = 0;
 
     const gameLoop = (currentTime: number) => {
-      // FPS debug logging (only log once per second)
-      if (Math.floor(currentTime / 1000) !== Math.floor(lastTime / 1000)) {
-        console.log(`[FPS DEBUG] Game loop running, refs valid: updateGame=${!!updateGameRef.current}, render=${!!renderRef.current}`);
-      }
       lastTime = currentTime;
 
       // Get music analysis data for reactive visual effects
