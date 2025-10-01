@@ -2516,6 +2516,11 @@ const Pong404: React.FC = () => {
               networkState.discoStartTime = messageData.discoStartTime;
             }
 
+            // 📐 Sync playfield scale from server
+            if (messageData.playfieldScale !== undefined) {
+              networkState.playfieldScale = messageData.playfieldScale;
+            }
+
             // Store network state and timing - let the game loop handle rendering from the ref
             networkGameStateRef.current = networkState;
             lastNetworkReceiveTimeRef.current = Date.now();
@@ -2592,10 +2597,6 @@ const Pong404: React.FC = () => {
               // Detect paddle collision by checking if lastTouchedBy changed
               if (message.data.ball.lastTouchedBy &&
                   message.data.ball.lastTouchedBy !== prevState.ball.lastTouchedBy) {
-                console.log('[GAME] Paddle collision detected in server_game_update', {
-                  prev: prevState.ball.lastTouchedBy,
-                  new: message.data.ball.lastTouchedBy
-                });
                 playMelodyNoteRef.current?.('paddle', null, 'both');
               }
 
@@ -2615,7 +2616,6 @@ const Pong404: React.FC = () => {
               const newTotal = message.data.score.left + message.data.score.right +
                              message.data.score.top + message.data.score.bottom;
               if (newTotal > prevTotal) {
-                console.log('[GAME] Score detected in server_game_update - playing score sound');
                 playMelodyNoteRef.current?.('score', null, 'both');
               }
 
@@ -2638,6 +2638,8 @@ const Pong404: React.FC = () => {
             }
             if (message.data.activeEffects) networkState.activeEffects = message.data.activeEffects;
             if (message.data.extraBalls) networkState.extraBalls = message.data.extraBalls;
+            if (message.data.machineGunBalls !== undefined) networkState.machineGunBalls = message.data.machineGunBalls;
+            if (message.data.machineGunActive !== undefined) networkState.machineGunActive = message.data.machineGunActive;
 
             if (message.data.pickupEffect) networkState.pickupEffect = message.data.pickupEffect;
             if (message.data.rumbleEffect) networkState.rumbleEffect = message.data.rumbleEffect;
@@ -2684,6 +2686,11 @@ const Pong404: React.FC = () => {
                   ...message.data.paddles.bottom
                 }) : prevState.paddles.bottom
               };
+            }
+
+            // 📐 Sync playfield scale from server
+            if (message.data.playfieldScale !== undefined) {
+              networkState.playfieldScale = message.data.playfieldScale;
             }
 
             // Store network state and timing for interpolation
@@ -4625,6 +4632,24 @@ const Pong404: React.FC = () => {
           topPaddle: prevState.trails?.topPaddle || [],
           bottomPaddle: prevState.trails?.bottomPaddle || []
         };
+
+        // Ensure machine gun balls and extra balls are properly copied (prevent race conditions)
+        if (networkGameStateRef.current.machineGunBalls && Array.isArray(networkGameStateRef.current.machineGunBalls)) {
+          newState.machineGunBalls = [...networkGameStateRef.current.machineGunBalls];
+        } else {
+          newState.machineGunBalls = [];
+        }
+
+        if (networkGameStateRef.current.extraBalls && Array.isArray(networkGameStateRef.current.extraBalls)) {
+          newState.extraBalls = [...networkGameStateRef.current.extraBalls];
+        } else {
+          newState.extraBalls = [];
+        }
+
+        // 📐 Sync playfield scale from network
+        if (networkGameStateRef.current.playfieldScale !== undefined) {
+          newState.playfieldScale = networkGameStateRef.current.playfieldScale;
+        }
 
         // Handle super striker aiming (auto-fires after 3 seconds, no manual control)
         const strikerEffect = newState.activeEffects.find(e => e.type === 'super_striker');
@@ -6792,76 +6817,9 @@ const Pong404: React.FC = () => {
     // Get current color scheme
     const currentColors = COLOR_PALETTE[gameState.colorIndex];
 
-    // Clear canvas with dynamic background color
+    // Clear canvas with current background color
     ctx.fillStyle = currentColors.background;
     ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
-
-    // [VISUALIZER] Audio visualizer - frequency bars and edge glow
-    if (analyserNodeRef.current && frequencyDataRef.current) {
-      analyserNodeRef.current.getByteFrequencyData(frequencyDataRef.current);
-
-      const barCount = 32; // Number of frequency bars
-      const barWidth = canvasSize.width / barCount;
-      const dataStep = Math.floor(frequencyDataRef.current.length / barCount);
-
-      // Helper function to lighten a hex color
-      const lightenColor = (hex: string, percent: number) => {
-        const num = parseInt(hex.replace('#', ''), 16);
-        const r = Math.min(255, Math.floor((num >> 16) + ((255 - (num >> 16)) * percent)));
-        const g = Math.min(255, Math.floor(((num >> 8) & 0x00FF) + ((255 - ((num >> 8) & 0x00FF)) * percent)));
-        const b = Math.min(255, Math.floor((num & 0x0000FF) + ((255 - (num & 0x0000FF)) * percent)));
-        return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
-      };
-
-      // Use lighter shade of background for visualizer
-      const visualizerColor = lightenColor(currentColors.background, 0.25);
-
-      // Calculate average bass frequency for edge glow
-      let bassSum = 0;
-      for (let i = 0; i < 8; i++) {
-        bassSum += frequencyDataRef.current[i];
-      }
-      const bassAverage = bassSum / 8 / 255; // Normalize to 0-1
-
-      // Edge glow effect - reacts to bass
-      if (bassAverage > 0.1) {
-        const glowIntensity = Math.floor(bassAverage * 100);
-        ctx.strokeStyle = visualizerColor;
-        ctx.lineWidth = 8 + (bassAverage * 16); // 8-24px thickness (doubled from 4-12px)
-        ctx.globalAlpha = bassAverage * 0.6; // More visible
-        ctx.strokeRect(0, 0, canvasSize.width, canvasSize.height);
-        ctx.globalAlpha = 1.0; // Reset alpha
-      }
-
-      // Frequency bars centered horizontally (mirrored from center)
-      ctx.fillStyle = visualizerColor;
-      ctx.globalAlpha = 0.4; // More visible
-
-      const centerX = canvasSize.width / 2;
-      const maxBarHeight = 300; // Increased from 150 for much taller bars
-
-      for (let i = 0; i < barCount / 2; i++) {
-        const dataIndex = i * dataStep;
-        const value = frequencyDataRef.current[dataIndex] / 255; // Normalize to 0-1
-        const barHeight = Math.pow(value, 0.5) * maxBarHeight; // Apply power curve for more sensitivity
-
-        const x = i * barWidth;
-
-        // Left half - bars extending upward from center
-        ctx.fillRect(x, centerX - barHeight, barWidth - 1, barHeight);
-
-        // Left half - bars extending downward from center
-        ctx.fillRect(x, centerX, barWidth - 1, barHeight);
-
-        // Right half - mirrored bars extending upward from center
-        ctx.fillRect(canvasSize.width - x - barWidth + 1, centerX - barHeight, barWidth - 1, barHeight);
-
-        // Right half - mirrored bars extending downward from center
-        ctx.fillRect(canvasSize.width - x - barWidth + 1, centerX, barWidth - 1, barHeight);
-      }
-
-      ctx.globalAlpha = 1.0; // Reset alpha
-    }
 
     // [AUDIO] AUDIO INTERACTION PROMPT (first load only)
     if (showAudioPrompt) {
@@ -6987,6 +6945,22 @@ const Pong404: React.FC = () => {
       ctx.shadowBlur = 0;
 
       return; // Don't render game elements when showing start screen
+    }
+
+    // 📐 Apply dynamic playfield scaling transformation
+    const playfieldScale = gameState.playfieldScale || 1.0;
+
+    // Always apply transform (even at 1.0 scale) for consistency
+    ctx.save(); // Save canvas state before transformation
+
+    if (playfieldScale !== 1.0) {
+      // Transform from center of canvas for symmetric scaling
+      const centerX = canvasSize.width / 2;
+      const centerY = canvasSize.height / 2;
+
+      ctx.translate(centerX, centerY); // Move origin to center
+      ctx.scale(playfieldScale, playfieldScale); // Apply scale
+      ctx.translate(-centerX, -centerY); // Move origin back
     }
 
     // Draw playfield borders at the edge of the canvas with music-reactive glow
@@ -7359,16 +7333,16 @@ const Pong404: React.FC = () => {
     }
 
     // 🔫 Draw machine gun balls
-    if (!gameState.isPaused) {
-      const mgBalls = gameState.machineGunBalls || [];
+    if (!gameState.isPaused && gameState.machineGunBalls && Array.isArray(gameState.machineGunBalls)) {
+      const mgBalls = gameState.machineGunBalls;
       if (mgBalls.length > 0) {
-        console.log(`[MACHINE GUN] Rendering ${mgBalls.length} machine gun balls:`, mgBalls);
+        mgBalls.forEach((mgBall: any, index: number) => {
+          if (mgBall && typeof mgBall.x === 'number' && typeof mgBall.y === 'number' && typeof mgBall.size === 'number') {
+            ctx.fillStyle = '#ff8800'; // Orange machine gun balls
+            ctx.fillRect(mgBall.x, mgBall.y, mgBall.size, mgBall.size);
+          }
+        });
       }
-      mgBalls.forEach((mgBall: any) => {
-        console.log(`[MACHINE GUN] Drawing ball at (${mgBall.x}, ${mgBall.y}) size ${mgBall.size}`);
-        ctx.fillStyle = '#ff8800'; // Orange machine gun balls
-        ctx.fillRect(mgBall.x, mgBall.y, mgBall.size, mgBall.size);
-      });
     }
 
 
@@ -8770,6 +8744,58 @@ const Pong404: React.FC = () => {
       ctx.restore();
     }
 
+    // 📐 Restore canvas state after dynamic playfield scaling (always restore since we always save)
+    ctx.restore();
+
+    // [VISUALIZER] Audio visualizer - frequency bars (drawn AFTER scaled content, WITHOUT edge border)
+    if (analyserNodeRef.current && frequencyDataRef.current) {
+      analyserNodeRef.current.getByteFrequencyData(frequencyDataRef.current);
+
+      const barCount = 32; // Number of frequency bars
+      const barWidth = canvasSize.width / barCount;
+      const dataStep = Math.floor(frequencyDataRef.current.length / barCount);
+
+      // Helper function to lighten a hex color
+      const lightenColor = (hex: string, percent: number) => {
+        const num = parseInt(hex.replace('#', ''), 16);
+        const r = Math.min(255, Math.floor((num >> 16) + ((255 - (num >> 16)) * percent)));
+        const g = Math.min(255, Math.floor(((num >> 8) & 0x00FF) + ((255 - ((num >> 8) & 0x00FF)) * percent)));
+        const b = Math.min(255, Math.floor((num & 0x0000FF) + ((255 - (num & 0x0000FF)) * percent)));
+        return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+      };
+
+      // Use lighter shade of background for visualizer
+      const visualizerColor = lightenColor(currentColors.background, 0.25);
+
+      // Frequency bars centered horizontally (mirrored from center) - NO EDGE BORDER
+      ctx.fillStyle = visualizerColor;
+      ctx.globalAlpha = 0.4; // More visible
+
+      const centerX = canvasSize.width / 2;
+      const maxBarHeight = 300; // Increased from 150 for much taller bars
+
+      for (let i = 0; i < barCount / 2; i++) {
+        const dataIndex = i * dataStep;
+        const value = frequencyDataRef.current[dataIndex] / 255; // Normalize to 0-1
+        const barHeight = Math.pow(value, 0.5) * maxBarHeight; // Apply power curve for more sensitivity
+
+        const x = i * barWidth;
+
+        // Left half - bars extending upward from center
+        ctx.fillRect(x, centerX - barHeight, barWidth - 1, barHeight);
+
+        // Left half - bars extending downward from center
+        ctx.fillRect(x, centerX, barWidth - 1, barHeight);
+
+        // Right half - mirrored bars extending upward from center
+        ctx.fillRect(canvasSize.width - x - barWidth + 1, centerX - barHeight, barWidth - 1, barHeight);
+
+        // Right half - mirrored bars extending downward from center
+        ctx.fillRect(canvasSize.width - x - barWidth + 1, centerX, barWidth - 1, barHeight);
+      }
+
+      ctx.globalAlpha = 1.0; // Reset alpha
+    }
 
   }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, crtEffect, applyCRTEffect, showAudioPrompt]);
 

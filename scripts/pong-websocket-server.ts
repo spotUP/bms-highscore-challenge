@@ -1512,6 +1512,11 @@ class PongWebSocketServer {
         }
       }
 
+      // 📐 Update playfield scaling animation (always, even when paused)
+      if (this.updatePlayfieldScale(gameState, now)) {
+        gameStateChanged = true;
+      }
+
       // Broadcast debug removed for cleaner console
 
       // ALWAYS broadcast paddle positions - players should be able to move at all times
@@ -1541,7 +1546,8 @@ class PongWebSocketServer {
           colorIndex: gameState.colorIndex,
           extraBalls: gameState.extraBalls,
           machineGunBalls: gameState.machineGunBalls,
-          machineGunActive: gameState.machineGunActive
+          machineGunActive: gameState.machineGunActive,
+          playfieldScale: gameState.playfieldScale // 📐 Broadcast playfield scaling for dynamic playfield effect
         }
       });
 
@@ -1870,13 +1876,22 @@ class PongWebSocketServer {
       const wallCollisionCooldown = 200;
 
       if (now - gameState.ball.lastWallCollisionTime > wallCollisionCooldown) {
-        console.log(`🏆 WALL SCORING: Ball hit ${wallCollisionCheck.side} boundary`);
+        console.log(`🏆 MAIN BALL SCORED: Hit ${wallCollisionCheck.side} boundary - resetting`);
         gameState.ball.lastWallCollisionTime = now;
-        this.handleScoring(gameState, wallCollisionCheck.side);
+        this.handleScoring(gameState, wallCollisionCheck.side, gameState.ball.lastTouchedBy, gameState.ball.previousTouchedBy, false, true);
         ballChanged = true;
 
         // Skip paddle collision checks if wall scoring occurred
         return ballChanged;
+      } else {
+        // Cooldown active - bounce ball back to prevent getting stuck
+        if (wallCollisionCheck.side === 'top' || wallCollisionCheck.side === 'bottom') {
+          gameState.ball.dy = -gameState.ball.dy;
+        } else {
+          gameState.ball.dx = -gameState.ball.dx;
+        }
+        console.log(`⚠️ Ball bounce (cooldown active) - preventing stuck ball`);
+        ballChanged = true;
       }
     }
 
@@ -2486,7 +2501,7 @@ class PongWebSocketServer {
         );
         if (wallCollisionCheck && wallCollisionCheck.hit) {
           console.log(`🎾 EXTRA BALL: Hit ${wallCollisionCheck.side} boundary (lastTouchedBy: ${extraBall.lastTouchedBy})`);
-          this.handleScoring(gameState, wallCollisionCheck.side, extraBall.lastTouchedBy, null);
+          this.handleScoring(gameState, wallCollisionCheck.side, extraBall.lastTouchedBy, null, false, false); // Don't pause for extra balls
           extraBallsToRemove.push(i);
           ballChanged = true;
           continue;
@@ -2501,11 +2516,11 @@ class PongWebSocketServer {
       }
     }
 
-    // 🔫 MACHINE GUN: Rapidly fire balls from the shooter's paddle
+    // 🔫 MACHINE GUN: Rapidly fire balls from the shooter's paddle (FIRING ONLY)
     if (gameState.machineGunActive && gameState.machineGunShooter) {
       const now = Date.now();
       const timeSinceStart = now - gameState.machineGunStartTime;
-      const fireInterval = 150; // Fire every 150ms (6.6 balls per second)
+      const fireInterval = 300; // Fire every 300ms (3.3 balls per second - half the rate)
       const ballsFired = Math.floor(timeSinceStart / fireInterval);
       const expectedBallCount = ballsFired;
 
@@ -2517,7 +2532,7 @@ class PongWebSocketServer {
       if (gameState.machineGunBalls.length < expectedBallCount) {
         const shooter = gameState.machineGunShooter;
         const ballSize = 10; // Smaller balls
-        const speed = 8; // Slower speed so they're visible longer
+        const speed = 6.0; // Quadruple original speed (was 1.5, then 3.0, now 6.0)
         let startX = 400;
         let startY = 300;
         let dx = 0;
@@ -2576,11 +2591,21 @@ class PongWebSocketServer {
         console.log(`🔫 MACHINE GUN: Fired ball #${gameState.machineGunBalls.length} from ${shooter}`);
         ballChanged = true;
       }
+    }
 
+    // 🔫 MACHINE GUN BALLS: Update existing balls (runs even after firing stops)
+    if (gameState.machineGunBalls.length > 0) {
+      if (frameCount % 30 === 0) {
+        console.log(`🔫 UPDATING ${gameState.machineGunBalls.length} machine gun balls (active=${gameState.machineGunActive})`);
+      }
       // Update machine gun balls (same logic as extra balls)
       const mgBallsToRemove: number[] = [];
       for (let i = 0; i < gameState.machineGunBalls.length; i++) {
         const mgBall = gameState.machineGunBalls[i];
+
+        if (frameCount % 30 === 0 && i < 3) {
+          console.log(`🔫 Ball ${i}: pos=(${mgBall.x.toFixed(1)}, ${mgBall.y.toFixed(1)}) vel=(${mgBall.dx.toFixed(2)}, ${mgBall.dy.toFixed(2)})`);
+        }
 
         // Create paddle collision objects
         const leftPaddle = { x: BORDER_THICKNESS * 2, y: gameState.paddles.left.y, width: gameState.paddles.left.width, height: gameState.paddles.left.height, side: 'left' as const, velocity: gameState.paddles.left.velocity || 0 };
@@ -2634,6 +2659,10 @@ class PongWebSocketServer {
         mgBall.x += mgBall.dx;
         mgBall.y += mgBall.dy;
 
+        if (frameCount % 10 === 0 && i === 0) {
+          console.log(`🔫 MG Ball #${i}: pos=(${mgBall.x.toFixed(1)}, ${mgBall.y.toFixed(1)}) vel=(${mgBall.dx.toFixed(1)}, ${mgBall.dy.toFixed(1)})`);
+        }
+
         // Check wall collision (scoring)
         const wallCollision = ServerCollisionDetector.detectBallWall(
           { x: mgBall.x, y: mgBall.y, size: mgBall.size, width: mgBall.size, height: mgBall.size, vx: mgBall.dx, vy: mgBall.dy, lastTouchedBy: mgBall.lastTouchedBy },
@@ -2642,8 +2671,8 @@ class PongWebSocketServer {
         );
 
         if (wallCollision && wallCollision.hit) {
-          console.log(`🔫 MACHINE GUN BALL: Hit ${wallCollision.side} boundary`);
-          this.handleScoring(gameState, wallCollision.side, mgBall.lastTouchedBy, null);
+          console.log(`🔫 MACHINE GUN BALL SCORED: Hit ${wallCollision.side} boundary - NO PAUSE/RESET`);
+          this.handleScoring(gameState, wallCollision.side, mgBall.lastTouchedBy, null, false, false); // Don't pause for machine gun balls
           mgBallsToRemove.push(i);
           ballChanged = true;
           continue;
@@ -2653,8 +2682,14 @@ class PongWebSocketServer {
       }
 
       // Remove machine gun balls that scored
+      if (mgBallsToRemove.length > 0) {
+        console.log(`🔫 REMOVING ${mgBallsToRemove.length} balls that hit walls`);
+      }
       for (let i = mgBallsToRemove.length - 1; i >= 0; i--) {
         gameState.machineGunBalls.splice(mgBallsToRemove[i], 1);
+      }
+      if (frameCount % 30 === 0) {
+        console.log(`🔫 After cleanup: ${gameState.machineGunBalls.length} balls remaining`);
       }
     }
 
@@ -2906,7 +2941,7 @@ class PongWebSocketServer {
     return ballChanged;
   }
 
-  private handleScoring(gameState: GameState, boundaryHit: 'left' | 'right' | 'top' | 'bottom', lastTouchedBy?: 'left' | 'right' | 'top' | 'bottom' | null, previousTouchedBy?: 'left' | 'right' | 'top' | 'bottom' | null): void {
+  private handleScoring(gameState: GameState, boundaryHit: 'left' | 'right' | 'top' | 'bottom', lastTouchedBy?: 'left' | 'right' | 'top' | 'bottom' | null, previousTouchedBy?: 'left' | 'right' | 'top' | 'bottom' | null, shouldPause: boolean = true, isMainBall: boolean = true): void {
     // Check for Great Wall protection (only for main ball)
     if (!lastTouchedBy && gameState.ball.hasGreatWall && gameState.ball.greatWallSide === boundaryHit) {
       console.log(`🧱 GREAT WALL: Protecting ${boundaryHit} wall - no score!`);
@@ -2958,15 +2993,14 @@ class PongWebSocketServer {
       gameState.gameEnded = true;
       gameState.isPlaying = false;
       console.log(`🎉 Game Over! Winner: ${scoringPlayer}`);
-    } else {
-      // Pause for goal celebration (2 seconds)
-      gameState.isPaused = true;
-      gameState.pauseEndTime = Date.now() + 2000;
-      console.log(`⏸️ Pausing for goal celebration, resuming in 2 seconds`);
     }
+    // No more pausing - just keep the action going!
 
-    // Reset ball position
-    this.resetBall(gameState);
+    // Reset ball position when main ball scores (not machine gun/extra balls)
+    if (isMainBall) {
+      this.resetBall(gameState);
+      console.log(`⚡ Ball reset - continuing gameplay without pause`);
+    }
   }
 
   private resetBall(gameState: GameState): void {
@@ -3082,7 +3116,7 @@ class PongWebSocketServer {
       'lightning_storm', 'invisible_paddles', 'ball_trail_mine', 'paddle_swap', 'disco_mode', 'pac_man',
       'banana_peel', 'rubber_ball', 'drunk_paddles', 'magnet_ball', 'balloon_ball', 'earthquake',
       'confetti_cannon', 'hypno_ball', 'conga_line', 'arkanoid', 'attractor', 'repulsor', 'great_wall', 'labyrinth'
-    ]; // Removed 'portal_ball' and 'blocker'
+    ]; // Removed 'portal_ball' and 'blocker' (too complex, needs proper implementation)
     const type = pickupTypes[Math.floor(Math.random() * pickupTypes.length)];
 
     // Pickup size is 32x32 (matches score counter font size)
@@ -3208,18 +3242,19 @@ class PongWebSocketServer {
         // Rapidly fire balls for 3 seconds
         gameState.machineGunActive = true;
         gameState.machineGunStartTime = Date.now();
-        gameState.machineGunShooter = gameState.ball.lastTouchedBy;
+        // Default to 'right' if ball hasn't touched any paddle yet
+        gameState.machineGunShooter = gameState.ball.lastTouchedBy || 'right';
         effect.duration = 3000; // 3 seconds of machine gun
-        effect.activator = gameState.ball.lastTouchedBy || 'none';
-        console.log(`🔫 MACHINE GUN activated by: ${gameState.machineGunShooter} at ${Date.now()}`);
-        this.broadcastRobotSpeech(roomId, 'MACHINE GUN!');
+        effect.activator = gameState.ball.lastTouchedBy || 'right';
+        console.log(`🔫 MACHINE GUN activated by: ${gameState.machineGunShooter}`);
         break;
       case 'dynamic_playfield':
-        // Grow and shrink playfield with easing for 15 seconds
+        // Pulsating playfield for 15 seconds - CHAOTIC zoom for maximum challenge
         gameState.playfieldScaleStart = gameState.playfieldScale;
-        gameState.playfieldScaleTarget = 0.7 + Math.random() * 0.6; // Scale between 0.7-1.3
+        gameState.playfieldScaleTarget = 0.3 + Math.random() * 0.7; // Scale between 0.3-1.0 (EXTREME zoom)
         gameState.playfieldScaleTime = Date.now();
-        effect.duration = 15000; // 15 seconds
+        effect.duration = 15000; // 15 seconds of pulsating
+        console.log(`📐 DYNAMIC PLAYFIELD: Starting at ${gameState.playfieldScale.toFixed(2)}x, target ${gameState.playfieldScaleTarget.toFixed(2)}x (pulsating for 15s)`);
         break;
       case 'switch_sides':
         // All players switch to opposite sides and their scores follow them
@@ -3641,6 +3676,53 @@ class PongWebSocketServer {
     return effectsChanged;
   }
 
+  // 📐 Easing function for bouncy playfield scaling animation
+  private easeInOutBack(t: number): number {
+    const c1 = 1.70158;
+    const c2 = c1 * 1.525;
+    return t < 0.5
+      ? (Math.pow(2 * t, 2) * ((c2 + 1) * 2 * t - c2)) / 2
+      : (Math.pow(2 * t - 2, 2) * ((c2 + 1) * (t * 2 - 2) + c2) + 2) / 2;
+  }
+
+  // 📐 Update playfield scaling with smooth animation
+  private updatePlayfieldScale(gameState: GameState, now: number): boolean {
+    // Check if dynamic playfield effect is active
+    const dynamicPlayfieldActive = gameState.activeEffects.some(e => e.type === 'dynamic_playfield');
+
+    if (gameState.playfieldScale === gameState.playfieldScaleTarget) {
+      // If dynamic playfield is active and animation completed, start a new pulse
+      if (dynamicPlayfieldActive) {
+        gameState.playfieldScaleStart = gameState.playfieldScale;
+        gameState.playfieldScaleTarget = 0.3 + Math.random() * 0.7; // New random scale between 0.3-1.0 (EXTREME zoom)
+        gameState.playfieldScaleTime = now;
+        console.log(`📐 NEW PULSE: ${gameState.playfieldScale.toFixed(2)}x → ${gameState.playfieldScaleTarget.toFixed(2)}x`);
+        return true;
+      }
+      return false; // No animation in progress
+    }
+
+    const ANIMATION_DURATION = 500; // 0.5 seconds for FAST, CHAOTIC transitions
+    const elapsed = now - gameState.playfieldScaleTime;
+
+    if (elapsed >= ANIMATION_DURATION) {
+      // Animation complete
+      gameState.playfieldScale = gameState.playfieldScaleTarget;
+      console.log(`📐 Pulse complete: ${gameState.playfieldScale.toFixed(2)}x`);
+      return true;
+    }
+
+    // Calculate eased progress (0-1) with bouncy overshoot
+    const progress = elapsed / ANIMATION_DURATION;
+    const easedProgress = this.easeInOutBack(progress);
+
+    // Interpolate between start and target
+    gameState.playfieldScale = gameState.playfieldScaleStart +
+      (gameState.playfieldScaleTarget - gameState.playfieldScaleStart) * easedProgress;
+
+    return true;
+  }
+
   private reversePickupEffect(gameState: GameState, effect: ActiveEffect): void {
     switch (effect.type) {
       case 'big_ball':
@@ -3721,12 +3803,15 @@ class PongWebSocketServer {
 
       case 'machine_gun':
         gameState.machineGunActive = false;
-        gameState.machineGunBalls = [];
+        // Don't clear balls - let them finish their flight
         break;
 
       case 'dynamic_playfield':
-        gameState.playfieldScale = 1.0;
+        // Animate back to normal size
+        gameState.playfieldScaleStart = gameState.playfieldScale;
         gameState.playfieldScaleTarget = 1.0;
+        gameState.playfieldScaleTime = Date.now();
+        console.log(`📐 DYNAMIC PLAYFIELD ENDING: Animating back from ${gameState.playfieldScale.toFixed(2)}x to 1.00x`);
         break;
 
       case 'time_warp':

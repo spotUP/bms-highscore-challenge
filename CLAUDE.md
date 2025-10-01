@@ -14,5 +14,40 @@
 - remember the pixel size in pong404 is 4x4 (use this for every pickup etc that you draw)
 - remember always check the console after adding/updating a new feature and fix all console errors
 - remember that pickups always should be handled by the websocket
-- the server is on port 8080
-- you keep opening http://localhost:8082/404 even though we forced the server to http://localhost:8080/404
+- remember we don't have a single player mode, only online multiplayer that can act as singleplayer with ai opponents.
+
+## 🚀 SERVER SETUP (IMPORTANT - READ THIS EVERY TIME YOU RESTART SERVERS)
+
+**The ONLY correct way to start the dev environment:**
+```bash
+npm run dev
+```
+
+**What this does:**
+- Starts WebSocket server on port **3002** (scripts/pong-websocket-server.ts)
+- Starts Vite dev server on port **8080** (configured in vite.config.ts)
+- Both run simultaneously via `npm run websocket & vite`
+
+**Port Configuration:**
+- Frontend (Vite): http://localhost:8080
+- WebSocket: ws://localhost:3002
+- Client connects to WebSocket at `ws://localhost:3002` (see Pong404.tsx line 271)
+
+**NEVER:**
+- Don't add `PORT=8080` prefix when starting dev server
+- Don't run WebSocket server on port 8080
+- Don't try to connect to `ws://localhost:8080`
+- Don't start multiple dev servers
+
+**To restart servers cleanly:**
+```bash
+killall -9 node && sleep 1 && npm run dev
+```
+
+**Files to check if connection fails:**
+- `vite.config.ts` line 13: Vite port (should be 8080)
+- `scripts/pong-websocket-server.ts` line 4194: WebSocket port (defaults to 3002)
+- `src/pages/Pong404.tsx` line 271: Client WebSocket URL (should be ws://localhost:3002)
+
+**URL to open in browser:**
+- http://localhost:8080/404 (NOT 8082, NOT 8083)

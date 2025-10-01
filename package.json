@@ -33,7 +33,7 @@
     "lint": "eslint . || true",
     "preview": "vite preview",
     "start": "tsx scripts/pong-websocket-server.ts",
-    "websocket": "tsx scripts/pong-websocket-server.ts",
+    "websocket": "tsx --watch scripts/pong-websocket-server.ts",
     "dedupe-achievements": "tsx scripts/remove-duplicate-achievements.ts",
     "apply-migration": "tsx scripts/apply-migration.ts",
     "check-env": "tsx scripts/check-env.ts",
