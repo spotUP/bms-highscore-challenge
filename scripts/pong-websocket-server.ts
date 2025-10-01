@@ -3474,8 +3474,9 @@ class PongWebSocketServer {
         // Generate maze with clear edges (50 pixels = ~5cm at typical scale)
         gameState.labyrinthActive = true;
         gameState.labyrinthStartTime = Date.now();
-        gameState.mazeWalls = this.generateMaze(this.canvasSize.width, this.canvasSize.height);
-        gameState.labyrinthCoins = this.generateLabyrinthCoins(gameState.mazeWalls, this.canvasSize.width, this.canvasSize.height);
+        // Use 800x800 canvas size (standard for all rooms)
+        gameState.mazeWalls = this.generateMaze(800, 800);
+        gameState.labyrinthCoins = this.generateLabyrinthCoins(gameState.mazeWalls, 800, 800);
         effect.duration = 30000; // 30 seconds
         console.log(`🏛️ LABYRINTH activated: ${gameState.mazeWalls.length} walls, ${gameState.labyrinthCoins.length} coins`);
         break;
