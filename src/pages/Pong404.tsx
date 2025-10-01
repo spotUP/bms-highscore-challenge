@@ -142,6 +142,8 @@ interface GameState {
   machineGunShooter: 'left' | 'right' | 'top' | 'bottom' | null;
   paddlesDrunk: boolean;
   drunkStartTime: number;
+  timeWarpActive: boolean;
+  timeWarpFactor: number;
 }
 
 interface MultiplayerState {
