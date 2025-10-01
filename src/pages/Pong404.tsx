@@ -2952,6 +2952,7 @@ const Pong404: React.FC = () => {
   const masterLimiterRef = useRef<any>(null);
   const discoMusicRef = useRef<{ kick: any; bass: any; synth: any; hihat: any; seq: any; gain: any } | null>(null);
   const hypnoSoundRef = useRef<{ osc1: any; osc2: any; lfo1: any; lfo2: any; reverb: any; gain: any } | null>(null);
+  const timeWarpSoundRef = useRef<{ osc: OscillatorNode; gain: GainNode } | null>(null);
   const gameStartTimeRef = useRef<number>(Date.now());
   const lastMoveTimesRef = useRef<Map<string, number>>(new Map());
 
@@ -6779,6 +6780,78 @@ const Pong404: React.FC = () => {
     ctx.restore();
   }, [gameState.colorIndex]);
 
+  // ⏱️ Time Warp Sound Effect
+  const startTimeWarpSound = useCallback((speed: number) => {
+    if (!audioContextRef.current || timeWarpSoundRef.current) return;
+
+    const ctx = audioContextRef.current;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    // Base frequency that changes with speed
+    // 0.5x speed = 200Hz (low, slow)
+    // 2.0x speed = 800Hz (high, fast)
+    const baseFreq = speed < 1 ? 200 : 800;
+    osc.frequency.value = baseFreq;
+    osc.type = 'sine';
+
+    // Volume based on speed
+    gain.gain.value = 0.15;
+
+    // Connect audio graph
+    osc.connect(gain);
+    if (beepsMasterGainRef.current) {
+      gain.connect(beepsMasterGainRef.current);
+    } else {
+      gain.connect(ctx.destination);
+    }
+
+    osc.start();
+    timeWarpSoundRef.current = { osc, gain };
+
+    console.log(`⏱️ TIME WARP SOUND: Started at ${baseFreq}Hz (speed: ${speed}x)`);
+  }, []);
+
+  const updateTimeWarpSound = useCallback((speed: number) => {
+    if (!timeWarpSoundRef.current) return;
+
+    // Update frequency smoothly
+    const baseFreq = speed < 1 ? 200 : 800;
+    timeWarpSoundRef.current.osc.frequency.setValueAtTime(
+      baseFreq,
+      audioContextRef.current!.currentTime
+    );
+  }, []);
+
+  const stopTimeWarpSound = useCallback(() => {
+    if (!timeWarpSoundRef.current) return;
+
+    try {
+      timeWarpSoundRef.current.gain.gain.exponentialRampToValueAtTime(
+        0.001,
+        audioContextRef.current!.currentTime + 0.3
+      );
+      setTimeout(() => {
+        if (timeWarpSoundRef.current) {
+          timeWarpSoundRef.current.osc.stop();
+          timeWarpSoundRef.current = null;
+        }
+      }, 300);
+      console.log('⏱️ TIME WARP SOUND: Stopped');
+    } catch (e) {
+      timeWarpSoundRef.current = null;
+    }
+  }, []);
+
+  // Watch for time warp effect activation
+  useEffect(() => {
+    if (gameState.timeWarpActive && gameState.timeWarpFactor !== 1.0) {
+      startTimeWarpSound(gameState.timeWarpFactor);
+      updateTimeWarpSound(gameState.timeWarpFactor);
+    } else {
+      stopTimeWarpSound();
+    }
+  }, [gameState.timeWarpActive, gameState.timeWarpFactor, startTimeWarpSound, updateTimeWarpSound, stopTimeWarpSound]);
 
   // High-performance render function
   const render = useCallback(() => {
