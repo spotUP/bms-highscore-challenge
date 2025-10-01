@@ -6012,6 +6012,9 @@ const Pong404: React.FC = () => {
   // Handle keyboard input
   useEffect(() => {
     const handleKeyDown = async (e: KeyboardEvent) => {
+      // Log ALL key presses for debugging
+      console.log(`[KEY] Key pressed: "${e.key}" code: "${e.code}" repeat: ${e.repeat}`);
+
       // Ignore key repeat events
       if (e.repeat) return;
 
