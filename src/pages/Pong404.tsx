@@ -1233,7 +1233,7 @@ const Pong404: React.FC = () => {
 
   // Trigger Render.com server deploy/wake
   const triggerServerStart = useCallback(async () => {
-    const RENDER_DEPLOY_HOOK = 'https://api.render.com/deploy/srv-d3b6ku6r433s738fn32g?key=geHuFzc6DF0';
+    const RENDER_DEPLOY_HOOK = 'https://api.render.com/deploy/srv-d3bcuf3e5dus73cf273g?key=bXyKnAwwSXU';
     try {
       console.log('[ROCKET] Triggering Render.com server start/wake...');
       setConnectionMessage('[ROCKET] Starting server on Render.com...');
