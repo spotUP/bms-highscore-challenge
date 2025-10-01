@@ -265,9 +265,25 @@ interface Pickup {
   id: string;
   x: number;
   y: number;
-  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'blocker' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall';
+  type: 'speed_up' | 'speed_down' | 'big_ball' | 'small_ball' | 'drunk_ball' | 'grow_paddle' | 'shrink_paddle' | 'reverse_controls' | 'invisible_ball' | 'multi_ball' | 'freeze_opponent' | 'super_speed' | 'coin_shower' | 'teleport_ball' | 'gravity_in_space' | 'super_striker' | 'sticky_paddles' | 'machine_gun' | 'dynamic_playfield' | 'switch_sides' | 'time_warp' | 'portal_ball' | 'mirror_mode' | 'quantum_ball' | 'black_hole' | 'lightning_storm' | 'invisible_paddles' | 'ball_trail_mine' | 'paddle_swap' | 'disco_mode' | 'pac_man' | 'banana_peel' | 'rubber_ball' | 'drunk_paddles' | 'magnet_ball' | 'balloon_ball' | 'earthquake' | 'confetti_cannon' | 'hypno_ball' | 'conga_line' | 'arkanoid' | 'attractor' | 'repulsor' | 'wind' | 'great_wall' | 'labyrinth';
   createdAt: number;
   size?: number;
+}
+
+interface MazeWall {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface LabyrinthCoin {
+  id: string;
+  x: number;
+  y: number;
+  collected: boolean;
+  collectedAt?: number;
+  rotation?: number;
 }
 
 interface Coin {
@@ -276,6 +292,9 @@ interface Coin {
   y: number;
   createdAt: number;
   size: number;
+  collected?: boolean;
+  collectedAt?: number;
+  rotation?: number;
 }
 
 interface ActiveEffect {
@@ -414,7 +433,13 @@ interface GameState {
   arkanoidBricks: any[];
   arkanoidActive: boolean;
   arkanoidMode: boolean;
+  // Labyrinth mode properties
+  labyrinthActive: boolean;
+  mazeWalls: MazeWall[];
+  labyrinthCoins: LabyrinthCoin[];
+  labyrinthStartTime: number;
   arkanoidBricksHit: number;
+  isDebugMode: boolean;
 }
 
 interface Player {
@@ -562,6 +587,16 @@ class PongWebSocketServer {
           if (player) player.lastSeen = Date.now();
         }
         break;
+      case 'test_pickup':
+        console.log(`🔧 Received test_pickup message: playerId=${playerId}, roomId=${roomId}, pickupType=${message.pickupType || data?.pickupType}`);
+        this.handleTestPickup(playerId, roomId, message.pickupType || data?.pickupType);
+        break;
+      case 'reset_paddle_sizes':
+        this.handleResetPaddleSizes(playerId, roomId);
+        break;
+      case 'super_striker_aim':
+        this.handleSuperStrikerAim(playerId, roomId, data);
+        break;
       default:
         console.log('[?] Unknown message type:', fullType, 'original:', type);
     }
@@ -672,6 +707,20 @@ class PongWebSocketServer {
       // Reduce ball velocity to make gameplay more reasonable (was 10, now 3)
       room.gameState.ball.dx = Math.random() > 0.5 ? 3 : -3;
       room.gameState.ball.dy = Math.random() > 0.5 ? 3 : -3;
+      // Reset all paddle sizes to original
+      room.gameState.paddles.left.height = room.gameState.paddles.left.originalHeight;
+      room.gameState.paddles.right.height = room.gameState.paddles.right.originalHeight;
+      room.gameState.paddles.top.width = room.gameState.paddles.top.originalWidth;
+      room.gameState.paddles.bottom.width = room.gameState.paddles.bottom.originalWidth;
+
+      // Reset all pickup states
+      room.gameState.activeEffects = [];
+      room.gameState.extraBalls = [];
+      room.gameState.coins = [];
+      room.gameState.stickyPaddlesActive = false;
+      room.gameState.machineGunActive = false;
+      room.gameState.earthquakeActive = false;
+
       console.log(`🎮 FRESH GAME STARTED in room ${roomId} with ${room.players.size} player(s) - All scores reset to 0-0-0-0`);
     }
   }
@@ -735,15 +784,15 @@ class PongWebSocketServer {
         if (player.side === 'left' || player.side === 'right') {
           const paddle = room.gameState.paddles[player.side];
           paddle.y += offset;
-          // Clamp to boundaries
-          const maxY = this.canvasSize.height - (BORDER_THICKNESS * 2) - paddle.height;
-          paddle.y = Math.max(BORDER_THICKNESS * 2, Math.min(paddle.y, maxY));
+          // Clamp to boundaries (border is outside playfield, so 0 to height)
+          const maxY = this.canvasSize.height - paddle.height;
+          paddle.y = Math.max(0, Math.min(paddle.y, maxY));
         } else {
           const paddle = room.gameState.paddles[player.side];
           paddle.x += offset;
-          // Clamp to boundaries
-          const maxX = this.canvasSize.width - (BORDER_THICKNESS * 2) - paddle.width;
-          paddle.x = Math.max(BORDER_THICKNESS * 2, Math.min(paddle.x, maxX));
+          // Clamp to boundaries (border is outside playfield, so 0 to width)
+          const maxX = this.canvasSize.width - paddle.width;
+          paddle.x = Math.max(0, Math.min(paddle.x, maxX));
         }
       }
     }
@@ -858,6 +907,159 @@ class PongWebSocketServer {
     });
 
     console.log(`[↻] Room ${roomId} reset by gamemaster ${playerId}`);
+  }
+
+  private handleResetPaddleSizes(playerId: string, roomId: string) {
+    const room = this.rooms.get(roomId);
+    if (!room) {
+      console.log(`[X] Reset paddle sizes failed: Room ${roomId} not found`);
+      return;
+    }
+
+    console.log(`🔧 Resetting all paddle sizes to original in room ${roomId}`);
+
+    // Reset all paddle sizes to original
+    room.gameState.paddles.left.height = room.gameState.paddles.left.originalHeight;
+    room.gameState.paddles.right.height = room.gameState.paddles.right.originalHeight;
+    room.gameState.paddles.top.width = room.gameState.paddles.top.originalWidth;
+    room.gameState.paddles.bottom.width = room.gameState.paddles.bottom.originalWidth;
+
+    // Broadcast updated game state
+    this.broadcastToRoom(roomId, {
+      type: 'game_state',
+      data: room.gameState
+    });
+  }
+
+  private handleSuperStrikerAim(playerId: string, roomId: string, data: any) {
+    const player = this.players.get(playerId);
+    if (!player) return;
+
+    const room = this.rooms.get(roomId);
+    if (!room) return;
+
+    // Check if super_striker is active and this player activated it
+    const strikerEffect = room.gameState.activeEffects.find(e => e.type === 'super_striker');
+    if (!strikerEffect || strikerEffect.activator !== player.side) return;
+
+    // Check if ball is still in aiming mode
+    if (!room.gameState.ball.isAiming) return;
+
+    // Update aim direction based on player input
+    const aimAngle = data.angle; // Angle in radians
+    const speed = 15; // Super striker speed
+
+    // Set ball velocity based on aim angle
+    room.gameState.ball.dx = Math.cos(aimAngle) * speed;
+    room.gameState.ball.dy = Math.sin(aimAngle) * speed;
+    room.gameState.ball.isAiming = false;
+
+    // Remove the effect immediately after firing
+    room.gameState.activeEffects = room.gameState.activeEffects.filter(e => e.type !== 'super_striker');
+
+    console.log(`🎯 SUPER STRIKER fired by ${player.side} at angle ${aimAngle} (${(aimAngle * 180 / Math.PI).toFixed(1)}°)`);
+  }
+
+  private handleTestPickup(playerId: string, roomId: string, pickupType: string) {
+    const room = this.rooms.get(roomId);
+    if (!room) {
+      console.log(`[X] Test pickup failed: Room ${roomId} not found`);
+      return;
+    }
+
+    console.log(`🔧 Test pickup activated: ${pickupType} in room ${roomId}`);
+
+    // Enable debug mode to disable random pickup spawning
+    room.gameState.isDebugMode = true;
+
+    // Clear all existing pickups and effects
+    room.gameState.pickups = [];
+    room.gameState.activeEffects = [];
+    room.gameState.coins = [];
+    room.gameState.walls = [];
+    room.gameState.confetti = [];
+    room.gameState.congaBalls = [];
+    room.gameState.labyrinthCoins = [];
+    room.gameState.mazeWalls = [];
+    room.gameState.labyrinthActive = false;
+    room.gameState.arkanoidBricks = [];
+    room.gameState.arkanoidActive = false;
+
+    // Reset ball effects
+    room.gameState.ball.isDrunk = false;
+    room.gameState.ball.isStuck = false;
+    room.gameState.ball.stuckToPaddle = null;
+    room.gameState.ball.hasPortal = false;
+    room.gameState.ball.isMirror = false;
+    room.gameState.ball.mirrorBalls = [];
+    room.gameState.ball.isQuantum = false;
+    room.gameState.ball.quantumPositions = [];
+    room.gameState.ball.hasTrailMines = false;
+    room.gameState.ball.trailMines = [];
+    room.gameState.ball.isSlippery = false;
+    room.gameState.ball.bounciness = 1;
+    room.gameState.ball.isMagnetic = false;
+    room.gameState.ball.isFloating = false;
+    room.gameState.ball.isHypnotic = false;
+    room.gameState.ball.hasWind = false;
+    room.gameState.ball.hasGreatWall = false;
+    room.gameState.ball.greatWallSide = null;
+    room.gameState.ball.hasGravity = false;
+    room.gameState.ball.isAiming = false;
+    room.gameState.ball.aimStartTime = 0;
+    room.gameState.ball.aimX = 0;
+    room.gameState.ball.aimY = 0;
+
+    // Reset paddle effects (but NOT paddle sizes - let them animate)
+    room.gameState.paddlesDrunk = false;
+    room.gameState.drunkStartTime = 0;
+    room.gameState.earthquakeActive = false;
+    room.gameState.earthquakeStartTime = 0;
+    room.gameState.discoMode = false;
+    room.gameState.discoStartTime = 0;
+    room.gameState.hypnoStartTime = 0;
+    room.gameState.stickyPaddlesActive = false;
+    room.gameState.machineGunActive = false;
+    room.gameState.machineGunBalls = [];
+    room.gameState.extraBalls = [];
+
+    // DON'T reset paddle sizes here - let the grow/shrink effects handle it
+    // This allows the animation to work properly without constant resets
+
+    // Reset ball size to original (except for ball size pickups)
+    if (pickupType !== 'big_ball' && pickupType !== 'small_ball') {
+      room.gameState.ball.size = room.gameState.ball.originalSize;
+    }
+
+    // Find which side this player is on
+    const player = room.players.get(playerId);
+    if (player) {
+      // Set lastTouchedBy to the player's side so pickups affect the correct paddle
+      room.gameState.ball.lastTouchedBy = player.side;
+      console.log(`🔧 Test pickup: Player ${playerId} is on ${player.side} side - will affect ${player.side} paddle`);
+      console.log(`🔧 Current paddle sizes: left=${room.gameState.paddles.left.height}, right=${room.gameState.paddles.right.height}, top=${room.gameState.paddles.top.width}, bottom=${room.gameState.paddles.bottom.width}`);
+    } else {
+      console.log(`🔧 Test pickup: Player ${playerId} NOT FOUND in room`);
+    }
+
+    // Create a virtual pickup at ball position
+    const pickup: Pickup = {
+      id: `test_${Date.now()}`,
+      x: room.gameState.ball.x,
+      y: room.gameState.ball.y,
+      type: pickupType as any,
+      createdAt: Date.now(),
+      size: 32
+    };
+
+    // Activate the pickup immediately
+    this.applyPickupEffect(room.gameState, pickup, roomId);
+
+    // Broadcast updated game state
+    this.broadcastToRoom(roomId, {
+      type: 'game_state',
+      data: room.gameState
+    });
   }
 
   private handlePlayerDisconnect(playerId: string) {
@@ -1092,7 +1294,13 @@ class PongWebSocketServer {
       arkanoidBricks: [],
       arkanoidActive: false,
       arkanoidMode: false,
-      arkanoidBricksHit: 0
+      // Labyrinth mode properties
+      labyrinthActive: false,
+      mazeWalls: [],
+      labyrinthCoins: [],
+      labyrinthStartTime: 0,
+      arkanoidBricksHit: 0,
+      isDebugMode: false
     };
   }
 
@@ -1192,7 +1400,7 @@ class PongWebSocketServer {
         // Physics debug removed for cleaner console
 
         // Handle pickups generation and collision
-        if (this.updatePickups(gameState, canvasSize, now)) {
+        if (this.updatePickups(gameState, canvasSize, now, roomId)) {
           gameStateChanged = true;
         }
 
@@ -1223,7 +1431,8 @@ class PongWebSocketServer {
           isPlaying: gameState.isPlaying,
           isPaused: gameState.isPaused,
           showStartScreen: gameState.showStartScreen,
-          colorIndex: gameState.colorIndex
+          colorIndex: gameState.colorIndex,
+          extraBalls: gameState.extraBalls
         }
       });
 
@@ -2053,6 +2262,118 @@ class PongWebSocketServer {
         }
       }
 
+      // Check labyrinth coin collection
+      if (gameState.labyrinthActive && gameState.labyrinthCoins.length > 0) {
+        for (const coin of gameState.labyrinthCoins) {
+          if (coin.collected) continue;
+
+          // Check if ball touches coin
+          const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
+          const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
+          const coinCenterX = coin.x + 8; // 16px coin, center at 8
+          const coinCenterY = coin.y + 8;
+
+          const dx = ballCenterX - coinCenterX;
+          const dy = ballCenterY - coinCenterY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < (gameState.ball.size / 2 + 8)) {
+            // Coin collected!
+            coin.collected = true;
+            coin.collectedAt = Date.now();
+            coin.rotation = 0;
+
+            // Award point to the player who last touched the ball
+            if (gameState.ball.lastTouchedBy) {
+              gameState.score[gameState.ball.lastTouchedBy]++;
+              console.log(`🪙 Coin collected by ${gameState.ball.lastTouchedBy}! New score: ${gameState.score[gameState.ball.lastTouchedBy]}`);
+            }
+          }
+        }
+      }
+
+      // Check coin_shower coin collection
+      if (gameState.coins && gameState.coins.length > 0) {
+        for (const coin of gameState.coins) {
+          if (coin.collected) continue;
+
+          // Check if ball touches coin
+          const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
+          const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
+          const coinCenterX = coin.x + coin.size / 2;
+          const coinCenterY = coin.y + coin.size / 2;
+
+          const dx = ballCenterX - coinCenterX;
+          const dy = ballCenterY - coinCenterY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < (gameState.ball.size / 2 + coin.size / 2)) {
+            // Coin collected!
+            coin.collected = true;
+            coin.collectedAt = Date.now();
+            coin.rotation = 0;
+
+            // Award point to the player who last touched the ball
+            if (gameState.ball.lastTouchedBy) {
+              gameState.score[gameState.ball.lastTouchedBy]++;
+              console.log(`💰 Coin shower coin collected by ${gameState.ball.lastTouchedBy}! New score: ${gameState.score[gameState.ball.lastTouchedBy]}`);
+            }
+          }
+        }
+      }
+
+      // Check labyrinth wall collisions
+      if (gameState.labyrinthActive && gameState.mazeWalls.length > 0) {
+        for (const wall of gameState.mazeWalls) {
+          // Simple AABB collision
+          const ballLeft = gameState.ball.x;
+          const ballRight = gameState.ball.x + gameState.ball.size;
+          const ballTop = gameState.ball.y;
+          const ballBottom = gameState.ball.y + gameState.ball.size;
+
+          const wallLeft = wall.x;
+          const wallRight = wall.x + wall.width;
+          const wallTop = wall.y;
+          const wallBottom = wall.y + wall.height;
+
+          if (ballRight > wallLeft && ballLeft < wallRight &&
+              ballBottom > wallTop && ballTop < wallBottom) {
+
+            // Collision detected - bounce off the wall
+            const overlapLeft = ballRight - wallLeft;
+            const overlapRight = wallRight - ballLeft;
+            const overlapTop = ballBottom - wallTop;
+            const overlapBottom = wallBottom - ballTop;
+
+            // Find minimum overlap to determine bounce direction
+            const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+
+            if (minOverlap === overlapLeft || minOverlap === overlapRight) {
+              // Horizontal collision
+              gameState.ball.dx = -gameState.ball.dx;
+              // Push ball out of wall
+              if (minOverlap === overlapLeft) {
+                gameState.ball.x = wallLeft - gameState.ball.size - 1;
+              } else {
+                gameState.ball.x = wallRight + 1;
+              }
+            } else {
+              // Vertical collision
+              gameState.ball.dy = -gameState.ball.dy;
+              // Push ball out of wall
+              if (minOverlap === overlapTop) {
+                gameState.ball.y = wallTop - gameState.ball.size - 1;
+              } else {
+                gameState.ball.y = wallBottom + 1;
+              }
+            }
+
+            console.log(`🏛️ Ball bounced off labyrinth wall at (${wall.x}, ${wall.y})`);
+            break; // Only handle one collision per frame
+          }
+        }
+      }
+
       // Log ball movement every few frames for tracking trajectory
       if (frameCount % 400 < 50) { // Every ~7 frames at 60fps
         console.log(`🚀 BALL MOVEMENT: (${prevX.toFixed(1)}, ${prevY.toFixed(1)}) → (${gameState.ball.x.toFixed(1)}, ${gameState.ball.y.toFixed(1)}) | Δ(${gameState.ball.dx.toFixed(2)}, ${gameState.ball.dy.toFixed(2)})`);
@@ -2201,8 +2522,13 @@ class PongWebSocketServer {
     gameState.ball.aimTargetY = 0;
   }
 
-  private updatePickups(gameState: GameState, canvasSize: { width: number; height: number }, now: number): boolean {
+  private updatePickups(gameState: GameState, canvasSize: { width: number; height: number }, now: number, roomId: string): boolean {
     let pickupsChanged = false;
+
+    // Skip random pickup spawning in debug/test mode
+    if (gameState.isDebugMode) {
+      return pickupsChanged;
+    }
 
     // Debug logging every 5 seconds
     if (!this.lastPickupLog) this.lastPickupLog = 0;
@@ -2263,7 +2589,7 @@ class PongWebSocketServer {
       if (collected) {
         // Pickup collected!
         console.log(`🎁 Pickup collected: ${pickup.type} at (${pickup.x.toFixed(0)}, ${pickup.y.toFixed(0)})`);
-        this.applyPickupEffect(gameState, pickup);
+        this.applyPickupEffect(gameState, pickup, roomId);
         gameState.pickups.splice(i, 1);
 
         // Create pickup effect animation
@@ -2286,11 +2612,11 @@ class PongWebSocketServer {
       'speed_up', 'speed_down', 'big_ball', 'small_ball', 'drunk_ball', 'grow_paddle', 'shrink_paddle',
       'reverse_controls', 'invisible_ball', 'freeze_opponent', 'multi_ball', 'super_speed', 'coin_shower',
       'teleport_ball', 'gravity_in_space', 'super_striker', 'sticky_paddles', 'machine_gun', 'dynamic_playfield',
-      'switch_sides', 'blocker', 'time_warp', 'mirror_mode', 'quantum_ball', 'black_hole',
+      'switch_sides', 'time_warp', 'mirror_mode', 'quantum_ball', 'black_hole',
       'lightning_storm', 'invisible_paddles', 'ball_trail_mine', 'paddle_swap', 'disco_mode', 'pac_man',
       'banana_peel', 'rubber_ball', 'drunk_paddles', 'magnet_ball', 'balloon_ball', 'earthquake',
-      'confetti_cannon', 'hypno_ball', 'conga_line', 'arkanoid', 'attractor', 'repulsor', 'great_wall'
-    ]; // Removed 'portal_ball' - was preventing scoring
+      'confetti_cannon', 'hypno_ball', 'conga_line', 'arkanoid', 'attractor', 'repulsor', 'great_wall', 'labyrinth'
+    ]; // Removed 'portal_ball' and 'blocker'
     const type = pickupTypes[Math.floor(Math.random() * pickupTypes.length)];
 
     // Pickup size is 32x32 (matches score counter font size)
@@ -2311,7 +2637,7 @@ class PongWebSocketServer {
     console.log(`✨ Generated pickup: ${type} at (${pickup.x.toFixed(0)}, ${pickup.y.toFixed(0)})`);
   }
 
-  private applyPickupEffect(gameState: GameState, pickup: Pickup): void {
+  private applyPickupEffect(gameState: GameState, pickup: Pickup, roomId?: string): void {
     const effect: ActiveEffect = {
       type: pickup.type,
       startTime: Date.now(),
@@ -2319,6 +2645,9 @@ class PongWebSocketServer {
     };
 
     gameState.activeEffects.push(effect);
+
+    // Debug: Log pickup type before switch
+    console.log(`🔍 PICKUP DEBUG: About to switch on type="${pickup.type}" (typeof: ${typeof pickup.type})`);
 
     // Apply immediate effects based on pickup type
     switch (pickup.type) {
@@ -2346,16 +2675,40 @@ class PongWebSocketServer {
         effect.duration = 4000;
         break;
       case 'grow_paddle':
-        const targetSide = Math.random() > 0.5 ? 'left' : 'right';
-        effect.side = targetSide;
-        effect.originalValue = gameState.paddles[targetSide].height;
-        gameState.paddles[targetSide].height = Math.min(150, gameState.paddles[targetSide].height * 1.5);
+        // In test/debug mode or regular gameplay, grow the paddle of the player who activated it
+        // Use lastTouchedBy which is set to the player's side in test mode
+        const growSide = (gameState.ball.lastTouchedBy || 'right') as 'left' | 'right' | 'top' | 'bottom';
+        effect.side = growSide;
+        effect.activator = growSide; // Mark who activated it for proper restoration
+
+        if (growSide === 'left' || growSide === 'right') {
+          effect.originalValue = gameState.paddles[growSide].height;
+          gameState.paddles[growSide].height = Math.min(300, gameState.paddles[growSide].height * 2.0);
+        } else {
+          effect.originalValue = gameState.paddles[growSide].width;
+          gameState.paddles[growSide].width = Math.min(300, gameState.paddles[growSide].width * 2.0);
+        }
         break;
       case 'shrink_paddle':
-        const shrinkSide = Math.random() > 0.5 ? 'left' : 'right';
-        effect.side = shrinkSide;
-        effect.originalValue = gameState.paddles[shrinkSide].height;
-        gameState.paddles[shrinkSide].height = Math.max(30, gameState.paddles[shrinkSide].height * 0.6);
+        // Shrink ALL opponent paddles (not the player who touched the ball)
+        const currentPlayer = gameState.ball.lastTouchedBy || 'right';
+        const allOpponents: Array<'left' | 'right' | 'top' | 'bottom'> = ['left', 'right', 'top', 'bottom'].filter(s => s !== currentPlayer);
+
+        // Store original values for all opponents
+        effect.originalValues = {};
+
+        // Shrink all opponent paddles
+        for (const opponentSide of allOpponents) {
+          if (opponentSide === 'left' || opponentSide === 'right') {
+            effect.originalValues[opponentSide] = gameState.paddles[opponentSide].height;
+            gameState.paddles[opponentSide].height = Math.max(30, gameState.paddles[opponentSide].height * 0.5);
+          } else {
+            effect.originalValues[opponentSide] = gameState.paddles[opponentSide].width;
+            gameState.paddles[opponentSide].width = Math.max(30, gameState.paddles[opponentSide].width * 0.5);
+          }
+        }
+
+        effect.affectedSides = allOpponents; // Track which sides were affected
         break;
       case 'reverse_controls':
         // Store who activated it so we can exclude them from the reversal
@@ -2462,7 +2815,9 @@ class PongWebSocketServer {
         gameState.ball.aimY = gameState.ball.y;
         gameState.ball.dx = 0; // Stop the ball
         gameState.ball.dy = 0;
-        effect.duration = 4000; // 4 seconds to aim
+        effect.activator = gameState.ball.lastTouchedBy || 'none'; // Store who activated it
+        effect.duration = 3000; // 3 seconds to aim before auto-fire
+        console.log(`🎯 SUPER STRIKER activated by: ${effect.activator}`);
         break;
       case 'arkanoid':
         // Create arkanoid bricks in + formation
@@ -2507,18 +2862,27 @@ class PongWebSocketServer {
         effect.duration = 30000; // 30 seconds or until all bricks destroyed
         break;
       case 'multi_ball':
-        // Add extra balls to the game
-        for (let i = 0; i < 2; i++) {
+        // Add 3 extra balls shooting out from center in different directions
+        const centerX = 400;
+        const centerY = 400;
+        const baseSpeed = 5; // Base speed for extra balls
+
+        for (let i = 0; i < 3; i++) {
+          // Shoot balls in 3 different directions: 0°, 120°, 240° (evenly spaced)
+          const angle = (i * 2 * Math.PI / 3); // 0, 120, 240 degrees in radians
+
           gameState.extraBalls.push({
-            x: gameState.ball.x + (i * 10),
-            y: gameState.ball.y + (i * 10),
-            dx: gameState.ball.dx * (0.8 + i * 0.2),
-            dy: gameState.ball.dy * (0.8 + i * 0.2),
+            x: centerX,
+            y: centerY,
+            dx: Math.cos(angle) * baseSpeed,
+            dy: Math.sin(angle) * baseSpeed,
             size: gameState.ball.size,
             id: `extra_${Date.now()}_${i}`
           });
         }
-        effect.duration = 15000; // 15 seconds
+        console.log(`🎾 MULTI-BALL: Added 3 extra balls shooting from center, total extraBalls: ${gameState.extraBalls.length}`);
+        // No duration - multiball stays active until all extra balls are removed by scoring
+        effect.duration = Infinity;
         break;
       case 'teleport_ball':
         // Teleport ball to random location
@@ -2606,6 +2970,16 @@ class PongWebSocketServer {
         }
         effect.duration = 12000; // 12 seconds
         break;
+
+      case 'labyrinth':
+        // Generate maze with clear edges (50 pixels = ~5cm at typical scale)
+        gameState.labyrinthActive = true;
+        gameState.labyrinthStartTime = Date.now();
+        gameState.mazeWalls = this.generateMaze(this.canvasSize.width, this.canvasSize.height);
+        gameState.labyrinthCoins = this.generateLabyrinthCoins(gameState.mazeWalls, this.canvasSize.width, this.canvasSize.height);
+        effect.duration = 30000; // 30 seconds
+        console.log(`🏛️ LABYRINTH activated: ${gameState.mazeWalls.length} walls, ${gameState.labyrinthCoins.length} coins`);
+        break;
       case 'confetti_cannon':
         // Create confetti particles
         gameState.confetti = [];
@@ -2623,32 +2997,33 @@ class PongWebSocketServer {
         effect.duration = 3000; // 3 seconds
         break;
       case 'coin_shower':
-        // Create coins for collection
+        console.log(`💰 ENTERING COIN_SHOWER CASE`);
+        // Create coins for collection with accelerating spawn delay (slow to fast)
         gameState.coins = [];
+        const now = Date.now();
+        let cumulativeDelay = 0;
         for (let i = 0; i < 10; i++) {
+          // Accelerating: start with 400ms between coins, decreasing to 85ms
+          const delayIncrement = 400 - (i * 35); // 400, 365, 330, 295, 260, 225, 190, 155, 120, 85
+          cumulativeDelay += delayIncrement;
+
+          // Spread coins evenly across entire playfield (80-720 for both x and y)
+          // Avoid paddle zones: left (x<60), right (x>740), top (y<80), bottom (y>720)
           gameState.coins.push({
-            id: `coin_${Date.now()}_${i}`,
-            x: Math.random() * 600 + 100,
-            y: Math.random() * 400 + 100,
-            createdAt: Date.now(),
-            size: 12
+            id: `coin_${now}_${i}`,
+            x: 80 + Math.random() * 640, // 80-720 (full width, avoiding paddles)
+            y: 80 + Math.random() * 640, // 80-720 (full height, avoiding paddles)
+            createdAt: now,
+            spawnDelay: cumulativeDelay,
+            size: 32 // Bigger coins (8x8 pixels at 4px each)
           });
         }
-        effect.duration = 15000; // 15 seconds
+        console.log(`💰 COIN SHOWER: Created ${gameState.coins.length} coins:`, JSON.stringify(gameState.coins.slice(0, 2)));
+        effect.duration = Infinity; // Never expires - coins stay until collected
         break;
       case 'blocker':
-        // Create walls/blockers
-        gameState.walls = [];
-        for (let i = 0; i < 3; i++) {
-          gameState.walls.push({
-            x: Math.random() * 600 + 100,
-            y: Math.random() * 400 + 100,
-            width: 20,
-            height: 60,
-            id: `wall_${i}`
-          });
-        }
-        effect.duration = 20000; // 20 seconds
+        // Blocker pickup disabled
+        effect.duration = 0;
         break;
       case 'portal_ball':
         // Portal ball pickup disabled - was preventing scoring
@@ -2766,6 +3141,16 @@ class PongWebSocketServer {
     // Remove expired effects
     const initialLength = gameState.activeEffects.length;
     gameState.activeEffects = gameState.activeEffects.filter(effect => {
+      // Special handling for multi_ball - expires when all extra balls are gone
+      if (effect.type === 'multi_ball') {
+        const isExpired = gameState.extraBalls.length === 0;
+        if (isExpired) {
+          console.log('🎾 MULTI-BALL: Effect expired - all extra balls removed');
+          this.reversePickupEffect(gameState, effect);
+        }
+        return !isExpired;
+      }
+
       const isExpired = now - effect.startTime > effect.duration;
 
       if (isExpired) {
@@ -2810,9 +3195,26 @@ class PongWebSocketServer {
         break;
 
       case 'grow_paddle':
-      case 'shrink_paddle':
         if (effect.side && effect.originalValue !== undefined) {
-          gameState.paddles[effect.side as keyof typeof gameState.paddles].height = effect.originalValue;
+          const side = effect.side as 'left' | 'right' | 'top' | 'bottom';
+          if (side === 'left' || side === 'right') {
+            gameState.paddles[side].height = effect.originalValue;
+          } else {
+            gameState.paddles[side].width = effect.originalValue;
+          }
+        }
+        break;
+
+      case 'shrink_paddle':
+        // Restore all affected paddles
+        if (effect.affectedSides && effect.originalValues) {
+          for (const side of effect.affectedSides as Array<'left' | 'right' | 'top' | 'bottom'>) {
+            if (side === 'left' || side === 'right') {
+              gameState.paddles[side].height = effect.originalValues[side];
+            } else {
+              gameState.paddles[side].width = effect.originalValues[side];
+            }
+          }
         }
         break;
 
@@ -2821,11 +3223,34 @@ class PongWebSocketServer {
         break;
 
       case 'super_striker':
-        gameState.ball.isAiming = false;
-        // If still aiming when time expires, launch ball in default direction
+        // Auto-fire after 3 seconds if player hasn't fired manually
         if (gameState.ball.isAiming) {
-          gameState.ball.dx = 10;
-          gameState.ball.dy = 0;
+          // Calculate direction towards center or opponent's side based on activator
+          const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
+          const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
+
+          let targetX = 400; // Center X
+          let targetY = 300; // Center Y
+
+          // Aim towards opponent's goal based on who activated it
+          if (effect.activator === 'left') {
+            targetX = 750; // Aim right
+          } else if (effect.activator === 'right') {
+            targetX = 50; // Aim left
+          } else if (effect.activator === 'top') {
+            targetY = 550; // Aim down
+          } else if (effect.activator === 'bottom') {
+            targetY = 50; // Aim up
+          }
+
+          const angle = Math.atan2(targetY - ballCenterY, targetX - ballCenterX);
+          const speed = 15; // Super striker speed
+
+          gameState.ball.dx = Math.cos(angle) * speed;
+          gameState.ball.dy = Math.sin(angle) * speed;
+          gameState.ball.isAiming = false;
+
+          console.log(`🎯 SUPER STRIKER auto-fired by ${effect.activator} at angle ${(angle * 180 / Math.PI).toFixed(1)}°`);
         }
         break;
 
@@ -2856,7 +3281,8 @@ class PongWebSocketServer {
         break;
 
       case 'multi_ball':
-        gameState.extraBalls = [];
+        // Don't clear extra balls - they are removed naturally when they score
+        // The effect expires when extraBalls.length === 0 (checked elsewhere)
         break;
 
       case 'teleport_ball':
@@ -2903,6 +3329,13 @@ class PongWebSocketServer {
 
       case 'conga_line':
         gameState.congaBalls = [];
+        break;
+
+      case 'labyrinth':
+        gameState.labyrinthActive = false;
+        gameState.mazeWalls = [];
+        gameState.labyrinthCoins = [];
+        console.log('🏛️ LABYRINTH expired: Maze cleared');
         break;
 
       case 'confetti_cannon':
@@ -3061,6 +3494,143 @@ class PongWebSocketServer {
         }
       });
     }, 30000); // Send heartbeat every 30 seconds
+  }
+
+  private generateMaze(width: number, height: number): MazeWall[] {
+    const walls: MazeWall[] = [];
+    const clearEdge = 50; // 50 pixels clear at edges (~5cm)
+    const wallThickness = 12; // Match border thickness
+    const cellSize = 80; // Size of maze cells
+
+    // Calculate maze area
+    const mazeLeft = clearEdge;
+    const mazeRight = width - clearEdge;
+    const mazeTop = clearEdge;
+    const mazeBottom = height - clearEdge;
+    const mazeWidth = mazeRight - mazeLeft;
+    const mazeHeight = mazeBottom - mazeTop;
+
+    // Create grid of cells
+    const cols = Math.floor(mazeWidth / cellSize);
+    const rows = Math.floor(mazeHeight / cellSize);
+
+    // Create a simple maze pattern with multiple entrances
+    // Using a modified recursive division algorithm
+    const horizontalWalls: boolean[][] = Array(rows + 1).fill(null).map(() => Array(cols).fill(false));
+    const verticalWalls: boolean[][] = Array(rows).fill(null).map(() => Array(cols + 1).fill(false));
+
+    // Add some horizontal walls with gaps (entrances)
+    for (let row = 1; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        // Add walls with 60% probability to create openings
+        if (Math.random() < 0.6) {
+          horizontalWalls[row][col] = true;
+        }
+      }
+      // Ensure at least 2 gaps per row for multiple entrances
+      const gaps = Math.floor(Math.random() * 3) + 2;
+      for (let i = 0; i < gaps; i++) {
+        const gapCol = Math.floor(Math.random() * cols);
+        horizontalWalls[row][gapCol] = false;
+      }
+    }
+
+    // Add some vertical walls with gaps
+    for (let row = 0; row < rows; row++) {
+      for (let col = 1; col < cols; col++) {
+        // Add walls with 60% probability
+        if (Math.random() < 0.6) {
+          verticalWalls[row][col] = true;
+        }
+      }
+      // Ensure at least 2 gaps per row
+      const gaps = Math.floor(Math.random() * 3) + 2;
+      for (let i = 0; i < gaps; i++) {
+        const gapCol = Math.floor(Math.random() * (cols - 1)) + 1;
+        verticalWalls[row][gapCol] = false;
+      }
+    }
+
+    // Convert grid to wall objects
+    // Horizontal walls
+    for (let row = 0; row <= rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        if (horizontalWalls[row][col]) {
+          walls.push({
+            x: mazeLeft + col * cellSize,
+            y: mazeTop + row * cellSize - wallThickness / 2,
+            width: cellSize,
+            height: wallThickness
+          });
+        }
+      }
+    }
+
+    // Vertical walls
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col <= cols; col++) {
+        if (verticalWalls[row][col]) {
+          walls.push({
+            x: mazeLeft + col * cellSize - wallThickness / 2,
+            y: mazeTop + row * cellSize,
+            width: wallThickness,
+            height: cellSize
+          });
+        }
+      }
+    }
+
+    console.log(`🏛️ Generated maze: ${rows}x${cols} grid, ${walls.length} walls`);
+    return walls;
+  }
+
+  private generateLabyrinthCoins(walls: MazeWall[], width: number, height: number): LabyrinthCoin[] {
+    const coins: LabyrinthCoin[] = [];
+    const clearEdge = 50;
+    const coinSize = 16; // 4x4 grid with 4px pixel size
+    const numCoins = 20; // Spawn 20 coins in the maze
+    const minDistance = 40; // Minimum distance between coins
+
+    let attempts = 0;
+    const maxAttempts = 500;
+
+    while (coins.length < numCoins && attempts < maxAttempts) {
+      attempts++;
+
+      // Random position within maze area
+      const x = clearEdge + Math.random() * (width - clearEdge * 2 - coinSize);
+      const y = clearEdge + Math.random() * (height - clearEdge * 2 - coinSize);
+
+      // Check if coin overlaps with any walls
+      const overlapsWall = walls.some(wall =>
+        x < wall.x + wall.width &&
+        x + coinSize > wall.x &&
+        y < wall.y + wall.height &&
+        y + coinSize > wall.y
+      );
+
+      if (overlapsWall) continue;
+
+      // Check if coin is too close to other coins
+      const tooClose = coins.some(coin => {
+        const dx = coin.x - x;
+        const dy = coin.y - y;
+        return Math.sqrt(dx * dx + dy * dy) < minDistance;
+      });
+
+      if (tooClose) continue;
+
+      // Add coin
+      coins.push({
+        id: `labyrinth_coin_${coins.length}`,
+        x,
+        y,
+        collected: false
+      });
+    }
+
+    console.log(`🪙 Generated ${coins.length} labyrinth coins`);
+    return coins;
   }
 
   public getStats() {

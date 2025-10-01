@@ -254,8 +254,11 @@ const PICKUP_TYPES = [
   { type: 'hypno_ball', pattern: 'hypno', color: '#9932cc', description: 'Hypno Ball!', scale: 'hungarian', note: 2 },
   { type: 'conga_line', pattern: 'conga', color: '#ffa500', description: 'Conga Line!', scale: 'diminished', note: 6 },
   { type: 'arkanoid', pattern: 'bricks', color: '#ff4500', description: 'Arkanoid Mode!', scale: 'wholetone', note: 5 },
+  { type: 'attractor', pattern: 'vortex', color: '#ff00ff', description: 'Ball Attractor!', scale: 'phrygian', note: 3 },
+  { type: 'repulsor', pattern: 'target', color: '#00ffff', description: 'Ball Repulsor!', scale: 'diminished', note: 2 },
   { type: 'wind', pattern: 'wind', color: '#87ceeb', description: 'Wind Blow!', scale: 'wholetone', note: 3 },
   { type: 'great_wall', pattern: 'brick', color: '#00ccff', description: 'Great Wall Defense!', scale: 'c-phrygian', note: 1 },
+  { type: 'labyrinth', pattern: 'maze', color: '#8b7355', description: 'Labyrinth Maze!', scale: 'hungarian', note: 4 },
 ];
 
 // WebSocket server URL - using correct Render service
@@ -748,6 +751,16 @@ const PRECALC_PICKUP_PATTERNS = {
       return (row >= 1 && row <= 2) &&
              ((row % 2 === 0 && col % 2 === 0) || (row % 2 === 1 && col % 2 === 1));
     })
+  ),
+
+  labyrinth: Array.from({ length: 4 }, (_, row) =>
+    Array.from({ length: 4 }, (_, col) => {
+      // Maze/labyrinth pattern with paths and walls
+      return (row === 0 && (col === 0 || col === 3)) || // Top corners
+             (row === 1 && col === 1) ||                 // Inner wall piece
+             (row === 2 && col === 2) ||                 // Inner wall piece
+             (row === 3 && (col === 1 || col === 2));    // Bottom walls
+    })
   )
 };
 
@@ -757,6 +770,7 @@ const Pong404: React.FC = () => {
   const pixiContainerRef = useRef<HTMLDivElement>(null);
   const crtFilterRef = useRef<CRTFilter | null>(null);
   const animationFrameRef = useRef<number>(0);
+  const coinSoundsPlayedRef = useRef<Set<string>>(new Set());
   const wsRef = useRef<WebSocket | null>(null);
 
   // Detect mobile device for performance optimizations
@@ -910,12 +924,41 @@ const Pong404: React.FC = () => {
   const [connectionStartTime, setConnectionStartTime] = useState(0);
   const [serverAvailable, setServerAvailable] = useState<boolean | null>(null);
   const [debugPickupIndex, setDebugPickupIndex] = useState(0);
+  const debugPickupIndexRef = useRef(0); // Ref to track current index in event handlers
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [currentPhase, setCurrentPhase] = useState<'initializing' | 'warming' | 'booting' | 'finalizing'>('initializing');
   const [isCRTEnabled, setIsCRTEnabled] = useState(false);
   const [showFPS, setShowFPS] = useState(false);
   const [paddleAnimationProgress, setPaddleAnimationProgress] = useState(0); // 0 to 1
   const paddleAnimationStartTimeRef = useRef<number>(0);
+
+  // Paddle size animation tracking
+  const previousPaddleSizesRef = useRef<{
+    left: { height: number; width: number };
+    right: { height: number; width: number };
+    top: { height: number; width: number };
+    bottom: { height: number; width: number };
+  }>({
+    left: { height: PADDLE_LENGTH, width: PADDLE_THICKNESS },
+    right: { height: PADDLE_LENGTH, width: PADDLE_THICKNESS },
+    top: { height: PADDLE_THICKNESS, width: PADDLE_LENGTH },
+    bottom: { height: PADDLE_THICKNESS, width: PADDLE_LENGTH }
+  });
+
+  const paddleSizeAnimationsRef = useRef<{
+    [key in 'left' | 'right' | 'top' | 'bottom']: {
+      startTime: number;
+      startSize: { height: number; width: number };
+      targetSize: { height: number; width: number };
+      startPosition: { x: number; y: number };
+      duration: number;
+    } | null;
+  }>({
+    left: null,
+    right: null,
+    top: null,
+    bottom: null
+  });
 
   // Playfield size - same as canvas (border is drawn inside, not outside)
   const playFieldWidth = canvasSize.width;
@@ -1188,6 +1231,27 @@ const Pong404: React.FC = () => {
     }
   }, [checkServerAvailability]);
 
+  // Trigger Render.com server deploy/wake
+  const triggerServerStart = useCallback(async () => {
+    const RENDER_DEPLOY_HOOK = 'https://api.render.com/deploy/srv-d3b6ku6r433s738fn32g?key=geHuFzc6DF0';
+    try {
+      console.log('[ROCKET] Triggering Render.com server start/wake...');
+      setConnectionMessage('[ROCKET] Starting server on Render.com...');
+      const response = await fetch(RENDER_DEPLOY_HOOK, { method: 'POST' });
+      if (response.ok) {
+        console.log('[CHECK] Server start triggered successfully');
+        setConnectionMessage('[CHECK] Server starting... waiting 60 seconds for deployment');
+        return true;
+      } else {
+        console.error('[X] Failed to trigger server start:', response.statusText);
+        return false;
+      }
+    } catch (error) {
+      console.error('[X] Error triggering server start:', error);
+      return false;
+    }
+  }, []);
+
   // WebSocket connection management
   const connectWebSocket = useCallback(async () => {
 
@@ -1207,6 +1271,11 @@ const Pong404: React.FC = () => {
       setConnectionMessage('[FIRE] Waking up server... This may take 30-60 seconds');
       setTimeout(() => speakRobotic('SERVER IS WAKING UP PLEASE WAIT'), 500);
       setCurrentPhase('warming');
+
+      // Trigger server start/wake via Render deploy hook
+      // This will either wake a sleeping server or trigger a fresh deploy
+      await triggerServerStart();
+
       // Skip health check, go straight to WebSocket connection
     } else {
       // For localhost, check if server is running first
@@ -2525,6 +2594,12 @@ const Pong404: React.FC = () => {
                 playMelodyNoteRef.current?.('paddle', null, 'both');
               }
 
+              // Detect super striker auto-fire (isAiming changed from true to false)
+              if (prevState.ball.isAiming && message.data.ball.isAiming === false) {
+                console.log('[GAME] Super striker fired (auto or manual)');
+                playMelodyNoteRef.current?.('powerup', null, 'both');
+              }
+
               networkState.ball = { ...prevState.ball, ...message.data.ball };
             }
 
@@ -2549,8 +2624,15 @@ const Pong404: React.FC = () => {
             if (message.data.gameEnded !== undefined) networkState.gameEnded = message.data.gameEnded;
 
             if (message.data.pickups) networkState.pickups = message.data.pickups;
-            if (message.data.coins) networkState.coins = message.data.coins;
+            if (message.data.coins) {
+              networkState.coins = message.data.coins;
+              // Clear coin sound tracking when new coins arrive
+              if (message.data.coins.length === 0) {
+                coinSoundsPlayedRef.current.clear();
+              }
+            }
             if (message.data.activeEffects) networkState.activeEffects = message.data.activeEffects;
+            if (message.data.extraBalls) networkState.extraBalls = message.data.extraBalls;
 
             if (message.data.pickupEffect) networkState.pickupEffect = message.data.pickupEffect;
             if (message.data.rumbleEffect) networkState.rumbleEffect = message.data.rumbleEffect;
@@ -2560,26 +2642,42 @@ const Pong404: React.FC = () => {
               networkState.colorIndex = message.data.colorIndex;
             }
 
-            // Update paddles from server AI (but NOT the local player's paddle)
+            // Update paddles from server - for player's paddle, keep position but accept size changes
             if (message.data.paddles) {
               const playerSide = multiplayerStateRef.current?.playerSide;
               networkState.paddles = {
-                left: (message.data.paddles.left && playerSide !== 'left') ? {
+                left: message.data.paddles.left ? (playerSide === 'left' ? {
+                  ...message.data.paddles.left,
+                  x: prevState.paddles.left.x,
+                  y: prevState.paddles.left.y
+                } : {
                   ...prevState.paddles.left,
                   ...message.data.paddles.left
-                } : prevState.paddles.left, // Keep local paddle unchanged
-                right: (message.data.paddles.right && playerSide !== 'right') ? {
+                }) : prevState.paddles.left,
+                right: message.data.paddles.right ? (playerSide === 'right' ? {
+                  ...message.data.paddles.right,
+                  x: prevState.paddles.right.x,
+                  y: prevState.paddles.right.y
+                } : {
                   ...prevState.paddles.right,
                   ...message.data.paddles.right
-                } : prevState.paddles.right, // Keep local paddle unchanged
-                top: (message.data.paddles.top && playerSide !== 'top') ? {
+                }) : prevState.paddles.right,
+                top: message.data.paddles.top ? (playerSide === 'top' ? {
+                  ...message.data.paddles.top,
+                  x: prevState.paddles.top.x,
+                  y: prevState.paddles.top.y
+                } : {
                   ...prevState.paddles.top,
                   ...message.data.paddles.top
-                } : prevState.paddles.top, // Keep local paddle unchanged
-                bottom: (message.data.paddles.bottom && playerSide !== 'bottom') ? {
+                }) : prevState.paddles.top,
+                bottom: message.data.paddles.bottom ? (playerSide === 'bottom' ? {
+                  ...message.data.paddles.bottom,
+                  x: prevState.paddles.bottom.x,
+                  y: prevState.paddles.bottom.y
+                } : {
                   ...prevState.paddles.bottom,
                   ...message.data.paddles.bottom
-                } : prevState.paddles.bottom // Keep local paddle unchanged
+                }) : prevState.paddles.bottom
               };
             }
 
@@ -3517,6 +3615,13 @@ const Pong404: React.FC = () => {
         melodyState.pickupIndex = (melodyState.pickupIndex + 3) % currentScale.length; // Jump by 3
         break;
 
+      case 'coin_spawn':
+        // Short, simple "plopp" sound - no harmonies to avoid clashing
+        frequency = 900 + Math.random() * 100; // Random pitch variation (900-1000Hz)
+        duration = 0.05; // Very short
+        harmony = []; // No harmonies - single clean tone
+        break;
+
       default:
         frequency = 440;
         duration = 0.1;
@@ -3731,6 +3836,68 @@ const Pong404: React.FC = () => {
       console.error('[SOUND] Error playing Tone.js melody:', error);
     }
 
+  }, []);
+
+  // CA-CHING coin collection sound
+  const playCoinSound = useCallback(() => {
+    if (!masterLimiterRef.current) return;
+
+    try {
+      // Create a metallic "ca-ching" register sound
+      // Two quick ascending tones to mimic cash register
+      const synth = new Tone.MetalSynth({
+        frequency: 800,
+        envelope: {
+          attack: 0.001,
+          decay: 0.1,
+          sustain: 0,
+          release: 0.2
+        },
+        harmonicity: 3,
+        modulationIndex: 20,
+        resonance: 3000,
+        octaves: 1.5
+      });
+
+      const reverb = new Tone.Reverb({
+        decay: 0.5,
+        wet: 0.3
+      }).connect(masterLimiterRef.current.compressor);
+
+      synth.connect(reverb);
+      synth.volume.value = -10;
+
+      // First "ca" - higher note
+      synth.triggerAttackRelease('E5', '0.08', Tone.now());
+
+      // Second "ching" - even higher with slight delay
+      synth.triggerAttackRelease('A5', '0.12', Tone.now() + 0.05);
+
+      // Add sparkle with sine wave
+      const sparkle = new Tone.Synth({
+        oscillator: { type: 'sine' },
+        envelope: {
+          attack: 0.001,
+          decay: 0.15,
+          sustain: 0,
+          release: 0.3
+        }
+      }).connect(reverb);
+
+      sparkle.volume.value = -15;
+      sparkle.triggerAttackRelease('C6', '0.15', Tone.now() + 0.08);
+
+      // Cleanup after sound completes
+      setTimeout(() => {
+        synth.dispose();
+        sparkle.dispose();
+        reverb.dispose();
+      }, 1000);
+
+      console.log('[SOUND] Ca-ching coin sound played');
+    } catch (error) {
+      console.error('[SOUND] Error playing coin sound:', error);
+    }
   }, []);
 
   // ATMOSPHERIC DARK DRONE - Inspired by "station - atmospheric dark drone music for focus.mp3"
@@ -4431,17 +4598,17 @@ const Pong404: React.FC = () => {
         // Server paddles for AI, local paddle for smooth player control
         newState.paddles = {
           left: playerSide === 'left'
-            ? prevState.paddles.left // Keep entire local paddle object
-            : { ...networkGameStateRef.current.paddles.left, height: PADDLE_LENGTH, width: PADDLE_THICKNESS },
+            ? { ...prevState.paddles.left, height: networkGameStateRef.current.paddles.left.height, width: networkGameStateRef.current.paddles.left.width } // Keep local position but use server size
+            : networkGameStateRef.current.paddles.left, // Use server paddle entirely
           right: playerSide === 'right'
-            ? prevState.paddles.right // Keep entire local paddle object
-            : { ...networkGameStateRef.current.paddles.right, height: PADDLE_LENGTH, width: PADDLE_THICKNESS },
+            ? { ...prevState.paddles.right, height: networkGameStateRef.current.paddles.right.height, width: networkGameStateRef.current.paddles.right.width } // Keep local position but use server size
+            : networkGameStateRef.current.paddles.right, // Use server paddle entirely
           top: playerSide === 'top'
-            ? prevState.paddles.top // Keep entire local paddle object
-            : { ...networkGameStateRef.current.paddles.top, height: PADDLE_THICKNESS, width: PADDLE_LENGTH },
+            ? { ...prevState.paddles.top, height: networkGameStateRef.current.paddles.top.height, width: networkGameStateRef.current.paddles.top.width } // Keep local position but use server size
+            : networkGameStateRef.current.paddles.top, // Use server paddle entirely
           bottom: playerSide === 'bottom'
-            ? prevState.paddles.bottom // Keep entire local paddle object
-            : { ...networkGameStateRef.current.paddles.bottom, height: PADDLE_THICKNESS, width: PADDLE_LENGTH }
+            ? { ...prevState.paddles.bottom, height: networkGameStateRef.current.paddles.bottom.height, width: networkGameStateRef.current.paddles.bottom.width } // Keep local position but use server size
+            : networkGameStateRef.current.paddles.bottom // Use server paddle entirely
         };
 
         // Preserve client-side trails (trails are visual-only and managed locally)
@@ -4453,6 +4620,76 @@ const Pong404: React.FC = () => {
           topPaddle: prevState.trails?.topPaddle || [],
           bottomPaddle: prevState.trails?.bottomPaddle || []
         };
+
+        // Handle super striker aiming
+        const strikerEffect = newState.activeEffects.find(e => e.type === 'super_striker');
+        if (strikerEffect && newState.ball.isAiming && strikerEffect.activator === playerSide) {
+          // Player is in super striker aiming mode - freeze paddle and allow aiming
+          const ballCenterX = newState.ball.x + newState.ball.size / 2;
+          const ballCenterY = newState.ball.y + newState.ball.size / 2;
+
+          // Calculate aim target based on mouse/touch or keyboard
+          let aimTargetX = ballCenterX + 100;
+          let aimTargetY = ballCenterY;
+
+          if (mouseX !== null && mouseY !== null) {
+            // Use mouse/touch position for aiming
+            aimTargetX = mouseX;
+            aimTargetY = mouseY;
+          } else {
+            // Use keyboard for aiming (arrow keys or WASD based on side)
+            if (playerSide === 'left') {
+              if (keys.w) aimTargetY -= 5;
+              if (keys.s) aimTargetY += 5;
+              if (keys.a) aimTargetX -= 5;
+              if (keys.d) aimTargetX += 5;
+            } else if (playerSide === 'right') {
+              if (keys.ArrowUp) aimTargetY -= 5;
+              if (keys.ArrowDown) aimTargetY += 5;
+              if (keys.ArrowLeft) aimTargetX -= 5;
+              if (keys.ArrowRight) aimTargetX += 5;
+            } else if (playerSide === 'top') {
+              if (keys.w) aimTargetY -= 5;
+              if (keys.s) aimTargetY += 5;
+              if (keys.a) aimTargetX -= 5;
+              if (keys.d) aimTargetX += 5;
+            } else if (playerSide === 'bottom') {
+              if (keys.ArrowUp) aimTargetY -= 5;
+              if (keys.ArrowDown) aimTargetY += 5;
+              if (keys.ArrowLeft) aimTargetX -= 5;
+              if (keys.ArrowRight) aimTargetX += 5;
+            }
+
+            // Store accumulated aim position
+            aimTargetX = (newState.ball.aimTargetX || ballCenterX + 100) + (aimTargetX - ballCenterX);
+            aimTargetY = (newState.ball.aimTargetY || ballCenterY) + (aimTargetY - ballCenterY);
+          }
+
+          // Update aim target in game state for rendering
+          newState.ball.aimTargetX = aimTargetX;
+          newState.ball.aimTargetY = aimTargetY;
+
+          // Fire on spacebar press
+          if (keys[' ']) {
+            const angle = Math.atan2(aimTargetY - ballCenterY, aimTargetX - ballCenterX);
+
+            // Play fire sound
+            playMelodyNoteRef.current?.('powerup', null, 'both');
+
+            // Send aim to server
+            if (multiplayerStateRef.current?.socket && multiplayerStateRef.current.roomId) {
+              multiplayerStateRef.current.socket.send(JSON.stringify({
+                type: 'super_striker_aim',
+                playerId: multiplayerStateRef.current.playerId,
+                roomId: multiplayerStateRef.current.roomId,
+                data: { angle }
+              }));
+            }
+          }
+
+          // Skip normal paddle controls while aiming
+          return newState;
+        }
 
         // Handle local player input and send to server
         // playerSide already declared above for paddle preservation
@@ -5836,6 +6073,83 @@ const Pong404: React.FC = () => {
       // Ignore key repeat events
       if (e.repeat) return;
 
+      // Handle connection retry when in error state
+      if (connectionStatus === 'error') {
+        e.preventDefault();
+        console.log('[GAME] Retrying connection...');
+        setRetryCount(prev => prev + 1);
+        setConnectionStatus('retrying');
+        setConnectionMessage(`Retrying connection (attempt ${retryCount + 1})...`);
+
+        // Close existing connection if any
+        if (wsRef.current) {
+          wsRef.current.close();
+          wsRef.current = null;
+        }
+
+        // Retry connection after short delay
+        setTimeout(() => {
+          connectWebSocket();
+        }, 500);
+        return;
+      }
+
+      // Handle pickup testing with keys 0, 1, and 2
+      if (e.key === '0') {
+        e.preventDefault();
+        // Reset all paddle sizes to original
+        if (multiplayerState.isConnected && wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'reset_paddle_sizes',
+            playerId: multiplayerState.playerId,
+            roomId: multiplayerState.roomId
+          }));
+          console.log('🔧 Reset paddle sizes to original');
+        }
+        return;
+      }
+
+      if (e.key === '1' || e.key === '2') {
+        e.preventDefault();
+
+        // Enable debug mode if not already enabled
+        if (!isDebugMode) {
+          setIsDebugMode(true);
+          console.log('🔧 Pickup test mode enabled');
+        }
+
+        // Calculate new index using ref for immediate updates
+        let newIndex = debugPickupIndexRef.current;
+        if (e.key === '1') {
+          // Previous pickup
+          newIndex = (newIndex - 1 + PICKUP_TYPES.length) % PICKUP_TYPES.length;
+        } else if (e.key === '2') {
+          // Next pickup
+          newIndex = (newIndex + 1) % PICKUP_TYPES.length;
+        }
+
+        // Update both ref and state
+        debugPickupIndexRef.current = newIndex;
+        setDebugPickupIndex(newIndex);
+
+        const pickup = PICKUP_TYPES[newIndex];
+        console.log(`🔧 Testing pickup [${newIndex + 1}/${PICKUP_TYPES.length}]: ${pickup.type} - ${pickup.description}`);
+
+        // Send pickup activation to server if multiplayer
+        if (multiplayerState.isConnected && wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({
+            type: 'test_pickup',
+            playerId: multiplayerState.playerId,
+            roomId: multiplayerState.roomId,
+            pickupType: pickup.type
+          }));
+          console.log(`🔧 Sent test_pickup message to server: ${pickup.type}`);
+        } else {
+          console.log(`🔧 Not connected to multiplayer - cannot test pickup`);
+        }
+
+        return;
+      }
 
       // Handle 'L' key FIRST before any early returns (for local test mode)
       if (e.key.toLowerCase() === 'l') {
@@ -6544,6 +6858,18 @@ const Pong404: React.FC = () => {
       const barWidth = canvasSize.width / barCount;
       const dataStep = Math.floor(frequencyDataRef.current.length / barCount);
 
+      // Helper function to lighten a hex color
+      const lightenColor = (hex: string, percent: number) => {
+        const num = parseInt(hex.replace('#', ''), 16);
+        const r = Math.min(255, Math.floor((num >> 16) + ((255 - (num >> 16)) * percent)));
+        const g = Math.min(255, Math.floor(((num >> 8) & 0x00FF) + ((255 - ((num >> 8) & 0x00FF)) * percent)));
+        const b = Math.min(255, Math.floor((num & 0x0000FF) + ((255 - (num & 0x0000FF)) * percent)));
+        return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+      };
+
+      // Use lighter shade of background for visualizer
+      const visualizerColor = lightenColor(currentColors.background, 0.25);
+
       // Calculate average bass frequency for edge glow
       let bassSum = 0;
       for (let i = 0; i < 8; i++) {
@@ -6554,17 +6880,16 @@ const Pong404: React.FC = () => {
       // Edge glow effect - reacts to bass
       if (bassAverage > 0.1) {
         const glowIntensity = Math.floor(bassAverage * 100);
-        const glowColor = currentColors.foreground;
-        ctx.strokeStyle = glowColor;
+        ctx.strokeStyle = visualizerColor;
         ctx.lineWidth = 8 + (bassAverage * 16); // 8-24px thickness (doubled from 4-12px)
-        ctx.globalAlpha = bassAverage * 0.4; // More prominent (increased from 0.15)
+        ctx.globalAlpha = bassAverage * 0.6; // More visible
         ctx.strokeRect(0, 0, canvasSize.width, canvasSize.height);
         ctx.globalAlpha = 1.0; // Reset alpha
       }
 
       // Frequency bars centered horizontally (mirrored from center)
-      ctx.fillStyle = currentColors.foreground;
-      ctx.globalAlpha = 0.25; // More prominent (increased from 0.08)
+      ctx.fillStyle = visualizerColor;
+      ctx.globalAlpha = 0.4; // More visible
 
       const centerX = canvasSize.width / 2;
       const maxBarHeight = 300; // Increased from 150 for much taller bars
@@ -6911,32 +7236,67 @@ const Pong404: React.FC = () => {
       const width = paddle.width || (side === 'left' || side === 'right' ? PADDLE_THICKNESS : PADDLE_LENGTH);
       const height = paddle.height || (side === 'left' || side === 'right' ? PADDLE_LENGTH : PADDLE_THICKNESS);
 
-      // Calculate animation progress directly (not using state to avoid timing issues)
-      let scale = 1;
-      if (paddleAnimationStartTimeRef.current > 0) {
-        const elapsed = Date.now() - paddleAnimationStartTimeRef.current;
-        const duration = 500; // 500ms animation
-        const progress = Math.min(elapsed / duration, 1);
+      // Detect size changes and start animation for this specific paddle
+      const prevSize = previousPaddleSizesRef.current[side as 'left' | 'right' | 'top' | 'bottom'];
+      const sizeChanged = prevSize.height !== height || prevSize.width !== width;
 
-        // Bouncy easing: elastic overshoot
-        scale = progress < 1
-          ? 1 - Math.pow(1 - progress, 3) * Math.cos(progress * Math.PI * 2.5)
-          : 1;
+      if (sizeChanged) {
+        console.log(`[PADDLE ANIM] ${side} paddle size changed: ${prevSize.height}x${prevSize.width} -> ${height}x${width}`);
+        const anim = paddleSizeAnimationsRef.current[side as 'left' | 'right' | 'top' | 'bottom'];
+        if (!anim || anim.startTime < Date.now() - 500) {
+          // Start new animation for this paddle
+          paddleSizeAnimationsRef.current[side as 'left' | 'right' | 'top' | 'bottom'] = {
+            startTime: Date.now(),
+            startSize: { ...prevSize },
+            targetSize: { height, width },
+            startPosition: { x, y },
+            duration: 400 // 400ms bouncy animation
+          };
+          console.log(`[PADDLE ANIM] Started animation for ${side} paddle`);
+        }
+        // Update previous size
+        previousPaddleSizesRef.current[side as 'left' | 'right' | 'top' | 'bottom'] = { height, width };
+      }
+
+      // Calculate animation progress for this specific paddle
+      let animatedWidth = width;
+      let animatedHeight = height;
+      const anim = paddleSizeAnimationsRef.current[side as 'left' | 'right' | 'top' | 'bottom'];
+
+      if (anim && anim.startTime > 0) {
+        const elapsed = Date.now() - anim.startTime;
+        const progress = Math.min(elapsed / anim.duration, 1);
+
+        if (progress < 1) {
+          // Bouncy easing with overshoot (elasticOut)
+          const eased = progress < 0.5
+            ? 0.5 * Math.pow(2 * progress, 3)
+            : 0.5 * (Math.pow(2 * progress - 2, 3) + 2);
+
+          // Add bounce overshoot
+          const bounce = Math.sin(progress * Math.PI * 1.5) * 0.15 * (1 - progress);
+          const finalProgress = eased + bounce;
+
+          // Interpolate size
+          animatedWidth = anim.startSize.width + (anim.targetSize.width - anim.startSize.width) * finalProgress;
+          animatedHeight = anim.startSize.height + (anim.targetSize.height - anim.startSize.height) * finalProgress;
+        } else {
+          // Animation complete
+          paddleSizeAnimationsRef.current[side as 'left' | 'right' | 'top' | 'bottom'] = null;
+        }
       }
 
       const isHumanControlled = (gameState.gameMode === 'multiplayer' && currentPlayerSide === side) ||
                                 (gameState.gameMode === 'player' && side === 'right');
       const paddleColor = isHumanControlled ? humanPlayerColor : currentColors.foreground;
 
-      // Calculate center point for scaling
+      // Calculate center point and grow from center
       const centerX = x + width / 2;
       const centerY = y + height / 2;
 
-      // Apply scale animation (grow from center)
-      const scaledWidth = width * scale;
-      const scaledHeight = height * scale;
-      const scaledX = centerX - scaledWidth / 2;
-      const scaledY = centerY - scaledHeight / 2;
+      // Use animated dimensions and grow from center
+      const scaledX = centerX - animatedWidth / 2;
+      const scaledY = centerY - animatedHeight / 2;
 
       // Draw music-reactive glow effect
       ctx.shadowBlur = 3 + musicData.volume * 7; // Subtle glow 3-10px
@@ -6945,7 +7305,7 @@ const Pong404: React.FC = () => {
       ctx.globalAlpha = 1; // Ensure paddles are fully opaque
       ctx.fillStyle = paddleColor;
       // Round to whole pixels to prevent sub-pixel anti-aliasing flicker
-      ctx.fillRect(Math.round(scaledX), Math.round(scaledY), scaledWidth, scaledHeight);
+      ctx.fillRect(Math.round(scaledX), Math.round(scaledY), Math.round(animatedWidth), Math.round(animatedHeight));
 
       // Reset shadow
       ctx.shadowBlur = 0;
@@ -7042,7 +7402,10 @@ const Pong404: React.FC = () => {
 
     // 🟠 Draw extra balls (for multi-ball effect)
     if (!gameState.isPaused) {
-      (gameState.extraBalls || []).forEach(extraBall => {
+      (gameState.extraBalls || []).forEach((extraBall, index) => {
+        if (index === 0 && gameState.extraBalls.length > 0) {
+          console.log(`[MULTIBALL] Rendering ${gameState.extraBalls.length} extra balls`);
+        }
         ctx.fillStyle = currentColors.foreground;
         ctx.fillRect(extraBall.x, extraBall.y, extraBall.size, extraBall.size);
       });
@@ -7179,6 +7542,91 @@ const Pong404: React.FC = () => {
       });
     }
 
+    // Draw labyrinth maze walls if active
+    if (gameState.labyrinthActive && gameState.mazeWalls) {
+      ctx.fillStyle = gameColors.foreground;
+      ctx.globalAlpha = 0.8;
+
+      gameState.mazeWalls.forEach((wall: any) => {
+        ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
+      });
+
+      ctx.globalAlpha = 1;
+    }
+
+    // Draw labyrinth coins if active
+    if (gameState.labyrinthActive && gameState.labyrinthCoins) {
+      const time = cachedTimeRef.current * 0.005;
+      const pulseIndex = Math.floor(time % 60);
+      const pulse = PRECALC_CONSTANTS.pulseValues[pulseIndex];
+      const now = Date.now();
+
+      gameState.labyrinthCoins.forEach((coin: any) => {
+        ctx.save();
+
+        const centerX = coin.x + 8;
+        const centerY = coin.y + 8;
+
+        if (coin.collected && coin.collectedAt) {
+          // Spin animation: 3 full rotations over 800ms with ease-out
+          const elapsed = now - coin.collectedAt;
+          const duration = 800; // 800ms total animation
+          const maxRotations = 3 * Math.PI * 2; // 3 full spins
+
+          if (elapsed < duration) {
+            // Ease-out cubic curve: 1 - (1-t)^3
+            const t = elapsed / duration;
+            const easeOut = 1 - Math.pow(1 - t, 3);
+            const rotation = easeOut * maxRotations;
+
+            // Calculate scale for 3D effect (cos gives width, simulating rotation around Y-axis)
+            const scaleX = Math.abs(Math.cos(rotation));
+
+            // Fade out during last 200ms
+            const fadeStart = duration - 200;
+            const alpha = elapsed > fadeStart ? 1 - ((elapsed - fadeStart) / 200) : 1;
+
+            ctx.globalAlpha = alpha;
+            ctx.translate(centerX, centerY);
+            ctx.scale(scaleX, 1);
+            ctx.translate(-centerX, -centerY);
+
+            // Draw coin
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw shine (only visible when facing forward)
+            if (scaleX > 0.3) {
+              ctx.fillStyle = '#ffff00';
+              ctx.beginPath();
+              ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+          // Don't render after animation completes
+        } else if (!coin.collected) {
+          // Normal static coin rendering
+          ctx.globalAlpha = pulse;
+
+          // Draw coin as a circle
+          ctx.fillStyle = '#ffd700'; // Gold color
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Draw inner shine
+          ctx.fillStyle = '#ffff00';
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      });
+    }
+
     // Draw pickups if they exist
     gameState.pickups?.forEach((pickup) => {
       const time = cachedTimeRef.current * 0.005;
@@ -7198,9 +7646,9 @@ const Pong404: React.FC = () => {
 
       // Draw pixelated pattern with NO gaps between pixels
       const drawPixelatedPattern = (pattern: string, x: number, y: number, size: number, color: string) => {
-        // Use 4x4 grid for patterns with 4x4 pixel size (16x16 total)
-        const gridSize = 4;
-        const pixelSize = 4; // Fixed 4x4 pixel size
+        // Use 8x8 grid for patterns with 2x2 pixel size (16x16 total) - allows for more detail
+        const gridSize = 8;
+        const pixelSize = 2; // 2x2 pixel size for more detail
 
         // Round coordinates to prevent sub-pixel rendering gaps
         const roundedX = Math.round(x);
@@ -7251,16 +7699,19 @@ const Pong404: React.FC = () => {
           'confetti': 'confetti',
           'hypno': 'hypno',
           'conga': 'conga',
-          'bricks': 'bricks'
+          'bricks': 'bricks',
+          'maze': 'labyrinth'
         };
 
         const precalcPattern = PRECALC_PICKUP_PATTERNS[patternMap[pattern] as keyof typeof PRECALC_PICKUP_PATTERNS];
         if (precalcPattern) {
           // [ROCKET] INSTANT rendering using precalculated 2D boolean array (no nested calculations)
+          // Scale 4x4 pattern to 8x8 by doubling each pixel
           for (let row = 0; row < 4; row++) {
             for (let col = 0; col < 4; col++) {
               if (precalcPattern[row][col]) {
-                ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
+                // Draw 2x2 block for each original pixel (scaling from 4x4 to 8x8)
+                ctx.fillRect(roundedX + col * 2 * pixelSize, roundedY + row * 2 * pixelSize, pixelSize * 2, pixelSize * 2);
               }
             }
           }
@@ -7480,48 +7931,134 @@ const Pong404: React.FC = () => {
       ctx.restore();
     });
 
-    // Draw coins
-    gameState.coins.forEach((coin) => {
+    // Draw coins (reuse 'now' from labyrinth coins above)
+    if (gameState.coins && gameState.coins.length > 0) {
+      console.log(`[COINS] Rendering ${gameState.coins.length} coins:`, gameState.coins.slice(0, 2));
+    }
+    (gameState.coins || []).forEach((coin: any) => {
       const time = cachedTimeRef.current * 0.008;
-      const bounce = Math.sin(time + coin.x * 0.01) * 2; // Small bounce animation
-      const pulse = 0.9 + Math.sin(time * 2) * 0.1; // Subtle pulsing
+
+      // Check if coin should be visible yet (sequential spawn)
+      const timeSinceCreated = now - coin.createdAt;
+      const spawnDelay = coin.spawnDelay || 0;
+      if (timeSinceCreated < spawnDelay) {
+        return; // Don't render yet
+      }
+
+      // Play plopp sound once when coin becomes visible
+      if (!coinSoundsPlayedRef.current.has(coin.id) && timeSinceCreated >= spawnDelay && timeSinceCreated < spawnDelay + 50) {
+        coinSoundsPlayedRef.current.add(coin.id);
+        // Use simple beep for clean sound - no effects
+        const pitch = 950 + Math.random() * 100; // Random 950-1050Hz
+        playBeep(pitch, 0.04, 'normal');
+      }
 
       ctx.save();
-      ctx.globalAlpha = pulse;
 
-      // Draw pixelated coin
-      const pixelSize = 14; // Match game's standard pixel size
-      const gridSize = Math.floor(coin.size / pixelSize);
       const coinCenterX = coin.x + coin.size / 2;
-      const coinCenterY = coin.y + coin.size / 2 + bounce;
+      const coinCenterY = coin.y + coin.size / 2;
 
-      ctx.fillStyle = currentColors.foreground;
+      // Scale-in animation when spawning
+      const spawnDuration = 400; // 400ms spawn animation
+      const timeSinceSpawn = timeSinceCreated - spawnDelay;
+      let spawnScale = 1;
+      if (timeSinceSpawn < spawnDuration) {
+        const t = timeSinceSpawn / spawnDuration;
+        // Elastic bounce: overshoots then settles
+        const bounce = Math.pow(2, -10 * t) * Math.sin((t - 0.075) * (2 * Math.PI) / 0.3) + 1;
+        spawnScale = bounce;
+      }
 
-      // Draw pixelated circular coin shape
-      for (let row = 0; row < gridSize; row++) {
-        for (let col = 0; col < gridSize; col++) {
-          const pixelX = coin.x + col * pixelSize;
-          const pixelY = coin.y + row * pixelSize + bounce;
+      if (coin.collected && coin.collectedAt) {
+        // Spin animation: 3 full rotations over 800ms with ease-out
+        const elapsed = now - coin.collectedAt;
+        const duration = 800; // 800ms total animation
+        const maxRotations = 3 * Math.PI * 2; // 3 full spins
 
-          // Calculate distance from center to create circular shape
-          const centerX = gridSize / 2;
-          const centerY = gridSize / 2;
-          const distance = Math.sqrt(Math.pow(col - centerX, 2) + Math.pow(row - centerY, 2));
+        if (elapsed < duration) {
+          // Ease-out cubic curve: 1 - (1-t)^3
+          const t = elapsed / duration;
+          const easeOut = 1 - Math.pow(1 - t, 3);
+          const rotation = easeOut * maxRotations;
 
-          // Outer circle (coin border)
-          if (distance <= gridSize * 0.45 && distance >= gridSize * 0.35) {
-            ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
+          // Calculate scale for 3D effect (cos gives width, simulating rotation around Y-axis)
+          const scaleX = Math.abs(Math.cos(rotation));
+
+          // Fade out during last 200ms
+          const fadeStart = duration - 200;
+          const alpha = elapsed > fadeStart ? 1 - ((elapsed - fadeStart) / 200) : 1;
+
+          ctx.globalAlpha = alpha;
+          ctx.translate(coinCenterX, coinCenterY);
+          ctx.scale(scaleX * spawnScale, 1 * spawnScale);
+          ctx.translate(-coinCenterX, -coinCenterY);
+
+          // Draw pixelated coin
+          const pixelSize = 4; // Match pong404 pixel size
+          const gridSize = Math.floor(coin.size / pixelSize);
+          ctx.fillStyle = currentColors.foreground;
+
+          for (let row = 0; row < gridSize; row++) {
+            for (let col = 0; col < gridSize; col++) {
+              const pixelX = coin.x + col * pixelSize;
+              const pixelY = coin.y + row * pixelSize;
+
+              const centerX = gridSize / 2;
+              const centerY = gridSize / 2;
+              const distance = Math.sqrt(Math.pow(col - centerX, 2) + Math.pow(row - centerY, 2));
+
+              // Outer circle (coin border)
+              if (distance <= gridSize * 0.45 && distance >= gridSize * 0.35) {
+                ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
+              }
+              // Inner pattern (only visible when facing forward)
+              else if (distance <= gridSize * 0.3 && scaleX > 0.3) {
+                const relX = col - centerX;
+                const relY = row - centerY;
+                if (Math.abs(relX) <= 1 || (Math.abs(relY) <= 1 && Math.abs(relX) <= 2)) {
+                  ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
+                }
+              }
+            }
           }
+        }
+        // Don't render after animation completes
+      } else if (!coin.collected) {
+        // Normal coin rendering with bounce
+        const bounce = Math.sin(time + coin.x * 0.01) * 2;
+        const pulse = 0.9 + Math.sin(time * 2) * 0.1;
 
-          // Inner circle pattern (coin center with "$" pattern)
-          else if (distance <= gridSize * 0.3) {
-            // Create a simple "$" or cross pattern
-            const relX = col - centerX;
-            const relY = row - centerY;
+        ctx.globalAlpha = pulse;
 
-            if (Math.abs(relX) <= 1 || // Vertical line of "$"
-                (Math.abs(relY) <= 1 && Math.abs(relX) <= 2)) { // Horizontal lines of "$"
+        // Apply spawn scale
+        ctx.translate(coinCenterX, coinCenterY);
+        ctx.scale(spawnScale, spawnScale);
+        ctx.translate(-coinCenterX, -coinCenterY);
+
+        const pixelSize = 4; // Match pong404 pixel size
+        const gridSize = Math.floor(coin.size / pixelSize);
+        ctx.fillStyle = currentColors.foreground;
+
+        for (let row = 0; row < gridSize; row++) {
+          for (let col = 0; col < gridSize; col++) {
+            const pixelX = coin.x + col * pixelSize;
+            const pixelY = coin.y + row * pixelSize + bounce;
+
+            const centerX = gridSize / 2;
+            const centerY = gridSize / 2;
+            const distance = Math.sqrt(Math.pow(col - centerX, 2) + Math.pow(row - centerY, 2));
+
+            // Outer circle (coin border)
+            if (distance <= gridSize * 0.45 && distance >= gridSize * 0.35) {
               ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
+            }
+            // Inner circle pattern (coin center with "$" pattern)
+            else if (distance <= gridSize * 0.3) {
+              const relX = col - centerX;
+              const relY = row - centerY;
+              if (Math.abs(relX) <= 1 || (Math.abs(relY) <= 1 && Math.abs(relX) <= 2)) {
+                ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
+              }
             }
           }
         }
@@ -7846,17 +8383,22 @@ const Pong404: React.FC = () => {
 
       // Show connection status with visual indicators
       if (connectionStatus === 'connecting' || connectionStatus === 'server_down' || connectionStatus === 'server_starting') {
-        const dots = '.'.repeat((Math.floor(Date.now() / 500) % 3) + 1);
+        // Blink every 500ms
+        const isVisible = Math.floor(Date.now() / 500) % 2 === 0;
 
         if (connectionStatus === 'server_down') {
           ctx.fillStyle = '#ff4444'; // Red for server down
           ctx.fillText(`SERVER DOWN`, playFieldWidth / 2, playFieldHeight - 160);
         } else if (connectionStatus === 'server_starting') {
-          ctx.fillStyle = '#ffaa00'; // Orange for server starting
-          ctx.fillText(`STARTING SERVER${dots}`, playFieldWidth / 2, playFieldHeight - 160);
+          if (isVisible) {
+            ctx.fillStyle = '#ffaa00'; // Orange for server starting
+            ctx.fillText(`STARTING SERVER`, playFieldWidth / 2, playFieldHeight - 160);
+          }
         } else {
-          ctx.fillStyle = currentColors.foreground; // Normal color for connecting
-          ctx.fillText(`CONNECTING${dots}`, playFieldWidth / 2, playFieldHeight - 160);
+          if (isVisible) {
+            ctx.fillStyle = currentColors.foreground; // Normal color for connecting
+            ctx.fillText(`CONNECTING`, playFieldWidth / 2, playFieldHeight - 160);
+          }
         }
 
         ctx.fillStyle = currentColors.foreground; // Reset color for other text
@@ -7965,11 +8507,24 @@ const Pong404: React.FC = () => {
         ctx.font = 'bold 10px "Press Start 2P", monospace';
         ctx.fillText('Server may be sleeping - retrying automatically', playFieldWidth / 2, playFieldHeight - 115);
         ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - 100);
+      } else if (connectionStatus === 'retrying') {
+        // Blink every 500ms
+        const isVisible = Math.floor(Date.now() / 500) % 2 === 0;
+        if (isVisible) {
+          ctx.fillStyle = '#ffaa00'; // Orange for retrying
+          ctx.fillText('RETRYING CONNECTION', playFieldWidth / 2, playFieldHeight - 160);
+        }
+        ctx.fillStyle = currentColors.foreground;
+        ctx.fillText(connectionMessage || `Retrying connection (attempt ${retryCount})...`, playFieldWidth / 2, playFieldHeight - 140);
+        ctx.fillText('Please wait...', playFieldWidth / 2, playFieldHeight - 120);
       } else if (connectionStatus === 'error') {
-        ctx.fillText('[ERROR] CONNECTION FAILED', playFieldWidth / 2, playFieldHeight - 160);
+        ctx.fillStyle = '#ff0000'; // Red for error
+        ctx.fillText('[X] CONNECTION FAILED', playFieldWidth / 2, playFieldHeight - 160);
+        ctx.fillStyle = currentColors.foreground;
         ctx.fillText(connectionMessage || 'Server may be sleeping or unreachable', playFieldWidth / 2, playFieldHeight - 140);
-        ctx.fillText('Press ANY KEY to retry connection', playFieldWidth / 2, playFieldHeight - 120);
-        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - 100);
+        ctx.fillText(`Failed ${retryCount} time${retryCount !== 1 ? 's' : ''}`, playFieldWidth / 2, playFieldHeight - 120);
+        ctx.fillStyle = '#00ff00'; // Green for retry prompt
+        ctx.fillText('Press ANY KEY to retry connection', playFieldWidth / 2, playFieldHeight - 100);
       } else {
         ctx.fillText('Press ANY KEY to join online multiplayer', playFieldWidth / 2, playFieldHeight - 160);
         ctx.fillText('Move your paddle: W/S keys OR hover mouse', playFieldWidth / 2, playFieldHeight - 140);
@@ -8717,6 +9272,37 @@ const Pong404: React.FC = () => {
       document.removeEventListener('pointermove', handleGlobalMouseMove);
     };
   }, [gameState.gameMode, gameState.isPlaying, multiplayerState.playerSide, initializeAudio, accumulatedMouseY, accumulatedMouseX]);
+
+  // Watch for coin collections and play ca-ching sound
+  useEffect(() => {
+    // Track collected labyrinth coins
+    if (gameState.labyrinthCoins) {
+      gameState.labyrinthCoins.forEach((coin: any) => {
+        if (coin.collected && coin.collectedAt) {
+          const timeSinceCollection = Date.now() - coin.collectedAt;
+          // Only play sound once (within first 50ms of collection)
+          if (timeSinceCollection < 50 && !coin.soundPlayed) {
+            playCoinSound();
+            coin.soundPlayed = true; // Mark to prevent replay
+          }
+        }
+      });
+    }
+
+    // Track collected coin_shower coins
+    if (gameState.coins) {
+      gameState.coins.forEach((coin: any) => {
+        if (coin.collected && coin.collectedAt) {
+          const timeSinceCollection = Date.now() - coin.collectedAt;
+          // Only play sound once (within first 50ms of collection)
+          if (timeSinceCollection < 50 && !coin.soundPlayed) {
+            playCoinSound();
+            coin.soundPlayed = true; // Mark to prevent replay
+          }
+        }
+      });
+    }
+  }, [gameState.labyrinthCoins, gameState.coins, playCoinSound]);
 
   // Focus canvas on mount and cleanup on unmount
   useEffect(() => {
