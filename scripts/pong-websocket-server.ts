@@ -1547,7 +1547,9 @@ class PongWebSocketServer {
           extraBalls: gameState.extraBalls,
           machineGunBalls: gameState.machineGunBalls,
           machineGunActive: gameState.machineGunActive,
-          playfieldScale: gameState.playfieldScale // 📐 Broadcast playfield scaling for dynamic playfield effect
+          playfieldScale: gameState.playfieldScale, // 📐 Broadcast playfield scaling for dynamic playfield effect
+          timeWarpActive: gameState.timeWarpActive, // ⏱️ Broadcast time warp state
+          timeWarpFactor: gameState.timeWarpFactor // ⏱️ Broadcast time warp speed factor
         }
       });
 
@@ -1723,7 +1725,9 @@ class PongWebSocketServer {
       const deadzone = 15; // Increased from 10 to make AI less twitchy
       if (distance > deadzone) {
         const direction = (targetPos + (paddleSize / 2)) > paddleCenter ? 1 : -1;
-        const movement = direction * speed;
+        // Apply time warp factor to paddle movement
+        const timeWarpFactor = gameState.timeWarpFactor || 1.0;
+        const movement = direction * speed * timeWarpFactor;
 
         // Prevent overshoot: don't move past the target
         if (Math.abs(movement) > distance) {
@@ -3304,11 +3308,11 @@ class PongWebSocketServer {
         console.log('🔄 SWITCH_SIDES: Scores swapped', gameState.score);
         break;
       case 'time_warp':
-        // Slow down or speed up time
+        // Activate time warp with oscillating speed (will be calculated in updateActiveEffects)
         gameState.timeWarpActive = true;
-        gameState.timeWarpFactor = Math.random() > 0.5 ? 0.5 : 2.0; // Half speed or double speed
-        effect.duration = 8000; // 8 seconds
-        console.log(`⏱️ TIME WARP: ${gameState.timeWarpFactor}x speed (${gameState.timeWarpFactor < 1 ? 'SLOW MOTION' : 'FAST FORWARD'})`);
+        gameState.timeWarpFactor = 0.05; // Start at slowest (will oscillate between 0.05x and 6.0x)
+        effect.duration = 8000; // 8 seconds - 2 full oscillation cycles
+        console.log(`⏱️ TIME WARP: Activated - oscillating between 0.05x and 6.0x speed (INSANELY EXTREME)`);
         break;
       case 'gravity_in_space':
         gameState.ball.hasGravity = true;
@@ -3634,6 +3638,26 @@ class PongWebSocketServer {
   private updateActiveEffects(gameState: GameState, now: number): boolean {
     let effectsChanged = false;
 
+    // Update time warp oscillation
+    const timeWarpEffect = gameState.activeEffects.find(e => e.type === 'time_warp');
+    if (timeWarpEffect && gameState.timeWarpActive) {
+      const elapsed = now - timeWarpEffect.startTime;
+      const progress = elapsed / timeWarpEffect.duration; // 0 to 1
+
+      // Oscillate between 0.05x (ULTRA extreme slow) and 6.0x (INSANE fast) using sine wave
+      // Complete 2 full cycles over the duration
+      const cycles = 2;
+      const oscillation = Math.sin(progress * Math.PI * 2 * cycles);
+
+      // Map oscillation from [-1, 1] to [0.05, 6.0] - INSANELY EXTREME range
+      const minSpeed = 0.05;
+      const maxSpeed = 6.0;
+      const range = maxSpeed - minSpeed;
+      gameState.timeWarpFactor = minSpeed + ((oscillation + 1) / 2) * range;
+
+      effectsChanged = true;
+    }
+
     // Remove expired effects
     const initialLength = gameState.activeEffects.length;
     gameState.activeEffects = gameState.activeEffects.filter(effect => {
@@ -3817,6 +3841,7 @@ class PongWebSocketServer {
       case 'time_warp':
         gameState.timeWarpActive = false;
         gameState.timeWarpFactor = 1.0;
+        console.log('⏱️ TIME WARP: Effect expired - returning to normal speed');
         break;
 
       case 'arkanoid':

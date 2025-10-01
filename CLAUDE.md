@@ -16,6 +16,48 @@
 - remember that pickups always should be handled by the websocket
 - remember we don't have a single player mode, only online multiplayer that can act as singleplayer with ai opponents.
 
+## 📦 PROCESS FOR ADDING/ENABLING PICKUPS (IMPORTANT - READ THIS WHEN ADDING PICKUPS)
+
+When adding or enabling a new pickup, follow these 10 steps in order:
+
+**Server-Side (scripts/pong-websocket-server.ts):**
+1. Add pickup name to `pickupTypes` array (line ~3113)
+2. Add `case 'pickup_name':` handler in `applyPickupEffect()` method (line ~3142+)
+   - Set game state properties
+   - Set effect.duration if needed
+   - Add console log for debugging
+3. Add cleanup `case 'pickup_name':` in effect expiration handler if needed (line ~3780+)
+   - Reset game state properties to default values
+   - Add console log for debugging
+
+**Client-Side (src/pages/Pong404.tsx):**
+4. Add pickup config to `PICKUP_CONFIGS` array with pattern, color, description, scale, note (line ~200+)
+5. Add pattern definition to `PRECALC_PICKUP_PATTERNS` object (line ~412+)
+   - Use 4x4 boolean array for pixel pattern
+6. Add state properties to `GameState` interface if needed (line ~50+)
+7. Initialize state values in initial game state (line ~1000+)
+8. Add rendering/gameplay logic where needed (search for similar pickups)
+
+**CRITICAL - Client/Server State Sync (src/pages/Pong404.tsx):**
+9. Add state property syncing in WebSocket message handler `case 'game_state_updated':` (line ~2690+)
+   - Add `if (message.data.yourProperty !== undefined) networkState.yourProperty = message.data.yourProperty;`
+   - This ensures client receives state changes from server when effect activates/expires
+   - **Without this step, the pickup will not work properly in multiplayer!**
+
+**Apply Time Warp Factor (if pickup affects speed):**
+10. If pickup affects game speed, apply the time warp factor to movement:
+    - Server AI paddle movement: line ~1726 (multiply movement by `gameState.timeWarpFactor`)
+    - Client paddle movement: line ~5912 and ~5961 (multiply velocity by `timeWarpFactor`)
+    - Ball movement: Already applied on server (line ~2732) and should use synced factor
+
+**Testing:**
+- Restart servers: `killall -9 node && sleep 1 && npm run dev`
+- Open: http://localhost:8080/404
+- Check browser console for errors
+- Wait for pickup to spawn and test effect
+- Verify effect expires after duration
+- Check that state returns to normal after expiration
+
 ## 🚀 SERVER SETUP (IMPORTANT - READ THIS EVERY TIME YOU RESTART SERVERS)
 
 **The ONLY correct way to start the dev environment:**

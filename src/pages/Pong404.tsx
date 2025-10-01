@@ -2694,6 +2694,14 @@ const Pong404: React.FC = () => {
               networkState.playfieldScale = message.data.playfieldScale;
             }
 
+            // ⏱️ Sync time warp state from server
+            if (message.data.timeWarpActive !== undefined) {
+              networkState.timeWarpActive = message.data.timeWarpActive;
+            }
+            if (message.data.timeWarpFactor !== undefined) {
+              networkState.timeWarpFactor = message.data.timeWarpFactor;
+            }
+
             // Store network state and timing for interpolation
             networkGameStateRef.current = networkState;
             lastNetworkReceiveTimeRef.current = Date.now();
@@ -2954,7 +2962,6 @@ const Pong404: React.FC = () => {
   const masterLimiterRef = useRef<any>(null);
   const discoMusicRef = useRef<{ kick: any; bass: any; synth: any; hihat: any; seq: any; gain: any } | null>(null);
   const hypnoSoundRef = useRef<{ osc1: any; osc2: any; lfo1: any; lfo2: any; reverb: any; gain: any } | null>(null);
-  const timeWarpSoundRef = useRef<{ osc: OscillatorNode; gain: GainNode; dryGain: GainNode; wetGain: GainNode } | null>(null);
   const gameStartTimeRef = useRef<number>(Date.now());
   const lastMoveTimesRef = useRef<Map<string, number>>(new Map());
 
@@ -3641,7 +3648,14 @@ const Pong404: React.FC = () => {
         duration = 0.1;
     }
 
-    // console.log(`[SOUND] Playing Tone.js melody: freq=${frequency}Hz, scale=${melodyState.currentScale}, harmony=[${harmony.join(',')}]`);
+    // Apply time warp pitch factor to all frequencies
+    const pitchFactor = currentGameStateRef.current?.timeWarpFactor || 1.0;
+    frequency = frequency * pitchFactor;
+    harmony = harmony.map(h => h * pitchFactor);
+
+    if (pitchFactor !== 1.0) {
+      console.log(`[SOUND] ${eventType}: freq=${frequency.toFixed(0)}Hz (pitched ${pitchFactor.toFixed(2)}x)`);
+    }
 
     try {
       // Create master limiter if it doesn't exist
@@ -4121,16 +4135,19 @@ const Pong404: React.FC = () => {
 
     console.log('[ATMOSPHERIC DRONE] Starting simple dark atmospheric drone...');
 
-    // Simple atmospheric drone frequencies - inspired by focus ambient music
+    // Simple atmospheric drone frequencies - enhanced for time warp pitch shifting
     const frequencies = [
       { freq: 32, vol: 0.25, wave: 'sine' as OscillatorType },      // Deep sub-bass
       { freq: 48, vol: 0.2, wave: 'sine' as OscillatorType },       // Sub foundation
       { freq: 64, vol: 0.18, wave: 'triangle' as OscillatorType },  // Warm bass
       { freq: 96, vol: 0.15, wave: 'sine' as OscillatorType },      // Low mid
       { freq: 128, vol: 0.12, wave: 'triangle' as OscillatorType }, // Mid atmospheric
-      { freq: 192, vol: 0.08, wave: 'sine' as OscillatorType },     // Upper mid
-      { freq: 256, vol: 0.06, wave: 'triangle' as OscillatorType }, // Ethereal
-      { freq: 384, vol: 0.04, wave: 'sine' as OscillatorType }      // High atmospheric
+      { freq: 192, vol: 0.1, wave: 'sine' as OscillatorType },      // Upper mid
+      { freq: 256, vol: 0.08, wave: 'triangle' as OscillatorType }, // Ethereal
+      { freq: 384, vol: 0.06, wave: 'sine' as OscillatorType },     // High atmospheric
+      { freq: 512, vol: 0.05, wave: 'sine' as OscillatorType },     // Higher voice for pitch shift clarity
+      { freq: 768, vol: 0.04, wave: 'triangle' as OscillatorType }, // Even higher for extreme shifts
+      { freq: 1024, vol: 0.03, wave: 'sine' as OscillatorType }     // Top layer for ultra-high shifts
     ];
 
     frequencies.forEach((layer, index) => {
@@ -4163,7 +4180,7 @@ const Pong404: React.FC = () => {
       ambienceGainsRef.current.push(gainNode);
     });
 
-    // console.log('[ATMOSPHERIC DRONE] Simple atmospheric drone started successfully');
+    console.log(`[ATMOSPHERIC DRONE] Simple atmospheric drone started with ${frequencies.length} oscillators`);
   }, []);
 
   const stopAmbienceSound = useCallback(() => {
@@ -4302,7 +4319,7 @@ const Pong404: React.FC = () => {
     if (gameState.showStartScreen) {
       // Start ambient sounds on title screen
       if (audioContextRef.current && audioContextRef.current.state === 'running' && !ambienceActiveRef.current) {
-        // setTimeout(() => startSimpleAtmosphericDrone(), 100); // Simple atmospheric drone - DISABLED
+        setTimeout(() => startSimpleAtmosphericDrone(), 100); // Simple atmospheric drone
       }
 
       // Instant welcome message on title screen
@@ -5908,8 +5925,9 @@ const Pong404: React.FC = () => {
           const maxSpeed = isLeft ? paddle.speed : paddle.speed * 0.9;
           paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
 
-          // Update position
-          paddle.y += paddle.velocity;
+          // Update position with time warp factor
+          const timeWarpFactor = newState.timeWarpFactor || 1.0;
+          paddle.y += paddle.velocity * timeWarpFactor;
 
           // Keep paddle within bounds
           // Paddle Y unclamped - allow free movement
@@ -5953,10 +5971,11 @@ const Pong404: React.FC = () => {
             paddle.velocity *= 0.9; // Slight friction when close to target
           }
 
-          // Apply speed limits and update position
+          // Apply speed limits and update position with time warp factor
           const maxSpeed = paddle.speed;
           paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
-          paddle.x += paddle.velocity;
+          const timeWarpFactor = newState.timeWarpFactor || 1.0;
+          paddle.x += paddle.velocity * timeWarpFactor;
           paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
         };
 
@@ -6782,101 +6801,54 @@ const Pong404: React.FC = () => {
     ctx.restore();
   }, [gameState.colorIndex]);
 
-  // ⏱️ Time Warp Sound Effect
-  const startTimeWarpSound = useCallback((speed: number) => {
-    if (!audioContextRef.current || timeWarpSoundRef.current) return;
 
-    const ctx = audioContextRef.current;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    const dryGain = ctx.createGain();
-    const wetGain = ctx.createGain();
-
-    // Base frequency that changes with speed
-    // 0.5x speed = 200Hz (low, slow)
-    // 2.0x speed = 800Hz (high, fast)
-    const baseFreq = speed < 1 ? 200 : 800;
-    osc.frequency.value = baseFreq;
-    osc.type = 'sine';
-
-    // Volume
-    gain.gain.value = 0.15;
-
-    // Reverb mix based on speed - more reverb for slower speeds
-    // 0.5x speed = 80% wet (lots of reverb for slow motion feel)
-    // 2.0x speed = 20% wet (less reverb for fast forward)
-    const reverbAmount = speed < 1 ? 0.8 : 0.2;
-    dryGain.gain.value = 1 - reverbAmount;
-    wetGain.gain.value = reverbAmount;
-
-    // Connect audio graph with reverb
-    osc.connect(gain);
-
-    // Split into dry/wet paths
-    gain.connect(dryGain);
-    gain.connect(wetGain);
-
-    // Connect wet path to reverb if available
-    if (reverbNodeRef.current) {
-      wetGain.connect(reverbNodeRef.current);
-      reverbNodeRef.current.connect(beepsMasterGainRef.current || ctx.destination);
-    } else {
-      wetGain.connect(beepsMasterGainRef.current || ctx.destination);
-    }
-
-    // Connect dry path directly
-    dryGain.connect(beepsMasterGainRef.current || ctx.destination);
-
-    osc.start();
-    timeWarpSoundRef.current = { osc, gain, dryGain, wetGain };
-
-    console.log(`⏱️ TIME WARP SOUND: Started at ${baseFreq}Hz (speed: ${speed}x, reverb: ${(reverbAmount * 100).toFixed(0)}%)`);
-  }, []);
-
-  const updateTimeWarpSound = useCallback((speed: number) => {
-    if (!timeWarpSoundRef.current || !audioContextRef.current) return;
-
-    const now = audioContextRef.current.currentTime;
-
-    // Update frequency smoothly
-    const baseFreq = speed < 1 ? 200 : 800;
-    timeWarpSoundRef.current.osc.frequency.setValueAtTime(baseFreq, now);
-
-    // Update reverb mix based on new speed
-    const reverbAmount = speed < 1 ? 0.8 : 0.2;
-    timeWarpSoundRef.current.dryGain.gain.setValueAtTime(1 - reverbAmount, now);
-    timeWarpSoundRef.current.wetGain.gain.setValueAtTime(reverbAmount, now);
-  }, []);
-
-  const stopTimeWarpSound = useCallback(() => {
-    if (!timeWarpSoundRef.current) return;
-
-    try {
-      timeWarpSoundRef.current.gain.gain.exponentialRampToValueAtTime(
-        0.001,
-        audioContextRef.current!.currentTime + 0.3
-      );
-      setTimeout(() => {
-        if (timeWarpSoundRef.current) {
-          timeWarpSoundRef.current.osc.stop();
-          timeWarpSoundRef.current = null;
-        }
-      }, 300);
-      console.log('⏱️ TIME WARP SOUND: Stopped');
-    } catch (e) {
-      timeWarpSoundRef.current = null;
-    }
-  }, []);
-
-  // Watch for time warp effect activation
+  // Watch for time warp effect activation and pitch-shift ambient music
   useEffect(() => {
     if (gameState.timeWarpActive && gameState.timeWarpFactor !== 1.0) {
-      startTimeWarpSound(gameState.timeWarpFactor);
-      updateTimeWarpSound(gameState.timeWarpFactor);
-    } else {
-      stopTimeWarpSound();
+      // Pitch-shift all ambient oscillators to match time warp speed
+      if (audioContextRef.current && ambienceOscillatorsRef.current.length > 0) {
+        const now = audioContextRef.current.currentTime;
+        const pitchFactor = gameState.timeWarpFactor; // 0.1x to 4.0x
+
+        // detune is in cents: 1200 cents = 1 octave = 2x frequency
+        // Formula: cents = 1200 * log2(pitchFactor)
+        const cents = 1200 * Math.log2(pitchFactor);
+
+        console.log(`⏱️ TIME WARP: Pitch-shifting ${ambienceOscillatorsRef.current.length} oscillators to ${pitchFactor.toFixed(2)}x speed (${cents.toFixed(0)} cents)`);
+
+        // Update frequency of each ambient oscillator - use exponentialRampToValueAtTime for smooth pitch changes
+        ambienceOscillatorsRef.current.forEach((osc, index) => {
+          try {
+            // Cancel any scheduled changes first
+            osc.detune.cancelScheduledValues(now);
+            // Set current value
+            osc.detune.setValueAtTime(osc.detune.value, now);
+            // Smooth transition to new pitch over 0.1s to avoid clicks
+            osc.detune.linearRampToValueAtTime(cents, now + 0.1);
+          } catch (e) {
+            console.error(`Failed to pitch-shift oscillator ${index}:`, e);
+          }
+        });
+      } else {
+        console.warn(`⏱️ TIME WARP: Cannot pitch-shift - audioContext: ${!!audioContextRef.current}, oscillators: ${ambienceOscillatorsRef.current.length}`);
+      }
+    } else if (gameState.timeWarpActive === false) {
+      // Restore original pitch only when effect explicitly ends
+      if (audioContextRef.current && ambienceOscillatorsRef.current.length > 0) {
+        const now = audioContextRef.current.currentTime;
+
+        ambienceOscillatorsRef.current.forEach((osc) => {
+          try {
+            osc.detune.cancelScheduledValues(now);
+            osc.detune.setValueAtTime(osc.detune.value, now);
+            osc.detune.linearRampToValueAtTime(0, now + 1.0); // Smooth return to normal over 1 second
+          } catch (e) {}
+        });
+
+        console.log('⏱️ TIME WARP: Restored ambient music to normal pitch');
+      }
     }
-  }, [gameState.timeWarpActive, gameState.timeWarpFactor, startTimeWarpSound, updateTimeWarpSound, stopTimeWarpSound]);
+  }, [gameState.timeWarpActive, gameState.timeWarpFactor]);
 
   // High-performance render function
   const render = useCallback(() => {
