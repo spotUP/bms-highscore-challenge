@@ -9394,7 +9394,7 @@ const Pong404: React.FC = () => {
         )}
 
         {/* Debug pickup indicator */}
-        {isDebugMode && (
+        {isDebugMode && PICKUP_TYPES && PICKUP_TYPES[debugPickupIndex] && (
           <div style={{
             position: 'absolute',
             top: '20px',
@@ -9408,9 +9408,17 @@ const Pong404: React.FC = () => {
             fontSize: '14px',
             border: '2px solid #00ff00',
             zIndex: 1000,
-            pointerEvents: 'none'
+            pointerEvents: 'none',
+            textAlign: 'center',
+            whiteSpace: 'nowrap'
           }}>
-            DEBUG: [{debugPickupIndex + 1}/{PICKUP_TYPES.length}] {PICKUP_TYPES[debugPickupIndex].type} - {PICKUP_TYPES[debugPickupIndex].description}
+            <div>DEBUG MODE: Press 1/2 to cycle pickups</div>
+            <div style={{ marginTop: '5px', fontWeight: 'bold' }}>
+              [{debugPickupIndex + 1}/{PICKUP_TYPES.length}] {PICKUP_TYPES[debugPickupIndex].type}
+            </div>
+            <div style={{ fontSize: '12px', opacity: 0.8 }}>
+              {PICKUP_TYPES[debugPickupIndex].description}
+            </div>
           </div>
         )}
 
