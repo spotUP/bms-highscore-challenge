@@ -65,10 +65,56 @@ When removing a pickup from the game, you MUST remove it from ALL of these locat
 8. Add rendering/gameplay logic where needed (search for similar pickups)
 
 **CRITICAL - Client/Server State Sync (src/pages/Pong404.tsx):**
-9. Add state property syncing in WebSocket message handler `case 'game_state_updated':` (line ~2690+)
-   - Add `if (message.data.yourProperty !== undefined) networkState.yourProperty = message.data.yourProperty;`
-   - This ensures client receives state changes from server when effect activates/expires
-   - **Without this step, the pickup will not work properly in multiplayer!**
+9. Add music/audio/visual activation logic in `case 'game_state_updated':` handler (line ~2055+)
+
+   **IMPORTANT ARCHITECTURE NOTES:**
+   - The server sends `game_state_updated` messages (NOT `delta_update` or `game_state`)
+   - The server broadcasts the ENTIRE `gameState` object in these messages
+   - The client has a `delta_update` handler but it's for CLIENT → SERVER updates, not SERVER → CLIENT
+   - Pickup selector (keys 1/2) sends `test_pickup` to server, server responds with `game_state_updated`
+
+   **CRITICAL BUG TO AVOID:**
+   - The `handleTestPickup()` method (line ~1150) MUST send `type: 'game_state_updated'`
+   - DO NOT send `type: 'game_state'` - the client doesn't have a handler for it!
+   - The client ONLY handles `game_state_updated`, NOT `game_state`
+   - If you send the wrong message type, pickups will activate on server but not trigger client effects
+
+   **For pickups with music/audio/visual effects that need activation/deactivation:**
+
+   Add activation logic in `case 'game_state_updated':` handler (line ~2055+), BEFORE `networkGameStateRef.current` is updated:
+
+   ```typescript
+   // Handle [Your Pickup] mode
+   const prevGameState = networkGameStateRef.current;
+   const hadEffect = prevGameState?.yourPickupMode || false;
+   const hasEffect = message.data.yourPickupMode || false;
+
+   console.log('[YOUR_PICKUP DEBUG] hadEffect:', hadEffect, 'hasEffect:', hasEffect);
+
+   if (hasEffect && !hadEffect) {
+     // Start music/effects
+     console.log('[YOUR_PICKUP] Starting effect');
+     if ((window as any).generativeMusic) {
+       (window as any).generativeMusic.startPiece('your-piece');
+     } else {
+       console.log('[YOUR_PICKUP] ERROR: generativeMusic not available');
+     }
+   } else if (!hasEffect && hadEffect) {
+     // Stop music/effects
+     console.log('[YOUR_PICKUP] Stopping effect');
+     if ((window as any).generativeMusic?.currentState?.currentPieceId === 'your-piece') {
+       const pieces = (window as any).generativeMusic.availablePieces.filter((p: any) => p.id !== 'your-piece');
+       const randomPiece = pieces[Math.floor(Math.random() * pieces.length)];
+       (window as any).generativeMusic.startPiece(randomPiece.id);
+     }
+   }
+   ```
+
+   **WHY THIS LOCATION:**
+   - `prevGameState = networkGameStateRef.current` gives you the previous state
+   - `message.data` contains the new state from server
+   - Must compare BEFORE updating `networkGameStateRef.current` (line ~2082+)
+   - This ensures state change detection works correctly
 
 **Apply Time Warp Factor (if pickup affects speed):**
 10. If pickup affects game speed, apply the time warp factor to movement:
@@ -119,3 +165,4 @@ killall -9 node && sleep 1 && npm run dev
 
 **URL to open in browser:**
 - http://localhost:8080/404 (NOT 8082, NOT 8083)
+- the ambient sound system is old and not used we use generated music with tone.js now

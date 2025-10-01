@@ -232,7 +232,6 @@ const PICKUP_TYPES = [
   { type: 'freeze_opponent', pattern: 'cross', color: '#00ffff', description: 'Freeze Enemy!', scale: 'locrian', note: 0 },
   { type: 'super_speed', pattern: 'stripes', color: '#ffffff', description: 'LUDICROUS SPEED!', scale: 'diminished', note: 7 },
   { type: 'coin_shower', pattern: 'diamond', color: '#ffdd00', description: 'Coin Shower!', scale: 'wholetone', note: 4 },
-  { type: 'teleport_ball', pattern: 'star', color: '#9966ff', description: 'Teleport Ball!', scale: 'diminished', note: 1 },
   { type: 'gravity_in_space', pattern: 'gravity', color: '#6a0dad', description: 'Gravity in Space!', scale: 'phrygian', note: 2 },
   { type: 'super_striker', pattern: 'target', color: '#ff4500', description: 'Super Striker!', scale: 'wholetone', note: 7 },
   { type: 'sticky_paddles', pattern: 'sticky', color: '#ffb347', description: 'Sticky Paddles!', scale: 'phrygian', note: 3 },
@@ -241,12 +240,11 @@ const PICKUP_TYPES = [
   { type: 'switch_sides', pattern: 'swap', color: '#ff6347', description: 'Switch Sides!', scale: 'hungarian', note: 5 },
   { type: 'time_warp', pattern: 'clock', color: '#4169e1', description: 'Time Warp!', scale: 'diminished', note: 1 },
   { type: 'mirror_mode', pattern: 'mirror', color: '#dda0dd', description: 'Mirror Mode!', scale: 'phrygian', note: 7 },
-  { type: 'quantum_ball', pattern: 'quantum', color: '#00ced1', description: 'Quantum Ball!', scale: 'hungarian', note: 4 },
   { type: 'black_hole', pattern: 'vortex', color: '#2f2f2f', description: 'Black Hole!', scale: 'locrian', note: 0 },
   { type: 'lightning_storm', pattern: 'lightning', color: '#ffff99', description: 'Lightning Storm!', scale: 'diminished', note: 3 },
   { type: 'invisible_paddles', pattern: 'fade', color: '#f0f8ff', description: 'Invisible Paddles!', scale: 'wholetone', note: 2 },
   { type: 'ball_trail_mine', pattern: 'mine', color: '#dc143c', description: 'Ball Trail Mine!', scale: 'hungarian', note: 1 },
-  { type: 'disco_mode', pattern: 'disco', color: '#ff1493', description: 'Disco Mode!', scale: 'wholetone', note: 7 },
+  { type: 'detroit', pattern: 'detroit', color: '#ff1493', description: 'Detroit Techno!', scale: 'wholetone', note: 7 },
   { type: 'pac_man', pattern: 'pacman', color: '#ffff00', description: 'Pac-Man Hunt!', scale: 'diminished', note: 4 },
   { type: 'banana_peel', pattern: 'banana', color: '#ffff99', description: 'Banana Peel!', scale: 'wholetone', note: 2 },
   { type: 'rubber_ball', pattern: 'bounce', color: '#ff69b4', description: 'Super Bouncy!', scale: 'phrygian', note: 6 },
@@ -597,14 +595,6 @@ const PRECALC_PICKUP_PATTERNS = {
     })
   ),
 
-  quantum: Array.from({ length: 4 }, (_, row) =>
-    Array.from({ length: 4 }, (_, col) => {
-      // Quantum superposition pattern - multiple positions
-      return (row === 1 && (col === 0 || col === 2)) ||
-             (row === 2 && (col === 1 || col === 3));
-    })
-  ),
-
   vortex: Array.from({ length: 4 }, (_, row) =>
     Array.from({ length: 4 }, (_, col) => {
       // Black hole vortex pattern
@@ -651,13 +641,13 @@ const PRECALC_PICKUP_PATTERNS = {
     })
   ),
 
-  disco: Array.from({ length: 4 }, (_, row) =>
+  detroit: Array.from({ length: 4 }, (_, row) =>
     Array.from({ length: 4 }, (_, col) => {
-      // Disco ball pattern - checkerboard in circle
-      const isDiscoBall = (row + col) % 2 === 0;
-      const centerX = 1.5, centerY = 1.5;
-      const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
-      return isDiscoBall && dist <= 1.5;
+      // Musical note pattern - eighth note
+      if (row === 0 && col >= 2 && col <= 3) return true; // Note head
+      if (row === 1 && col >= 2 && col <= 3) return true; // Note head
+      if (row >= 2 && col === 3) return true; // Note stem
+      return false;
     })
   ),
 
@@ -775,6 +765,7 @@ const Pong404: React.FC = () => {
   const crtFilterRef = useRef<CRTFilter | null>(null);
   const animationFrameRef = useRef<number>(0);
   const coinSoundsPlayedRef = useRef<Set<string>>(new Set());
+  const previousMachineGunBallCountRef = useRef<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
 
   // Detect mobile device for performance optimizations
@@ -939,6 +930,11 @@ const Pong404: React.FC = () => {
   const [showFPS, setShowFPS] = useState(false);
   const [paddleAnimationProgress, setPaddleAnimationProgress] = useState(0); // 0 to 1
   const paddleAnimationStartTimeRef = useRef<number>(0);
+  const [currentMusicTrack, setCurrentMusicTrack] = useState(0); // Current ambient music track index
+  const [showTrackName, setShowTrackName] = useState(false); // Show track name for 4 seconds
+  const trackNameTimeoutRef = useRef<number | null>(null);
+  const trackNameShowTimeRef = useRef<number>(0); // When track name was shown
+  const isSwitchingTrackRef = useRef(false); // Prevent rapid track switching
 
   // Paddle size animation tracking
   const previousPaddleSizesRef = useRef<{
@@ -1009,8 +1005,6 @@ const Pong404: React.FC = () => {
       portalY: 0,
       isMirror: false,
       mirrorBalls: [],
-      isQuantum: false,
-      quantumPositions: [],
       hasTrailMines: false,
       trailMines: [],
       isSlippery: false,
@@ -1071,9 +1065,9 @@ const Pong404: React.FC = () => {
     stickyPaddlesActive: false,
     sidesSwitched: false,
     paddleVisibility: { left: 1.0, right: 1.0, top: 1.0, bottom: 1.0 },
-    discoMode: false,
-    discoStartTime: 0,
     pacMans: [],
+    detroitMode: false,
+    detroitStartTime: 0,
     paddlesDrunk: false,
     drunkStartTime: 0,
     earthquakeActive: false,
@@ -1741,6 +1735,7 @@ const Pong404: React.FC = () => {
 
       case 'game_state_updated':
         if (message.data) {
+          console.log('[WEBSOCKET] game_state_updated received, detroitMode:', message.data.detroitMode);
           const prevGameState = networkGameStateRef.current;
 
           // Detect paddle collision by checking if lastTouchedBy changed
@@ -2058,177 +2053,79 @@ const Pong404: React.FC = () => {
             }
           }
 
-          // Handle disco mode Detroit techno music
-          const hadDiscoMode = prevGameState?.discoMode || false;
-          const hasDiscoMode = message.data.discoMode || false;
+          // HARD AUDIO RESET: Stop all audio effects when switching pickups in test mode
+          // This ensures clean state when rapidly switching with 1/2 keys
+          if (message.data.isDebugMode) {
+            // Reset machine gun ball counter
+            previousMachineGunBallCountRef.current = 0;
 
-          if (hasDiscoMode && !hadDiscoMode) {
-            // Start Detroit techno music (130 BPM)
-            if (Tone && !discoMusicRef.current) {
-              console.log('[DISCO] Starting Detroit techno music at 130 BPM');
-
-              // Set tempo to 130 BPM
-              Tone.Transport.bpm.value = 130;
-
-              // Master gain for disco music
-              const masterGain = new Tone.Gain(0.6).toDestination();
-
-              // KICK DRUM - 50Hz sine wave with quick decay, on every beat
-              const kick = new Tone.MembraneSynth({
-                pitchDecay: 0.05,
-                octaves: 4,
-                oscillator: { type: 'sine' },
-                envelope: {
-                  attack: 0.001,
-                  decay: 0.4,
-                  sustain: 0,
-                  release: 0.1
-                }
-              }).connect(masterGain);
-
-              // BASS - 60-120Hz sawtooth with filter, 16th note pattern
-              const bassFilter = new Tone.Filter({
-                type: 'lowpass',
-                frequency: 400,
-                rolloff: -24,
-                Q: 2
-              });
-              const bass = new Tone.MonoSynth({
-                oscillator: { type: 'sawtooth' },
-                filter: {
-                  type: 'lowpass',
-                  frequency: 400,
-                  Q: 2
-                },
-                envelope: {
-                  attack: 0.01,
-                  decay: 0.1,
-                  sustain: 0.4,
-                  release: 0.1
-                },
-                filterEnvelope: {
-                  attack: 0.01,
-                  decay: 0.2,
-                  sustain: 0.3,
-                  release: 0.2,
-                  baseFrequency: 200,
-                  octaves: 2
-                }
-              }).connect(bassFilter);
-              bassFilter.connect(masterGain);
-
-              // LEAD SYNTH - 200-800Hz square wave with resonant filter sweep
-              const synthFilter = new Tone.Filter({
-                type: 'lowpass',
-                frequency: 800,
-                rolloff: -24,
-                Q: 8
-              });
-              const synthLFO = new Tone.LFO({
-                frequency: '8n',
-                min: 400,
-                max: 2000
-              }).start();
-              synthLFO.connect(synthFilter.frequency);
-
-              const leadSynth = new Tone.PolySynth(Tone.Synth, {
-                oscillator: { type: 'square' },
-                envelope: {
-                  attack: 0.005,
-                  decay: 0.1,
-                  sustain: 0.3,
-                  release: 0.3
-                }
-              }).connect(synthFilter);
-              synthFilter.connect(masterGain);
-
-              // HI-HAT - Noise bursts on 8th notes with bandpass filter
-              const hihatFilter = new Tone.Filter({
-                type: 'bandpass',
-                frequency: 10000,
-                rolloff: -24,
-                Q: 1
-              });
-              const hihat = new Tone.NoiseSynth({
-                noise: { type: 'white' },
-                envelope: {
-                  attack: 0.001,
-                  decay: 0.05,
-                  sustain: 0,
-                  release: 0.05
-                }
-              }).connect(hihatFilter);
-              hihatFilter.connect(masterGain);
-
-              // PATTERN SEQUENCER
-              const seq = new Tone.Sequence((time, step) => {
-                // Kick on every beat (4/4 time)
-                if (step % 4 === 0) {
-                  kick.triggerAttackRelease('C1', '8n', time);
-                }
-
-                // Hi-hat on 8th notes
-                hihat.triggerAttackRelease('16n', time);
-
-                // Bass pattern - repetitive 16th note pattern
-                const bassNotes = ['A1', 'A1', 'A2', 'A1', 'F1', 'F1', 'F2', 'F1'];
-                const bassNote = bassNotes[step % 8];
-                bass.triggerAttackRelease(bassNote, '16n', time);
-
-                // Lead synth stabs on specific beats
-                if (step % 8 === 0) {
-                  leadSynth.triggerAttackRelease(['C4', 'E4', 'G4'], '8n', time);
-                } else if (step % 8 === 4) {
-                  leadSynth.triggerAttackRelease(['A3', 'C4', 'E4'], '8n', time);
-                }
-              }, Array.from({ length: 16 }, (_, i) => i), '16n');
-
-              // Start the sequence
-              seq.start(0);
-              Tone.Transport.start();
-
-              discoMusicRef.current = { kick, bass, synth: leadSynth, hihat, seq, gain: masterGain };
-
-              // Mute ambient/background music during disco mode
-              if (ambienceMasterGainRef.current) {
-                ambienceMasterGainRef.current.gain.exponentialRampToValueAtTime(0.001, Tone.context.currentTime + 0.5);
-              }
-
-              // Mute global generative music if it exists
-              if ((window as any).generativeMusic?.setVolume) {
-                (window as any).generativeMusic.setVolume(0);
-              }
-
-              console.log('[DISCO] Detroit techno music started successfully');
+            // Stop hypnotic sound if active
+            if (hypnoSoundRef.current) {
+              console.log('🔊 HARD AUDIO RESET: Stopping hypnotic sound');
+              hypnoSoundRef.current.osc1.stop();
+              hypnoSoundRef.current.osc2.stop();
+              hypnoSoundRef.current.osc1.dispose();
+              hypnoSoundRef.current.osc2.dispose();
+              hypnoSoundRef.current.lfo1.stop();
+              hypnoSoundRef.current.lfo2.stop();
+              hypnoSoundRef.current.lfo1.dispose();
+              hypnoSoundRef.current.lfo2.dispose();
+              hypnoSoundRef.current.reverb.dispose();
+              hypnoSoundRef.current.gain.dispose();
+              hypnoSoundRef.current = null;
             }
-          } else if (!hasDiscoMode && hadDiscoMode) {
-            // Stop disco mode music and restore previous music
-            if (discoMusicRef.current) {
-              console.log('[DISCO] Stopping Detroit techno music');
 
-              discoMusicRef.current.seq.stop();
-              discoMusicRef.current.seq.dispose();
-              discoMusicRef.current.kick.dispose();
-              discoMusicRef.current.bass.dispose();
-              discoMusicRef.current.synth.dispose();
-              discoMusicRef.current.hihat.dispose();
-              discoMusicRef.current.gain.dispose();
-              discoMusicRef.current = null;
-
-              Tone.Transport.stop();
-
-              // Restore ambient/background music
-              if (ambienceMasterGainRef.current) {
-                ambienceMasterGainRef.current.gain.exponentialRampToValueAtTime(0.35, Tone.context.currentTime + 1.0);
-              }
-
-              // Restore global generative music if it exists
-              if ((window as any).generativeMusic?.setVolume) {
-                (window as any).generativeMusic.setVolume(1);
-              }
-
-              console.log('[DISCO] Restored previous music');
+            // Stop detroit music ONLY if we're NOT activating Detroit mode
+            // (Otherwise the Detroit detection below will handle it properly)
+            if (!message.data.detroitMode && (window as any).generativeMusic?.currentState?.currentPieceId === 'detroit-techno') {
+              console.log('🔊 HARD AUDIO RESET: Stopping Detroit techno');
+              const pieces = (window as any).generativeMusic.availablePieces.filter((p: any) => p.id !== 'detroit-techno');
+              const randomPiece = pieces[Math.floor(Math.random() * pieces.length)];
+              (window as any).generativeMusic.startPiece(randomPiece.id);
             }
+          }
+
+          // Handle labyrinth mode
+          const hadLabyrinth = prevGameState?.labyrinthActive || false;
+          const hasLabyrinth = message.data.labyrinthActive || false;
+
+          console.log('[LABYRINTH DEBUG] hadLabyrinth:', hadLabyrinth, 'hasLabyrinth:', hasLabyrinth, 'message.data.labyrinthActive:', message.data.labyrinthActive, 'mazeWalls:', message.data.mazeWalls?.length || 0, 'coins:', message.data.coins?.length || 0);
+
+          if (hasLabyrinth && !hadLabyrinth) {
+            console.log('[LABYRINTH] Activating labyrinth mode - maze walls:', message.data.mazeWalls?.length || 0, 'existing coins:', message.data.coins?.length || 0);
+          } else if (!hasLabyrinth && hadLabyrinth) {
+            console.log('[LABYRINTH] Deactivating labyrinth mode');
+          } else if (hasLabyrinth && hadLabyrinth) {
+            console.log('[LABYRINTH] Labyrinth mode still active - maze walls:', message.data.mazeWalls?.length || 0, 'coins:', message.data.coins?.length || 0);
+          } else {
+            console.log('[LABYRINTH] No labyrinth mode active');
+          }
+
+          // Handle Detroit techno mode
+          const hadDetroit = prevGameState?.detroitMode || false;
+          const hasDetroit = message.data.detroitMode || false;
+
+          console.log('[DETROIT DEBUG] hadDetroit:', hadDetroit, 'hasDetroit:', hasDetroit, 'message.data.detroitMode:', message.data.detroitMode);
+
+          if (hasDetroit && !hadDetroit) {
+            // Start Detroit techno music
+            console.log('[DETROIT] Starting Detroit techno mode');
+            if ((window as any).generativeMusic) {
+              (window as any).generativeMusic.startPiece('detroit-techno');
+            } else {
+              console.log('[DETROIT] ERROR: generativeMusic not available');
+            }
+          } else if (!hasDetroit && hadDetroit) {
+            // Stop Detroit techno and restore previous ambient music
+            console.log('[DETROIT] Stopping Detroit techno mode');
+            if ((window as any).generativeMusic?.currentState?.currentPieceId === 'detroit-techno') {
+              // Return to a random ambient piece
+              const pieces = (window as any).generativeMusic.availablePieces.filter((p: any) => p.id !== 'detroit-techno');
+              const randomPiece = pieces[Math.floor(Math.random() * pieces.length)];
+              (window as any).generativeMusic.startPiece(randomPiece.id);
+            }
+          } else {
+            console.log('[DETROIT] No state change detected');
           }
 
           // ONLY update the network state ref - let the game loop handle rendering
@@ -2328,189 +2225,6 @@ const Pong404: React.FC = () => {
             // Update color index from server
             if (messageData.colorIndex !== undefined) {
               networkState.colorIndex = messageData.colorIndex;
-            }
-
-            // Handle disco mode state changes
-            if (messageData.discoMode !== undefined) {
-              const hadDiscoMode = prevState.discoMode || false;
-              const hasDiscoMode = messageData.discoMode;
-
-              if (hasDiscoMode && !hadDiscoMode) {
-                // Start disco mode music
-                if ((window as any).Tone && !discoMusicRef.current) {
-                  const Tone = (window as any).Tone;
-                  console.log('[DISCO] Starting Detroit techno music at 130 BPM (delta update)');
-
-                  // Set tempo to 130 BPM
-                  Tone.Transport.bpm.value = 130;
-
-                  // Master gain for disco music
-                  const masterGain = new Tone.Gain(0.6).toDestination();
-
-                  // KICK DRUM - 50Hz sine wave with quick decay, on every beat
-                  const kick = new Tone.MembraneSynth({
-                    pitchDecay: 0.05,
-                    octaves: 4,
-                    oscillator: { type: 'sine' },
-                    envelope: {
-                      attack: 0.001,
-                      decay: 0.4,
-                      sustain: 0,
-                      release: 0.1
-                    }
-                  }).connect(masterGain);
-
-                  // BASS - 60-120Hz sawtooth with filter, 16th note pattern
-                  const bassFilter = new Tone.Filter({
-                    type: 'lowpass',
-                    frequency: 400,
-                    rolloff: -24,
-                    Q: 2
-                  });
-                  const bass = new Tone.MonoSynth({
-                    oscillator: { type: 'sawtooth' },
-                    filter: {
-                      type: 'lowpass',
-                      frequency: 400,
-                      Q: 2
-                    },
-                    envelope: {
-                      attack: 0.01,
-                      decay: 0.1,
-                      sustain: 0.4,
-                      release: 0.1
-                    },
-                    filterEnvelope: {
-                      attack: 0.01,
-                      decay: 0.2,
-                      sustain: 0.3,
-                      release: 0.2,
-                      baseFrequency: 200,
-                      octaves: 2
-                    }
-                  }).connect(bassFilter);
-                  bassFilter.connect(masterGain);
-
-                  // LEAD SYNTH - 200-800Hz square wave with resonant filter sweep
-                  const synthFilter = new Tone.Filter({
-                    type: 'lowpass',
-                    frequency: 800,
-                    rolloff: -24,
-                    Q: 8
-                  });
-                  const synthLFO = new Tone.LFO({
-                    frequency: '8n',
-                    min: 400,
-                    max: 2000
-                  }).start();
-                  synthLFO.connect(synthFilter.frequency);
-
-                  const leadSynth = new Tone.PolySynth(Tone.Synth, {
-                    oscillator: { type: 'square' },
-                    envelope: {
-                      attack: 0.005,
-                      decay: 0.1,
-                      sustain: 0.3,
-                      release: 0.3
-                    }
-                  }).connect(synthFilter);
-                  synthFilter.connect(masterGain);
-
-                  // HI-HAT - Noise bursts on 8th notes with bandpass filter
-                  const hihatFilter = new Tone.Filter({
-                    type: 'bandpass',
-                    frequency: 10000,
-                    rolloff: -24,
-                    Q: 1
-                  });
-                  const hihat = new Tone.NoiseSynth({
-                    noise: { type: 'white' },
-                    envelope: {
-                      attack: 0.001,
-                      decay: 0.05,
-                      sustain: 0,
-                      release: 0.05
-                    }
-                  }).connect(hihatFilter);
-                  hihatFilter.connect(masterGain);
-
-                  // PATTERN SEQUENCER
-                  const seq = new Tone.Sequence((time, step) => {
-                    // Kick on every beat (4/4 time)
-                    if (step % 4 === 0) {
-                      kick.triggerAttackRelease('C1', '8n', time);
-                    }
-
-                    // Hi-hat on 8th notes
-                    hihat.triggerAttackRelease('16n', time);
-
-                    // Bass pattern - repetitive 16th note pattern
-                    const bassNotes = ['A1', 'A1', 'A2', 'A1', 'F1', 'F1', 'F2', 'F1'];
-                    const bassNote = bassNotes[step % 8];
-                    bass.triggerAttackRelease(bassNote, '16n', time);
-
-                    // Lead synth stabs on specific beats
-                    if (step % 8 === 0) {
-                      leadSynth.triggerAttackRelease(['C4', 'E4', 'G4'], '8n', time);
-                    } else if (step % 8 === 4) {
-                      leadSynth.triggerAttackRelease(['A3', 'C4', 'E4'], '8n', time);
-                    }
-                  }, Array.from({ length: 16 }, (_, i) => i), '16n');
-
-                  // Start the sequence
-                  seq.start(0);
-                  Tone.Transport.start();
-
-                  discoMusicRef.current = { kick, bass, synth: leadSynth, hihat, seq, gain: masterGain };
-
-                  // Mute ambient/background music during disco mode
-                  if (ambienceMasterGainRef.current) {
-                    ambienceMasterGainRef.current.gain.exponentialRampToValueAtTime(0.001, Tone.context.currentTime + 0.5);
-                  }
-
-                  // Mute global generative music if it exists
-                  if ((window as any).generativeMusic?.setVolume) {
-                    (window as any).generativeMusic.setVolume(0);
-                  }
-
-                  console.log('[DISCO] Detroit techno music started successfully (delta update)');
-                }
-              } else if (!hasDiscoMode && hadDiscoMode) {
-                // Stop disco mode music and restore previous music
-                if (discoMusicRef.current) {
-                  const Tone = (window as any).Tone;
-                  console.log('[DISCO] Stopping Detroit techno music (delta update)');
-
-                  discoMusicRef.current.seq.stop();
-                  discoMusicRef.current.seq.dispose();
-                  discoMusicRef.current.kick.dispose();
-                  discoMusicRef.current.bass.dispose();
-                  discoMusicRef.current.synth.dispose();
-                  discoMusicRef.current.hihat.dispose();
-                  discoMusicRef.current.gain.dispose();
-                  discoMusicRef.current = null;
-
-                  Tone.Transport.stop();
-
-                  // Restore ambient/background music
-                  if (ambienceMasterGainRef.current) {
-                    ambienceMasterGainRef.current.gain.exponentialRampToValueAtTime(0.35, Tone.context.currentTime + 1.0);
-                  }
-
-                  // Restore global generative music if it exists
-                  if ((window as any).generativeMusic?.setVolume) {
-                    (window as any).generativeMusic.setVolume(1);
-                  }
-
-                  console.log('[DISCO] Restored previous music (delta update)');
-                }
-              }
-
-              networkState.discoMode = messageData.discoMode;
-            }
-
-            if (messageData.discoStartTime !== undefined) {
-              networkState.discoStartTime = messageData.discoStartTime;
             }
 
             // 📐 Sync playfield scale from server
@@ -2635,7 +2349,23 @@ const Pong404: React.FC = () => {
             }
             if (message.data.activeEffects) networkState.activeEffects = message.data.activeEffects;
             if (message.data.extraBalls) networkState.extraBalls = message.data.extraBalls;
-            if (message.data.machineGunBalls !== undefined) networkState.machineGunBalls = message.data.machineGunBalls;
+            if (message.data.machineGunBalls !== undefined) {
+              // Detect when new machine gun balls are fired and play laser sound
+              const previousCount = previousMachineGunBallCountRef.current;
+              const newCount = message.data.machineGunBalls.length;
+
+              if (newCount > previousCount) {
+                // New balls were fired - play laser sound for each new ball
+                const ballsAdded = newCount - previousCount;
+                for (let i = 0; i < ballsAdded; i++) {
+                  playLaserSound();
+                }
+              }
+
+              // Update tracked count
+              previousMachineGunBallCountRef.current = newCount;
+              networkState.machineGunBalls = message.data.machineGunBalls;
+            }
             if (message.data.machineGunActive !== undefined) networkState.machineGunActive = message.data.machineGunActive;
 
             if (message.data.pickupEffect) networkState.pickupEffect = message.data.pickupEffect;
@@ -2696,6 +2426,38 @@ const Pong404: React.FC = () => {
             }
             if (message.data.timeWarpFactor !== undefined) {
               networkState.timeWarpFactor = message.data.timeWarpFactor;
+            }
+
+            // 🕳️ Sync black holes from server
+            if (message.data.blackHoles !== undefined) {
+              networkState.blackHoles = message.data.blackHoles;
+            }
+
+            // 🎵 Sync detroit mode from server
+            const hadDetroit = networkState.detroitMode || false;
+            if (message.data.detroitMode !== undefined) {
+              networkState.detroitMode = message.data.detroitMode;
+              console.log('[DETROIT] Synced detroitMode from server:', message.data.detroitMode);
+
+              // Handle music activation/deactivation
+              const hasDetroit = message.data.detroitMode;
+              if (hasDetroit && !hadDetroit) {
+                console.log('[DETROIT] Starting Detroit techno mode (delta)');
+                if ((window as any).generativeMusic) {
+                  (window as any).generativeMusic.startPiece('detroit-techno');
+                }
+              } else if (!hasDetroit && hadDetroit) {
+                console.log('[DETROIT] Stopping Detroit techno mode (delta)');
+                if ((window as any).generativeMusic?.currentState?.currentPieceId === 'detroit-techno') {
+                  const pieces = (window as any).generativeMusic.availablePieces.filter((p: any) => p.id !== 'detroit-techno');
+                  const randomPiece = pieces[Math.floor(Math.random() * pieces.length)];
+                  (window as any).generativeMusic.startPiece(randomPiece.id);
+                }
+              }
+            }
+            if (message.data.detroitStartTime !== undefined) {
+              networkState.detroitStartTime = message.data.detroitStartTime;
+              console.log('[DETROIT] Synced detroitStartTime from server:', message.data.detroitStartTime);
             }
 
             // Store network state and timing for interpolation
@@ -2956,7 +2718,6 @@ const Pong404: React.FC = () => {
   const blackHoleSoundRef = useRef<{ osc: any; filter: any; lfo: any; gain: any } | null>(null);
   const electricHumRef = useRef<any>(null);
   const masterLimiterRef = useRef<any>(null);
-  const discoMusicRef = useRef<{ kick: any; bass: any; synth: any; hihat: any; seq: any; gain: any } | null>(null);
   const hypnoSoundRef = useRef<{ osc1: any; osc2: any; lfo1: any; lfo2: any; reverb: any; gain: any } | null>(null);
   const gameStartTimeRef = useRef<number>(Date.now());
   const lastMoveTimesRef = useRef<Map<string, number>>(new Map());
@@ -3143,13 +2904,35 @@ const Pong404: React.FC = () => {
   const analyserNodeRef = useRef<AnalyserNode | null>(null);
   const frequencyDataRef = useRef<Uint8Array | null>(null);
 
-  // Ambient spaceship sounds
-  const ambienceOscillatorsRef = useRef<OscillatorNode[]>([]);
-  const ambienceGainsRef = useRef<GainNode[]>([]);
-  const ambienceActiveRef = useRef(false);
-  const ambienceMasterGainRef = useRef<GainNode | null>(null);
+  // ===== GLOBAL AUDIO MIXER ARCHITECTURE =====
+  // All audio routes through this mixer to prevent crackling and distortion
+
+  // Master channels (16 channels total for maximum distribution)
+  const audioChannel1Ref = useRef<GainNode | null>(null);
+  const audioChannel2Ref = useRef<GainNode | null>(null);
+  const audioChannel3Ref = useRef<GainNode | null>(null);
+  const audioChannel4Ref = useRef<GainNode | null>(null);
+  const audioChannel5Ref = useRef<GainNode | null>(null);
+  const audioChannel6Ref = useRef<GainNode | null>(null);
+  const audioChannel7Ref = useRef<GainNode | null>(null);
+  const audioChannel8Ref = useRef<GainNode | null>(null);
+  const audioChannel9Ref = useRef<GainNode | null>(null);
+  const audioChannel10Ref = useRef<GainNode | null>(null);
+  const audioChannel11Ref = useRef<GainNode | null>(null);
+  const audioChannel12Ref = useRef<GainNode | null>(null);
+  const audioChannel13Ref = useRef<GainNode | null>(null);
+  const audioChannel14Ref = useRef<GainNode | null>(null);
+  const audioChannel15Ref = useRef<GainNode | null>(null);
+  const audioChannel16Ref = useRef<GainNode | null>(null);
+
+  // Round-robin channel selector
+  const currentChannelIndexRef = useRef<number>(0);
+
+  // Master compressor/limiter to prevent clipping
+  const masterCompressorRef = useRef<DynamicsCompressorNode | null>(null);
+
+  // Speech has dedicated channel (channel 1)
   const speechMasterGainRef = useRef<GainNode | null>(null);
-  const beepsMasterGainRef = useRef<GainNode | null>(null);
 
   // Speech queue system to prevent overlapping robot speech
   const speechQueueRef = useRef<string[]>([]);
@@ -3171,43 +2954,87 @@ const Pong404: React.FC = () => {
     return impulse;
   }, []);
 
-  // Initialize audio effects chain
+  // ===== GLOBAL AUDIO MIXER INITIALIZATION =====
+  const initializeGlobalMixer = useCallback((audioContext: AudioContext) => {
+    console.log('🎚️ Initializing Global Audio Mixer');
+
+    // Create master compressor/limiter
+    const compressor = audioContext.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-10, audioContext.currentTime);
+    compressor.knee.setValueAtTime(10, audioContext.currentTime);
+    compressor.ratio.setValueAtTime(12, audioContext.currentTime);
+    compressor.attack.setValueAtTime(0.003, audioContext.currentTime);
+    compressor.release.setValueAtTime(0.25, audioContext.currentTime);
+    masterCompressorRef.current = compressor;
+
+    // Create audio analyzer
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 128;
+    analyser.smoothingTimeConstant = 0.8;
+    analyserNodeRef.current = analyser;
+    frequencyDataRef.current = new Uint8Array(analyser.frequencyBinCount);
+
+    // Routing: Compressor → Analyser → Destination
+    compressor.connect(analyser);
+    analyser.connect(audioContext.destination);
+
+    // Create 16 mixer channels
+    const channelVolume = 0.15;
+    const channels = [
+      audioChannel1Ref, audioChannel2Ref, audioChannel3Ref, audioChannel4Ref,
+      audioChannel5Ref, audioChannel6Ref, audioChannel7Ref, audioChannel8Ref,
+      audioChannel9Ref, audioChannel10Ref, audioChannel11Ref, audioChannel12Ref,
+      audioChannel13Ref, audioChannel14Ref, audioChannel15Ref, audioChannel16Ref
+    ];
+
+    channels.forEach((channelRef) => {
+      const gain = audioContext.createGain();
+      gain.gain.setValueAtTime(channelVolume, audioContext.currentTime);
+      gain.connect(compressor);
+      channelRef.current = gain;
+    });
+
+    // Speech uses channel 1
+    speechMasterGainRef.current = audioChannel1Ref.current;
+
+    console.log('  ✓ 16 channels, compressor, analyser initialized');
+
+    // Global refs
+    (window as any).pongAudioAnalyzer = analyser;
+    (window as any).pongAudioContext = audioContext;
+    (window as any).pongMasterCompressor = compressor;
+  }, []);
+
+  // Initialize audio effects (reverb/delay)
   const initializeAudioEffects = useCallback((audioContext: AudioContext) => {
-    // Create reverb
     const convolver = audioContext.createConvolver();
     convolver.buffer = createImpulseResponse(audioContext);
     reverbNodeRef.current = convolver;
 
-    // Create echo/delay
     const delay = audioContext.createDelay(1.0);
-    delay.delayTime.setValueAtTime(0.15, audioContext.currentTime); // 150ms delay
+    delay.delayTime.setValueAtTime(0.15, audioContext.currentTime);
     delayNodeRef.current = delay;
 
-    // Echo feedback gain
     const echoGain = audioContext.createGain();
-    echoGain.gain.setValueAtTime(0.4, audioContext.currentTime); // 40% feedback
+    echoGain.gain.setValueAtTime(0.4, audioContext.currentTime);
     echoGainRef.current = echoGain;
 
-    // Connect echo feedback loop
     delay.connect(echoGain);
     echoGain.connect(delay);
-
-    // Create audio analyzer for visualizer
-    const analyser = audioContext.createAnalyser();
-    analyser.fftSize = 128; // Small FFT for performance (64 frequency bars)
-    analyser.smoothingTimeConstant = 0.8; // Smooth transitions
-    analyserNodeRef.current = analyser;
-
-    // Create frequency data array
-    frequencyDataRef.current = new Uint8Array(analyser.frequencyBinCount);
-
-    // Connect analyser to destination to capture all audio
-    analyser.connect(audioContext.destination);
-
-    // Store analyzer and audio context reference globally so music system can connect to it
-    (window as any).pongAudioAnalyzer = analyser;
-    (window as any).pongAudioContext = audioContext;
   }, [createImpulseResponse]);
+
+  // Get next available audio channel (round-robin, skips channel 1 for speech)
+  const getNextAudioChannel = useCallback((): GainNode | null => {
+    const channels = [
+      audioChannel2Ref, audioChannel3Ref, audioChannel4Ref, audioChannel5Ref,
+      audioChannel6Ref, audioChannel7Ref, audioChannel8Ref, audioChannel9Ref,
+      audioChannel10Ref, audioChannel11Ref, audioChannel12Ref, audioChannel13Ref,
+      audioChannel14Ref, audioChannel15Ref, audioChannel16Ref
+    ];
+
+    currentChannelIndexRef.current = (currentChannelIndexRef.current + 1) % channels.length;
+    return channels[currentChannelIndexRef.current].current;
+  }, []);
 
   // Initialize audio on user interaction
   const initializeAudio = useCallback(async () => {
@@ -3215,6 +3042,7 @@ const Pong404: React.FC = () => {
       audioInitAttempted.current = true;
       try {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+        initializeGlobalMixer(audioContextRef.current); // ← Initialize mixer FIRST
         initializeAudioEffects(audioContextRef.current);
         // Resume context if suspended
         if (audioContextRef.current.state === 'suspended') {
@@ -3224,7 +3052,7 @@ const Pong404: React.FC = () => {
         // Audio not supported - fail silently
       }
     }
-  }, [initializeAudioEffects]);
+  }, [initializeGlobalMixer, initializeAudioEffects]);
 
   // Simple speech function with overlap prevention and effects
   const speakRobotic = useCallback((text: string) => {
@@ -3452,16 +3280,11 @@ const Pong404: React.FC = () => {
     const ctx = audioContextRef.current;
     const now = ctx.currentTime;
 
-    // Create dedicated beeps audio bus if it doesn't exist
-    if (!beepsMasterGainRef.current) {
-      beepsMasterGainRef.current = ctx.createGain();
-      beepsMasterGainRef.current.gain.setValueAtTime(0.4, ctx.currentTime); // Increased from 0.15 to make sounds audible
-      // Connect to analyzer for visualizer, then to destination
-      if (analyserNodeRef.current) {
-        beepsMasterGainRef.current.connect(analyserNodeRef.current);
-      } else {
-        beepsMasterGainRef.current.connect(ctx.destination);
-      }
+    // Get next mixer channel (global round-robin distribution)
+    const selectedChannel = getNextAudioChannel();
+    if (!selectedChannel) {
+      console.warn('⚠️ No audio channel available');
+      return;
     }
 
     // Create oscillator and main gain
@@ -3490,25 +3313,25 @@ const Pong404: React.FC = () => {
     wetGain.gain.setValueAtTime(reverbLevel, now);
     echoWetGain.gain.setValueAtTime(echoLevel, now);
 
-    // Connect the audio graph through dedicated beeps bus
+    // Connect the audio graph through selected beep channel (round-robin distribution)
     oscillator.connect(mainGain);
 
-    // Dry signal (through beeps master gain)
+    // Dry signal (through selected channel)
     mainGain.connect(dryGain);
-    dryGain.connect(beepsMasterGainRef.current!);
+    dryGain.connect(selectedChannel);
 
-    // Wet signal (through reverb to beeps master gain)
+    // Wet signal (through reverb to selected channel)
     if ((effectType === 'reverb' || effectType === 'both') && reverbNodeRef.current) {
       mainGain.connect(reverbNodeRef.current);
       reverbNodeRef.current.connect(wetGain);
-      wetGain.connect(beepsMasterGainRef.current!);
+      wetGain.connect(selectedChannel);
     }
 
-    // Echo signal (through delay to beeps master gain)
+    // Echo signal (through delay to selected channel)
     if ((effectType === 'echo' || effectType === 'both') && delayNodeRef.current) {
       mainGain.connect(delayNodeRef.current);
       delayNodeRef.current.connect(echoWetGain);
-      echoWetGain.connect(beepsMasterGainRef.current!);
+      echoWetGain.connect(selectedChannel);
     }
 
     // Start and stop
@@ -3862,345 +3685,122 @@ const Pong404: React.FC = () => {
 
   }, []);
 
-  // CA-CHING coin collection sound
+  // CA-CHING coin collection sound (routed through global mixer)
   const playCoinSound = useCallback(() => {
-    if (!masterLimiterRef.current) return;
+    // Get next available mixer channel (round-robin distribution)
+    const channel = getNextAudioChannel();
+    if (!channel) return;
 
     try {
-      // Create a metallic "ca-ching" register sound
-      // Two quick ascending tones to mimic cash register
+      // Convert Tone.js gain node to native Web Audio gain for mixer routing
+      const mixerGain = new Tone.Gain(1.0);
+
+      // Connect Tone.js → Native Web Audio mixer channel
+      if ((window as any).pongAudioContext) {
+        const nativeGain = (window as any).pongAudioContext.createGain();
+        nativeGain.gain.value = 1.0;
+        nativeGain.connect(channel);
+
+        // Bridge Tone.js to native audio
+        mixerGain.connect(new Tone.Gain().toDestination().context.rawContext.createMediaStreamDestination());
+        const toneDestination = mixerGain.context.rawContext.createGain();
+        toneDestination.connect(nativeGain);
+        mixerGain.connect(toneDestination as any);
+      }
+
+      // Create metallic "ca-ching" sound
       const synth = new Tone.MetalSynth({
         frequency: 800,
-        envelope: {
-          attack: 0.001,
-          decay: 0.1,
-          sustain: 0,
-          release: 0.2
-        },
+        envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.2 },
         harmonicity: 3,
         modulationIndex: 20,
         resonance: 3000,
         octaves: 1.5
       });
 
-      const reverb = new Tone.Reverb({
-        decay: 0.5,
-        wet: 0.3
-      }).connect(masterLimiterRef.current.compressor);
-
+      const reverb = new Tone.Reverb({ decay: 0.5, wet: 0.3 }).connect(mixerGain);
       synth.connect(reverb);
       synth.volume.value = -10;
 
-      // First "ca" - higher note
+      // Ca-ching notes
       synth.triggerAttackRelease('E5', '0.08', Tone.now());
-
-      // Second "ching" - even higher with slight delay
       synth.triggerAttackRelease('A5', '0.12', Tone.now() + 0.05);
 
-      // Add sparkle with sine wave
+      // Sparkle
       const sparkle = new Tone.Synth({
         oscillator: { type: 'sine' },
-        envelope: {
-          attack: 0.001,
-          decay: 0.15,
-          sustain: 0,
-          release: 0.3
-        }
+        envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.3 }
       }).connect(reverb);
-
       sparkle.volume.value = -15;
       sparkle.triggerAttackRelease('C6', '0.15', Tone.now() + 0.08);
 
-      // Cleanup after sound completes
+      // Cleanup
       setTimeout(() => {
         synth.dispose();
         sparkle.dispose();
         reverb.dispose();
+        mixerGain.dispose();
       }, 1000);
-
-      // console.log('[SOUND] Ca-ching coin sound played');
     } catch (error) {
       console.error('[SOUND] Error playing coin sound:', error);
     }
-  }, []);
+  }, [getNextAudioChannel]);
 
-  // ATMOSPHERIC DARK DRONE - Inspired by "station - atmospheric dark drone music for focus.mp3"
-  // Original cinematic system temporarily disabled to test dark atmospheric approach
-  const startAmbienceSound = useCallback(() => {
+  // Play space laser sound for machine gun balls (routes through global mixer)
+  const playLaserSound = useCallback(() => {
+    // Get next available mixer channel (round-robin distribution)
+    const channel = getNextAudioChannel();
+    if (!channel) return;
 
-    if (ambienceActiveRef.current || !audioContextRef.current) {
-      return;
-    }
+    try {
+      // Convert Tone.js gain node to native Web Audio gain for mixer routing
+      const mixerGain = new Tone.Gain(1.0);
 
-    const ctx = audioContextRef.current;
-    ambienceActiveRef.current = true;
+      // Connect Tone.js → Native Web Audio mixer channel
+      if ((window as any).pongAudioContext) {
+        const nativeGain = (window as any).pongAudioContext.createGain();
+        nativeGain.gain.value = 1.0;
+        nativeGain.connect(channel);
 
-    // Create atmospheric drone soft synth master bus
-    if (!ambienceMasterGainRef.current) {
-      ambienceMasterGainRef.current = ctx.createGain();
-      ambienceMasterGainRef.current.gain.setValueAtTime(0.35, ctx.currentTime); // Atmospheric volume for focus
-      // Connect to analyzer for visualizer, then to destination
-      if (analyserNodeRef.current) {
-        ambienceMasterGainRef.current.connect(analyserNodeRef.current);
-      } else {
-        ambienceMasterGainRef.current.connect(ctx.destination);
+        // Bridge Tone.js to native audio
+        const toneDestination = mixerGain.context.rawContext.createGain();
+        toneDestination.connect(nativeGain);
+        mixerGain.connect(toneDestination as any);
       }
 
-      // Add gentle atmospheric breathing - very slow volume modulation
-      const addAtmosphericBreathing = () => {
-        if (!ambienceMasterGainRef.current || !ambienceActiveRef.current) return;
-
-        const breatheVolume = 0.3 + Math.random() * 0.1; // 0.3 to 0.4 - subtle breathing
-        const breatheDuration = 45 + Math.random() * 60; // 45-105 second breathing cycles
-        const now = ctx.currentTime;
-
-        try {
-          ambienceMasterGainRef.current.gain.exponentialRampToValueAtTime(breatheVolume, now + breatheDuration);
-        } catch (e) {}
-
-        setTimeout(addAtmosphericBreathing, (60 + Math.random() * 90) * 1000); // 60-150 second intervals
-      };
-
-      setTimeout(addAtmosphericBreathing, 15000); // Start after 15 seconds
-    }
-
-    // Clear any existing synth voices
-    ambienceOscillatorsRef.current.forEach(osc => {
-      try { osc.stop(); } catch (e) {}
-    });
-    ambienceGainsRef.current.forEach(gain => gain.disconnect());
-    ambienceOscillatorsRef.current = [];
-    ambienceGainsRef.current = [];
-
-    // SIMPLE ATMOSPHERIC DARK DRONE - Clean and focus-friendly
-    console.log('[ATMOSPHERIC DRONE] Creating simple dark atmospheric layers...');
-
-    const droneVoices = [
-      // Deep sub-bass foundation
-      { freq: 40, vol: 0.3, wave: 'sine' as OscillatorType, name: 'Deep Foundation' },
-      { freq: 60, vol: 0.25, wave: 'triangle' as OscillatorType, name: 'Sub Bass' },
-
-      // Warm mid-bass
-      { freq: 80, vol: 0.2, wave: 'sine' as OscillatorType, name: 'Warm Bass' },
-      { freq: 120, vol: 0.15, wave: 'triangle' as OscillatorType, name: 'Mid Bass' },
-
-      // Atmospheric mid-range
-      { freq: 160, vol: 0.12, wave: 'sine' as OscillatorType, name: 'Atmospheric Mid' },
-      { freq: 240, vol: 0.08, wave: 'triangle' as OscillatorType, name: 'Upper Mid' },
-
-      // Ethereal high content
-      { freq: 320, vol: 0.06, wave: 'sine' as OscillatorType, name: 'Ethereal High' },
-      { freq: 480, vol: 0.04, wave: 'triangle' as OscillatorType, name: 'Distant High' }
-    ];
-
-    // CREATE SIMPLE ATMOSPHERIC DRONE VOICES
-    droneVoices.forEach((voice, index) => {
-      console.log(`[ATMOSPHERIC DRONE] Creating voice: ${voice.name} at ${voice.freq}Hz`);
-
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      const filterNode = ctx.createBiquadFilter();
-
-      // Simple oscillator configuration
-      oscillator.type = voice.wave;
-      oscillator.frequency.setValueAtTime(voice.freq, ctx.currentTime);
-
-      // SOFT SYNTH LFO SYSTEM - Atmospheric modulation based on voice configuration
-      const lfoGain = ctx.createGain();
-      const lfo = ctx.createOscillator();
-
-      // Configure LFO based on voice parameters
-      lfo.type = 'sine'; // Always smooth for atmospheric drone
-      lfo.frequency.setValueAtTime(voice.lfo.rate, ctx.currentTime);
-      lfoGain.gain.setValueAtTime(voice.freq * voice.lfo.depth, ctx.currentTime);
-
-      // Connect LFO to appropriate target
-      lfo.connect(lfoGain);
-      if (voice.lfo.target === 'frequency') {
-        lfoGain.connect(oscillator.frequency);
-      } else if (voice.lfo.target === 'amplitude') {
-        lfoGain.connect(gainNode.gain);
-      } else if (voice.lfo.target === 'filter') {
-        lfoGain.connect(filterNode.frequency);
-      }
-      lfo.start();
-
-      // SOFT SYNTH FILTER SYSTEM - Configure filter from voice parameters
-      filterNode.type = voice.filter.type;
-      filterNode.frequency.setValueAtTime(voice.filter.freq, ctx.currentTime);
-      filterNode.Q.setValueAtTime(voice.filter.q, ctx.currentTime);
-
-      // Set gain for peaking filters
-      if (voice.filter.type === 'peaking' && filterNode.gain) {
-        filterNode.gain.setValueAtTime(6, ctx.currentTime); // Moderate gain for atmospheric character
-      }
-
-      // SOFT SYNTH ADSR ENVELOPE - Proper synthesizer envelope from voice parameters
-      const now = ctx.currentTime;
-      const envelope = voice.envelope;
-
-      // ADSR Envelope implementation
-      gainNode.gain.setValueAtTime(0.001, now); // Start nearly silent
-
-      // Attack phase - fade in over attack time
-      gainNode.gain.exponentialRampToValueAtTime(voice.vol, now + envelope.attack);
-
-      // Decay phase - settle to sustain level (if decay > 0)
-      if (envelope.decay > 0) {
-        gainNode.gain.exponentialRampToValueAtTime(
-          voice.vol * envelope.sustain,
-          now + envelope.attack + envelope.decay
-        );
-      }
-
-      console.log(`[SOFT SYNTH] Voice "${voice.name}" ADSR: A=${envelope.attack}s D=${envelope.decay}s S=${envelope.sustain} R=${envelope.release}s`);
-
-      // SOFT SYNTH SIGNAL CHAIN - Connect oscillator through filter and envelope to output
-      oscillator.connect(filterNode);
-      filterNode.connect(gainNode);
-      gainNode.connect(ambienceMasterGainRef.current!); // Connect to dedicated ambient bus, not main destination
-
-      oscillator.start();
-
-      ambienceOscillatorsRef.current.push(oscillator);
-      ambienceGainsRef.current.push(gainNode);
-
-      // Add gentle atmospheric breathing for organic feel
-      const addAtmosphericModulation = () => {
-        if (!ambienceActiveRef.current) {
-          return;
-        }
-
-        // SUBTLE ATMOSPHERIC MODULATION - Very gentle for focus-friendly background
-        // Simple atmospheric breathing - very gentle modulation
-        const modulationDuration = 90 + Math.random() * 60; // 90-150 second slow breathing
-        const targetVolume = voice.vol * (0.9 + Math.random() * 0.2); // ±10% gentle variation
-
-        try {
-          gainNode.gain.exponentialRampToValueAtTime(Math.max(0.001, targetVolume), ctx.currentTime + modulationDuration);
-        } catch (e) {}
-
-        // Schedule next gentle modulation
-        setTimeout(addAtmosphericModulation, (modulationDuration + Math.random() * 60) * 1000);
-      };
-
-      // Start atmospheric modulation after a delay
-      setTimeout(addAtmosphericModulation, (60 + Math.random() * 120) * 1000);
-    });
-
-    // Restart soft synth every 12 minutes to keep it fresh
-    const restartInterval = setInterval(() => {
-      if (ambienceActiveRef.current) {
-        console.log('[SOFT SYNTH] Restarting atmospheric drone synthesizer for freshness');
-        stopAmbienceSound();
-        // setTimeout(() => startAmbienceSound(), 3000); // 3 second gap for clean restart - DISABLED
-      }
-    }, 12 * 60 * 1000); // 12 minutes
-
-    return () => clearInterval(restartInterval);
-  }, []);
-
-  // SIMPLE ATMOSPHERIC DARK DRONE - Clean implementation inspired by your reference MP3
-  const startSimpleAtmosphericDrone = useCallback(() => {
-    if (ambienceActiveRef.current || !audioContextRef.current) {
-      return;
-    }
-
-    const ctx = audioContextRef.current;
-    ambienceActiveRef.current = true;
-
-    // Create master gain for atmospheric drone
-    if (!ambienceMasterGainRef.current) {
-      ambienceMasterGainRef.current = ctx.createGain();
-      ambienceMasterGainRef.current.gain.setValueAtTime(0.4, ctx.currentTime);
-      // Connect to analyzer for visualizer, then to destination
-      if (analyserNodeRef.current) {
-        ambienceMasterGainRef.current.connect(analyserNodeRef.current);
-      } else {
-        ambienceMasterGainRef.current.connect(ctx.destination);
-      }
-    }
-
-    // Clear existing oscillators
-    ambienceOscillatorsRef.current.forEach(osc => {
-      try { osc.stop(); } catch (e) {}
-    });
-    ambienceGainsRef.current.forEach(gain => gain.disconnect());
-    ambienceOscillatorsRef.current = [];
-    ambienceGainsRef.current = [];
-
-    console.log('[ATMOSPHERIC DRONE] Starting simple dark atmospheric drone...');
-
-    // Simple atmospheric drone frequencies - enhanced for time warp pitch shifting
-    const frequencies = [
-      { freq: 32, vol: 0.25, wave: 'sine' as OscillatorType },      // Deep sub-bass
-      { freq: 48, vol: 0.2, wave: 'sine' as OscillatorType },       // Sub foundation
-      { freq: 64, vol: 0.18, wave: 'triangle' as OscillatorType },  // Warm bass
-      { freq: 96, vol: 0.15, wave: 'sine' as OscillatorType },      // Low mid
-      { freq: 128, vol: 0.12, wave: 'triangle' as OscillatorType }, // Mid atmospheric
-      { freq: 192, vol: 0.1, wave: 'sine' as OscillatorType },      // Upper mid
-      { freq: 256, vol: 0.08, wave: 'triangle' as OscillatorType }, // Ethereal
-      { freq: 384, vol: 0.06, wave: 'sine' as OscillatorType },     // High atmospheric
-      { freq: 512, vol: 0.05, wave: 'sine' as OscillatorType },     // Higher voice for pitch shift clarity
-      { freq: 768, vol: 0.04, wave: 'triangle' as OscillatorType }, // Even higher for extreme shifts
-      { freq: 1024, vol: 0.03, wave: 'sine' as OscillatorType }     // Top layer for ultra-high shifts
-    ];
-
-    frequencies.forEach((layer, index) => {
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-      const filterNode = ctx.createBiquadFilter();
-
-      // Configure oscillator
-      oscillator.type = layer.wave;
-      oscillator.frequency.setValueAtTime(layer.freq, ctx.currentTime);
-
-      // Simple lowpass filter for warmth
-      filterNode.type = 'lowpass';
-      filterNode.frequency.setValueAtTime(layer.freq * 2.5, ctx.currentTime);
-      filterNode.Q.setValueAtTime(0.5, ctx.currentTime);
-
-      // Very slow attack for smooth entrance
-      const attackTime = 8 + index * 2; // 8-22 second staggered attacks
-      gainNode.gain.setValueAtTime(0.001, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(layer.vol, ctx.currentTime + attackTime);
-
-      // Connect simple chain
-      oscillator.connect(filterNode);
-      filterNode.connect(gainNode);
-      gainNode.connect(ambienceMasterGainRef.current!);
-
-      oscillator.start();
-
-      ambienceOscillatorsRef.current.push(oscillator);
-      ambienceGainsRef.current.push(gainNode);
-    });
-
-    console.log(`[ATMOSPHERIC DRONE] Simple atmospheric drone started with ${frequencies.length} oscillators`);
-  }, []);
-
-  const stopAmbienceSound = useCallback(() => {
-    if (!ambienceActiveRef.current) return;
-
-    ambienceActiveRef.current = false;
-
-    // Fade out and stop all soft synth voices
-    ambienceGainsRef.current.forEach((gain, index) => {
-      try {
-        gain.gain.exponentialRampToValueAtTime(0.001, audioContextRef.current!.currentTime + 3);
-      } catch (e) {}
-    });
-
-    setTimeout(() => {
-      ambienceOscillatorsRef.current.forEach(osc => {
-        try { osc.stop(); } catch (e) {}
+      // Create space laser "pew pew" sound
+      const synth = new Tone.Synth({
+        oscillator: { type: 'sawtooth' },
+        envelope: { attack: 0.001, decay: 0.08, sustain: 0, release: 0.12 }
       });
-      ambienceGainsRef.current.forEach(gain => gain.disconnect());
-      ambienceOscillatorsRef.current = [];
-      ambienceGainsRef.current = [];
-    }, 3500);
-  }, []);
 
+      // Frequency sweep for laser effect (high to low)
+      const filter = new Tone.Filter({
+        type: 'lowpass',
+        frequency: 3000,
+        Q: 5
+      }).connect(mixerGain);
+
+      synth.connect(filter);
+      synth.volume.value = -24; // Very quiet to prevent distortion when multiple lasers fire
+
+      // Fast pitch sweep: 800Hz → 200Hz for laser "pew" effect
+      synth.triggerAttackRelease('800', '0.12', Tone.now());
+      synth.frequency.exponentialRampTo('200', 0.1, Tone.now());
+
+      // Filter sweep for extra laser character
+      filter.frequency.exponentialRampTo(500, 0.12, Tone.now());
+
+      // Cleanup
+      setTimeout(() => {
+        synth.dispose();
+        filter.dispose();
+        mixerGain.dispose();
+      }, 500);
+    } catch (error) {
+      console.error('[SOUND] Error playing laser sound:', error);
+    }
+  }, [getNextAudioChannel]);
 
   // Process speech queue to prevent overlapping speech
 
@@ -4313,11 +3913,7 @@ const Pong404: React.FC = () => {
   // Welcome message and ambient sound on start screen
   useEffect(() => {
     if (gameState.showStartScreen) {
-      // Start ambient sounds on title screen
-      if (audioContextRef.current && audioContextRef.current.state === 'running' && !ambienceActiveRef.current) {
-        setTimeout(() => startSimpleAtmosphericDrone(), 100); // Simple atmospheric drone
-      }
-
+      // Ambient music now handled by GlobalAmbientMusic component
       // Instant welcome message on title screen
       speakRobotic('WELCOME TO SPACE BLAZERS');
     } else {
@@ -4329,25 +3925,7 @@ const Pong404: React.FC = () => {
         speechTimeoutRef.current = null;
       }
     }
-  }, [gameState.showStartScreen, speakRobotic, startAmbienceSound]);
-
-  // Auto-start ambient sounds when audio context is ready and game is active
-  useEffect(() => {
-
-    // Ambient music now handled globally - no need to start here
-    // if (audioContextRef.current && audioContextRef.current.state === 'running' &&
-    //     !ambienceActiveRef.current) {
-    //   setTimeout(() => // startAmbienceSound() // Disabled - now using global ambient music, 200); // Much shorter delay for better reliability
-    // }
-  }, [gameState.gameMode, startAmbienceSound, stopAmbienceSound]);
-
-  // Cleanup ambient sounds on unmount
-  useEffect(() => {
-    return () => {
-      // Don't stop ambient music - it's now handled globally
-      // stopAmbienceSound();
-    };
-  }, [stopAmbienceSound]);
+  }, [gameState.showStartScreen, speakRobotic]);
 
   // Connect WebSocket when entering multiplayer mode
   useEffect(() => {
@@ -4371,23 +3949,6 @@ const Pong404: React.FC = () => {
         }
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
-        }
-        // Cleanup disco music on unmount
-        if (discoMusicRef.current) {
-          try {
-            const Tone = (window as any).Tone;
-            discoMusicRef.current.seq.stop();
-            discoMusicRef.current.seq.dispose();
-            discoMusicRef.current.kick.dispose();
-            discoMusicRef.current.bass.dispose();
-            discoMusicRef.current.synth.dispose();
-            discoMusicRef.current.hihat.dispose();
-            discoMusicRef.current.gain.dispose();
-            discoMusicRef.current = null;
-            if (Tone) Tone.Transport.stop();
-          } catch (e) {
-            console.error('[DISCO] Error cleaning up disco music:', e);
-          }
         }
         // Cleanup hypnotic sound on unmount
         if (hypnoSoundRef.current) {
@@ -6300,13 +5861,6 @@ const Pong404: React.FC = () => {
       // Initialize audio on first user interaction
       await initializeAudio();
 
-      // Start ambient sounds immediately on first keyboard interaction (including title screen)
-      if (!ambienceActiveRef.current && audioContextRef.current) {
-        setTimeout(() => {
-          // startSimpleAtmosphericDrone(); // Simple atmospheric drone - DISABLED
-        }, 50); // Even shorter delay
-      }
-
       switch (e.key.toLowerCase()) {
         case 'w':
           e.preventDefault();
@@ -6344,7 +5898,6 @@ const Pong404: React.FC = () => {
           e.preventDefault();
           // console.log('[MUSIC] M key pressed! Audio context state:', {
           //   audioContext: !!audioContextRef.current,
-          //   ambienceGain: !!ambienceMasterGainRef.current,
           //   speechGain: !!speechMasterGainRef.current,
           //   beepsGain: !!beepsMasterGainRef.current
           // });
@@ -6373,42 +5926,56 @@ const Pong404: React.FC = () => {
           }
 
           // Create gain nodes if they don't exist
-          if (!ambienceMasterGainRef.current && audioContextRef.current) {
-            ambienceMasterGainRef.current = audioContextRef.current.createGain();
-            ambienceMasterGainRef.current.gain.setValueAtTime(0.15, audioContextRef.current.currentTime);
-            ambienceMasterGainRef.current.connect(audioContextRef.current.destination);
-            // console.log('[MUSIC] Created ambience gain node');
-          }
-
           if (!speechMasterGainRef.current && audioContextRef.current) {
             speechMasterGainRef.current = audioContextRef.current.createGain();
             speechMasterGainRef.current.gain.setValueAtTime(0.08, audioContextRef.current.currentTime);
             speechMasterGainRef.current.connect(audioContextRef.current.destination);
-            // console.log('[MUSIC] Created speech gain node');
           }
 
-          if (!beepsMasterGainRef.current && audioContextRef.current) {
-            beepsMasterGainRef.current = audioContextRef.current.createGain();
-            beepsMasterGainRef.current.gain.setValueAtTime(0.15, audioContextRef.current.currentTime);
-            beepsMasterGainRef.current.connect(audioContextRef.current.destination);
-            // console.log('[MUSIC] Created beeps gain node');
+          // Create all 4 beep channels if they don't exist
+          const channelVolume = 0.25;
+          if (!beepsChannel1Ref.current && audioContextRef.current) {
+            beepsChannel1Ref.current = audioContextRef.current.createGain();
+            beepsChannel1Ref.current.gain.setValueAtTime(channelVolume, audioContextRef.current.currentTime);
+            beepsChannel1Ref.current.connect(audioContextRef.current.destination);
+          }
+          if (!beepsChannel2Ref.current && audioContextRef.current) {
+            beepsChannel2Ref.current = audioContextRef.current.createGain();
+            beepsChannel2Ref.current.gain.setValueAtTime(channelVolume, audioContextRef.current.currentTime);
+            beepsChannel2Ref.current.connect(audioContextRef.current.destination);
+          }
+          if (!beepsChannel3Ref.current && audioContextRef.current) {
+            beepsChannel3Ref.current = audioContextRef.current.createGain();
+            beepsChannel3Ref.current.gain.setValueAtTime(channelVolume, audioContextRef.current.currentTime);
+            beepsChannel3Ref.current.connect(audioContextRef.current.destination);
+          }
+          if (!beepsChannel4Ref.current && audioContextRef.current) {
+            beepsChannel4Ref.current = audioContextRef.current.createGain();
+            beepsChannel4Ref.current.gain.setValueAtTime(channelVolume, audioContextRef.current.currentTime);
+            beepsChannel4Ref.current.connect(audioContextRef.current.destination);
           }
 
           // Now toggle mute with all gain nodes available
-          if (ambienceMasterGainRef.current && speechMasterGainRef.current && beepsMasterGainRef.current && audioContextRef.current) {
-            const isCurrentlyMuted = ambienceMasterGainRef.current.gain.value === 0;
+          if (speechMasterGainRef.current && beepsChannel1Ref.current && audioContextRef.current) {
+            const isCurrentlyMuted = speechMasterGainRef.current.gain.value === 0;
 
             // Toggle logic: if muted (0), restore levels; if unmuted, set to 0
-            const ambientLevel = isCurrentlyMuted ? 0.15 : 0;
-            const speechLevel = isCurrentlyMuted ? 0.15 : 0;
-            const beepsLevel = isCurrentlyMuted ? 0.15 : 0;
+            const speechLevel = isCurrentlyMuted ? 0.08 : 0;
+            const beepsLevel = isCurrentlyMuted ? channelVolume : 0;
 
             const currentTime = audioContextRef.current.currentTime;
-            ambienceMasterGainRef.current.gain.setValueAtTime(ambientLevel, currentTime);
             speechMasterGainRef.current.gain.setValueAtTime(speechLevel, currentTime);
-            beepsMasterGainRef.current.gain.setValueAtTime(beepsLevel, currentTime);
+            beepsChannel1Ref.current.gain.setValueAtTime(beepsLevel, currentTime);
+            beepsChannel2Ref.current?.gain.setValueAtTime(beepsLevel, currentTime);
+            beepsChannel3Ref.current?.gain.setValueAtTime(beepsLevel, currentTime);
+            beepsChannel4Ref.current?.gain.setValueAtTime(beepsLevel, currentTime);
 
-            // console.log(`[AUDIO] Audio ${isCurrentlyMuted ? 'UNMUTED' : 'MUTED'} - Levels: ambient=${ambientLevel}, speech=${speechLevel}, beeps=${beepsLevel}`);
+            // Also mute/unmute Tone.js music
+            if ((window as any).generativeMusic?.setVolume) {
+              (window as any).generativeMusic.setVolume(isCurrentlyMuted ? 0.6 : 0);
+            }
+
+            // console.log(`[AUDIO] Audio ${isCurrentlyMuted ? 'UNMUTED' : 'MUTED'} - Levels: speech=${speechLevel}, beeps=${beepsLevel}`);
 
             // Visual feedback
             if (isCurrentlyMuted) {
@@ -6455,6 +6022,78 @@ const Pong404: React.FC = () => {
           e.preventDefault();
           console.log('[DISABLED] Debug pickup controls disabled - server handles all pickups');
           break;
+        case '3':
+          e.preventDefault();
+          // Previous track
+          if ((window as any).generativeMusic && !isSwitchingTrackRef.current) {
+            isSwitchingTrackRef.current = true;
+
+            const pieces = (window as any).generativeMusic.availablePieces;
+            const currentState = (window as any).generativeMusic.currentState;
+            const currentIndex = pieces.findIndex((p: any) => p.id === currentState.currentPieceId);
+            const newIndex = currentIndex === 0 ? pieces.length - 1 : currentIndex - 1;
+            const newPiece = pieces[newIndex];
+
+            console.log('[MUSIC] Switching to previous track:', newPiece.title);
+
+            // Await the track switch to ensure cleanup completes
+            (window as any).generativeMusic.startPiece(newPiece.id).then(() => {
+              console.log('[MUSIC] Successfully switched to:', newPiece.title);
+              isSwitchingTrackRef.current = false;
+            }).catch((err: any) => {
+              console.error('[MUSIC] Failed to switch track:', err);
+              isSwitchingTrackRef.current = false;
+            });
+
+            setCurrentMusicTrack(newIndex);
+
+            // Show track name for 4 seconds
+            trackNameShowTimeRef.current = Date.now();
+            setShowTrackName(true);
+            if (trackNameTimeoutRef.current) {
+              clearTimeout(trackNameTimeoutRef.current);
+            }
+            trackNameTimeoutRef.current = window.setTimeout(() => {
+              setShowTrackName(false);
+            }, 4000);
+          }
+          break;
+        case '4':
+          e.preventDefault();
+          // Next track
+          if ((window as any).generativeMusic && !isSwitchingTrackRef.current) {
+            isSwitchingTrackRef.current = true;
+
+            const pieces = (window as any).generativeMusic.availablePieces;
+            const currentState = (window as any).generativeMusic.currentState;
+            const currentIndex = pieces.findIndex((p: any) => p.id === currentState.currentPieceId);
+            const newIndex = (currentIndex + 1) % pieces.length;
+            const newPiece = pieces[newIndex];
+
+            console.log('[MUSIC] Switching to next track:', newPiece.title);
+
+            // Await the track switch to ensure cleanup completes
+            (window as any).generativeMusic.startPiece(newPiece.id).then(() => {
+              console.log('[MUSIC] Successfully switched to:', newPiece.title);
+              isSwitchingTrackRef.current = false;
+            }).catch((err: any) => {
+              console.error('[MUSIC] Failed to switch track:', err);
+              isSwitchingTrackRef.current = false;
+            });
+
+            setCurrentMusicTrack(newIndex);
+
+            // Show track name for 4 seconds
+            trackNameShowTimeRef.current = Date.now();
+            setShowTrackName(true);
+            if (trackNameTimeoutRef.current) {
+              clearTimeout(trackNameTimeoutRef.current);
+            }
+            trackNameTimeoutRef.current = window.setTimeout(() => {
+              setShowTrackName(false);
+            }, 4000);
+          }
+          break;
         case 'r':
           e.preventDefault();
           // Reset game completely
@@ -6484,8 +6123,6 @@ const Pong404: React.FC = () => {
               hasPortal: false,
               isMirror: false,
               mirrorBalls: [],
-              isQuantum: false,
-              quantumPositions: [],
               hasTrailMines: false,
               trailMines: [],
               isSlippery: false,
@@ -6741,24 +6378,43 @@ const Pong404: React.FC = () => {
     ctx.fillStyle = cache.curvature;
     ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
-    // [ROCKET] OPTIMIZED Scanlines - Use cached gradient (no animation)
+    // [ROCKET] OPTIMIZED Scanlines - Enhanced during Detroit mode
     ctx.globalCompositeOperation = 'multiply';
     ctx.globalAlpha = 1;
 
-    // Static scanline pattern - no animation to prevent flickering
-    const scanlineOffset = 0;
+    // Detroit mode: Animated rainbow scanlines synced to beat
+    let scanlineOffset = 0;
+    let scanlineGradient = cache.scanline;
 
-    // Create scanline gradient once and cache it
-    if (!cache.scanline) {
-      cache.scanline = ctx.createLinearGradient(0, 0, 0, 4);
-      cache.scanline.addColorStop(0, 'rgba(0, 0, 0, 0.2)');
-      cache.scanline.addColorStop(0.5, 'rgba(0, 0, 0, 0.3)');
-      cache.scanline.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
+    if (gameState.detroitMode) {
+      const timeSinceStart = Date.now() - (gameState.detroitStartTime || 0);
+      const beatDuration = 461; // 130 BPM
+      const beatPhase = (timeSinceStart % beatDuration) / beatDuration;
+      const beat = Math.floor(timeSinceStart / beatDuration);
+      const hue = (beat * 45) % 360;
+
+      // Animate scanline position
+      scanlineOffset = Math.floor(beatPhase * 4) % 4;
+
+      // Rainbow scanlines
+      scanlineGradient = ctx.createLinearGradient(0, 0, 0, 4);
+      scanlineGradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 0.3)`);
+      scanlineGradient.addColorStop(0.5, `hsla(${(hue + 60) % 360}, 100%, 50%, 0.4)`);
+      scanlineGradient.addColorStop(1, `hsla(${(hue + 120) % 360}, 100%, 50%, 0.3)`);
+    } else {
+      // Static scanline pattern - no animation to prevent flickering
+      if (!cache.scanline) {
+        cache.scanline = ctx.createLinearGradient(0, 0, 0, 4);
+        cache.scanline.addColorStop(0, 'rgba(0, 0, 0, 0.2)');
+        cache.scanline.addColorStop(0.5, 'rgba(0, 0, 0, 0.3)');
+        cache.scanline.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
+      }
+      scanlineGradient = cache.scanline;
     }
 
-    ctx.fillStyle = cache.scanline;
+    ctx.fillStyle = scanlineGradient;
 
-    // Draw scanlines every 2 pixels with static pattern
+    // Draw scanlines every 2 pixels
     for (let y = scanlineOffset; y < canvasSize.height; y += 4) {
       ctx.fillRect(0, y, canvasSize.width, 1);
     }
@@ -6798,62 +6454,7 @@ const Pong404: React.FC = () => {
   }, [gameState.colorIndex]);
 
 
-  // Watch for time warp effect activation and pitch-shift ambient music
-  useEffect(() => {
-    if (gameState.timeWarpActive && gameState.timeWarpFactor !== 1.0) {
-      // Pitch-shift all ambient oscillators to match time warp speed
-      if (audioContextRef.current && ambienceOscillatorsRef.current.length > 0) {
-        const now = audioContextRef.current.currentTime;
-        const pitchFactor = gameState.timeWarpFactor; // 0.1x to 4.0x
-
-        // detune is in cents: 1200 cents = 1 octave = 2x frequency
-        // Formula: cents = 1200 * log2(pitchFactor)
-        const cents = 1200 * Math.log2(pitchFactor);
-
-        console.log(`⏱️ TIME WARP: Pitch-shifting ${ambienceOscillatorsRef.current.length} oscillators to ${pitchFactor.toFixed(2)}x speed (${cents.toFixed(0)} cents)`);
-
-        // Update frequency of each ambient oscillator - use exponentialRampToValueAtTime for smooth pitch changes
-        ambienceOscillatorsRef.current.forEach((osc, index) => {
-          try {
-            // Cancel any scheduled changes first
-            osc.detune.cancelScheduledValues(now);
-            // Set current value
-            osc.detune.setValueAtTime(osc.detune.value, now);
-            // Smooth transition to new pitch over 0.1s to avoid clicks
-            osc.detune.linearRampToValueAtTime(cents, now + 0.1);
-          } catch (e) {
-            console.error(`Failed to pitch-shift oscillator ${index}:`, e);
-          }
-        });
-      } else {
-        console.warn(`⏱️ TIME WARP: Cannot pitch-shift - audioContext: ${!!audioContextRef.current}, oscillators: ${ambienceOscillatorsRef.current.length}`);
-      }
-    } else if (gameState.timeWarpActive === false) {
-      // Restore original pitch only when effect explicitly ends
-      if (audioContextRef.current && ambienceOscillatorsRef.current.length > 0) {
-        const now = audioContextRef.current.currentTime;
-
-        ambienceOscillatorsRef.current.forEach((osc) => {
-          try {
-            // Force cancel all scheduled values to prevent stuck notes
-            osc.detune.cancelScheduledValues(now);
-            osc.frequency.cancelScheduledValues(now);
-
-            // Set current values
-            osc.detune.setValueAtTime(osc.detune.value, now);
-            osc.frequency.setValueAtTime(osc.frequency.value, now);
-
-            // Smooth return to normal pitch over 1 second
-            osc.detune.linearRampToValueAtTime(0, now + 1.0);
-          } catch (e) {
-            console.error('Error restoring oscillator:', e);
-          }
-        });
-
-        console.log('⏱️ TIME WARP: Restored ambient music to normal pitch');
-      }
-    }
-  }, [gameState.timeWarpActive, gameState.timeWarpFactor]);
+  // Time warp effect - pitch shifting now handled by Tone.js GlobalAmbientMusic component
 
   // High-performance render function
   const render = useCallback(() => {
@@ -6894,6 +6495,99 @@ const Pong404: React.FC = () => {
     // Clear canvas with current background color
     ctx.fillStyle = currentColors.background;
     ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+
+    // 🎵 DETROIT TECHNO VISUAL EFFECTS - Synced to 130 BPM (461ms per beat)
+    if (gameState.detroitMode) {
+      const timeSinceStart = Date.now() - (gameState.detroitStartTime || 0);
+      const beatDuration = 461; // 130 BPM = 461ms per beat
+      const beatPhase = (timeSinceStart % beatDuration) / beatDuration;
+      const beat = Math.floor(timeSinceStart / beatDuration);
+      const step16th = Math.floor(timeSinceStart / (beatDuration / 4)) % 16;
+
+      // 1. Rainbow color cycling synced to beats
+      const hue = (beat * 45) % 360; // Change hue every beat
+      const rainbowColor = `hsl(${hue}, 100%, 50%)`;
+
+      // 2. Kick drum flash (every 4 steps = every beat)
+      if (step16th % 4 === 0 && beatPhase < 0.15) {
+        const kickFlash = 1 - (beatPhase / 0.15);
+        ctx.globalAlpha = kickFlash * 0.3;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
+        ctx.globalAlpha = 1;
+      }
+
+      // 3. Strobing borders on synth stabs (steps 0 and 4)
+      if ((step16th === 0 || step16th === 4) && beatPhase < 0.2) {
+        const borderSize = 20 + beatPhase * 40;
+        const strobeBrightness = 1 - (beatPhase / 0.2);
+        ctx.globalAlpha = strobeBrightness * 0.8;
+        ctx.strokeStyle = rainbowColor;
+        ctx.lineWidth = borderSize;
+        ctx.strokeRect(borderSize / 2, borderSize / 2, canvasSize.width - borderSize, canvasSize.height - borderSize);
+        ctx.globalAlpha = 1;
+      }
+
+      // 4. Rotating corner particles
+      const particleCount = 8;
+      for (let i = 0; i < particleCount; i++) {
+        const angle = (timeSinceStart / 1000) + (i * Math.PI * 2 / particleCount);
+        const radius = 150 + Math.sin(timeSinceStart / 200 + i) * 50;
+        const corners = [
+          { x: canvasSize.width / 2, y: canvasSize.height / 2 },
+        ];
+
+        corners.forEach(corner => {
+          const px = corner.x + Math.cos(angle) * radius;
+          const py = corner.y + Math.sin(angle) * radius;
+          const particleHue = (hue + i * 45) % 360;
+          ctx.fillStyle = `hsl(${particleHue}, 100%, 50%)`;
+          ctx.globalAlpha = 0.6;
+          ctx.beginPath();
+          ctx.arc(px, py, 8, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+      ctx.globalAlpha = 1;
+
+      // 5. (REMOVED - Detroit text logo)
+
+      // 6. Scanline intensity pulse on kick
+      if (step16th % 4 === 0 && beatPhase < 0.2) {
+        const scanlineIntensity = (1 - beatPhase / 0.2) * 0.3;
+        ctx.globalAlpha = scanlineIntensity;
+        for (let y = 0; y < canvasSize.height; y += 4) {
+          ctx.fillStyle = '#000000';
+          ctx.fillRect(0, y, canvasSize.width, 2);
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      // 7. Grid overlay pulsing with hi-hats (every 2 steps)
+      if (beatPhase < 0.08) {
+        const gridAlpha = (1 - beatPhase / 0.08) * 0.15;
+        ctx.globalAlpha = gridAlpha;
+        ctx.strokeStyle = rainbowColor;
+        ctx.lineWidth = 1;
+
+        // Vertical lines
+        for (let x = 0; x < canvasSize.width; x += 40) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, canvasSize.height);
+          ctx.stroke();
+        }
+
+        // Horizontal lines
+        for (let y = 0; y < canvasSize.height; y += 40) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(canvasSize.width, y);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
 
     // [VISUALIZER] Audio visualizer - frequency bars (drawn BEHIND scaled content)
     if (analyserNodeRef.current && frequencyDataRef.current) {
@@ -7619,7 +7313,7 @@ const Pong404: React.FC = () => {
 
     // Draw labyrinth maze walls if active
     if (gameState.labyrinthActive && gameState.mazeWalls) {
-      ctx.fillStyle = gameColors.foreground;
+      ctx.fillStyle = '#ffffff';
       ctx.globalAlpha = 0.8;
 
       gameState.mazeWalls.forEach((wall: any) => {
@@ -7702,6 +7396,62 @@ const Pong404: React.FC = () => {
       });
     }
 
+    // Draw black holes if active
+    if (gameState.blackHoles && gameState.blackHoles.length > 0) {
+      const time = cachedTimeRef.current * 0.01;
+
+      gameState.blackHoles.forEach((hole: any) => {
+        ctx.save();
+
+        // Draw event horizon (outer dark circle with pulsing)
+        const pulse = 0.9 + Math.sin(time * 2) * 0.1;
+        const gradient = ctx.createRadialGradient(hole.x, hole.y, 0, hole.x, hole.y, hole.radius * pulse);
+        gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+        gradient.addColorStop(0.6, 'rgba(30, 0, 60, 0.8)');
+        gradient.addColorStop(0.85, 'rgba(138, 43, 226, 0.4)');
+        gradient.addColorStop(1, 'rgba(138, 43, 226, 0)');
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(hole.x, hole.y, hole.radius * pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Draw accretion disk (swirling rings)
+        ctx.globalAlpha = 0.6;
+        for (let i = 0; i < 3; i++) {
+          const ringRadius = hole.radius * 0.7 + i * 8;
+          const ringOffset = (time * (i + 1) * 0.5) % (Math.PI * 2);
+
+          ctx.strokeStyle = `rgba(138, 43, 226, ${0.5 - i * 0.15})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+
+          // Draw spiral segments
+          for (let angle = 0; angle < Math.PI * 2; angle += 0.3) {
+            const totalAngle = angle + ringOffset;
+            const x = hole.x + Math.cos(totalAngle) * ringRadius;
+            const y = hole.y + Math.sin(totalAngle) * ringRadius;
+
+            if (angle === 0) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          }
+          ctx.stroke();
+        }
+
+        // Draw singularity (center black core)
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#000000';
+        ctx.beginPath();
+        ctx.arc(hole.x, hole.y, hole.radius * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+      });
+    }
+
     // Draw pickups if they exist
     gameState.pickups?.forEach((pickup) => {
       const time = cachedTimeRef.current * 0.005;
@@ -7712,8 +7462,23 @@ const Pong404: React.FC = () => {
       ctx.save();
 
       // Add disharmonic shake effect - increased multiplier for more visible shake
-      const shakeX = (Math.random() - 0.5) * musicData.disharmonic * 25;
-      const shakeY = (Math.random() - 0.5) * musicData.disharmonic * 25;
+      let shakeX = (Math.random() - 0.5) * musicData.disharmonic * 25;
+      let shakeY = (Math.random() - 0.5) * musicData.disharmonic * 25;
+
+      // Detroit mode: Enhanced shake on kick drum
+      if (gameState.detroitMode) {
+        const timeSinceStart = Date.now() - (gameState.detroitStartTime || 0);
+        const beatDuration = 461; // 130 BPM
+        const beatPhase = (timeSinceStart % beatDuration) / beatDuration;
+        const step16th = Math.floor(timeSinceStart / (beatDuration / 4)) % 16;
+
+        // Kick drum shake (every 4 steps)
+        if (step16th % 4 === 0 && beatPhase < 0.1) {
+          const kickShakeIntensity = (1 - beatPhase / 0.1) * 15;
+          shakeX += (Math.random() - 0.5) * kickShakeIntensity;
+          shakeY += (Math.random() - 0.5) * kickShakeIntensity;
+        }
+      }
 
       ctx.translate(shakeX, shakeY);
 
@@ -7763,7 +7528,7 @@ const Pong404: React.FC = () => {
           'fade': 'fade',
           'mine': 'mine',
           'shuffle': 'shuffle',
-          'disco': 'disco',
+          'detroit': 'detroit',
           'pacman': 'pacman',
           'banana': 'banana',
           'bounce': 'bounce',
@@ -8071,7 +7836,7 @@ const Pong404: React.FC = () => {
           // Draw pixelated coin
           const pixelSize = 4; // Match pong404 pixel size
           const gridSize = Math.floor(coin.size / pixelSize);
-          ctx.fillStyle = currentColors.foreground;
+          ctx.fillStyle = '#FFD700'; // Always gold color for coins
 
           for (let row = 0; row < gridSize; row++) {
             for (let col = 0; col < gridSize; col++) {
@@ -8112,7 +7877,7 @@ const Pong404: React.FC = () => {
 
         const pixelSize = 4; // Match pong404 pixel size
         const gridSize = Math.floor(coin.size / pixelSize);
-        ctx.fillStyle = currentColors.foreground;
+        ctx.fillStyle = '#FFD700'; // Always gold color for coins
 
         for (let row = 0; row < gridSize; row++) {
           for (let col = 0; col < gridSize; col++) {
@@ -8301,6 +8066,35 @@ const Pong404: React.FC = () => {
       });
 
       ctx.shadowBlur = 0;
+    }
+
+    // Draw track name when switching music
+    if (showTrackName && (window as any).generativeMusic) {
+      const currentState = (window as any).generativeMusic.currentState;
+      const pieces = (window as any).generativeMusic.availablePieces;
+      const currentPiece = pieces.find((p: any) => p.id === currentState.currentPieceId);
+
+      if (currentPiece) {
+        ctx.save();
+        ctx.font = 'bold 24px "Press Start 2P", monospace';
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#00ffff';
+
+        // Fade effect based on time elapsed since showing
+        const elapsed = Date.now() - trackNameShowTimeRef.current;
+        const fadeProgress = Math.min(1, elapsed / 4000);
+        const alpha = fadeProgress > 0.8 ? (1 - (fadeProgress - 0.8) / 0.2) : 1;
+        ctx.globalAlpha = alpha;
+
+        const trackText = `♫ ${currentPiece.title.toUpperCase()} ♫`;
+        ctx.fillText(trackText, playFieldWidth / 2, 100);
+
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
     }
 
     // Draw active effects status with live countdown and robot voice announcements
@@ -9300,11 +9094,6 @@ const Pong404: React.FC = () => {
       // await initializeAudio();
 
       // Start ambient sounds immediately on first interaction (including title screen)
-      if (!ambienceActiveRef.current && audioContextRef.current) {
-        // setTimeout(() => startSimpleAtmosphericDrone(), 50); // Simple atmospheric drone - DISABLED
-      }
-
-
       const rect = canvasRef.current?.getBoundingClientRect();
       if (rect) {
         let y, x;
@@ -9551,13 +9340,6 @@ const Pong404: React.FC = () => {
             paddleAnimationStartTimeRef.current = Date.now();
             setPaddleAnimationProgress(0);
 
-            // Start ambient sounds immediately on first click interaction
-            if (!ambienceActiveRef.current && audioContextRef.current) {
-              setTimeout(() => {
-                // startSimpleAtmosphericDrone(); // Simple atmospheric drone - DISABLED
-              }, 50);
-            }
-
             // Try to connect to multiplayer WebSocket
             if (!multiplayerState.isConnected && connectionStatus !== 'error') {
               try {
@@ -9660,13 +9442,6 @@ const Pong404: React.FC = () => {
             // Start paddle animation
             paddleAnimationStartTimeRef.current = Date.now();
             setPaddleAnimationProgress(0);
-
-            // Start ambient sounds immediately on first touch interaction
-            if (!ambienceActiveRef.current && audioContextRef.current) {
-              setTimeout(() => {
-                // startSimpleAtmosphericDrone(); // Simple atmospheric drone - DISABLED
-              }, 50);
-            }
 
             // Try to connect to multiplayer WebSocket
             if (!multiplayerState.isConnected && connectionStatus !== 'error') {

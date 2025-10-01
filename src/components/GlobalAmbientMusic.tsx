@@ -5,7 +5,6 @@ let Tone: any = null;
 
 // Generative music pieces using Tone.js (no external samples required)
 const AVAILABLE_PIECES = [
-  { id: 'space-atmosphere', title: 'Space Atmosphere', mood: 'space' },
   { id: 'cosmic-chords', title: 'Cosmic Chords', mood: 'spacey' },
   { id: 'crystal-cascade', title: 'Crystal Cascade', mood: 'sparkle' },
   { id: 'doom-drone', title: 'Doom Drone', mood: 'dark' },
@@ -17,6 +16,7 @@ const AVAILABLE_PIECES = [
   { id: 'cosmic-longing', title: 'Cosmic Longing', mood: 'melancholic' },
   { id: 'cosmic-whale', title: 'Cosmic Whale', mood: 'oceanic' },
   { id: 'earth-approach', title: 'Earth Approach', mood: 'joyful' },
+  { id: 'detroit-techno', title: 'Detroit Techno', mood: 'energetic' },
 ];
 
 interface GenerativeMusicState {
@@ -1071,10 +1071,213 @@ const GlobalAmbientMusic: React.FC = () => {
     }];
   }, []);
 
+  const createDetroitTechno = useCallback(async () => {
+    // Jeff Mills-inspired minimal techno at 135 BPM
+    Tone.getTransport().bpm.value = 135;
+
+    // Master gain
+    const masterGain = new Tone.Gain(0.7).toDestination();
+
+    // KICK - Deep, punchy 909-style kick
+    const kick = new Tone.MembraneSynth({
+      pitchDecay: 0.03,
+      octaves: 6,
+      oscillator: { type: 'sine' },
+      envelope: {
+        attack: 0.001,
+        decay: 0.3,
+        sustain: 0,
+        release: 0.1
+      }
+    }).connect(masterGain);
+
+    // CLAP - Sharp, tight clap on 2 and 4
+    const clapNoise = new Tone.NoiseSynth({
+      noise: { type: 'white' },
+      envelope: {
+        attack: 0.001,
+        decay: 0.08,
+        sustain: 0,
+        release: 0.05
+      }
+    });
+    const clapFilter = new Tone.Filter({
+      type: 'bandpass',
+      frequency: 2000,
+      Q: 4
+    });
+    clapNoise.connect(clapFilter);
+    clapFilter.connect(masterGain);
+
+    // HI-HAT - Crisp 16th note hats
+    const hihatNoise = new Tone.NoiseSynth({
+      noise: { type: 'white' },
+      envelope: {
+        attack: 0.001,
+        decay: 0.03,
+        sustain: 0,
+        release: 0.02
+      }
+    });
+    const hihatFilter = new Tone.Filter({
+      type: 'highpass',
+      frequency: 8000,
+      Q: 1
+    });
+    hihatNoise.connect(hihatFilter);
+    hihatFilter.connect(new Tone.Gain(0.5).connect(masterGain));
+
+    // OPEN HI-HAT - Longer decay
+    const openHihat = new Tone.NoiseSynth({
+      noise: { type: 'white' },
+      envelope: {
+        attack: 0.001,
+        decay: 0.2,
+        sustain: 0,
+        release: 0.1
+      }
+    });
+    const openHihatFilter = new Tone.Filter({
+      type: 'highpass',
+      frequency: 7000,
+      Q: 1
+    });
+    openHihat.connect(openHihatFilter);
+    openHihatFilter.connect(new Tone.Gain(0.4).connect(masterGain));
+
+    // BASS - Minimalist sub-bass with slight variation
+    const bassFilter = new Tone.Filter({
+      type: 'lowpass',
+      frequency: 300,
+      rolloff: -24,
+      Q: 3
+    });
+    const bass = new Tone.MonoSynth({
+      oscillator: { type: 'sawtooth' },
+      envelope: {
+        attack: 0.005,
+        decay: 0.1,
+        sustain: 0.3,
+        release: 0.2
+      },
+      filterEnvelope: {
+        attack: 0.01,
+        decay: 0.15,
+        sustain: 0.4,
+        release: 0.2,
+        baseFrequency: 150,
+        octaves: 1.5
+      }
+    }).connect(bassFilter);
+    bassFilter.connect(new Tone.Gain(0.8).connect(masterGain));
+
+    // HYPNOTIC LEAD - Repeating minimal melody with resonant filter
+    const leadFilter = new Tone.Filter({
+      type: 'lowpass',
+      frequency: 1200,
+      rolloff: -24,
+      Q: 12
+    });
+    const leadLFO = new Tone.LFO({
+      frequency: '4n',
+      min: 800,
+      max: 3000
+    }).start();
+    leadLFO.connect(leadFilter.frequency);
+
+    const lead = new Tone.MonoSynth({
+      oscillator: { type: 'square' },
+      envelope: {
+        attack: 0.002,
+        decay: 0.05,
+        sustain: 0.2,
+        release: 0.1
+      }
+    }).connect(leadFilter);
+    leadFilter.connect(new Tone.Gain(0.4).connect(masterGain));
+
+    // RIDE CYMBAL - Sparse metallic accents
+    const ride = new Tone.MetalSynth({
+      frequency: 300,
+      envelope: {
+        attack: 0.001,
+        decay: 0.8,
+        release: 0.4
+      },
+      harmonicity: 8,
+      modulationIndex: 20,
+      resonance: 2000,
+      octaves: 1
+    }).connect(new Tone.Gain(0.3).connect(masterGain));
+
+    // MAIN SEQUENCER - Jeff Mills minimal but driving
+    const seq = new Tone.Sequence((time, step) => {
+      // Four-on-the-floor kick
+      if (step % 4 === 0) {
+        kick.triggerAttackRelease('C0', '16n', time, 1.0);
+      }
+
+      // Clap on 2 and 4
+      if (step === 4 || step === 12) {
+        clapNoise.triggerAttackRelease('16n', time, 0.8);
+      }
+
+      // 16th note hi-hats (closed)
+      hihatNoise.triggerAttackRelease('32n', time, 0.6);
+
+      // Open hi-hat on offbeats
+      if (step % 8 === 6) {
+        openHihat.triggerAttackRelease('8n', time, 0.5);
+      }
+
+      // Hypnotic bass line - simple two-note pattern
+      if (step % 16 === 0) {
+        bass.triggerAttackRelease('A1', '8n', time, 0.9);
+      } else if (step % 16 === 8) {
+        bass.triggerAttackRelease('F1', '8n', time, 0.9);
+      }
+
+      // Sparse lead melody - creates tension
+      if (step === 0) {
+        lead.triggerAttackRelease('E4', '16n', time, 0.7);
+      } else if (step === 3) {
+        lead.triggerAttackRelease('C4', '16n', time, 0.6);
+      } else if (step === 7) {
+        lead.triggerAttackRelease('D4', '16n', time, 0.5);
+      } else if (step === 15) {
+        lead.triggerAttackRelease('A3', '16n', time, 0.65);
+      }
+
+      // Ride cymbal accent every 8 bars
+      if (step === 0 && Math.random() > 0.85) {
+        ride.triggerAttackRelease('16n', time, 0.4);
+      }
+    }, Array.from({ length: 16 }, (_, i) => i), '16n');
+
+    // Start the sequence
+    seq.start(0);
+
+    return [{
+      kick,
+      clapNoise,
+      hihatNoise,
+      openHihat,
+      bass,
+      lead,
+      ride,
+      seq,
+      masterGain,
+      clapFilter,
+      hihatFilter,
+      openHihatFilter,
+      bassFilter,
+      leadFilter,
+      leadLFO
+    }];
+  }, []);
+
   const createPiece = useCallback(async (pieceId: string) => {
     switch (pieceId) {
-      case 'space-atmosphere':
-        return await createSpaceAtmosphere();
       case 'cosmic-chords':
         return await createCosmicChords();
       case 'crystal-cascade':
@@ -1097,10 +1300,12 @@ const GlobalAmbientMusic: React.FC = () => {
         return await createCosmicWhale();
       case 'earth-approach':
         return await createEarthApproach();
+      case 'detroit-techno':
+        return await createDetroitTechno();
       default:
-        return await createSpaceAtmosphere();
+        return await createCosmicChords();
     }
-  }, [createSpaceAtmosphere, createCosmicChords, createCrystalCascade, createDoomDrone, createSpaceDrone, createHomewardBound, createDistantMemories, createStellarSolitude, createEarthsEmbrace, createCosmicLonging, createCosmicWhale, createEarthApproach]);
+  }, [createCosmicChords, createCrystalCascade, createDoomDrone, createSpaceDrone, createHomewardBound, createDistantMemories, createStellarSolitude, createEarthsEmbrace, createCosmicLonging, createCosmicWhale, createEarthApproach, createDetroitTechno]);
 
   const startPiece = useCallback(async (pieceId: string) => {
     if (!isInitializedRef.current) {
@@ -1111,6 +1316,10 @@ const GlobalAmbientMusic: React.FC = () => {
     if (currentPieceRef.current) {
       // Stopping current piece
       try {
+        // Stop and reset transport first to stop all scheduled events
+        Tone.getTransport().stop();
+        Tone.getTransport().cancel(0); // Cancel all scheduled events from time 0
+
         if (currentPieceRef.current.stop) {
           await currentPieceRef.current.stop();
         } else if (Array.isArray(currentPieceRef.current)) {
@@ -1118,17 +1327,33 @@ const GlobalAmbientMusic: React.FC = () => {
           currentPieceRef.current.forEach((item) => {
             if (!item) return;
 
-            // Handle old format: { synth, pattern }
-            if (item.synth || item.pattern) {
-              if (item.pattern) item.pattern.stop();
-              if (item.synth?.dispose) item.synth.dispose();
-              else if (item.synth?.stop) item.synth.stop();
+            // Handle old format: { synth, pattern, loop }
+            if (item.synth || item.pattern || item.loop) {
+              // Stop patterns and loops first
+              if (item.pattern?.stop) item.pattern.stop();
+              if (item.loop?.stop) item.loop.stop();
+
+              // Dispose synths (dispose() handles disconnection)
+              if (item.synth) {
+                try {
+                  if (item.synth.dispose) item.synth.dispose();
+                  else if (item.synth.stop) item.synth.stop();
+                } catch (e) {
+                  // Ignore disposal errors
+                }
+              }
             } else {
               // Handle new format: object with multiple audio nodes
               Object.values(item).forEach((node: any) => {
                 try {
-                  if (node?.stop) node.stop();
-                  if (node?.dispose) node.dispose();
+                  // Stop loops, patterns, LFOs, oscillators
+                  if (node?.stop && typeof node.stop === 'function') {
+                    node.stop();
+                  }
+                  // Dispose everything (dispose() handles disconnection)
+                  if (node?.dispose && typeof node.dispose === 'function') {
+                    node.dispose();
+                  }
                 } catch (e) {
                   // Ignore disposal errors for already disposed nodes
                 }
@@ -1137,11 +1362,11 @@ const GlobalAmbientMusic: React.FC = () => {
           });
         }
 
-        // Stop and reset transport for clean slate
-        Tone.getTransport().stop();
-        Tone.getTransport().cancel();
-
         currentPieceRef.current = null;
+
+        // Wait a bit longer for all audio to stop and release envelope tails
+        await new Promise(resolve => setTimeout(resolve, 200));
+
         // Previous piece stopped cleanly
       } catch (error) {
         console.error('Error stopping previous piece:', error);
@@ -1159,11 +1384,12 @@ const GlobalAmbientMusic: React.FC = () => {
       const synths = await createPiece(pieceId);
       currentPieceRef.current = synths;
 
-      // Start Tone.Transport fresh
-      if (Tone.getTransport().state !== 'started') {
-        Tone.getTransport().start();
-        // Tone.Transport started
-      }
+      // Start Tone.Transport fresh from the beginning
+      Tone.getTransport().seconds = 0; // Reset transport position to start
+
+      // Always restart transport (it was stopped in cleanup above)
+      Tone.getTransport().start();
+      // Tone.Transport started
 
       setMusicState(prev => ({
         ...prev,
