@@ -6065,6 +6065,7 @@ const Pong404: React.FC = () => {
       }
 
       if (e.key === '1' || e.key === '2') {
+        console.log(`🔧 DEBUG KEY PRESSED: ${e.key}`);
         e.preventDefault();
 
         // Enable debug mode if not already enabled
