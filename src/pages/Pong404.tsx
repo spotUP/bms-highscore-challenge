@@ -82,6 +82,7 @@ interface GameState {
     aimY: number;
     aimTargetX: number;
     aimTargetY: number;
+    spin: number; // 🌀 Curve ball spin rate
     isStuck: boolean;
   };
   paddles: {
@@ -994,6 +995,7 @@ const Pong404: React.FC = () => {
       aimY: 0,
       aimTargetX: 0,
       aimTargetY: 0,
+      spin: 0, // 🌀 Initial spin is 0
       isStuck: false,
       stuckToPaddle: null,
       stuckStartTime: 0,
@@ -3406,11 +3408,11 @@ const Pong404: React.FC = () => {
 
   // Enhanced tone generation with custom volume
   const playTone = useCallback(async (frequency: number, duration: number, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both', volume: number = 0.3) => {
-    console.log(`[SOUND] playTone called: freq=${frequency}, dur=${duration}, vol=${volume}`);
+    // console.log(`[SOUND] playTone called: freq=${frequency}, dur=${duration}, vol=${volume}`);
 
     // Only create AudioContext when actually trying to play a sound (user gesture)
     if (!audioContextRef.current && !audioInitAttempted.current) {
-      console.log('[SOUND] Creating new AudioContext');
+      // console.log('[SOUND] Creating new AudioContext');
       audioInitAttempted.current = true;
       try {
         audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -3424,25 +3426,25 @@ const Pong404: React.FC = () => {
 
     // Exit early if no audio context
     if (!audioContextRef.current) {
-      console.warn('[SOUND] No audio context available');
+      // console.warn('[SOUND] No audio context available');
       return;
     }
 
-    console.log(`[SOUND] Audio context state: ${audioContextRef.current.state}`);
+    // console.log(`[SOUND] Audio context state: ${audioContextRef.current.state}`);
 
     // Resume audio context if suspended (required for production builds)
     if (audioContextRef.current.state === 'suspended') {
-      console.log('[SOUND] Resuming suspended audio context');
+      // console.log('[SOUND] Resuming suspended audio context');
       try {
         await audioContextRef.current.resume();
-        console.log('[SOUND] Audio context resumed successfully, state:', audioContextRef.current?.state);
+        // console.log('[SOUND] Audio context resumed successfully, state:', audioContextRef.current?.state);
       } catch (error) {
         console.error('[SOUND] Failed to resume audio context:', error);
         return;
       }
     }
 
-    console.log('[SOUND] About to create oscillator and play sound');
+    // console.log('[SOUND] About to create oscillator and play sound');
 
     const ctx = audioContextRef.current;
     const now = ctx.currentTime;
@@ -3507,18 +3509,18 @@ const Pong404: React.FC = () => {
     }
 
     // Start and stop
-    console.log('[SOUND] Starting oscillator:', {
-      frequency,
-      duration,
-      volume,
-      effectType,
-      beepsMasterGainExists: !!beepsMasterGainRef.current,
-      beepsMasterGainValue: beepsMasterGainRef.current?.gain.value,
-      contextState: ctx.state
-    });
+    // console.log('[SOUND] Starting oscillator:', {
+    //   frequency,
+    //   duration,
+    //   volume,
+    //   effectType,
+    //   beepsMasterGainExists: !!beepsMasterGainRef.current,
+    //   beepsMasterGainValue: beepsMasterGainRef.current?.gain.value,
+    //   contextState: ctx.state
+    // });
     oscillator.start(now);
     oscillator.stop(now + duration);
-    console.log('[SOUND] Oscillator started and scheduled to stop');
+    // console.log('[SOUND] Oscillator started and scheduled to stop');
 
     // Clean up nodes after oscillator stops to prevent accumulation
     setTimeout(() => {
@@ -3541,18 +3543,18 @@ const Pong404: React.FC = () => {
 
   // [ROCKET] OPTIMIZED melody system using Tone.js
   const playMelodyNote = useCallback(async (eventType: 'paddle' | 'wall' | 'score' | 'pickup', pickupData?: any, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both') => {
-    console.log(`[SOUND] Playing sound for event: ${eventType}`);
+    // console.log(`[SOUND] Playing sound for event: ${eventType}`);
 
     // Dynamically import Tone.js if not available
     let Tone = (window as any).Tone;
 
     if (!Tone) {
-      console.log('[SOUND] Tone.js not available yet, trying to import...');
+      // console.log('[SOUND] Tone.js not available yet, trying to import...');
       try {
         const ToneModule = await import('tone');
         Tone = ToneModule.default || ToneModule;
         (window as any).Tone = Tone;
-        console.log('[SOUND] Tone.js imported successfully');
+        // console.log('[SOUND] Tone.js imported successfully');
       } catch (error) {
         console.error('[SOUND] Failed to import Tone.js:', error);
         return;
@@ -3639,7 +3641,7 @@ const Pong404: React.FC = () => {
         duration = 0.1;
     }
 
-    console.log(`[SOUND] Playing Tone.js melody: freq=${frequency}Hz, scale=${melodyState.currentScale}, harmony=[${harmony.join(',')}]`);
+    // console.log(`[SOUND] Playing Tone.js melody: freq=${frequency}Hz, scale=${melodyState.currentScale}, harmony=[${harmony.join(',')}]`);
 
     try {
       // Create master limiter if it doesn't exist
@@ -3653,7 +3655,7 @@ const Pong404: React.FC = () => {
         });
         compressor.connect(limiter);
         masterLimiterRef.current = { compressor, limiter };
-        console.log('[SOUND] Master limiter initialized');
+        // console.log('[SOUND] Master limiter initialized');
       }
 
       // Create multi-layered reverb for depth and space
@@ -3689,7 +3691,7 @@ const Pong404: React.FC = () => {
 
       // MUST wait for reverb to generate impulse response
       await reverb.generate();
-      console.log('[SOUND] Reverb generated, decay:', reverb.decay);
+      // console.log('[SOUND] Reverb generated, decay:', reverb.decay);
 
       // Add filter for warmth and movement
       const filter = new Tone.Filter({
@@ -3843,7 +3845,7 @@ const Pong404: React.FC = () => {
         echoGain.dispose();
       }, (duration + 4.0) * 1000); // Extended cleanup for 3.5s reverb tail
 
-      console.log('[SOUND] Tone.js dystopian melody with harmonies played successfully');
+      // console.log('[SOUND] Tone.js dystopian melody with harmonies played successfully');
     } catch (error) {
       console.error('[SOUND] Error playing Tone.js melody:', error);
     }
@@ -3906,7 +3908,7 @@ const Pong404: React.FC = () => {
         reverb.dispose();
       }, 1000);
 
-      console.log('[SOUND] Ca-ching coin sound played');
+      // console.log('[SOUND] Ca-ching coin sound played');
     } catch (error) {
       console.error('[SOUND] Error playing coin sound:', error);
     }
@@ -4161,7 +4163,7 @@ const Pong404: React.FC = () => {
       ambienceGainsRef.current.push(gainNode);
     });
 
-    console.log('[ATMOSPHERIC DRONE] Simple atmospheric drone started successfully');
+    // console.log('[ATMOSPHERIC DRONE] Simple atmospheric drone started successfully');
   }, []);
 
   const stopAmbienceSound = useCallback(() => {
@@ -6230,7 +6232,7 @@ const Pong404: React.FC = () => {
 
       // Handle audio prompt dismissal with spacebar - in spectator mode, go directly to multiplayer
       if (showAudioPrompt && !audioPromptDismissedRef.current && e.key === ' ') {
-        console.log('[MUSIC] DISMISSING AUDIO PROMPT WITH SPACEBAR');
+        // console.log('[MUSIC] DISMISSING AUDIO PROMPT WITH SPACEBAR');
         audioPromptDismissedRef.current = true;
         setShowAudioPrompt(false);
 
@@ -6366,21 +6368,21 @@ const Pong404: React.FC = () => {
           break;
         case 'm':
           e.preventDefault();
-          console.log('[MUSIC] M key pressed! Audio context state:', {
-            audioContext: !!audioContextRef.current,
-            ambienceGain: !!ambienceMasterGainRef.current,
-            speechGain: !!speechMasterGainRef.current,
-            beepsGain: !!beepsMasterGainRef.current
-          });
+          // console.log('[MUSIC] M key pressed! Audio context state:', {
+          //   audioContext: !!audioContextRef.current,
+          //   ambienceGain: !!ambienceMasterGainRef.current,
+          //   speechGain: !!speechMasterGainRef.current,
+          //   beepsGain: !!beepsMasterGainRef.current
+          // });
 
           // COMPREHENSIVE AUDIO INITIALIZATION AND MUTE TOGGLE
-          console.log('[MUSIC] M key pressed - initializing audio system...');
+          // console.log('[MUSIC] M key pressed - initializing audio system...');
 
           // Initialize audio context if needed
           if (!audioContextRef.current) {
             try {
               audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-              console.log('[MUSIC] Created new AudioContext');
+              // console.log('[MUSIC] Created new AudioContext');
             } catch (error) {
               console.error('[ERROR] Failed to create AudioContext:', error);
               break;
@@ -6390,7 +6392,7 @@ const Pong404: React.FC = () => {
           // Resume audio context if suspended (required by browser autoplay policies)
           if (audioContextRef.current.state === 'suspended') {
             audioContextRef.current.resume().then(() => {
-              console.log('[MUSIC] Resumed AudioContext');
+              // console.log('[MUSIC] Resumed AudioContext');
             }).catch((error) => {
               console.error('[ERROR] Failed to resume AudioContext:', error);
             });
@@ -6401,21 +6403,21 @@ const Pong404: React.FC = () => {
             ambienceMasterGainRef.current = audioContextRef.current.createGain();
             ambienceMasterGainRef.current.gain.setValueAtTime(0.15, audioContextRef.current.currentTime);
             ambienceMasterGainRef.current.connect(audioContextRef.current.destination);
-            console.log('[MUSIC] Created ambience gain node');
+            // console.log('[MUSIC] Created ambience gain node');
           }
 
           if (!speechMasterGainRef.current && audioContextRef.current) {
             speechMasterGainRef.current = audioContextRef.current.createGain();
             speechMasterGainRef.current.gain.setValueAtTime(0.08, audioContextRef.current.currentTime);
             speechMasterGainRef.current.connect(audioContextRef.current.destination);
-            console.log('[MUSIC] Created speech gain node');
+            // console.log('[MUSIC] Created speech gain node');
           }
 
           if (!beepsMasterGainRef.current && audioContextRef.current) {
             beepsMasterGainRef.current = audioContextRef.current.createGain();
             beepsMasterGainRef.current.gain.setValueAtTime(0.15, audioContextRef.current.currentTime);
             beepsMasterGainRef.current.connect(audioContextRef.current.destination);
-            console.log('[MUSIC] Created beeps gain node');
+            // console.log('[MUSIC] Created beeps gain node');
           }
 
           // Now toggle mute with all gain nodes available
@@ -6432,15 +6434,15 @@ const Pong404: React.FC = () => {
             speechMasterGainRef.current.gain.setValueAtTime(speechLevel, currentTime);
             beepsMasterGainRef.current.gain.setValueAtTime(beepsLevel, currentTime);
 
-            console.log(`[AUDIO] Audio ${isCurrentlyMuted ? 'UNMUTED' : 'MUTED'} - Levels: ambient=${ambientLevel}, speech=${speechLevel}, beeps=${beepsLevel}`);
+            // console.log(`[AUDIO] Audio ${isCurrentlyMuted ? 'UNMUTED' : 'MUTED'} - Levels: ambient=${ambientLevel}, speech=${speechLevel}, beeps=${beepsLevel}`);
 
             // Visual feedback
             if (isCurrentlyMuted) {
               // Show unmuted message on screen briefly
-              console.log('[AUDIO] AUDIO ENABLED');
+              // console.log('[AUDIO] AUDIO ENABLED');
             } else {
               // Show muted message on screen briefly
-              console.log('🔇 AUDIO MUTED');
+              // console.log('🔇 AUDIO MUTED');
             }
           } else {
             console.log('[ERROR] Failed to create or access audio gain nodes');
@@ -7358,11 +7360,14 @@ const Pong404: React.FC = () => {
       // Check if ball should be invisible
       const invisibleEffect = gameState.activeEffects?.find(e => e.type === 'invisible_ball');
       if (!invisibleEffect) {
+        // 🌀 Check if ball is curved (spinning)
+        const isCurved = gameState.ball.spin && Math.abs(gameState.ball.spin) > 2.5;
+
         // Draw music-reactive glow effect for ball
         ctx.shadowBlur = 3 + musicData.volume * 7; // Subtle glow 3-10px
-        ctx.shadowColor = currentColors.foreground;
+        ctx.shadowColor = isCurved ? '#ff0000' : currentColors.foreground;
 
-        ctx.fillStyle = currentColors.foreground; // FIX: Set ball color before drawing
+        ctx.fillStyle = isCurved ? '#ff0000' : currentColors.foreground; // 🌀 Red when curved
         ctx.fillRect(gameState.ball.x, gameState.ball.y, gameState.ball.size, gameState.ball.size);
 
         // Reset shadow
@@ -8958,15 +8963,15 @@ const Pong404: React.FC = () => {
       // ALWAYS apply filter to test if it's working
       sprite.filters = [filter];
 
-      console.log('[CRT] Filter created and applied:', {
-        hasCrtFilter: !!filter,
-        filterApplied: sprite.filters.length > 0,
-        filterSettings: {
-          curvature: 6.0,
-          scanlineIntensity: 0.15,
-          vignetteIntensity: 0.3
-        }
-      });
+      // console.log('[CRT] Filter created and applied:', {
+      //   hasCrtFilter: !!filter,
+      //   filterApplied: sprite.filters.length > 0,
+      //   filterSettings: {
+      //     curvature: 6.0,
+      //     scanlineIntensity: 0.15,
+      //     vignetteIntensity: 0.3
+      //   }
+      // });
 
       // Don't recreate texture - just keep one and it should update automatically
       // PixiJS will detect the canvas has changed and update the texture
@@ -8976,17 +8981,17 @@ const Pong404: React.FC = () => {
         frameCount++;
 
         // Debug log every 120 frames (every 2 seconds at 60fps)
-        const now = Date.now();
-        if (now - lastLogTime > 2000) {
-          console.log('[CRT] Render frame:', {
-            frame: frameCount,
-            hasTexture: !!sprite.texture,
-            hasFilter: !!sprite.filters && sprite.filters.length > 0,
-            filterCount: sprite.filters?.length || 0,
-            filterTime: (filter.uniforms as any)?.uTime
-          });
-          lastLogTime = now;
-        }
+        // const now = Date.now();
+        // if (now - lastLogTime > 2000) {
+        //   console.log('[CRT] Render frame:', {
+        //     frame: frameCount,
+        //     hasTexture: !!sprite.texture,
+        //     hasFilter: !!sprite.filters && sprite.filters.length > 0,
+        //     filterCount: sprite.filters?.length || 0,
+        //     filterTime: (filter.uniforms as any)?.uTime
+        //   });
+        //   lastLogTime = now;
+        // }
 
         // PixiJS v8: Access uniforms via filter.resources.crtUniforms.uniforms (nested!)
         if (filter && filter.resources && filter.resources.crtUniforms) {
@@ -9012,12 +9017,12 @@ const Pong404: React.FC = () => {
         }
       });
 
-      console.log('[CRT] PixiJS initialized with CRT filter:', {
-        filterEnabled: crtEffect,
-        canvasSize: { width: canvasSize.width, height: canvasSize.height },
-        hasSprite: !!sprite,
-        hasFilter: !!filter
-      });
+      // console.log('[CRT] PixiJS initialized with CRT filter:', {
+      //   filterEnabled: crtEffect,
+      //   canvasSize: { width: canvasSize.width, height: canvasSize.height },
+      //   hasSprite: !!sprite,
+      //   hasFilter: !!filter
+      // });
     })();
 
     return () => {
@@ -9037,7 +9042,7 @@ const Pong404: React.FC = () => {
       const sprite = pixiAppRef.current.stage.children[0] as Sprite;
       if (sprite) {
         sprite.filters = crtEffect ? [crtFilterRef.current] : [];
-        console.log('[CRT] Filter toggled:', crtEffect ? 'ON' : 'OFF');
+        // console.log('[CRT] Filter toggled:', crtEffect ? 'ON' : 'OFF');
       }
     }
   }, [crtEffect]);
@@ -9125,7 +9130,7 @@ const Pong404: React.FC = () => {
       if ((e.type === 'click' || e.type === 'mousedown' || e.type === 'touchstart') && showAudioPrompt && !audioPromptDismissedRef.current) {
         // Initialize audio ONLY when dismissing prompt (after user interaction)
         await initializeAudio();
-        console.log('[MUSIC] DISMISSING AUDIO PROMPT WITH MOUSE CLICK');
+        // console.log('[MUSIC] DISMISSING AUDIO PROMPT WITH MOUSE CLICK');
         audioPromptDismissedRef.current = true;
         setShowAudioPrompt(false);
         justDismissedAudioRef.current = Date.now(); // Mark that we just dismissed

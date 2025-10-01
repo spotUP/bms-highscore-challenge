@@ -24,6 +24,7 @@ interface CollisionObject {
 interface Ball extends CollisionObject {
   size: number; // width and height are the same for balls
   lastTouchedBy?: string;
+  spin?: number; // Angular velocity for curve balls (rad/sec)
 }
 
 interface Paddle extends CollisionObject {
@@ -51,6 +52,134 @@ const PADDLE_THICKNESS = 12; // Thickness of all paddles (matches border thickne
 
 class ServerCollisionDetector {
   private static readonly COLLISION_BUFFER = 0; // No buffer for pixel-perfect collision detection
+
+  // 🎮 ARKANOID-STYLE PHYSICS PARAMETERS
+  private static readonly BASE_BALL_SPEED = 5; // Base speed (pixels per frame)
+  private static readonly MIN_ANGLE_DEG = 15; // Minimum bounce angle (prevents too shallow)
+  private static readonly MAX_ANGLE_DEG = 75; // Maximum bounce angle (prevents too steep)
+  private static readonly PADDLE_INFLUENCE = 0.3; // How much paddle velocity affects ball (0-1)
+
+  // 🌀 SPIN MECHANICS (Curve Ball Physics)
+  private static readonly SPIN_TRANSFER = 1.2; // How much paddle velocity becomes spin (0-1) - INCREASED for much easier curves
+  private static readonly MAGNUS_FORCE = 0.05; // Magnus effect strength (curve amount) - REDUCED for subtler curves
+  private static readonly SPIN_DECAY = 0.995; // Spin reduces by 0.5% per frame - MUCH SLOWER decay (keeps spin longer)
+  private static readonly MAX_SPIN = 12; // Maximum spin rate (rad/sec) - INCREASED for stronger curves
+
+  // 🎯 Apply Arkanoid-style physics to ball bounce with spin
+  static applyArkanoidPhysics(
+    ball: { dx: number; dy: number; x: number; y: number; size: number; spin?: number },
+    paddle: { x: number; y: number; width: number; height: number; side: string; velocity?: number },
+    hitPosition: number // 0-1, where 0.5 is center
+  ): { dx: number; dy: number; spin: number } {
+    const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+    const targetSpeed = this.BASE_BALL_SPEED;
+
+    // Calculate relative hit position (-1 to 1, where 0 is center)
+    const relativeHit = (hitPosition - 0.5) * 2;
+
+    // Paddle velocity influence (moving paddle adds momentum)
+    const paddleVelocity = paddle.velocity || 0;
+    const paddleInfluence = paddleVelocity * this.PADDLE_INFLUENCE;
+
+    let newDx = ball.dx;
+    let newDy = ball.dy;
+
+    if (paddle.side === 'left' || paddle.side === 'right') {
+      // Vertical paddles - calculate angle based on hit position
+      // Hit position affects vertical angle: center = straight, edges = angled
+      const baseAngle = relativeHit * (this.MAX_ANGLE_DEG - this.MIN_ANGLE_DEG);
+      const angleRad = (baseAngle * Math.PI) / 180;
+
+      // Direction based on paddle side
+      const direction = paddle.side === 'left' ? 1 : -1;
+
+      // Calculate new velocity with angle
+      newDx = direction * targetSpeed * Math.cos(angleRad);
+      newDy = targetSpeed * Math.sin(angleRad) + paddleInfluence;
+
+      // Ensure minimum horizontal velocity
+      const minDx = targetSpeed * Math.cos((this.MAX_ANGLE_DEG * Math.PI) / 180);
+      if (Math.abs(newDx) < minDx) {
+        newDx = direction * minDx;
+      }
+    } else {
+      // Horizontal paddles - calculate angle based on hit position
+      const baseAngle = relativeHit * (this.MAX_ANGLE_DEG - this.MIN_ANGLE_DEG);
+      const angleRad = (baseAngle * Math.PI) / 180;
+
+      // Direction based on paddle side
+      const direction = paddle.side === 'top' ? 1 : -1;
+
+      // Calculate new velocity with angle
+      newDy = direction * targetSpeed * Math.cos(angleRad);
+      newDx = targetSpeed * Math.sin(angleRad) + paddleInfluence;
+
+      // Ensure minimum vertical velocity
+      const minDy = targetSpeed * Math.cos((this.MAX_ANGLE_DEG * Math.PI) / 180);
+      if (Math.abs(newDy) < minDy) {
+        newDy = direction * minDy;
+      }
+    }
+
+    // Normalize to maintain constant speed
+    const newSpeed = Math.sqrt(newDx * newDx + newDy * newDy);
+    const speedRatio = targetSpeed / newSpeed;
+    newDx *= speedRatio;
+    newDy *= speedRatio;
+
+    // 🌀 CALCULATE SPIN from paddle velocity
+    // Paddle moving perpendicular to ball direction creates spin
+    // Spin direction: paddle moving up/right = positive spin (clockwise)
+    let newSpin = paddleVelocity * this.SPIN_TRANSFER;
+
+    // Clamp spin to maximum
+    newSpin = Math.max(-this.MAX_SPIN, Math.min(this.MAX_SPIN, newSpin));
+
+    if (Math.abs(newSpin) > 0.5) {
+      console.log(`🌀 SPIN APPLIED: ${newSpin.toFixed(2)} (from paddle velocity: ${paddleVelocity.toFixed(2)})`);
+    }
+
+    return { dx: newDx, dy: newDy, spin: newSpin };
+  }
+
+  // 🌀 Apply Magnus effect (spin creates curve)
+  static applyMagnusEffect(ball: { dx: number; dy: number; spin: number }): { dx: number; dy: number } {
+    if (!ball.spin || Math.abs(ball.spin) < 0.1) {
+      return { dx: ball.dx, dy: ball.dy }; // No spin, no curve
+    }
+
+    // Magnus force is perpendicular to velocity
+    // Positive spin curves right/down, negative spin curves left/up
+    const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+    const angle = Math.atan2(ball.dy, ball.dx);
+
+    // Perpendicular angle (90 degrees rotated)
+    const perpAngle = angle + Math.PI / 2;
+
+    // Magnus force magnitude based on spin and speed
+    const magnusStrength = ball.spin * this.MAGNUS_FORCE;
+
+    // Apply Magnus force
+    const curveX = Math.cos(perpAngle) * magnusStrength;
+    const curveY = Math.sin(perpAngle) * magnusStrength;
+
+    let newDx = ball.dx + curveX;
+    let newDy = ball.dy + curveY;
+
+    // Increase speed when spinning - spin adds energy (very minimal boost)
+    const spinSpeedBoost = 1 + (Math.abs(ball.spin) * 0.005); // Up to ~6% faster at max spin (12 * 0.005 = 0.06)
+    newDx *= spinSpeedBoost;
+    newDy *= spinSpeedBoost;
+
+    if (Math.abs(magnusStrength) > 0.5) {
+      console.log(`🌊 MAGNUS CURVE: spin=${ball.spin.toFixed(2)}, curve=(${curveX.toFixed(2)}, ${curveY.toFixed(2)}), boost=${spinSpeedBoost.toFixed(2)}x, velocity=(${ball.dx.toFixed(2)}, ${ball.dy.toFixed(2)}) → (${newDx.toFixed(2)}, ${newDy.toFixed(2)})`);
+    }
+
+    return {
+      dx: newDx,
+      dy: newDy
+    };
+  }
 
   // 🏓 Ball-paddle collision with hit position calculation
   static detectBallPaddle(ball: Ball, paddle: Paddle): CollisionResult {
@@ -332,6 +461,8 @@ interface GameState {
     aimY: number;
     aimTargetX: number;
     aimTargetY: number;
+    spin: number; // 🌀 Curve ball spin rate
+    spinDistanceTraveled: number; // 🌀 Distance traveled since last paddle hit (for delayed curve)
     // New pickup properties
     isStuck: boolean;
     stuckToPaddle: 'left' | 'right' | 'top' | 'bottom' | null;
@@ -1197,6 +1328,8 @@ class PongWebSocketServer {
         aimY: 0,
         aimTargetX: 0,
         aimTargetY: 0,
+        spin: 0, // 🌀 Initial spin is 0
+        spinDistanceTraveled: 0, // 🌀 Initial distance is 0
         // Extended ball properties
         isStuck: false,
         stuckToPaddle: null,
@@ -1355,7 +1488,7 @@ class PongWebSocketServer {
       this.updateGameLogic();
     }, GAME_LOOP_INTERVAL);
 
-    console.log(`[↻] Server game loop started at ${GAME_LOOP_FPS} FPS`);
+    // console.log(`[↻] Server game loop started at ${GAME_LOOP_FPS} FPS`);
   }
 
   private updateGameLogic() {
@@ -1478,6 +1611,7 @@ class PongWebSocketServer {
       ballY: number,
       ballDX: number,
       ballDY: number,
+      ballSpin: number, // 🌀 Include spin in prediction
       targetX: number,
       canvasWidth: number,
       canvasHeight: number,
@@ -1488,10 +1622,19 @@ class PongWebSocketServer {
       let y = ballY;
       let dx = ballDX;
       let dy = ballDY;
+      let spin = ballSpin;
       const maxIterations = 200; // Prevent infinite loops
       let iterations = 0;
 
       while (iterations < maxIterations) {
+        // 🌀 Apply Magnus effect (curve) to velocity if ball is spinning
+        if (spin && Math.abs(spin) > 0.1) {
+          const magnusEffect = ServerCollisionDetector.applyMagnusEffect({ dx, dy, spin });
+          dx = magnusEffect.dx;
+          dy = magnusEffect.dy;
+          spin *= ServerCollisionDetector['SPIN_DECAY']; // Spin decays over time
+        }
+
         // Move ball one step
         x += dx;
         y += dy;
@@ -1558,16 +1701,24 @@ class PongWebSocketServer {
         gameState.ball.y,
         gameState.ball.dx,
         gameState.ball.dy,
+        gameState.ball.spin || 0, // 🌀 Pass spin for curve prediction
         targetCoord,
         canvasWidth,
         canvasHeight,
         !isVertical
       );
 
+      // Calculate distance to ball for curve ball strategy
+      const ballAxisPos = isVertical ? gameState.ball.y : gameState.ball.x;
+      const ballDistanceToImpact = isVertical
+        ? Math.abs(gameState.ball.x - (paddleName === 'left' ? 32 : canvasWidth - 32))
+        : Math.abs(gameState.ball.y - (paddleName === 'top' ? 32 : canvasHeight - 32));
+
       // Store target if not exists or recalculate if ball direction/position changed significantly
       if (!paddle.targetPos || Math.abs(paddle.lastPredictedPos - predictedPos) > 20) {
         // Increased imperfection for more variety and mistakes
         const imperfection = (Math.random() - 0.5) * 40; // Increased from 10 to 40
+
         paddle.targetPos = predictedPos + imperfection - (paddleSize / 2);
         paddle.lastPredictedPos = predictedPos;
       }
@@ -1582,6 +1733,7 @@ class PongWebSocketServer {
       // Reduced AI speed to make it less perfect
       const minSpeed = 1.5; // Reduced from 2.0
       const maxSpeed = 6.0; // Reduced from 8.0
+
       const speedMultiplier = Math.min(1, distance / 100); // Scale based on distance
       const speed = minSpeed + (maxSpeed - minSpeed) * speedMultiplier;
 
@@ -1641,6 +1793,30 @@ class PongWebSocketServer {
       updatePaddleAI('bottom', gameState.paddles.bottom, canvasSize.width, canvasSize.height);
     }
 
+    // Calculate ALL paddle velocities for spin transfer (both AI and human)
+    // For AI paddles, use old positions saved before AI update
+    // For human paddles, keep the velocity they sent (already set in paddle update handler)
+    if (!humanPlayers.left) {
+      const velocity = gameState.paddles.left.y - oldPositions.left.y;
+      gameState.paddles.left.velocity = velocity;
+      if (Math.abs(velocity) > 0.1) console.log(`⚡ LEFT AI velocity: ${velocity.toFixed(2)}`);
+    }
+    if (!humanPlayers.right) {
+      const velocity = gameState.paddles.right.y - oldPositions.right.y;
+      gameState.paddles.right.velocity = velocity;
+      if (Math.abs(velocity) > 0.1) console.log(`⚡ RIGHT AI velocity: ${velocity.toFixed(2)}`);
+    }
+    if (!humanPlayers.top) {
+      const velocity = gameState.paddles.top.x - oldPositions.top.x;
+      gameState.paddles.top.velocity = velocity;
+      if (Math.abs(velocity) > 0.1) console.log(`⚡ TOP AI velocity: ${velocity.toFixed(2)}`);
+    }
+    if (!humanPlayers.bottom) {
+      const velocity = gameState.paddles.bottom.x - oldPositions.bottom.x;
+      gameState.paddles.bottom.velocity = velocity;
+      if (Math.abs(velocity) > 0.1) console.log(`⚡ BOTTOM AI velocity: ${velocity.toFixed(2)}`);
+    }
+
     // DISABLED: Paddle-to-paddle collision detection (causing AI to get stuck)
     // In 4-player Pong, paddles don't collide - they can overlap in corners
 
@@ -1666,7 +1842,8 @@ class PongWebSocketServer {
       y: gameState.paddles.left.y,
       width: gameState.paddles.left.width,
       height: gameState.paddles.left.height,
-      side: 'left'
+      side: 'left',
+      velocity: gameState.paddles.left.velocity || 0
     };
 
     const rightPaddle: Paddle = {
@@ -1674,7 +1851,8 @@ class PongWebSocketServer {
       y: gameState.paddles.right.y,
       width: gameState.paddles.right.width,
       height: gameState.paddles.right.height,
-      side: 'right'
+      side: 'right',
+      velocity: gameState.paddles.right.velocity || 0
     };
 
     const topPaddle: Paddle = {
@@ -1682,7 +1860,8 @@ class PongWebSocketServer {
       y: 60,
       width: gameState.paddles.top.width,
       height: gameState.paddles.top.height,
-      side: 'top'
+      side: 'top',
+      velocity: gameState.paddles.top.velocity || 0
     };
 
     const bottomPaddle: Paddle = {
@@ -1690,7 +1869,8 @@ class PongWebSocketServer {
       y: 728,
       width: gameState.paddles.bottom.width,
       height: gameState.paddles.bottom.height,
-      side: 'bottom'
+      side: 'bottom',
+      velocity: gameState.paddles.bottom.velocity || 0
     };
 
     // 🎯 DETAILED PADDLE DEBUG OUTPUT
@@ -1811,26 +1991,61 @@ class PongWebSocketServer {
 
             console.log(`🧲 STICKY PADDLE: Ball stuck to ${paddle.side} paddle (activator)`);
           } else {
-            // SIMPLE BOUNCE - NO PHYSICS MODIFICATIONS
-            // Just reverse the appropriate velocity component and move ball outside paddle
+            // 🎮 ARKANOID-STYLE PHYSICS - Position-based angle control + paddle velocity influence
             const oldDx = gameState.ball.dx;
             const oldDy = gameState.ball.dy;
 
+            // Get paddle velocity for momentum transfer
+            const paddleWithVelocity = {
+              ...paddle,
+              velocity: paddle.velocity || 0
+            };
+
+            console.log(`🎯 PADDLE VELOCITY: ${paddle.side} = ${paddleWithVelocity.velocity.toFixed(2)}`);
+
+            // Apply Arkanoid physics using hit position from collision result
+            const newVelocity = ServerCollisionDetector.applyArkanoidPhysics(
+              gameState.ball,
+              paddleWithVelocity,
+              collision.hitPosition
+            );
+
+            gameState.ball.dx = newVelocity.dx;
+            gameState.ball.dy = newVelocity.dy;
+
+            // 🌀 ADD new spin to existing spin on paddle hit
+            const oldSpin = gameState.ball.spin || 0;
+            gameState.ball.spin = oldSpin + newVelocity.spin;
+
+            // Clamp total spin to max
+            gameState.ball.spin = Math.max(-ServerCollisionDetector['MAX_SPIN'], Math.min(ServerCollisionDetector['MAX_SPIN'], gameState.ball.spin));
+
+            // 🌀 Reset distance traveled (delays curve effect)
+            gameState.ball.spinDistanceTraveled = 0;
+
+            console.log(`🌀 BALL SPIN: ${oldSpin.toFixed(2)} + ${newVelocity.spin.toFixed(2)} = ${gameState.ball.spin.toFixed(2)} (velocity: ${paddleWithVelocity.velocity.toFixed(2)})`);
+
+            // 🌀 Announce curve ball if significant spin was applied
+            if (Math.abs(gameState.ball.spin) > 2.5) {
+              this.broadcastToRoom(roomId, {
+                type: 'robot_speech',
+                data: { text: 'CURVE BALL!' }
+              });
+              console.log(`🌀 CURVE BALL ANNOUNCED! Spin: ${newVelocity.spin.toFixed(2)}`);
+            }
+
+            // Position ball outside paddle to prevent overlap
             if (paddle.side === 'left') {
-              gameState.ball.dx = Math.abs(gameState.ball.dx); // Make positive (moving right)
               gameState.ball.x = paddle.x + paddle.width + 1;
             } else if (paddle.side === 'right') {
-              gameState.ball.dx = -Math.abs(gameState.ball.dx); // Make negative (moving left)
               gameState.ball.x = paddle.x - gameState.ball.size - 1;
             } else if (paddle.side === 'top') {
-              gameState.ball.dy = Math.abs(gameState.ball.dy); // Make positive (moving down)
               gameState.ball.y = paddle.y + paddle.height + 1;
             } else if (paddle.side === 'bottom') {
-              gameState.ball.dy = -Math.abs(gameState.ball.dy); // Make negative (moving up)
               gameState.ball.y = paddle.y - gameState.ball.size - 1;
             }
 
-            console.log(`🔄 VELOCITY CHANGE: (${oldDx.toFixed(2)}, ${oldDy.toFixed(2)}) → (${gameState.ball.dx.toFixed(2)}, ${gameState.ball.dy.toFixed(2)})`);
+            console.log(`🎮 ARKANOID PHYSICS: (${oldDx.toFixed(2)}, ${oldDy.toFixed(2)}) → (${gameState.ball.dx.toFixed(2)}, ${gameState.ball.dy.toFixed(2)}) | Hit: ${collision.hitPosition.toFixed(2)}`);
 
             // Apply rubber_ball bounciness (increased velocity on bounce)
             if (gameState.ball.bounciness > 1) {
@@ -2154,10 +2369,40 @@ class PongWebSocketServer {
 
       for (let i = 0; i < gameState.extraBalls.length; i++) {
         const extraBall = gameState.extraBalls[i];
-        extraBall.x += extraBall.dx;
-        extraBall.y += extraBall.dy;
 
-        // Check wall collisions for scoring (like main ball)
+        // Check paddle collisions BEFORE moving (to prevent pass-through)
+        // Use SAME paddle creation logic as main ball (with hardcoded X/Y positions)
+        const leftPaddle: Paddle = {
+          x: BORDER_THICKNESS * 2,
+          y: gameState.paddles.left.y,
+          width: gameState.paddles.left.width,
+          height: gameState.paddles.left.height,
+          side: 'left'
+        };
+        const rightPaddle: Paddle = {
+          x: canvasSize.width - gameState.paddles.right.width - (BORDER_THICKNESS * 2),
+          y: gameState.paddles.right.y,
+          width: gameState.paddles.right.width,
+          height: gameState.paddles.right.height,
+          side: 'right'
+        };
+        const topPaddle: Paddle = {
+          x: gameState.paddles.top.x,
+          y: 60,
+          width: gameState.paddles.top.width,
+          height: gameState.paddles.top.height,
+          side: 'top'
+        };
+        const bottomPaddle: Paddle = {
+          x: gameState.paddles.bottom.x,
+          y: 728,
+          width: gameState.paddles.bottom.width,
+          height: gameState.paddles.bottom.height,
+          side: 'bottom'
+        };
+        const paddles: Paddle[] = [leftPaddle, rightPaddle, topPaddle, bottomPaddle];
+
+        // Create collision object with CURRENT position (before movement)
         const extraBallForCollision = {
           x: extraBall.x,
           y: extraBall.y,
@@ -2170,22 +2415,6 @@ class PongWebSocketServer {
           lastTouchedBy: extraBall.lastTouchedBy
         };
 
-        const wallCollisionCheck = ServerCollisionDetector.detectBallWall(extraBallForCollision, canvasSize.width, canvasSize.height);
-        if (wallCollisionCheck && wallCollisionCheck.hit) {
-          console.log(`🎾 EXTRA BALL: Hit ${wallCollisionCheck.side} boundary (lastTouchedBy: ${extraBall.lastTouchedBy})`);
-          this.handleScoring(gameState, wallCollisionCheck.side, extraBall.lastTouchedBy, null);
-          extraBallsToRemove.push(i);
-          ballChanged = true;
-          continue;
-        }
-
-        // Check paddle collisions to update lastTouchedBy
-        const leftPaddle = gameState.paddles.left;
-        const rightPaddle = gameState.paddles.right;
-        const topPaddle = gameState.paddles.top;
-        const bottomPaddle = gameState.paddles.bottom;
-        const paddles: Paddle[] = [leftPaddle, rightPaddle, topPaddle, bottomPaddle];
-
         for (const paddle of paddles) {
           const paddleForCollision = {
             x: paddle.x,
@@ -2194,6 +2423,8 @@ class PongWebSocketServer {
             height: paddle.height,
             dx: 0,
             dy: 0,
+            vx: 0,
+            vy: 0,
             side: paddle.side
           };
 
@@ -2201,26 +2432,43 @@ class PongWebSocketServer {
           if (collisionResult.hit) {
             console.log(`🎾 EXTRA BALL: Hit ${paddle.side} paddle at (${extraBall.x.toFixed(1)}, ${extraBall.y.toFixed(1)})`);
 
-            // SIMPLE BOUNCE - Same as main ball logic
-            // Just reverse the appropriate velocity component and move ball outside paddle
+            // 🎮 ARKANOID-STYLE PHYSICS - Same sophisticated physics as main ball
             const oldDx = extraBall.dx;
             const oldDy = extraBall.dy;
 
+            // Get paddle velocity for momentum transfer
+            const paddleWithVelocityForPhysics = {
+              x: paddle.x,
+              y: paddle.y,
+              width: paddle.width,
+              height: paddle.height,
+              side: paddle.side,
+              velocity: paddle.velocity || 0
+            };
+
+            // Apply Arkanoid physics using hit position from collision result
+            const newVelocity = ServerCollisionDetector.applyArkanoidPhysics(
+              extraBall,
+              paddleWithVelocityForPhysics,
+              collisionResult.hitPosition
+            );
+
+            extraBall.dx = newVelocity.dx;
+            extraBall.dy = newVelocity.dy;
+            extraBall.spin = newVelocity.spin; // 🌀 Apply spin to extra balls
+
+            // Position ball outside paddle to prevent overlap
             if (paddle.side === 'left') {
-              extraBall.dx = Math.abs(extraBall.dx); // Make positive (moving right)
               extraBall.x = paddle.x + paddle.width + 1;
             } else if (paddle.side === 'right') {
-              extraBall.dx = -Math.abs(extraBall.dx); // Make negative (moving left)
               extraBall.x = paddle.x - extraBall.size - 1;
             } else if (paddle.side === 'top') {
-              extraBall.dy = Math.abs(extraBall.dy); // Make positive (moving down)
               extraBall.y = paddle.y + paddle.height + 1;
             } else if (paddle.side === 'bottom') {
-              extraBall.dy = -Math.abs(extraBall.dy); // Make negative (moving up)
               extraBall.y = paddle.y - extraBall.size - 1;
             }
 
-            console.log(`🔄 EXTRA BALL VELOCITY CHANGE: (${oldDx.toFixed(2)}, ${oldDy.toFixed(2)}) → (${extraBall.dx.toFixed(2)}, ${extraBall.dy.toFixed(2)})`);
+            console.log(`🎮 EXTRA BALL ARKANOID PHYSICS: (${oldDx.toFixed(2)}, ${oldDy.toFixed(2)}) → (${extraBall.dx.toFixed(2)}, ${extraBall.dy.toFixed(2)}) | Hit: ${collisionResult.hitPosition.toFixed(2)}`);
 
             // Track ball touch for scoring system
             extraBall.lastTouchedBy = paddle.side;
@@ -2228,6 +2476,50 @@ class PongWebSocketServer {
             ballChanged = true;
             break;
           }
+        }
+
+        // 🌀 APPLY MAGNUS EFFECT to extra balls (spin creates curve)
+        if (!extraBall.spin) extraBall.spin = 0;
+
+        if (Math.abs(extraBall.spin) > 0.1) {
+          const curvedVelocity = ServerCollisionDetector.applyMagnusEffect({
+            dx: extraBall.dx,
+            dy: extraBall.dy,
+            spin: extraBall.spin
+          });
+          extraBall.dx = curvedVelocity.dx;
+          extraBall.dy = curvedVelocity.dy;
+
+          // Apply spin decay (friction)
+          extraBall.spin *= ServerCollisionDetector['SPIN_DECAY'];
+        }
+
+        // Move ball AFTER collision check and Magnus effect
+        extraBall.x += extraBall.dx;
+        extraBall.y += extraBall.dy;
+
+        // Check wall collisions for scoring (after movement)
+        const wallCollisionCheck = ServerCollisionDetector.detectBallWall(
+          {
+            x: extraBall.x,
+            y: extraBall.y,
+            width: extraBall.size,
+            height: extraBall.size,
+            dx: extraBall.dx,
+            dy: extraBall.dy,
+            vx: extraBall.dx,
+            vy: extraBall.dy,
+            lastTouchedBy: extraBall.lastTouchedBy
+          },
+          canvasSize.width,
+          canvasSize.height
+        );
+        if (wallCollisionCheck && wallCollisionCheck.hit) {
+          console.log(`🎾 EXTRA BALL: Hit ${wallCollisionCheck.side} boundary (lastTouchedBy: ${extraBall.lastTouchedBy})`);
+          this.handleScoring(gameState, wallCollisionCheck.side, extraBall.lastTouchedBy, null);
+          extraBallsToRemove.push(i);
+          ballChanged = true;
+          continue;
         }
 
         ballChanged = true;
@@ -2244,6 +2536,34 @@ class PongWebSocketServer {
     if (!gameState.ball.isAiming) {
       const prevX = gameState.ball.x;
       const prevY = gameState.ball.y;
+
+      // 🌀 APPLY MAGNUS EFFECT (spin creates curve) - but only after 50 pixels
+      if (!gameState.ball.spin) gameState.ball.spin = 0;
+      if (!gameState.ball.spinDistanceTraveled) gameState.ball.spinDistanceTraveled = 0;
+
+      // Track distance traveled
+      const speed = Math.sqrt(gameState.ball.dx * gameState.ball.dx + gameState.ball.dy * gameState.ball.dy);
+      gameState.ball.spinDistanceTraveled += speed;
+
+      // Only apply Magnus effect after ball has traveled 50 pixels
+      if (Math.abs(gameState.ball.spin) > 0.1 && gameState.ball.spinDistanceTraveled >= 50) {
+        const curvedVelocity = ServerCollisionDetector.applyMagnusEffect({
+          dx: gameState.ball.dx,
+          dy: gameState.ball.dy,
+          spin: gameState.ball.spin
+        });
+        gameState.ball.dx = curvedVelocity.dx;
+        gameState.ball.dy = curvedVelocity.dy;
+
+        // Apply spin decay (friction)
+        const oldSpin = gameState.ball.spin;
+        gameState.ball.spin *= ServerCollisionDetector['SPIN_DECAY'];
+
+        // Debug: Log spin decay every 30 frames if spin is significant
+        if (Math.abs(gameState.ball.spin) > 1.0 && frameCount % 30 === 0) {
+          console.log(`🌀 SPIN DECAY: ${oldSpin.toFixed(2)} → ${gameState.ball.spin.toFixed(2)} (decay=${ServerCollisionDetector['SPIN_DECAY']})`);
+        }
+      }
 
       gameState.ball.x += gameState.ball.dx;
       gameState.ball.y += gameState.ball.dy;
@@ -2528,6 +2848,8 @@ class PongWebSocketServer {
     // Reduce ball velocity to make gameplay more reasonable (was 10, now 3)
     gameState.ball.dx = Math.random() > 0.5 ? 3 : -3;
     gameState.ball.dy = Math.random() > 0.5 ? 3 : -3;
+    gameState.ball.spin = 0; // 🌀 Reset spin when ball is reset
+    gameState.ball.spinDistanceTraveled = 0; // 🌀 Reset distance traveled
     gameState.ball.lastTouchedBy = null;
     gameState.ball.previousTouchedBy = null;
     gameState.ball.hasGravity = false;
