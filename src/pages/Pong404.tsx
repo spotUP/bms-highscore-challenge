@@ -9393,35 +9393,6 @@ const Pong404: React.FC = () => {
           }} />
         )}
 
-        {/* Debug pickup indicator */}
-        {isDebugMode && PICKUP_TYPES && PICKUP_TYPES[debugPickupIndex] && (
-          <div style={{
-            position: 'absolute',
-            top: '20px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            background: 'rgba(0, 0, 0, 0.8)',
-            color: '#00ff00',
-            padding: '10px 20px',
-            borderRadius: '8px',
-            fontFamily: 'monospace',
-            fontSize: '14px',
-            border: '2px solid #00ff00',
-            zIndex: 1000,
-            pointerEvents: 'none',
-            textAlign: 'center',
-            whiteSpace: 'nowrap'
-          }}>
-            <div>DEBUG MODE: Press 1/2 to cycle pickups</div>
-            <div style={{ marginTop: '5px', fontWeight: 'bold' }}>
-              [{debugPickupIndex + 1}/{PICKUP_TYPES.length}] {PICKUP_TYPES[debugPickupIndex].type}
-            </div>
-            <div style={{ fontSize: '12px', opacity: 0.8 }}>
-              {PICKUP_TYPES[debugPickupIndex].description}
-            </div>
-          </div>
-        )}
-
         {/* Canvas for game rendering - hidden when CRT is active (PixiJS shows it instead) */}
         <canvas
           ref={canvasRef}
