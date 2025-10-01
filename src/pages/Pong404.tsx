@@ -873,6 +873,10 @@ const Pong404: React.FC = () => {
     collisionManager.on('extra-ball-paddle', (result: CollisionResult) => {
       if (!result.hit) return;
       playMelodyNoteRef.current?.('paddle', null, 'both');
+      // Add haptic feedback for extra ball paddle hit
+      if (navigator.vibrate) {
+        navigator.vibrate(15); // Lighter vibration for extra balls
+      }
     });
 
     collisionManager.on('extra-ball-wall', (result: CollisionResult) => {
@@ -1760,6 +1764,10 @@ const Pong404: React.FC = () => {
             });
             if (playMelodyNoteRef.current) {
               playMelodyNoteRef.current('paddle', null, 'both');
+              // Add haptic feedback for paddle hit
+              if (navigator.vibrate) {
+                navigator.vibrate(20); // Short vibration for paddle hit
+              }
             } else {
               console.error('[GAME] playMelodyNoteRef.current is null!');
             }
@@ -1774,6 +1782,10 @@ const Pong404: React.FC = () => {
             if (newTotal > prevTotal) {
               console.log('[GAME] Score detected in game_state_updated - playing score sound');
               playMelodyNoteRef.current?.('score', null, 'both');
+              // Add haptic feedback for scoring
+              if (navigator.vibrate) {
+                navigator.vibrate([50, 30, 50]); // Double vibration pattern for score
+              }
             }
           }
 
