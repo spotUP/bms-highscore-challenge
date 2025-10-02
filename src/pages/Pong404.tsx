@@ -969,7 +969,7 @@ const Pong404: React.FC = () => {
     bottom: null
   });
 
-  // Playfield size - square playfield using full square canvas
+  // Playfield size - same as canvas, borders drawn with stroke extending inward
   const playFieldWidth = canvasSize.width;
   const playFieldHeight = canvasSize.height;
 
@@ -1019,10 +1019,10 @@ const Pong404: React.FC = () => {
       isHypnotic: false,
     },
     paddles: {
-      left: { x: BORDER_THICKNESS, y: Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - PADDLE_LENGTH, playFieldHeight / 2 - PADDLE_LENGTH/2)), height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - PADDLE_LENGTH, playFieldHeight / 2 - PADDLE_LENGTH/2)), originalHeight: PADDLE_LENGTH },
-      right: { x: playFieldWidth - PADDLE_THICKNESS - BORDER_THICKNESS, y: Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - PADDLE_LENGTH, playFieldHeight / 2 - PADDLE_LENGTH/2)), height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - PADDLE_LENGTH, playFieldHeight / 2 - PADDLE_LENGTH/2)), originalHeight: PADDLE_LENGTH },
-      top: { x: Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - PADDLE_LENGTH, playFieldWidth / 2 - PADDLE_LENGTH/2)), y: BORDER_THICKNESS, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - PADDLE_LENGTH, playFieldWidth / 2 - PADDLE_LENGTH/2)), originalWidth: PADDLE_LENGTH },
-      bottom: { x: Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - PADDLE_LENGTH, playFieldWidth / 2 - PADDLE_LENGTH/2)), y: playFieldHeight - PADDLE_THICKNESS - BORDER_THICKNESS, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - PADDLE_LENGTH, playFieldWidth / 2 - PADDLE_LENGTH/2)), originalWidth: PADDLE_LENGTH },
+      left: { x: BORDER_THICKNESS, y: playFieldHeight / 2 - PADDLE_LENGTH/2, height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: playFieldHeight / 2 - PADDLE_LENGTH/2, originalHeight: PADDLE_LENGTH },
+      right: { x: playFieldWidth - BORDER_THICKNESS - PADDLE_THICKNESS, y: playFieldHeight / 2 - PADDLE_LENGTH/2, height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: playFieldHeight / 2 - PADDLE_LENGTH/2, originalHeight: PADDLE_LENGTH },
+      top: { x: playFieldWidth / 2 - PADDLE_LENGTH/2, y: BORDER_THICKNESS, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: playFieldWidth / 2 - PADDLE_LENGTH/2, originalWidth: PADDLE_LENGTH },
+      bottom: { x: playFieldWidth / 2 - PADDLE_LENGTH/2, y: playFieldHeight - BORDER_THICKNESS - PADDLE_THICKNESS, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: playFieldWidth / 2 - PADDLE_LENGTH/2, originalWidth: PADDLE_LENGTH },
     },
     score: { left: 0, right: 0, top: 0, bottom: 0 }, // 4-player scoring
     isPlaying: false,
@@ -1560,25 +1560,25 @@ const Pong404: React.FC = () => {
             paddles: {
               left: {
                 ...message.data.gameState.paddles.left,
-                x: message.data.gameState.paddles.left.x ?? (BORDER_THICKNESS * 2),
+                x: message.data.gameState.paddles.left.x ?? BORDER_THICKNESS,
                 height: PADDLE_LENGTH,
                 width: PADDLE_THICKNESS
               },
               right: {
                 ...message.data.gameState.paddles.right,
-                x: message.data.gameState.paddles.right.x ?? (canvasSize.width - BORDER_THICKNESS - PADDLE_THICKNESS),
+                x: message.data.gameState.paddles.right.x ?? (playFieldWidth - BORDER_THICKNESS - PADDLE_THICKNESS),
                 height: PADDLE_LENGTH,
                 width: PADDLE_THICKNESS
               },
               top: message.data.gameState.paddles.top ? {
                 ...message.data.gameState.paddles.top,
-                y: message.data.gameState.paddles.top.y ?? (BORDER_THICKNESS * 2),
+                y: message.data.gameState.paddles.top.y ?? BORDER_THICKNESS,
                 height: PADDLE_THICKNESS,
                 width: PADDLE_LENGTH
               } : prevState.paddles.top,
               bottom: message.data.gameState.paddles.bottom ? {
                 ...message.data.gameState.paddles.bottom,
-                y: message.data.gameState.paddles.bottom.y ?? (canvasSize.height - BORDER_THICKNESS - PADDLE_THICKNESS),
+                y: message.data.gameState.paddles.bottom.y ?? (playFieldHeight - BORDER_THICKNESS - PADDLE_THICKNESS),
                 height: PADDLE_THICKNESS,
                 width: PADDLE_LENGTH
               } : prevState.paddles.bottom
@@ -1727,8 +1727,8 @@ const Pong404: React.FC = () => {
             newState.paddles.left.y = currentY + (compensatedY - currentY) * smoothingFactor;
             newState.paddles.left.velocity = data.velocity || 0;
             newState.paddles.left.targetY = data.targetY || compensatedY;
-            // Clamp to bounds (using fixed canvas size)
-            newState.paddles.left.y = Math.max(0, Math.min(newState.paddles.left.y, canvasSize.height - newState.paddles.left.height));
+            // Clamp to playfield bounds (0-based coordinates)
+            newState.paddles.left.y = Math.max(0, Math.min(newState.paddles.left.y, playFieldHeight - newState.paddles.left.height));
           } else if (data.side === 'right') {
             // Smooth interpolation: blend current position with new position
             const currentY = prev.paddles.right.y;
@@ -1736,8 +1736,8 @@ const Pong404: React.FC = () => {
             newState.paddles.right.y = currentY + (compensatedY - currentY) * smoothingFactor;
             newState.paddles.right.velocity = data.velocity || 0;
             newState.paddles.right.targetY = data.targetY || compensatedY;
-            // Clamp to bounds (using fixed canvas size)
-            newState.paddles.right.y = Math.max(0, Math.min(newState.paddles.right.y, canvasSize.height - newState.paddles.right.height));
+            // Clamp to playfield bounds (0-based coordinates)
+            newState.paddles.right.y = Math.max(0, Math.min(newState.paddles.right.y, playFieldHeight - newState.paddles.right.height));
           }
           return newState;
         });
@@ -2147,21 +2147,22 @@ const Pong404: React.FC = () => {
           networkGameStateRef.current = {
             ...message.data,
             // Enforce correct paddle dimensions
+            // For YOUR paddle: keep local position, for AI paddles: use server position
             paddles: {
-              left: playerSide === 'left' && currentState ? currentState.paddles.left : {
+              left: {
                 ...message.data.paddles.left,
-                x: message.data.paddles.left?.x ?? (BORDER_THICKNESS * 2),
+                x: message.data.paddles.left?.x ?? BORDER_THICKNESS,
                 width: PADDLE_THICKNESS,
                 height: PADDLE_LENGTH
               },
-              right: playerSide === 'right' && currentState ? currentState.paddles.right : {
+              right: {
                 ...message.data.paddles.right,
-                x: message.data.paddles.right?.x ?? (canvasSize.width - BORDER_THICKNESS - PADDLE_THICKNESS),
+                x: message.data.paddles.right?.x ?? (playFieldWidth - BORDER_THICKNESS - PADDLE_THICKNESS),
                 width: PADDLE_THICKNESS,
                 height: PADDLE_LENGTH
               },
-              top: playerSide === 'top' && currentState ? currentState.paddles.top : (message.data.paddles.top || networkGameStateRef.current?.paddles.top),
-              bottom: playerSide === 'bottom' && currentState ? currentState.paddles.bottom : (message.data.paddles.bottom || networkGameStateRef.current?.paddles.bottom)
+              top: message.data.paddles.top || networkGameStateRef.current?.paddles.top || { x: 360, y: 60, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: 32, velocity: 0 },
+              bottom: message.data.paddles.bottom || networkGameStateRef.current?.paddles.bottom || { x: 360, y: 728, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: 32, velocity: 0 }
             }
           };
           lastNetworkReceiveTimeRef.current = Date.now();
@@ -2261,13 +2262,13 @@ const Pong404: React.FC = () => {
             paddles: {
               left: {
                 ...message.data.paddles.left,
-                x: message.data.paddles.left?.x ?? (BORDER_THICKNESS * 2),
+                x: message.data.paddles.left?.x ?? BORDER_THICKNESS,
                 width: PADDLE_THICKNESS,
                 height: PADDLE_LENGTH
               },
               right: {
                 ...message.data.paddles.right,
-                x: message.data.paddles.right?.x ?? (canvasSize.width - BORDER_THICKNESS - PADDLE_THICKNESS),
+                x: message.data.paddles.right?.x ?? (playFieldWidth - BORDER_THICKNESS - PADDLE_THICKNESS),
                 width: PADDLE_THICKNESS,
                 height: PADDLE_LENGTH
               },
@@ -2552,6 +2553,34 @@ const Pong404: React.FC = () => {
         }));
 
         lastPaddlePositionRef.current = y;
+        lastPaddleUpdateTimeRef.current = now;
+      }
+    }
+  }, [multiplayerState.playerId, multiplayerState.isConnected, multiplayerState.playerSide]);
+
+  // Update horizontal paddle position (top/bottom paddles use X coordinate)
+  const updateHorizontalPaddlePosition = useCallback((x: number, velocity = 0, targetX?: number) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN && multiplayerState.isConnected) {
+      const now = Date.now();
+
+      // Only send if position actually changed
+      if (x !== lastPaddlePositionRef.current) {
+        paddleUpdateSequenceRef.current++;
+
+        // Send paddle update with X coordinate instead of Y
+        wsRef.current.send(JSON.stringify({
+          t: 'up', // update_paddle
+          p: multiplayerState.playerId,
+          d: {
+            x, // Use x for horizontal paddles
+            v: velocity,
+            tX: targetX || x, // targetX for horizontal paddles
+            ts: now,
+            seq: paddleUpdateSequenceRef.current
+          }
+        }));
+
+        lastPaddlePositionRef.current = x;
         lastPaddleUpdateTimeRef.current = now;
       }
     }
@@ -2990,6 +3019,9 @@ const Pong404: React.FC = () => {
   // Round-robin channel selector
   const currentChannelIndexRef = useRef<number>(0);
 
+  // Track active sounds for dynamic volume adjustment
+  const activeSoundsCountRef = useRef<number>(0);
+
   // Master compressor/limiter to prevent clipping
   const masterCompressorRef = useRef<DynamicsCompressorNode | null>(null);
 
@@ -3020,13 +3052,13 @@ const Pong404: React.FC = () => {
   const initializeGlobalMixer = useCallback((audioContext: AudioContext) => {
     console.log('🎚️ Initializing Global Audio Mixer');
 
-    // Create master compressor/limiter
+    // Create master compressor/limiter with aggressive settings to prevent distortion
     const compressor = audioContext.createDynamicsCompressor();
-    compressor.threshold.setValueAtTime(-10, audioContext.currentTime);
-    compressor.knee.setValueAtTime(10, audioContext.currentTime);
-    compressor.ratio.setValueAtTime(12, audioContext.currentTime);
-    compressor.attack.setValueAtTime(0.003, audioContext.currentTime);
-    compressor.release.setValueAtTime(0.25, audioContext.currentTime);
+    compressor.threshold.setValueAtTime(-20, audioContext.currentTime); // Lower threshold catches more peaks
+    compressor.knee.setValueAtTime(15, audioContext.currentTime); // Smoother compression
+    compressor.ratio.setValueAtTime(20, audioContext.currentTime); // Hard limiting (was 12)
+    compressor.attack.setValueAtTime(0.001, audioContext.currentTime); // Faster attack (was 0.003)
+    compressor.release.setValueAtTime(0.15, audioContext.currentTime); // Faster release (was 0.25)
     masterCompressorRef.current = compressor;
 
     // Create audio analyzer
@@ -3355,6 +3387,17 @@ const Pong404: React.FC = () => {
       return;
     }
 
+    // Track active sounds for automatic volume adjustment
+    activeSoundsCountRef.current += 1;
+    const currentActiveSounds = activeSoundsCountRef.current;
+
+    // Dynamic volume scaling: reduce volume when multiple sounds play simultaneously
+    // Formula: baseVolume / sqrt(activeSounds) prevents clipping while maintaining clarity
+    const volumeScale = Math.min(1.0, 1.5 / Math.sqrt(currentActiveSounds));
+    const adjustedVolume = volume * volumeScale;
+
+    // console.log(`[SOUND] Active sounds: ${currentActiveSounds}, volume scale: ${volumeScale.toFixed(2)}, adjusted volume: ${adjustedVolume.toFixed(2)}`);
+
     // Create oscillator and main gain
     const oscillator = ctx.createOscillator();
     const mainGain = ctx.createGain();
@@ -3368,8 +3411,8 @@ const Pong404: React.FC = () => {
     oscillator.frequency.setValueAtTime(frequency, now);
     oscillator.type = 'square'; // Classic arcade sound
 
-    // Configure main envelope with custom volume
-    mainGain.gain.setValueAtTime(volume, now); // Immediate full volume, no fade-in
+    // Configure main envelope with dynamically adjusted volume
+    mainGain.gain.setValueAtTime(adjustedVolume, now); // Dynamic volume based on active sounds
     mainGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
 
     // Configure mix levels based on effect type (restored advanced effects)
@@ -3423,11 +3466,13 @@ const Pong404: React.FC = () => {
         dryGain.disconnect();
         wetGain.disconnect();
         echoWetGain.disconnect();
+        // Decrement active sounds counter
+        activeSoundsCountRef.current = Math.max(0, activeSoundsCountRef.current - 1);
       } catch (e) {
         // Nodes may already be disconnected
       }
     }, (duration * 1000) + 100); // Add small buffer
-  }, [initializeAudioEffects]);
+  }, [initializeAudioEffects, getNextAudioChannel]);
 
 
   // Legacy beep function for compatibility
@@ -4334,7 +4379,8 @@ const Pong404: React.FC = () => {
             // Handle mouse control for left paddle
             if (mouseY !== null) {
               const targetY = mouseY - newState.paddles.left.height / 2;
-              newY = targetY;
+              // Clamp to keep paddle within playfield bounds (inside border)
+              newY = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.left.height, targetY));
             }
 
             // Check if reverse controls is active
@@ -4385,7 +4431,8 @@ const Pong404: React.FC = () => {
             // Handle mouse control for right paddle
             if (mouseY !== null) {
               const targetY = mouseY - newState.paddles.right.height / 2;
-              newY = targetY;
+              // Clamp to keep paddle within playfield bounds (inside border)
+              newY = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.right.height, targetY));
             }
 
             const reverseControlsEffect = newState.activeEffects.find(e => e.type === 'reverse_controls');
@@ -4429,7 +4476,7 @@ const Pong404: React.FC = () => {
 
         // Track left paddle trails - add every frame
         newState.trails.leftPaddle.push({
-          x: (BORDER_THICKNESS * 2) + newState.paddles.left.width / 2,
+          x: newState.paddles.left.x + newState.paddles.left.width / 2,
           y: newState.paddles.left.y + newState.paddles.left.height / 2,
           timestamp: now,
           width: newState.paddles.left.width,
@@ -4438,7 +4485,7 @@ const Pong404: React.FC = () => {
 
         // Track right paddle trails - add every frame
         newState.trails.rightPaddle.push({
-          x: canvasSize.width - BORDER_THICKNESS - newState.paddles.right.width / 2,
+          x: newState.paddles.right.x + newState.paddles.right.width / 2,
           y: newState.paddles.right.y + newState.paddles.right.height / 2,
           timestamp: now,
           width: newState.paddles.right.width,
@@ -4449,7 +4496,7 @@ const Pong404: React.FC = () => {
         if (newState.paddles.top) {
           newState.trails.topPaddle.push({
             x: newState.paddles.top.x + newState.paddles.top.width / 2,
-            y: (BORDER_THICKNESS * 2) + newState.paddles.top.height / 2,
+            y: newState.paddles.top.y + newState.paddles.top.height / 2,
             timestamp: now,
             width: newState.paddles.top.width,
             height: newState.paddles.top.height
@@ -4460,7 +4507,7 @@ const Pong404: React.FC = () => {
         if (newState.paddles.bottom) {
           newState.trails.bottomPaddle.push({
             x: newState.paddles.bottom.x + newState.paddles.bottom.width / 2,
-            y: canvasSize.height - BORDER_THICKNESS - newState.paddles.bottom.height / 2,
+            y: newState.paddles.bottom.y + newState.paddles.bottom.height / 2,
             timestamp: now,
             width: newState.paddles.bottom.width,
             height: newState.paddles.bottom.height
@@ -4588,7 +4635,36 @@ const Pong404: React.FC = () => {
         if (controlSide === 'right' && (mouseY !== null || touchY !== null)) {
           // Mouse/touch control for right paddle (player)
           const targetY = (touchY !== null ? touchY : mouseY!) - newState.paddles.right.height / 2;
-          const clampedY = targetY; // No clamping - free movement
+          // Clamp to keep paddle within playfield bounds (inside border)
+          let clampedY = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.right.height, targetY));
+
+          // Check collision with top paddle (right paddle can't move into top-right corner)
+          const topPaddle = newState.paddles.top;
+          const topPaddleBottom = topPaddle.y + topPaddle.height;
+          const topPaddleRight = topPaddle.x + topPaddle.width;
+
+          // Check if right paddle overlaps with top paddle horizontally
+          const rightPaddleLeft = newState.paddles.right.x;
+          const rightPaddleRight = newState.paddles.right.x + newState.paddles.right.width;
+
+          if (rightPaddleLeft < topPaddleRight && rightPaddleRight > topPaddle.x) {
+            // Paddles overlap horizontally, check vertical collision
+            if (clampedY < topPaddleBottom) {
+              console.log(`🚧 RIGHT PADDLE BLOCKED BY TOP: clampedY=${clampedY} -> ${topPaddleBottom}`);
+              clampedY = topPaddleBottom; // Stop at bottom edge of top paddle
+            }
+          }
+
+          // Check collision with bottom paddle (right paddle can't move into bottom-right corner)
+          const bottomPaddle = newState.paddles.bottom;
+          if (newState.paddles.right.x < bottomPaddle.x + bottomPaddle.width &&
+              newState.paddles.right.x + newState.paddles.right.width > bottomPaddle.x) {
+            // Paddles overlap horizontally, check vertical collision
+            const maxY = bottomPaddle.y - newState.paddles.right.height;
+            if (clampedY + newState.paddles.right.height > bottomPaddle.y) {
+              clampedY = maxY; // Stop at top edge of bottom paddle
+            }
+          }
 
           // Calculate velocity based on movement delta for trail effects
           const deltaY = clampedY - newState.paddles.right.y;
@@ -4614,7 +4690,7 @@ const Pong404: React.FC = () => {
               newState.trails.rightPaddle = [];
             }
             newState.trails.rightPaddle.push({
-              x: canvasSize.width - BORDER_THICKNESS - newState.paddles.right.width / 2,
+              x: newState.paddles.right.x + newState.paddles.right.width / 2,
               y: newState.paddles.right.y + newState.paddles.right.height / 2,
               width: newState.paddles.right.width,
               height: newState.paddles.right.height,
@@ -4634,7 +4710,7 @@ const Pong404: React.FC = () => {
           // Add trail for right paddle movement
           if (Math.abs(newState.paddles.right.velocity) > 0.01) {
             newState.trails.rightPaddle.push({
-              x: canvasSize.width - BORDER_THICKNESS - newState.paddles.right.width / 2,
+              x: newState.paddles.right.x + newState.paddles.right.width / 2,
               y: newState.paddles.right.y + newState.paddles.right.height / 2,
               width: newState.paddles.right.width,
               height: newState.paddles.right.height,
@@ -4651,7 +4727,7 @@ const Pong404: React.FC = () => {
           // Add trail for right paddle movement
           if (Math.abs(newState.paddles.right.velocity) > 0.01) {
             newState.trails.rightPaddle.push({
-              x: canvasSize.width - BORDER_THICKNESS - newState.paddles.right.width / 2,
+              x: newState.paddles.right.x + newState.paddles.right.width / 2,
               y: newState.paddles.right.y + newState.paddles.right.height / 2,
               width: newState.paddles.right.width,
               height: newState.paddles.right.height,
@@ -4668,8 +4744,8 @@ const Pong404: React.FC = () => {
           newState.paddles.right.y += newState.paddles.right.velocity;
         }
 
-        // Clamp right paddle position
-        newState.paddles.right.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, newState.paddles.right.y));
+        // Clamp right paddle position (accounting for border)
+        newState.paddles.right.y = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.right.height, newState.paddles.right.y));
 
         // In player mode, make the left paddle AI-controlled (always, since player controls right)
         if (newState.gameMode === 'player') {
@@ -4758,8 +4834,8 @@ const Pong404: React.FC = () => {
             // Update position
             paddle.y += paddle.velocity;
 
-            // Keep paddle within bounds
-            paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
+            // Keep paddle within bounds (accounting for border)
+            paddle.y = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - paddle.height, paddle.y));
           };
 
           // Check if left paddle is frozen (all paddles except the one who last touched)
@@ -4790,7 +4866,7 @@ const Pong404: React.FC = () => {
               newState.trails.leftPaddle = [];
             }
             newState.trails.leftPaddle.push({
-              x: (BORDER_THICKNESS * 2) + newState.paddles.left.width / 2, // Paddle center X
+              x: newState.paddles.left.x + newState.paddles.left.width / 2, // Paddle center X
               y: newState.paddles.left.y + newState.paddles.left.height / 2,
               timestamp: now,
               width: newState.paddles.left.width,
@@ -4884,8 +4960,8 @@ const Pong404: React.FC = () => {
           // Update position
           paddle.x += paddle.velocity;
 
-          // Keep paddle within bounds
-          paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
+          // Keep paddle within bounds (accounting for border)
+          paddle.x = Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - paddle.width, paddle.x));
         };
 
         if (newState.paddles.top) {
@@ -4895,7 +4971,7 @@ const Pong404: React.FC = () => {
           if (Math.abs(newState.paddles.top.velocity) > 0.01) {
             newState.trails.topPaddle.push({
               x: newState.paddles.top.x + newState.paddles.top.width / 2,
-              y: (BORDER_THICKNESS * 2) + newState.paddles.top.height / 2,
+              y: newState.paddles.top.y + newState.paddles.top.height / 2,
               timestamp: now,
               width: newState.paddles.top.width,
               height: newState.paddles.top.height
@@ -4909,7 +4985,7 @@ const Pong404: React.FC = () => {
           if (Math.abs(newState.paddles.bottom.velocity) > 0.01) {
             newState.trails.bottomPaddle.push({
               x: newState.paddles.bottom.x + newState.paddles.bottom.width / 2,
-              y: canvasSize.height - BORDER_THICKNESS - newState.paddles.bottom.height / 2, // 32px spacing from bottom wall
+              y: newState.paddles.bottom.y + newState.paddles.bottom.height / 2, // 32px spacing from bottom wall
               timestamp: now,
               width: newState.paddles.bottom.width,
               height: newState.paddles.bottom.height
@@ -4932,7 +5008,8 @@ const Pong404: React.FC = () => {
             // Handle mouse control for left paddle (always enabled)
             if (mouseY !== null) {
               const targetY = mouseY - newState.paddles.left.height / 2;
-              const clampedY = targetY; // No clamping - free movement
+              // Clamp to keep paddle within playfield bounds (inside border)
+              const clampedY = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.left.height, targetY));
               newState.paddles.left.velocity = clampedY - newState.paddles.left.y;
               newState.paddles.left.y = clampedY;
             }
@@ -4970,13 +5047,33 @@ const Pong404: React.FC = () => {
             newState.paddles.left.y += newState.paddles.left.velocity;
           }
 
-          // Clamp left paddle position
-          newState.paddles.left.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.left.height, newState.paddles.left.y));
+          // Clamp left paddle position (accounting for border)
+          newState.paddles.left.y = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.left.height, newState.paddles.left.y));
+
+          // Check collision with top paddle
+          const topPaddle = newState.paddles.top;
+          if (newState.paddles.left.x < topPaddle.x + topPaddle.width &&
+              newState.paddles.left.x + newState.paddles.left.width > topPaddle.x) {
+            const topPaddleBottom = topPaddle.y + topPaddle.height;
+            if (newState.paddles.left.y < topPaddleBottom) {
+              newState.paddles.left.y = topPaddleBottom;
+            }
+          }
+
+          // Check collision with bottom paddle
+          const bottomPaddle = newState.paddles.bottom;
+          if (newState.paddles.left.x < bottomPaddle.x + bottomPaddle.width &&
+              newState.paddles.left.x + newState.paddles.left.width > bottomPaddle.x) {
+            const maxY = bottomPaddle.y - newState.paddles.left.height;
+            if (newState.paddles.left.y + newState.paddles.left.height > bottomPaddle.y) {
+              newState.paddles.left.y = maxY;
+            }
+          }
 
           // Add left paddle trail point
           if (Math.abs(newState.paddles.left.velocity) > 0.01) {
             newState.trails.leftPaddle.push({
-              x: (BORDER_THICKNESS * 2) + newState.paddles.left.width / 2, // Paddle center X
+              x: newState.paddles.left.x + newState.paddles.left.width / 2, // Paddle center X
               y: newState.paddles.left.y + newState.paddles.left.height / 2,
               width: newState.paddles.left.width,
               height: newState.paddles.left.height,
@@ -5003,7 +5100,8 @@ const Pong404: React.FC = () => {
             // Handle mouse control for right paddle (always enabled)
             if (mouseY !== null) {
               const targetY = mouseY - newState.paddles.right.height / 2;
-              const clampedY = targetY;
+              // Clamp to keep paddle within playfield bounds (inside border)
+              const clampedY = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.right.height, targetY));
               newState.paddles.right.velocity = clampedY - newState.paddles.right.y;
               newState.paddles.right.y = clampedY;
             }
@@ -5041,13 +5139,33 @@ const Pong404: React.FC = () => {
             newState.paddles.right.y += newState.paddles.right.velocity;
           }
 
-          // Clamp right paddle position
-          newState.paddles.right.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, newState.paddles.right.y));
+          // Clamp right paddle position (accounting for border)
+          newState.paddles.right.y = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.right.height, newState.paddles.right.y));
+
+          // Check collision with top paddle
+          const topPaddleRight = newState.paddles.top;
+          if (newState.paddles.right.x < topPaddleRight.x + topPaddleRight.width &&
+              newState.paddles.right.x + newState.paddles.right.width > topPaddleRight.x) {
+            const topPaddleBottom = topPaddleRight.y + topPaddleRight.height;
+            if (newState.paddles.right.y < topPaddleBottom) {
+              newState.paddles.right.y = topPaddleBottom;
+            }
+          }
+
+          // Check collision with bottom paddle
+          const bottomPaddleRight = newState.paddles.bottom;
+          if (newState.paddles.right.x < bottomPaddleRight.x + bottomPaddleRight.width &&
+              newState.paddles.right.x + newState.paddles.right.width > bottomPaddleRight.x) {
+            const maxY = bottomPaddleRight.y - newState.paddles.right.height;
+            if (newState.paddles.right.y + newState.paddles.right.height > bottomPaddleRight.y) {
+              newState.paddles.right.y = maxY;
+            }
+          }
 
           // Add right paddle trail point
           if (Math.abs(newState.paddles.right.velocity) > 0.01) {
             newState.trails.rightPaddle.push({
-              x: canvasSize.width - BORDER_THICKNESS - newState.paddles.right.width / 2, // Paddle center X
+              x: newState.paddles.right.x + newState.paddles.right.width / 2, // Paddle center X
               y: newState.paddles.right.y + newState.paddles.right.height / 2,
               width: newState.paddles.right.width,
               height: newState.paddles.right.height,
@@ -5071,7 +5189,8 @@ const Pong404: React.FC = () => {
           // Handle mouse/touch control for top paddle (always enabled)
           if (controlSide === 'top' && (mouseX !== null || touchX !== null)) {
             const targetX = (touchX !== null ? touchX : mouseX!) - newState.paddles.top.width / 2;
-            const clampedX = targetX;
+            // Clamp to keep paddle within playfield bounds
+            const clampedX = Math.max(0, Math.min(playFieldWidth - newState.paddles.top.width, targetX));
             newState.paddles.top.velocity = clampedX - newState.paddles.top.x;
             newState.paddles.top.x = clampedX;
           }
@@ -5109,15 +5228,15 @@ const Pong404: React.FC = () => {
             newState.paddles.top.x += newState.paddles.top.velocity;
           }
 
-          // Clamp top paddle position
-          newState.paddles.top.x = Math.max(0, Math.min(canvasSize.width - newState.paddles.top.width, newState.paddles.top.x));
+          // Clamp top paddle position (accounting for border)
+          newState.paddles.top.x = Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - newState.paddles.top.width, newState.paddles.top.x));
 
           // Add top paddle trail point
           const now = Date.now();
           if (Math.abs(newState.paddles.top.velocity) > 0.01) {
             newState.trails.topPaddle.push({
               x: newState.paddles.top.x + newState.paddles.top.width / 2,
-              y: (BORDER_THICKNESS * 2) + newState.paddles.top.height / 2, // Paddle spacing from top wall
+              y: newState.paddles.top.y + newState.paddles.top.height / 2, // Paddle spacing from top wall
               width: newState.paddles.top.width,
               height: newState.paddles.top.height,
               timestamp: now
@@ -5125,7 +5244,7 @@ const Pong404: React.FC = () => {
           }
 
           if (Math.abs(newState.paddles.top.x - oldX) > 0.5 && !localTestMode) {
-            // TODO: Add updatePaddlePosition for top paddle when WebSocket server supports it
+            updateHorizontalPaddlePosition(newState.paddles.top.x, newState.paddles.top.velocity, newState.paddles.top.x);
           }
         }
 
@@ -5136,7 +5255,8 @@ const Pong404: React.FC = () => {
           // Handle mouse/touch control for bottom paddle (always enabled)
           if (controlSide === 'bottom' && (mouseX !== null || touchX !== null)) {
             const targetX = (touchX !== null ? touchX : mouseX!) - newState.paddles.bottom.width / 2;
-            const clampedX = targetX;
+            // Clamp to keep paddle within playfield bounds
+            const clampedX = Math.max(0, Math.min(playFieldWidth - newState.paddles.bottom.width, targetX));
             newState.paddles.bottom.velocity = clampedX - newState.paddles.bottom.x;
             newState.paddles.bottom.x = clampedX;
           }
@@ -5174,15 +5294,15 @@ const Pong404: React.FC = () => {
             newState.paddles.bottom.x += newState.paddles.bottom.velocity;
           }
 
-          // Clamp bottom paddle position
-          newState.paddles.bottom.x = Math.max(0, Math.min(canvasSize.width - newState.paddles.bottom.width, newState.paddles.bottom.x));
+          // Clamp bottom paddle position (accounting for border)
+          newState.paddles.bottom.x = Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - newState.paddles.bottom.width, newState.paddles.bottom.x));
 
           // Add bottom paddle trail point
           const now = Date.now();
           if (Math.abs(newState.paddles.bottom.velocity) > 0.01) {
             newState.trails.bottomPaddle.push({
               x: newState.paddles.bottom.x + newState.paddles.bottom.width / 2,
-              y: canvasSize.height - BORDER_THICKNESS - newState.paddles.bottom.height / 2, // 32px spacing from bottom wall
+              y: newState.paddles.bottom.y + newState.paddles.bottom.height / 2, // 32px spacing from bottom wall
               width: newState.paddles.bottom.width,
               height: newState.paddles.bottom.height,
               timestamp: now
@@ -5190,7 +5310,7 @@ const Pong404: React.FC = () => {
           }
 
           if (Math.abs(newState.paddles.bottom.x - oldX) > 0.5 && !localTestMode) {
-            // TODO: Add updatePaddlePosition for bottom paddle when WebSocket server supports it
+            updateHorizontalPaddlePosition(newState.paddles.bottom.x, newState.paddles.bottom.velocity, newState.paddles.bottom.x);
           }
         }
 
@@ -5234,11 +5354,11 @@ const Pong404: React.FC = () => {
 
         // Bottom paddle vs Right paddle (already handled above)
 
-        // Re-clamp all paddles after collision resolution to ensure they stay in bounds
-        newState.paddles.left.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.left.height, newState.paddles.left.y));
-        newState.paddles.right.y = Math.max(0, Math.min(canvasSize.height - newState.paddles.right.height, newState.paddles.right.y));
-        newState.paddles.top.x = Math.max(0, Math.min(canvasSize.width - newState.paddles.top.width, newState.paddles.top.x));
-        newState.paddles.bottom.x = Math.max(0, Math.min(canvasSize.width - newState.paddles.bottom.width, newState.paddles.bottom.x));
+        // Re-clamp all paddles after collision resolution to ensure they stay in bounds (accounting for border)
+        newState.paddles.left.y = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.left.height, newState.paddles.left.y));
+        newState.paddles.right.y = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.right.height, newState.paddles.right.y));
+        newState.paddles.top.x = Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - newState.paddles.top.width, newState.paddles.top.x));
+        newState.paddles.bottom.x = Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - newState.paddles.bottom.width, newState.paddles.bottom.x));
 
         // AI CONTROL FOR NON-HUMAN PADDLES IN MULTIPLAYER
         const currentPlayerSide = multiplayerStateRef.current?.playerSide;
@@ -5281,8 +5401,8 @@ const Pong404: React.FC = () => {
               paddle.y += paddle.velocity;
             }
 
-            // Keep within bounds
-            paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
+            // Keep within bounds (accounting for border)
+            paddle.y = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - paddle.height, paddle.y));
           } else {
             // Paddle is frozen - stop all movement
             newState.paddles.left.velocity = 0;
@@ -5291,7 +5411,7 @@ const Pong404: React.FC = () => {
           // Add trail for AI left paddle
           if (Math.abs(newState.paddles.left.velocity) > 0.01) {
             newState.trails.leftPaddle.push({
-              x: (BORDER_THICKNESS * 2) + newState.paddles.left.width / 2,
+              x: newState.paddles.left.x + newState.paddles.left.width / 2,
               y: newState.paddles.left.y + newState.paddles.left.height / 2,
               width: newState.paddles.left.width,
               height: newState.paddles.left.height,
@@ -5338,8 +5458,8 @@ const Pong404: React.FC = () => {
               paddle.y += paddle.velocity;
             }
 
-            // Keep within bounds
-            paddle.y = Math.max(0, Math.min(canvasSize.height - paddle.height, paddle.y));
+            // Keep within bounds (accounting for border)
+            paddle.y = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - paddle.height, paddle.y));
           } else {
             // Paddle is frozen - stop all movement
             newState.paddles.right.velocity = 0;
@@ -5348,7 +5468,7 @@ const Pong404: React.FC = () => {
           // Add trail for AI right paddle
           if (Math.abs(newState.paddles.right.velocity) > 0.01) {
             newState.trails.rightPaddle.push({
-              x: canvasSize.width - BORDER_THICKNESS - newState.paddles.right.width / 2,
+              x: newState.paddles.right.x + newState.paddles.right.width / 2,
               y: newState.paddles.right.y + newState.paddles.right.height / 2,
               width: newState.paddles.right.width,
               height: newState.paddles.right.height,
@@ -5430,7 +5550,7 @@ const Pong404: React.FC = () => {
           const maxSpeed = paddle.speed * 0.9;
           paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
           paddle.x += paddle.velocity;
-          paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
+          paddle.x = Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - paddle.width, paddle.x));
         };
 
         // Apply AI to top paddle (only if no player is controlling it)
@@ -5441,7 +5561,7 @@ const Pong404: React.FC = () => {
           if (Math.abs(newState.paddles.top.velocity) > 0.01) {
             newState.trails.topPaddle.push({
               x: newState.paddles.top.x + newState.paddles.top.width / 2,
-              y: (BORDER_THICKNESS * 2) + newState.paddles.top.height / 2,
+              y: newState.paddles.top.y + newState.paddles.top.height / 2,
               timestamp: now,
               width: newState.paddles.top.width,
               height: newState.paddles.top.height
@@ -5457,7 +5577,7 @@ const Pong404: React.FC = () => {
           if (Math.abs(newState.paddles.bottom.velocity) > 0.01) {
             newState.trails.bottomPaddle.push({
               x: newState.paddles.bottom.x + newState.paddles.bottom.width / 2,
-              y: canvasSize.height - BORDER_THICKNESS - newState.paddles.bottom.height / 2, // 32px spacing from bottom wall
+              y: newState.paddles.bottom.y + newState.paddles.bottom.height / 2, // 32px spacing from bottom wall
               timestamp: now,
               width: newState.paddles.bottom.width,
               height: newState.paddles.bottom.height
@@ -5619,7 +5739,7 @@ const Pong404: React.FC = () => {
           paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
           const timeWarpFactor = newState.timeWarpFactor || 1.0;
           paddle.x += paddle.velocity * timeWarpFactor;
-          paddle.x = Math.max(0, Math.min(canvasSize.width - paddle.width, paddle.x));
+          paddle.x = Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - paddle.width, paddle.x));
         };
 
         if (newState.paddles.top) {
@@ -5633,7 +5753,7 @@ const Pong404: React.FC = () => {
         const now = Date.now();
         if (Math.abs(newState.paddles.left.velocity) > 0.01) {
           newState.trails.leftPaddle.push({
-            x: (BORDER_THICKNESS * 2) + newState.paddles.left.width / 2, // Left paddle center x position
+            x: newState.paddles.left.x + newState.paddles.left.width / 2, // Left paddle center x position
             y: newState.paddles.left.y + newState.paddles.left.height / 2,
             timestamp: now,
             width: newState.paddles.left.width,
@@ -5642,7 +5762,7 @@ const Pong404: React.FC = () => {
         }
         if (Math.abs(newState.paddles.right.velocity) > 0.01) {
           newState.trails.rightPaddle.push({
-            x: canvasSize.width - BORDER_THICKNESS - newState.paddles.right.width / 2, // Right paddle center x position
+            x: newState.paddles.right.x + newState.paddles.right.width / 2, // Right paddle center x position
             y: newState.paddles.right.y + newState.paddles.right.height / 2,
             timestamp: now,
             width: newState.paddles.right.width,
@@ -5663,7 +5783,7 @@ const Pong404: React.FC = () => {
         if (newState.paddles.bottom && Math.abs(newState.paddles.bottom.velocity) > 0.01) {
           newState.trails.bottomPaddle.push({
             x: newState.paddles.bottom.x + newState.paddles.bottom.width / 2,
-            y: canvasSize.height - BORDER_THICKNESS - newState.paddles.bottom.height / 2, // 32px spacing from bottom wall
+            y: newState.paddles.bottom.y + newState.paddles.bottom.height / 2, // 32px spacing from bottom wall
             timestamp: now,
             width: newState.paddles.bottom.width,
             height: newState.paddles.bottom.height
@@ -6895,62 +7015,57 @@ const Pong404: React.FC = () => {
 
       ctx.setLineDash([]); // Solid lines for borders
 
-      // Draw each border with appropriate color
+      // Draw borders with centered stroke at BORDER_THICKNESS/2 from edges
       // Left border
       ctx.strokeStyle = protectedSide === 'left' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'left' ? glowIntensity : 3 + musicData.volume * 7; // Music-reactive glow 3-10px
+      ctx.shadowBlur = protectedSide === 'left' ? glowIntensity : 3 + musicData.volume * 7;
       ctx.shadowColor = protectedSide === 'left' ? electricBlue : currentColors.foreground;
-      ctx.lineWidth = protectedSide === 'left' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
+      ctx.lineWidth = protectedSide === 'left' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
       ctx.beginPath();
-      ctx.moveTo(BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
-      ctx.lineTo(BORDER_THICKNESS / 2, playFieldHeight - BORDER_THICKNESS / 2);
+      ctx.moveTo(BORDER_THICKNESS/2, BORDER_THICKNESS/2);
+      ctx.lineTo(BORDER_THICKNESS/2, playFieldHeight - BORDER_THICKNESS/2);
       ctx.stroke();
 
       // Right border
       ctx.strokeStyle = protectedSide === 'right' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'right' ? glowIntensity : 3 + musicData.volume * 7; // Music-reactive glow 3-10px
+      ctx.shadowBlur = protectedSide === 'right' ? glowIntensity : 3 + musicData.volume * 7;
       ctx.shadowColor = protectedSide === 'right' ? electricBlue : currentColors.foreground;
-      ctx.lineWidth = protectedSide === 'right' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
+      ctx.lineWidth = protectedSide === 'right' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
       ctx.beginPath();
-      ctx.moveTo(playFieldWidth - BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
-      ctx.lineTo(playFieldWidth - BORDER_THICKNESS / 2, playFieldHeight - BORDER_THICKNESS / 2);
+      ctx.moveTo(playFieldWidth - BORDER_THICKNESS/2, BORDER_THICKNESS/2);
+      ctx.lineTo(playFieldWidth - BORDER_THICKNESS/2, playFieldHeight - BORDER_THICKNESS/2);
       ctx.stroke();
 
       // Top border
       ctx.strokeStyle = protectedSide === 'top' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'top' ? glowIntensity : 3 + musicData.volume * 7; // Music-reactive glow 3-10px
+      ctx.shadowBlur = protectedSide === 'top' ? glowIntensity : 3 + musicData.volume * 7;
       ctx.shadowColor = protectedSide === 'top' ? electricBlue : currentColors.foreground;
-      ctx.lineWidth = protectedSide === 'top' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
+      ctx.lineWidth = protectedSide === 'top' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
       ctx.beginPath();
-      ctx.moveTo(BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
-      ctx.lineTo(playFieldWidth - BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
+      ctx.moveTo(BORDER_THICKNESS/2, BORDER_THICKNESS/2);
+      ctx.lineTo(playFieldWidth - BORDER_THICKNESS/2, BORDER_THICKNESS/2);
       ctx.stroke();
 
       // Bottom border
       ctx.strokeStyle = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'bottom' ? glowIntensity : 3 + musicData.volume * 7; // Music-reactive glow 3-10px
+      ctx.shadowBlur = protectedSide === 'bottom' ? glowIntensity : 3 + musicData.volume * 7;
       ctx.shadowColor = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
-      ctx.lineWidth = protectedSide === 'bottom' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
+      ctx.lineWidth = protectedSide === 'bottom' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
       ctx.beginPath();
-      ctx.moveTo(BORDER_THICKNESS / 2, playFieldHeight - BORDER_THICKNESS / 2);
-      ctx.lineTo(playFieldWidth - BORDER_THICKNESS / 2, playFieldHeight - BORDER_THICKNESS / 2);
+      ctx.moveTo(BORDER_THICKNESS/2, playFieldHeight - BORDER_THICKNESS/2);
+      ctx.lineTo(playFieldWidth - BORDER_THICKNESS/2, playFieldHeight - BORDER_THICKNESS/2);
       ctx.stroke();
     } else {
-      // Normal border drawing when Great Wall is not active
+      // Normal border drawing - centered stroke at BORDER_THICKNESS/2 from edges
       ctx.strokeStyle = currentColors.foreground;
       ctx.lineWidth = BORDER_THICKNESS;
-      ctx.setLineDash([]); // Solid lines for borders
+      ctx.setLineDash([]);
 
       // Add music-reactive glow to border
-      ctx.shadowBlur = 3 + musicData.volume * 7; // Music-reactive glow 3-10px
+      ctx.shadowBlur = 3 + musicData.volume * 7;
       ctx.shadowColor = currentColors.foreground;
 
-      ctx.strokeRect(
-        BORDER_THICKNESS / 2,
-        BORDER_THICKNESS / 2,
-        playFieldWidth - BORDER_THICKNESS,
-        playFieldHeight - BORDER_THICKNESS
-      );
+      ctx.strokeRect(BORDER_THICKNESS/2, BORDER_THICKNESS/2, playFieldWidth - BORDER_THICKNESS, playFieldHeight - BORDER_THICKNESS);
     }
 
     // Clear shadow for other elements
@@ -8051,13 +8166,13 @@ const Pong404: React.FC = () => {
     ctx.textAlign = 'center';
 
     // 4-player score positions - 48px from paddle edge towards center
-    const leftPaddleRight = (BORDER_THICKNESS * 2) + gameState.paddles.left.width;
+    const leftPaddleRight = gameState.paddles.left.x + gameState.paddles.left.width;
     const leftScoreX = leftPaddleRight + 48; // 48px from left paddle's right edge
-    const rightPaddleLeft = canvasSize.width - (BORDER_THICKNESS * 2) - gameState.paddles.right.width;
+    const rightPaddleLeft = gameState.paddles.right.x;
     const rightScoreX = rightPaddleLeft - 48; // 48px from right paddle's left edge
-    const topPaddleBottom = (BORDER_THICKNESS * 2) + gameState.paddles.top.height;
+    const topPaddleBottom = gameState.paddles.top.y + gameState.paddles.top.height;
     const topScoreY = topPaddleBottom + 48; // 48px below top paddle
-    const bottomPaddleTop = canvasSize.height - (BORDER_THICKNESS * 2) - gameState.paddles.bottom.height;
+    const bottomPaddleTop = gameState.paddles.bottom.y;
     const bottomScoreY = bottomPaddleTop - 48; // 48px above bottom paddle
 
     // Display all 4 player scores with padding
@@ -9406,6 +9521,8 @@ const Pong404: React.FC = () => {
           width: '100%',
           height: '100%',
           aspectRatio: '1 / 1',
+          boxShadow: `inset 0 0 80px 10px ${COLOR_PALETTE[gameState.colorIndex].foreground}25`,
+          transition: 'box-shadow 0.3s ease',
         }}>
         {/* Canvas for game rendering - hidden when CRT is active (PixiJS shows it instead) */}
         <canvas
@@ -9703,6 +9820,19 @@ const Pong404: React.FC = () => {
           visibility: crtEffect ? 'visible' : 'hidden', // Only show when CRT is active
         }}
       />
+
+      {/* Inner border glow overlay - visible inside game area */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        boxShadow: `inset 0 0 100px 30px ${COLOR_PALETTE[gameState.colorIndex].foreground}40`,
+        transition: 'box-shadow 0.3s ease',
+        pointerEvents: 'none',
+        zIndex: 15, // Above everything to be visible
+      }} />
       </div>
       </div>
 
