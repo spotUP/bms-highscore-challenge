@@ -9385,7 +9385,11 @@ const Pong404: React.FC = () => {
         width: '100vh', // Square based on viewport height
         height: '100vh',
         aspectRatio: '1 / 1',
-        boxShadow: `0 0 60px 10px ${COLOR_PALETTE[gameState.colorIndex].foreground}40, 0 0 100px 20px ${COLOR_PALETTE[gameState.colorIndex].foreground}20`,
+        boxShadow: `
+          0 0 240px 40px ${COLOR_PALETTE[gameState.colorIndex].foreground}40,
+          0 0 400px 80px ${COLOR_PALETTE[gameState.colorIndex].foreground}20,
+          inset 0 0 120px 20px ${COLOR_PALETTE[gameState.colorIndex].foreground}30
+        `,
         transition: 'box-shadow 0.3s ease',
       }}>
       <div style={{
