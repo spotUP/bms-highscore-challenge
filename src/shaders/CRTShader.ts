@@ -4,6 +4,7 @@ import { Filter, GlProgram, GpuProgram } from 'pixi.js';
 const vertex = `
 in vec2 aPosition;
 out vec2 vTextureCoord;
+out vec2 vScreenCoord;
 
 uniform vec4 uInputSize;
 uniform vec4 uOutputFrame;
@@ -23,6 +24,8 @@ vec2 filterTextureCoord(void) {
 void main(void) {
     gl_Position = filterVertexPosition();
     vTextureCoord = filterTextureCoord();
+    // Pass normalized screen coordinates (0-1) for perfectly symmetric distortion
+    vScreenCoord = aPosition;
 }
 `;
 
@@ -30,6 +33,7 @@ const fragment = `
 precision mediump float;
 
 in vec2 vTextureCoord;
+in vec2 vScreenCoord;
 out vec4 finalColor;
 
 uniform sampler2D uTexture;
@@ -43,24 +47,24 @@ uniform float uResolutionX;
 uniform float uResolutionY;
 uniform float uChromaticAberration;
 uniform float uDisharmonic;
+uniform vec2 uCenterOffset;
 
-// CRT barrel distortion with 4:3 aspect ratio correction
+// CRT barrel distortion for square display
 vec2 curveRemapUV(vec2 uv) {
+    // Apply center offset to correct misalignment
+    uv = uv + uCenterOffset;
+
     // Center coordinates (range -1 to 1)
     vec2 centered = uv * 2.0 - 1.0;
 
-    // Correct for 4:3 display aspect ratio (being stretched from square 800x800)
-    // Since we're stretching horizontally, compress X coordinate before distortion
-    centered.x *= 0.75; // 3/4 = 0.75
-
-    // Apply classic barrel distortion
+    // Apply classic barrel distortion with corner enhancement
     // This creates gentle outward curvature like a real CRT
     float curveAmount = 1.0 / uCurvature;
     float r2 = centered.x * centered.x + centered.y * centered.y;
-    centered = centered * (1.0 + curveAmount * r2);
 
-    // Restore aspect ratio after distortion
-    centered.x /= 0.75;
+    // Add corner-specific distortion using r^4 for more dramatic corners
+    float cornerDistortion = r2 * r2 * 0.2; // Gentler corner enhancement
+    centered = centered * (1.0 + curveAmount * r2 + curveAmount * cornerDistortion);
 
     // Return to 0-1 range
     return centered * 0.5 + 0.5;
@@ -85,8 +89,11 @@ float noise(vec2 co) {
 }
 
 void main(void) {
-    // Apply barrel distortion
-    vec2 uv = curveRemapUV(vTextureCoord);
+    // Apply barrel distortion using perfect screen coordinates for symmetry
+    vec2 distortedScreenCoord = curveRemapUV(vScreenCoord);
+
+    // Calculate the distorted texture coordinate
+    vec2 uv = distortedScreenCoord * (vTextureCoord / vScreenCoord);
 
     // Check if we're outside the curved screen
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
@@ -155,7 +162,8 @@ void main(void) {
     }
 
     // Apply scanlines
-    color.rgb *= scanline(uv);
+    // Use original texture coords for evenly spaced scanlines (not distorted uv)
+    color.rgb *= scanline(vTextureCoord);
 
     // RGB shadow mask / aperture grille - simulate individual RGB phosphors (very subtle)
     vec2 maskCoord = vTextureCoord * vec2(uResolutionX, uResolutionY);
@@ -248,7 +256,7 @@ export class CRTFilter extends Filter {
       resources: {
         crtUniforms: {
           uTime: { value: options.time || 0, type: 'f32' },
-          uCurvature: { value: options.curvature || 6.0, type: 'f32' },
+          uCurvature: { value: options.curvature || 4.5, type: 'f32' }, // Lower = more curve
           uScanlineIntensity: { value: options.scanlineIntensity || 0.15, type: 'f32' },
           uVignetteIntensity: { value: options.vignetteIntensity || 0.3, type: 'f32' },
           uNoiseIntensity: { value: options.noiseIntensity || 0.03, type: 'f32' },
@@ -257,6 +265,7 @@ export class CRTFilter extends Filter {
           uResolutionY: { value: 800, type: 'f32' },
           uChromaticAberration: { value: options.chromaticAberration || 0.001, type: 'f32' },
           uDisharmonic: { value: options.disharmonic || 0.0, type: 'f32' },
+          uCenterOffset: { value: [0.0, 0.0], type: 'vec2<f32>' }, // Perfect center
         },
       },
     });

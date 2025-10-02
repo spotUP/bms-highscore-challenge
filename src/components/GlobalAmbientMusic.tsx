@@ -31,7 +31,12 @@ interface MusicAnalysisData {
   beat: number;        // 0-1 beat intensity
 }
 
-const GlobalAmbientMusic: React.FC = () => {
+interface GlobalAmbientMusicProps {
+  lanMode?: boolean;
+  isSpectatorMode?: boolean;
+}
+
+const GlobalAmbientMusic: React.FC<GlobalAmbientMusicProps> = ({ lanMode = false, isSpectatorMode = false }) => {
   // Pick a random piece at initialization
   const randomPiece = AVAILABLE_PIECES[Math.floor(Math.random() * AVAILABLE_PIECES.length)];
 
@@ -1308,6 +1313,12 @@ const GlobalAmbientMusic: React.FC = () => {
   }, [createCosmicChords, createCrystalCascade, createDoomDrone, createSpaceDrone, createHomewardBound, createDistantMemories, createStellarSolitude, createEarthsEmbrace, createCosmicLonging, createCosmicWhale, createEarthApproach, createDetroitTechno]);
 
   const startPiece = useCallback(async (pieceId: string) => {
+    // LAN mode check - mute all clients, only spectator plays audio
+    if (lanMode && !isSpectatorMode) {
+      console.log('[LAN MODE] Music muted - LAN mode is active and this is not spectator view');
+      return;
+    }
+
     if (!isInitializedRef.current) {
       await initializeTone();
     }
@@ -1401,7 +1412,7 @@ const GlobalAmbientMusic: React.FC = () => {
     } catch (error) {
       console.error(`[GENERATIVE MUSIC] Error starting piece "${pieceId}":`, error);
     }
-  }, [musicState.volume, initializeTone, createPiece]);
+  }, [lanMode, isSpectatorMode, musicState.volume, initializeTone, createPiece]);
 
   const stopCurrentPiece = useCallback(async () => {
     if (currentPieceRef.current) {

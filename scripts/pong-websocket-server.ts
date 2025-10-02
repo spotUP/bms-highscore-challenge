@@ -588,6 +588,7 @@ interface GameRoom {
   lastUpdate: number;
   isActive: boolean;
   canvasSize: { width: number; height: number };
+  lanMode: boolean; // LAN mode - mute all clients, only spectator plays audio
 }
 
 class PongWebSocketServer {
@@ -722,6 +723,9 @@ class PongWebSocketServer {
         break;
       case 'reset_paddle_sizes':
         this.handleResetPaddleSizes(playerId, roomId);
+        break;
+      case 'toggle_lan_mode':
+        this.handleToggleLanMode(playerId, roomId);
         break;
       default:
         console.log('[?] Unknown message type:', fullType, 'original:', type);
@@ -1057,6 +1061,24 @@ class PongWebSocketServer {
     });
   }
 
+  private handleToggleLanMode(playerId: string, roomId: string) {
+    const room = this.rooms.get(roomId);
+    if (!room) {
+      console.log(`[X] Toggle LAN mode failed: Room ${roomId} not found`);
+      return;
+    }
+
+    // Toggle LAN mode
+    room.lanMode = !room.lanMode;
+    console.log(`🔊 LAN mode ${room.lanMode ? 'ENABLED' : 'DISABLED'} in room ${roomId} by player ${playerId}`);
+
+    // Broadcast LAN mode status to all players in the room
+    this.broadcastToRoom(roomId, {
+      type: 'lan_mode_updated',
+      data: { lanMode: room.lanMode }
+    });
+  }
+
 
   private handleTestPickup(playerId: string, roomId: string, pickupType: string) {
     const room = this.rooms.get(roomId);
@@ -1298,7 +1320,8 @@ class PongWebSocketServer {
       gamemaster: null,
       lastUpdate: Date.now(),
       isActive: false, // Start inactive - activate when first player joins
-      canvasSize: { width: 800, height: 800 }
+      canvasSize: { width: 800, height: 800 },
+      lanMode: false // LAN mode disabled by default
     };
   }
 
@@ -2110,8 +2133,7 @@ class PongWebSocketServer {
     } // Close collision cooldown check
 
     // Arkanoid brick collision detection
-    // TESTING: Disable Arkanoid
-    if (false && gameState.arkanoidActive && gameState.arkanoidBricks && gameState.arkanoidBricks.length > 0) {
+    if (gameState.arkanoidActive && gameState.arkanoidBricks && gameState.arkanoidBricks.length > 0) {
       for (let i = gameState.arkanoidBricks.length - 1; i >= 0; i--) {
         const brick = gameState.arkanoidBricks[i];
 
@@ -2127,6 +2149,16 @@ class PongWebSocketServer {
                               ballTop <= brick.y + brick.height;
 
         if (brickCollision) {
+          // Broadcast brick break event to all clients for visual/audio feedback
+          this.broadcastToRoom(roomId, {
+            type: 'brick_break',
+            data: {
+              x: brick.x + brick.width / 2,
+              y: brick.y + brick.height / 2,
+              color: brick.color || '#ff4500'
+            }
+          });
+
           // Remove the brick
           gameState.arkanoidBricks.splice(i, 1);
           gameState.arkanoidBricksHit++;
@@ -3484,18 +3516,31 @@ class PongWebSocketServer {
 
         // Create + formation with 16 bricks (7 horizontal + 9 vertical, center overlaps)
         const centerX = 400; // Center of 800px canvas
-        const centerY = 300; // Center of 600px canvas
+        const centerY = 400; // Center of 800px canvas
         const brickWidth = 40;
         const brickHeight = 20;
         const spacing = 5;
 
-        // Horizontal line of the + (7 bricks)
+        // Classic Arkanoid color palette
+        const brickColors = [
+          '#ff0000', // Red
+          '#ff6600', // Orange
+          '#ffcc00', // Yellow
+          '#00ff00', // Green
+          '#00ccff', // Cyan
+          '#0066ff', // Blue
+          '#9933ff', // Purple
+        ];
+
+        // Horizontal line of the + (7 bricks with rainbow colors)
         for (let i = -3; i <= 3; i++) {
+          const colorIndex = i + 3; // 0-6 for rainbow
           gameState.arkanoidBricks.push({
             x: centerX + i * (brickWidth + spacing) - brickWidth / 2,
             y: centerY - brickHeight / 2,
             width: brickWidth,
             height: brickHeight,
+            color: brickColors[colorIndex],
             id: `h_${i}`,
             life: 1
           });
@@ -3504,11 +3549,13 @@ class PongWebSocketServer {
         // Vertical line of the + (9 bricks, excluding center overlap)
         for (let i = -4; i <= 4; i++) {
           if (i !== 0) { // Skip center to avoid overlap
+            const colorIndex = Math.abs(i + 4) % brickColors.length;
             gameState.arkanoidBricks.push({
               x: centerX - brickWidth / 2,
               y: centerY + i * (brickHeight + spacing) - brickHeight / 2,
               width: brickWidth,
               height: brickHeight,
+              color: brickColors[colorIndex],
               id: `v_${i}`,
               life: 1
             });

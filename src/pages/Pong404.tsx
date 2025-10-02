@@ -144,6 +144,10 @@ interface GameState {
   drunkStartTime: number;
   timeWarpActive: boolean;
   timeWarpFactor: number;
+  arkanoidBricks: any[];
+  arkanoidActive: boolean;
+  arkanoidMode: boolean;
+  arkanoidBricksHit: number;
 }
 
 interface MultiplayerState {
@@ -890,9 +894,9 @@ const Pong404: React.FC = () => {
   const checkRandomTauntRef = useRef<any>(null);
   const multiplayerStateRef = useRef<any>(null);
 
-  // Check URL parameters for spectator mode - DISABLED to allow normal multiplayer joining
+  // Check URL parameters for spectator mode
   const urlParams = new URLSearchParams(window.location.search);
-  const isSpectatorMode = false; // urlParams.get('spectator') === 'true' || urlParams.get('mode') === 'spectator';
+  const isSpectatorMode = urlParams.get('spectator') === 'true' || urlParams.get('mode') === 'spectator';
 
 
 
@@ -915,6 +919,7 @@ const Pong404: React.FC = () => {
     };
 
     const size = getOptimalCanvasSize();
+    // Square canvas for square playfield
     return { width: size, height: size };
   });
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'warming' | 'connected' | 'error' | 'retrying' | 'server_down' | 'server_starting'>('idle');
@@ -964,7 +969,7 @@ const Pong404: React.FC = () => {
     bottom: null
   });
 
-  // Playfield size - same as canvas (border is drawn inside, not outside)
+  // Playfield size - square playfield using full square canvas
   const playFieldWidth = canvasSize.width;
   const playFieldHeight = canvasSize.height;
 
@@ -1083,6 +1088,10 @@ const Pong404: React.FC = () => {
     timeWarpFactor: 1.0,
     blackHoles: [],
     lightningStrikes: [],
+    arkanoidBricks: [],
+    arkanoidActive: false,
+    arkanoidMode: false,
+    arkanoidBricksHit: 0,
   });
 
   // Wrapper around setGameState to ensure top/bottom paddles are always preserved
@@ -1143,6 +1152,7 @@ const Pong404: React.FC = () => {
 
   const [localTestMode, setLocalTestMode] = useState(false);
   const [crtEffect, setCrtEffect] = useState(true); // CRT shader enabled by default
+  const [lanMode, setLanMode] = useState(false); // LAN mode - mute all clients, only spectator plays audio
   const [showAudioPrompt, setShowAudioPrompt] = useState(!isSpectatorMode); // Show audio interaction prompt on first load (skip for spectators)
   const audioPromptDismissedRef = useRef(isSpectatorMode); // Track if audio prompt was dismissed (auto-dismiss for spectators)
   const [robotText, setRobotText] = useState<string>(''); // Current robot speech text to display
@@ -2469,6 +2479,46 @@ const Pong404: React.FC = () => {
         }
         break;
 
+      case 'lan_mode_updated':
+        if (message.data) {
+          console.log('[LAN MODE] LAN mode updated:', message.data.lanMode);
+          setLanMode(message.data.lanMode);
+        }
+        break;
+
+      case 'brick_break':
+        if (message.data) {
+          // Create particle explosion effect
+          const particleCount = 12;
+          const newParticles: any[] = [];
+
+          for (let i = 0; i < particleCount; i++) {
+            const angle = (Math.PI * 2 * i) / particleCount;
+            const speed = 2 + Math.random() * 3;
+            newParticles.push({
+              x: message.data.x,
+              y: message.data.y,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed,
+              color: message.data.color,
+              life: 1.0,
+              size: 3 + Math.random() * 3
+            });
+          }
+
+          // Add particles to confetti array for rendering
+          setGameState(prev => ({
+            ...prev,
+            confetti: [...(prev.confetti || []), ...newParticles]
+          }));
+
+          // Play brick break sound
+          if (playMelodyNoteRef.current) {
+            playMelodyNoteRef.current('pickup', { type: 'brick_break' }, 'both');
+          }
+        }
+        break;
+
       default:
         break;
     }
@@ -2506,6 +2556,18 @@ const Pong404: React.FC = () => {
       }
     }
   }, [multiplayerState.playerId, multiplayerState.isConnected, multiplayerState.playerSide]);
+
+  // Toggle LAN mode - sends message to server
+  const toggleLanMode = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'toggle_lan_mode',
+        playerId: multiplayerState.playerId,
+        roomId: multiplayerState.roomId
+      }));
+      console.log('[LAN MODE] Toggling LAN mode');
+    }
+  }, [multiplayerState.playerId, multiplayerState.roomId]);
 
   // Track previous game state for delta compression
   const previousGameStateRef = useRef<GameState | null>(null);
@@ -3056,6 +3118,12 @@ const Pong404: React.FC = () => {
 
   // Simple speech function with overlap prevention and effects
   const speakRobotic = useCallback((text: string) => {
+    // LAN mode check - mute all clients, only spectator plays audio
+    if (lanMode && !isSpectatorMode) {
+      console.log('[LAN MODE] Robot voice muted - LAN mode is active and this is not spectator view');
+      return;
+    }
+
     // Validate text input
     if (!text || typeof text !== 'string' || text.trim() === '') {
       console.error('[ROBOT] SAM speech error: Invalid text input:', text);
@@ -3192,7 +3260,7 @@ const Pong404: React.FC = () => {
       console.error('[ROBOT] SAM speech error:', error);
       isSpeakingRef.current = false;
     }
-  }, [initializeAudio]);
+  }, [lanMode, isSpectatorMode, initializeAudio]);
 
   const attemptRobotTaunt = useCallback((triggerEvent: string, playerId?: string) => {
     const now = Date.now();
@@ -3371,6 +3439,12 @@ const Pong404: React.FC = () => {
   const playMelodyNote = useCallback(async (eventType: 'paddle' | 'wall' | 'score' | 'pickup', pickupData?: any, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both') => {
     // console.log(`[SOUND] Playing sound for event: ${eventType}`);
 
+    // LAN mode check - mute all clients, only spectator plays audio
+    if (lanMode && !isSpectatorMode) {
+      console.log('[LAN MODE] Audio muted - LAN mode is active and this is not spectator view');
+      return;
+    }
+
     // Dynamically import Tone.js if not available
     let Tone = (window as any).Tone;
 
@@ -3444,15 +3518,27 @@ const Pong404: React.FC = () => {
         break;
 
       case 'pickup':
-        frequency = currentScale[melodyState.pickupIndex % currentScale.length];
-        duration = 0.3;
-        // Ethereal harmony for pickups
-        harmony = [
-          frequency * 0.75, // Minor seventh
-          frequency * 1.33, // Fourth
-          frequency * 2.25  // Ninth
-        ];
-        melodyState.pickupIndex = (melodyState.pickupIndex + 3) % currentScale.length; // Jump by 3
+        // Special sound for brick break
+        if (pickupData?.type === 'brick_break') {
+          // Satisfying "crunch" sound - descending pitch with harmonics
+          frequency = 1200; // High initial pitch
+          duration = 0.15;
+          harmony = [
+            800,  // Lower harmonic
+            600,  // Even lower
+            400   // Bass thump
+          ];
+        } else {
+          frequency = currentScale[melodyState.pickupIndex % currentScale.length];
+          duration = 0.3;
+          // Ethereal harmony for pickups
+          harmony = [
+            frequency * 0.75, // Minor seventh
+            frequency * 1.33, // Fourth
+            frequency * 2.25  // Ninth
+          ];
+          melodyState.pickupIndex = (melodyState.pickupIndex + 3) % currentScale.length; // Jump by 3
+        }
         break;
 
       case 'coin_spawn':
@@ -3683,7 +3769,7 @@ const Pong404: React.FC = () => {
       console.error('[SOUND] Error playing Tone.js melody:', error);
     }
 
-  }, []);
+  }, [lanMode, isSpectatorMode]);
 
   // CA-CHING coin collection sound (routed through global mixer)
   const playCoinSound = useCallback(() => {
@@ -5858,6 +5944,13 @@ const Pong404: React.FC = () => {
         return; // Don't process any other logic
       }
 
+      // Handle LAN mode toggle (M key) - only in spectator mode
+      if (e.key.toLowerCase() === 'm' && isSpectatorMode) {
+        e.preventDefault();
+        toggleLanMode();
+        return; // Don't process any other logic
+      }
+
       // Initialize audio on first user interaction
       await initializeAudio();
 
@@ -6810,7 +6903,7 @@ const Pong404: React.FC = () => {
       ctx.lineWidth = protectedSide === 'left' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
       ctx.beginPath();
       ctx.moveTo(BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
-      ctx.lineTo(BORDER_THICKNESS / 2, canvasSize.height - BORDER_THICKNESS / 2);
+      ctx.lineTo(BORDER_THICKNESS / 2, playFieldHeight - BORDER_THICKNESS / 2);
       ctx.stroke();
 
       // Right border
@@ -6819,8 +6912,8 @@ const Pong404: React.FC = () => {
       ctx.shadowColor = protectedSide === 'right' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'right' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
       ctx.beginPath();
-      ctx.moveTo(canvasSize.width - BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
-      ctx.lineTo(canvasSize.width - BORDER_THICKNESS / 2, canvasSize.height - BORDER_THICKNESS / 2);
+      ctx.moveTo(playFieldWidth - BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
+      ctx.lineTo(playFieldWidth - BORDER_THICKNESS / 2, playFieldHeight - BORDER_THICKNESS / 2);
       ctx.stroke();
 
       // Top border
@@ -6830,7 +6923,7 @@ const Pong404: React.FC = () => {
       ctx.lineWidth = protectedSide === 'top' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
       ctx.beginPath();
       ctx.moveTo(BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
-      ctx.lineTo(canvasSize.width - BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
+      ctx.lineTo(playFieldWidth - BORDER_THICKNESS / 2, BORDER_THICKNESS / 2);
       ctx.stroke();
 
       // Bottom border
@@ -6839,8 +6932,8 @@ const Pong404: React.FC = () => {
       ctx.shadowColor = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'bottom' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS; // 4-8px width
       ctx.beginPath();
-      ctx.moveTo(BORDER_THICKNESS / 2, canvasSize.height - BORDER_THICKNESS / 2);
-      ctx.lineTo(canvasSize.width - BORDER_THICKNESS / 2, canvasSize.height - BORDER_THICKNESS / 2);
+      ctx.moveTo(BORDER_THICKNESS / 2, playFieldHeight - BORDER_THICKNESS / 2);
+      ctx.lineTo(playFieldWidth - BORDER_THICKNESS / 2, playFieldHeight - BORDER_THICKNESS / 2);
       ctx.stroke();
     } else {
       // Normal border drawing when Great Wall is not active
@@ -6855,8 +6948,8 @@ const Pong404: React.FC = () => {
       ctx.strokeRect(
         BORDER_THICKNESS / 2,
         BORDER_THICKNESS / 2,
-        canvasSize.width - BORDER_THICKNESS,
-        canvasSize.height - BORDER_THICKNESS
+        playFieldWidth - BORDER_THICKNESS,
+        playFieldHeight - BORDER_THICKNESS
       );
     }
 
@@ -7164,6 +7257,23 @@ const Pong404: React.FC = () => {
         ctx.fillRect(mirrorBall.x, mirrorBall.y, gameState.ball.size, gameState.ball.size);
         ctx.shadowBlur = 0;
         ctx.globalAlpha = 1.0;
+      });
+    }
+
+    // 🧱 Draw Arkanoid bricks
+    if (!gameState.isPaused && gameState.arkanoidActive && gameState.arkanoidBricks && Array.isArray(gameState.arkanoidBricks)) {
+      gameState.arkanoidBricks.forEach((brick: any) => {
+        if (brick && typeof brick.x === 'number' && typeof brick.y === 'number' &&
+            typeof brick.width === 'number' && typeof brick.height === 'number') {
+          // Draw brick with color
+          ctx.fillStyle = brick.color || '#ff4500';
+          ctx.fillRect(brick.x, brick.y, brick.width, brick.height);
+
+          // Draw brick border/outline
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(brick.x, brick.y, brick.width, brick.height);
+        }
       });
     }
 
@@ -8770,6 +8880,7 @@ const Pong404: React.FC = () => {
     (async () => {
       app = new Application();
 
+      // Create SQUARE PIXI canvas (800x800) for square curvature
       await app.init({
         width: canvasSize.width,
         height: canvasSize.height,
@@ -8782,12 +8893,13 @@ const Pong404: React.FC = () => {
       pixiContainerRef.current.appendChild(app.canvas);
       pixiAppRef.current = app;
 
-      // Style the PixiJS canvas to fill the container and center properly
-      // Use object-fit to maintain aspect ratio without distortion
+      // Style the PixiJS canvas - fill the container
+      app.canvas.style.position = 'absolute';
+      app.canvas.style.top = '0';
+      app.canvas.style.left = '0';
       app.canvas.style.width = '100%';
       app.canvas.style.height = '100%';
       app.canvas.style.display = 'block';
-      app.canvas.style.objectFit = 'fill';
       // Set cursor style on PixiJS canvas to match game state
       app.canvas.style.cursor = cursorHidden ? 'none' : 'default';
 
@@ -8796,11 +8908,13 @@ const Pong404: React.FC = () => {
       const sprite = new Sprite(texture);
       sprite.width = canvasSize.width;
       sprite.height = canvasSize.height;
+      sprite.x = 0;
+      sprite.y = 0;
       app.stage.addChild(sprite);
 
       // Create and apply CRT filter with subtle authentic effects
       const filter = new CRTFilter({
-        curvature: 18.0,              // Gentle screen curve (higher = less curve)
+        curvature: 12.0,              // More curvature (higher = less curve)
         scanlineIntensity: 0.1,       // Very subtle scanlines
         vignetteIntensity: 0.15,      // Very light edge darkening
         noiseIntensity: 0.05,         // Visible CRT noise/grain
@@ -8810,8 +8924,8 @@ const Pong404: React.FC = () => {
 
       crtFilterRef.current = filter;
 
-      // ALWAYS apply filter to test if it's working
-      sprite.filters = [filter];
+      // Apply filter to the ENTIRE STAGE (not just sprite) for centered distortion
+      app.stage.filters = [filter];
 
       // console.log('[CRT] Filter created and applied:', {
       //   hasCrtFilter: !!filter,
@@ -9252,7 +9366,7 @@ const Pong404: React.FC = () => {
 
   return (
     <div
-      className="w-screen h-screen overflow-hidden bg-black flex items-center justify-center p-1"
+      className="w-screen h-screen overflow-hidden flex items-center justify-center"
       style={{
         touchAction: 'none',
         userSelect: 'none',
@@ -9261,9 +9375,19 @@ const Pong404: React.FC = () => {
         top: 0,
         left: 0,
         width: '100%',
-        height: '100%'
+        height: '100%',
+        background: '#000000'
       }}
     >
+      {/* Container for game - fill entire height */}
+      <div style={{
+        position: 'relative',
+        width: '100vh', // Square based on viewport height
+        height: '100vh',
+        aspectRatio: '1 / 1',
+        boxShadow: `0 0 60px 10px ${COLOR_PALETTE[gameState.colorIndex].foreground}40, 0 0 100px 20px ${COLOR_PALETTE[gameState.colorIndex].foreground}20`,
+        transition: 'box-shadow 0.3s ease',
+      }}>
       <div style={{
         position: 'relative',
         display: 'flex',
@@ -9272,33 +9396,13 @@ const Pong404: React.FC = () => {
         width: '100%',
         height: '100%',
       }}>
-        {/* TV frame wrapper - only visible when CRT is ON */}
-        {crtEffect && (
-          <div style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            // Enable hardware acceleration for smooth rendering
-            transform: 'translate(-50%, -50%) translateZ(0)',
-            padding: '40px 60px',
-            background: 'linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 50%, #0a0a0a 100%)',
-            borderRadius: '20px',
-            boxShadow: `
-              0 0 0 8px #1a1a1a,
-              0 0 0 12px #2a2a2a,
-              0 0 0 14px #0a0a0a,
-              inset 0 0 30px rgba(0,0,0,0.8),
-              inset 0 0 2px rgba(0,0,0,0.5),
-              0 20px 60px rgba(0,0,0,0.9)
-            `,
-            willChange: 'transform',
-            backfaceVisibility: 'hidden' as const,
-            width: `calc(min(calc(100vw - 8px), calc((100vh - 8px) * 4 / 3)) + 120px)`,
-            height: `calc(min(calc(100vh - 8px), calc((100vw - 8px) * 3 / 4)) + 80px)`,
-            pointerEvents: 'none',
-          }} />
-        )}
-
+        {/* Shared container for canvas and PIXI to ensure perfect alignment */}
+        <div style={{
+          position: 'relative',
+          width: '100%',
+          height: '100%',
+          aspectRatio: '1 / 1',
+        }}>
         {/* Canvas for game rendering - hidden when CRT is active (PixiJS shows it instead) */}
         <canvas
           ref={canvasRef}
@@ -9306,12 +9410,14 @@ const Pong404: React.FC = () => {
           height={canvasSize.height}
           className="block"
           style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
             background: COLOR_PALETTE[gameState.colorIndex].background,
             outline: 'none',
-            // Force 4:3 aspect ratio like classic CRT monitors
-            width: `min(calc(100vw - 8px), calc((100vh - 8px) * 4 / 3))`,
-            height: `min(calc(100vh - 8px), calc((100vw - 8px) * 3 / 4))`,
-            aspectRatio: '4 / 3',
+            objectFit: 'contain',
             cursor: cursorHidden ? 'none' : 'default',
             // Disable text smoothing and antialiasing for pixelated text
             fontSmooth: 'never',
@@ -9582,13 +9688,10 @@ const Pong404: React.FC = () => {
         ref={pixiContainerRef}
         style={{
           position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          // Match canvas sizing exactly - 4:3 aspect ratio
-          width: `min(calc(100vw - 8px), calc((100vh - 8px) * 4 / 3))`,
-          height: `min(calc(100vh - 8px), calc((100vw - 8px) * 3 / 4))`,
-          aspectRatio: '4 / 3',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
           cursor: cursorHidden ? 'none' : 'default',
           imageRendering: 'pixelated',
           pointerEvents: 'none', // Let events pass through to canvas
@@ -9596,6 +9699,7 @@ const Pong404: React.FC = () => {
           visibility: crtEffect ? 'visible' : 'hidden', // Only show when CRT is active
         }}
       />
+      </div>
       </div>
 
       {/* Spectator Mode UI Overlay */}
@@ -9616,8 +9720,9 @@ const Pong404: React.FC = () => {
       </Link>
 
       {/* Ambient Music - only plays on this page */}
-      <GlobalAmbientMusic />
+      <GlobalAmbientMusic lanMode={lanMode} isSpectatorMode={isSpectatorMode} />
 
+      </div>
     </div>
   );
 };
