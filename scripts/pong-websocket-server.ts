@@ -76,9 +76,9 @@ class ServerCollisionDetector {
     // Get current ball speed or use base speed
     const currentSpeed = ball.currentSpeed || this.BASE_BALL_SPEED;
 
-    // Accelerate by 10% on each paddle hit, max 200% of base speed
+    // Accelerate by 10% on each paddle hit, max 300% of base speed
     const ACCELERATION = 1.10;
-    const MAX_SPEED = this.BASE_BALL_SPEED * 2.0;
+    const MAX_SPEED = this.BASE_BALL_SPEED * 3.0;
     const newSpeed = Math.min(currentSpeed * ACCELERATION, MAX_SPEED);
 
     let newDx = ball.dx;
@@ -919,7 +919,8 @@ class PongWebSocketServer {
     const player = this.players.get(playerId);
     if (!player) return;
 
-    const room = this.rooms.get(player.roomId);
+    const roomId = player.roomId;
+    const room = this.rooms.get(roomId);
     if (!room) return;
 
     // Check sequence number to ignore out-of-order updates
@@ -1995,9 +1996,9 @@ class PongWebSocketServer {
           paddle.reactionTime = 30 + Math.random() * 40; // 30-70ms (very fast)
         }
 
-        paddle.skillLevel = 0.90 + Math.random() * 0.08; // 90-98% skill level (very good)
+        paddle.skillLevel = 0.85 + Math.random() * 0.10; // 85-95% skill level (good but not perfect)
         paddle.lastReactionTime = 0;
-        paddle.missChance = 0.01 + Math.random() * 0.02; // 1-3% miss chance (catches almost all balls)
+        paddle.missChance = 0.03 + Math.random() * 0.04; // 3-7% miss chance (more scoring opportunities)
         paddle.currentVelocity = 0;
         paddle.lastUpdateTime = now;
         paddle.idleWobble = Math.random() * Math.PI * 2; // Random phase for idle movement
@@ -2085,13 +2086,29 @@ class PongWebSocketServer {
           !isVertical
         );
 
-        // 🎯 STRATEGIC POSITIONING: ALL paddles aim for aggressive angles
-        // 70% of the time, position to hit ball at an angle to make it harder for opponents
-        if (Math.random() < 0.7) {
-          // Calculate aggressive offset to create max angle (±30° from physics)
+        // 🎯 STRATEGIC POSITIONING: Add variety to prevent boring volleys
+        // 50% of the time, aim for center (safe return)
+        // 30% of the time, aim for aggressive angle
+        // 20% of the time, aim randomly (chaos factor)
+        const strategy = Math.random();
+
+        if (strategy < 0.5) {
+          // Safe return - aim for center of paddle (straight back)
+          // This creates predictable returns that can lead to points
+        } else if (strategy < 0.8) {
+          // Aggressive angle - hit near edge
           const angleDirection = Math.random() < 0.5 ? -1 : 1;
-          const aggressiveOffset = (paddleSize / 2) * 0.8 * angleDirection; // Hit near edge
+          const aggressiveOffset = (paddleSize / 2) * (0.6 + Math.random() * 0.3) * angleDirection; // 60-90% toward edge
           predictedPos += aggressiveOffset;
+
+          // Clamp to valid playfield
+          const canvasDimension = isVertical ? canvasHeight : canvasWidth;
+          const margin = paddleSize / 2;
+          predictedPos = Math.max(margin, Math.min(canvasDimension - margin, predictedPos));
+        } else {
+          // Random positioning - creates unpredictable returns
+          const randomOffset = (Math.random() - 0.5) * paddleSize * 1.5;
+          predictedPos += randomOffset;
 
           // Clamp to valid playfield
           const canvasDimension = isVertical ? canvasHeight : canvasWidth;
@@ -2099,8 +2116,8 @@ class PongWebSocketServer {
           predictedPos = Math.max(margin, Math.min(canvasDimension - margin, predictedPos));
         }
 
-        // Add skill-based error (very small for excellent accuracy)
-        const maxError = paddleSize * 0.08 * (1 - paddle.skillLevel); // Very small error for better catches
+        // Add larger skill-based error for more variation
+        const maxError = paddleSize * 0.15 * (1 - paddle.skillLevel); // Increased from 0.08 to 0.15
         const predictionError = (Math.random() - 0.5) * maxError;
         predictedPos += predictionError;
 
@@ -2198,6 +2215,11 @@ class PongWebSocketServer {
       top: Array.from(room.players.values()).some(p => p.side === 'top'),
       bottom: Array.from(room.players.values()).some(p => p.side === 'bottom')
     };
+
+    // Debug: Log human player status every 60 frames
+    if (gameState.ball && Math.floor(gameState.ball.x) % 60 === 0) {
+      console.log('🎮 Human Players:', humanPlayers);
+    }
 
     // Only update AI for paddles WITHOUT human players
     // Human players control their own paddles

@@ -901,6 +901,8 @@ const Pong404: React.FC = () => {
 
 
   // Responsive square canvas size for perfect square gameplay
+  const BEZEL_SIZE = 50;
+
   const [canvasSize, setCanvasSize] = useState(() => {
     const getOptimalCanvasSize = () => {
       if (typeof window === 'undefined') return 800;
@@ -914,13 +916,13 @@ const Pong404: React.FC = () => {
       if (viewportWidth < 768) {
         return Math.min(Math.floor(minDimension * 0.9), 600); // Cap at 600px for very large phones
       } else {
-        return 800; // Desktop size
+        return 800; // Desktop size for playfield
       }
     };
 
-    const size = getOptimalCanvasSize();
-    // Square canvas for square playfield
-    return { width: size, height: size };
+    const playfieldSize = getOptimalCanvasSize();
+    // Add bezel margins to canvas size
+    return { width: playfieldSize + (BEZEL_SIZE * 2), height: playfieldSize + (BEZEL_SIZE * 2) };
   });
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'warming' | 'connected' | 'error' | 'retrying' | 'server_down' | 'server_starting'>('idle');
   const [retryCount, setRetryCount] = useState(0);
@@ -969,9 +971,9 @@ const Pong404: React.FC = () => {
     bottom: null
   });
 
-  // Playfield size - same as canvas, borders drawn with stroke extending inward
-  const playFieldWidth = canvasSize.width;
-  const playFieldHeight = canvasSize.height;
+  // Playfield size - canvas minus bezel margins
+  const playFieldWidth = canvasSize.width - (BEZEL_SIZE * 2);
+  const playFieldHeight = canvasSize.height - (BEZEL_SIZE * 2);
 
   const [gameState, _setGameState] = useState<GameState>({
     ball: {
@@ -1151,7 +1153,7 @@ const Pong404: React.FC = () => {
   }, []);
 
   const [localTestMode, setLocalTestMode] = useState(false);
-  const [crtEffect, setCrtEffect] = useState(true); // CRT shader enabled by default
+  const [crtEffect, setCrtEffect] = useState(false); // CRT shader disabled by default
   const [lanMode, setLanMode] = useState(false); // LAN mode - mute all clients, only spectator plays audio
   const [showAudioPrompt, setShowAudioPrompt] = useState(!isSpectatorMode); // Show audio interaction prompt on first load (skip for spectators)
   const audioPromptDismissedRef = useRef(isSpectatorMode); // Track if audio prompt was dismissed (auto-dismiss for spectators)
@@ -2940,40 +2942,41 @@ const Pong404: React.FC = () => {
         }
       };
 
-      const newSize = getOptimalCanvasSize();
+      const playfieldSize = getOptimalCanvasSize();
+      const canvasSizeWithBezel = playfieldSize + (BEZEL_SIZE * 2);
 
       console.log('Canvas size update:', {
         viewport: { width: window.innerWidth, height: window.innerHeight },
-        newSize,
-        willSet: { width: newSize, height: newSize }
+        playfieldSize,
+        willSet: { width: canvasSizeWithBezel, height: canvasSizeWithBezel }
       });
 
-      setCanvasSize({ width: newSize, height: newSize });
+      setCanvasSize({ width: canvasSizeWithBezel, height: canvasSizeWithBezel });
 
-      // Update game state when canvas size changes
+      // Update game state when canvas size changes (use playfield size, not canvas size)
       setGameState(prev => ({
         ...prev,
         ball: {
           ...prev.ball,
-          x: Math.min(prev.ball.x, newSize - prev.ball.size),
-          y: Math.min(prev.ball.y, newSize - prev.ball.size)
+          x: Math.min(prev.ball.x, playfieldSize - prev.ball.size),
+          y: Math.min(prev.ball.y, playfieldSize - prev.ball.size)
         },
         paddles: {
           left: {
             ...prev.paddles.left,
-            y: Math.min(prev.paddles.left.y, newSize - prev.paddles.left.height)
+            y: Math.min(prev.paddles.left.y, playfieldSize - prev.paddles.left.height)
           },
           right: {
             ...prev.paddles.right,
-            y: Math.min(prev.paddles.right.y, newSize - prev.paddles.right.height)
+            y: Math.min(prev.paddles.right.y, playfieldSize - prev.paddles.right.height)
           },
           top: {
             ...prev.paddles.top,
-            x: Math.min(prev.paddles.top.x, newSize - prev.paddles.top.width)
+            x: Math.min(prev.paddles.top.x, playfieldSize - prev.paddles.top.width)
           },
           bottom: {
             ...prev.paddles.bottom,
-            x: Math.min(prev.paddles.bottom.x, newSize - prev.paddles.bottom.width)
+            x: Math.min(prev.paddles.bottom.x, playfieldSize - prev.paddles.bottom.width)
           }
         }
       }));
@@ -3025,6 +3028,9 @@ const Pong404: React.FC = () => {
   // Master compressor/limiter to prevent clipping
   const masterCompressorRef = useRef<DynamicsCompressorNode | null>(null);
 
+  // Hard limiter (final safety net before destination)
+  const masterLimiterGainRef = useRef<GainNode | null>(null);
+
   // Speech has dedicated channel (channel 1)
   const speechMasterGainRef = useRef<GainNode | null>(null);
 
@@ -3052,14 +3058,27 @@ const Pong404: React.FC = () => {
   const initializeGlobalMixer = useCallback((audioContext: AudioContext) => {
     console.log('🎚️ Initializing Global Audio Mixer');
 
-    // Create master compressor/limiter with aggressive settings to prevent distortion
+    // Create master compressor for smooth dynamics control
     const compressor = audioContext.createDynamicsCompressor();
-    compressor.threshold.setValueAtTime(-20, audioContext.currentTime); // Lower threshold catches more peaks
-    compressor.knee.setValueAtTime(15, audioContext.currentTime); // Smoother compression
-    compressor.ratio.setValueAtTime(20, audioContext.currentTime); // Hard limiting (was 12)
-    compressor.attack.setValueAtTime(0.001, audioContext.currentTime); // Faster attack (was 0.003)
-    compressor.release.setValueAtTime(0.15, audioContext.currentTime); // Faster release (was 0.25)
+    compressor.threshold.setValueAtTime(-24, audioContext.currentTime); // Even lower threshold
+    compressor.knee.setValueAtTime(20, audioContext.currentTime); // Very smooth compression
+    compressor.ratio.setValueAtTime(12, audioContext.currentTime); // Moderate compression (not extreme)
+    compressor.attack.setValueAtTime(0.001, audioContext.currentTime); // Very fast attack
+    compressor.release.setValueAtTime(0.1, audioContext.currentTime); // Fast release
     masterCompressorRef.current = compressor;
+
+    // Create HARD LIMITER (brick wall at -0.3dB to prevent any clipping)
+    const limiter = audioContext.createDynamicsCompressor();
+    limiter.threshold.setValueAtTime(-0.3, audioContext.currentTime); // Just below 0dB
+    limiter.knee.setValueAtTime(0, audioContext.currentTime); // Hard knee = brick wall
+    limiter.ratio.setValueAtTime(20, audioContext.currentTime); // Infinity ratio for true limiting
+    limiter.attack.setValueAtTime(0.0001, audioContext.currentTime); // Instant attack
+    limiter.release.setValueAtTime(0.05, audioContext.currentTime); // Very fast release
+
+    // Create safety gain before limiter (reduces everything by 20% as final safety)
+    const safetyGain = audioContext.createGain();
+    safetyGain.gain.setValueAtTime(0.8, audioContext.currentTime);
+    masterLimiterGainRef.current = safetyGain;
 
     // Create audio analyzer
     const analyser = audioContext.createAnalyser();
@@ -3068,12 +3087,14 @@ const Pong404: React.FC = () => {
     analyserNodeRef.current = analyser;
     frequencyDataRef.current = new Uint8Array(analyser.frequencyBinCount);
 
-    // Routing: Compressor → Analyser → Destination
-    compressor.connect(analyser);
+    // Routing: Compressor → Safety Gain → Hard Limiter → Analyser → Destination
+    compressor.connect(safetyGain);
+    safetyGain.connect(limiter);
+    limiter.connect(analyser);
     analyser.connect(audioContext.destination);
 
-    // Create 16 mixer channels
-    const channelVolume = 0.15;
+    // Create 16 mixer channels with REDUCED volume to prevent overload
+    const channelVolume = 0.08; // Reduced from 0.15 to 0.08
     const channels = [
       audioChannel1Ref, audioChannel2Ref, audioChannel3Ref, audioChannel4Ref,
       audioChannel5Ref, audioChannel6Ref, audioChannel7Ref, audioChannel8Ref,
@@ -3091,12 +3112,14 @@ const Pong404: React.FC = () => {
     // Speech uses channel 1
     speechMasterGainRef.current = audioChannel1Ref.current;
 
-    console.log('  ✓ 16 channels, compressor, analyser initialized');
+    console.log('  ✓ 16 channels, compressor, hard limiter, safety gain, analyser initialized');
+    console.log(`  ✓ Audio chain: Channels(${channelVolume}) → Compressor(-24dB) → Safety(0.8) → Limiter(-0.3dB) → Analyser → Out`);
 
     // Global refs
     (window as any).pongAudioAnalyzer = analyser;
     (window as any).pongAudioContext = audioContext;
     (window as any).pongMasterCompressor = compressor;
+    (window as any).pongMasterLimiter = limiter;
   }, []);
 
   // Initialize audio effects (reverb/delay)
@@ -3338,7 +3361,7 @@ const Pong404: React.FC = () => {
   }, [speakRobotic, getContextualTaunt]);
 
   // Enhanced tone generation with custom volume
-  const playTone = useCallback(async (frequency: number, duration: number, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both', volume: number = 0.3) => {
+  const playTone = useCallback(async (frequency: number, duration: number, effectType: 'normal' | 'echo' | 'reverb' | 'both' = 'both', volume: number = 0.5) => {
     // console.log(`[SOUND] playTone called: freq=${frequency}, dur=${duration}, vol=${volume}`);
 
     // Only create AudioContext when actually trying to play a sound (user gesture)
@@ -6784,18 +6807,18 @@ const Pong404: React.FC = () => {
         ctx.lineWidth = 1;
 
         // Vertical lines
-        for (let x = 0; x < canvasSize.width; x += 40) {
+        for (let x = 0; x < playFieldWidth; x += 40) {
           ctx.beginPath();
           ctx.moveTo(x, 0);
-          ctx.lineTo(x, canvasSize.height);
+          ctx.lineTo(x, playFieldHeight);
           ctx.stroke();
         }
 
         // Horizontal lines
-        for (let y = 0; y < canvasSize.height; y += 40) {
+        for (let y = 0; y < playFieldHeight; y += 40) {
           ctx.beginPath();
           ctx.moveTo(0, y);
-          ctx.lineTo(canvasSize.width, y);
+          ctx.lineTo(playFieldWidth, y);
           ctx.stroke();
         }
         ctx.globalAlpha = 1;
@@ -6975,19 +6998,39 @@ const Pong404: React.FC = () => {
       ctx.fillText(`CRT EFFECT: ${crtEffect ? 'ON' : 'OFF'}`, canvasSize.width / 2, canvasSize.height / 2 + 200);
       ctx.shadowBlur = 0;
 
+      // 🖼️ MEGA BEZEL - Draw on start screen too
+      const BEZEL_SIZE_START = 50;
+      const gradient = ctx.createLinearGradient(0, 0, canvasSize.width, canvasSize.height);
+      gradient.addColorStop(0, 'rgba(0,0,0,0.7)');
+      gradient.addColorStop(0.5, 'rgba(17,17,17,0.7)');
+      gradient.addColorStop(1, 'rgba(0,0,0,0.7)');
+      ctx.fillStyle = gradient;
+
+      // Draw bezel frame
+      ctx.fillRect(0, 0, canvasSize.width, BEZEL_SIZE_START); // Top
+      ctx.fillRect(0, canvasSize.height - BEZEL_SIZE_START, canvasSize.width, BEZEL_SIZE_START); // Bottom
+      ctx.fillRect(0, 0, BEZEL_SIZE_START, canvasSize.height); // Left
+      ctx.fillRect(canvasSize.width - BEZEL_SIZE_START, 0, BEZEL_SIZE_START, canvasSize.height); // Right
+
+      // Inner border
+      ctx.strokeStyle = '#333333';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(BEZEL_SIZE_START, BEZEL_SIZE_START, canvasSize.width - BEZEL_SIZE_START * 2, canvasSize.height - BEZEL_SIZE_START * 2);
+
       return; // Don't render game elements when showing start screen
     }
 
-    // 📐 Apply dynamic playfield scaling transformation
+    // 📐 Offset canvas by bezel size so game is drawn inside the frame
+    ctx.save(); // Save canvas state before transformation
+    ctx.translate(BEZEL_SIZE, BEZEL_SIZE); // Offset by bezel margins
+
+    // Apply dynamic playfield scaling transformation
     const playfieldScale = gameState.playfieldScale || 1.0;
 
-    // Always apply transform (even at 1.0 scale) for consistency
-    ctx.save(); // Save canvas state before transformation
-
     if (playfieldScale !== 1.0) {
-      // Transform from center of canvas for symmetric scaling
-      const centerX = canvasSize.width / 2;
-      const centerY = canvasSize.height / 2;
+      // Transform from center of PLAYFIELD for symmetric scaling
+      const centerX = playFieldWidth / 2;
+      const centerY = playFieldHeight / 2;
 
       ctx.translate(centerX, centerY); // Move origin to center
       ctx.scale(playfieldScale, playfieldScale); // Apply scale
@@ -6996,6 +7039,10 @@ const Pong404: React.FC = () => {
 
     // Draw playfield borders at the edge of the canvas with music-reactive glow
     const musicData = musicDataRef.current;
+
+    // Ensure we always have some glow even if music data is not available
+    const baseGlow = 8; // Minimum glow even without music
+    const musicVolume = Math.max(0.2, musicData.volume); // Use at least 20% volume for visibility
 
     // Music data logging moved to GlobalAmbientMusic.tsx for better debugging
 
@@ -7016,9 +7063,12 @@ const Pong404: React.FC = () => {
       ctx.setLineDash([]); // Solid lines for borders
 
       // Draw borders with centered stroke at BORDER_THICKNESS/2 from edges
+      // Music-reactive glow for non-protected sides
+      const musicGlow = baseGlow + musicVolume * 12; // 8-20px based on music
+
       // Left border
       ctx.strokeStyle = protectedSide === 'left' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'left' ? glowIntensity : 3 + musicData.volume * 7;
+      ctx.shadowBlur = protectedSide === 'left' ? glowIntensity : musicGlow;
       ctx.shadowColor = protectedSide === 'left' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'left' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
       ctx.beginPath();
@@ -7028,7 +7078,7 @@ const Pong404: React.FC = () => {
 
       // Right border
       ctx.strokeStyle = protectedSide === 'right' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'right' ? glowIntensity : 3 + musicData.volume * 7;
+      ctx.shadowBlur = protectedSide === 'right' ? glowIntensity : musicGlow;
       ctx.shadowColor = protectedSide === 'right' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'right' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
       ctx.beginPath();
@@ -7038,7 +7088,7 @@ const Pong404: React.FC = () => {
 
       // Top border
       ctx.strokeStyle = protectedSide === 'top' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'top' ? glowIntensity : 3 + musicData.volume * 7;
+      ctx.shadowBlur = protectedSide === 'top' ? glowIntensity : musicGlow;
       ctx.shadowColor = protectedSide === 'top' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'top' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
       ctx.beginPath();
@@ -7048,7 +7098,7 @@ const Pong404: React.FC = () => {
 
       // Bottom border
       ctx.strokeStyle = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'bottom' ? glowIntensity : 3 + musicData.volume * 7;
+      ctx.shadowBlur = protectedSide === 'bottom' ? glowIntensity : musicGlow;
       ctx.shadowColor = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'bottom' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
       ctx.beginPath();
@@ -7056,16 +7106,21 @@ const Pong404: React.FC = () => {
       ctx.lineTo(playFieldWidth - BORDER_THICKNESS/2, playFieldHeight - BORDER_THICKNESS/2);
       ctx.stroke();
     } else {
-      // Normal border drawing - centered stroke at BORDER_THICKNESS/2 from edges
-      ctx.strokeStyle = currentColors.foreground;
-      ctx.lineWidth = BORDER_THICKNESS;
+      // Normal border drawing with dramatic music-reactive inner glow
       ctx.setLineDash([]);
 
-      // Add music-reactive glow to border
-      ctx.shadowBlur = 3 + musicData.volume * 7;
-      ctx.shadowColor = currentColors.foreground;
+      // Music-reactive glow intensity (use musicVolume which has minimum baseline)
+      const glowIntensity = musicVolume; // 0.2 minimum, 1 at peak
 
-      ctx.strokeRect(BORDER_THICKNESS/2, BORDER_THICKNESS/2, playFieldWidth - BORDER_THICKNESS, playFieldHeight - BORDER_THICKNESS);
+      // Main border with dramatic inner glow
+      const mainGlowSize = 15 + glowIntensity * 25; // 15-40px based on music (much more visible)
+
+      ctx.strokeStyle = currentColors.foreground;
+      ctx.lineWidth = BORDER_THICKNESS;
+      ctx.shadowBlur = mainGlowSize;
+      ctx.shadowColor = currentColors.foreground;
+      // Draw border at exact edges (0, 0, playFieldWidth, playFieldHeight)
+      ctx.strokeRect(0, 0, playFieldWidth, playFieldHeight);
     }
 
     // Clear shadow for other elements
@@ -8907,6 +8962,107 @@ const Pong404: React.FC = () => {
     // 📐 Restore canvas state after dynamic playfield scaling (always restore since we always save)
     ctx.restore();
 
+    // 🪞 MEGA BEZEL REFLECTIONS - Create flipped copies of edges in separate canvases
+    // This eliminates transform precision issues
+
+    // Music-reactive reflection opacity
+    const reflectionMusicData = musicDataRef.current || { volume: 0, bass: 0, mid: 0, treble: 0 };
+    const baseOpacity = 0.15;  // More visible base
+    const maxOpacity = 0.30;   // More visible with music
+    const reflectionOpacity = baseOpacity + (reflectionMusicData.volume * (maxOpacity - baseOpacity));
+
+    // Capture playfield content
+    const playfieldData = ctx.getImageData(BEZEL_SIZE, BEZEL_SIZE, playFieldWidth, playFieldHeight);
+    const sourceCanvas = document.createElement('canvas');
+    sourceCanvas.width = playFieldWidth;
+    sourceCanvas.height = playFieldHeight;
+    const sourceCtx = sourceCanvas.getContext('2d');
+    if (sourceCtx) {
+      sourceCtx.putImageData(playfieldData, 0, 0);
+    }
+
+    // Draw black bezel background - leave gap for borders (half of BORDER_THICKNESS)
+    const borderOffset = BORDER_THICKNESS / 2; // 6px
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, canvasSize.width, BEZEL_SIZE - borderOffset); // Top
+    ctx.fillRect(0, canvasSize.height - BEZEL_SIZE + borderOffset, canvasSize.width, BEZEL_SIZE - borderOffset); // Bottom
+    ctx.fillRect(0, 0, BEZEL_SIZE - borderOffset, canvasSize.height); // Left
+    ctx.fillRect(canvasSize.width - BEZEL_SIZE + borderOffset, 0, BEZEL_SIZE - borderOffset, canvasSize.height); // Right
+
+    if (sourceCtx) {
+      // Create pre-flipped reflection canvases to avoid transform issues
+
+      // TOP reflection - full width including where corners will be
+      const topReflection = document.createElement('canvas');
+      topReflection.width = canvasSize.width; // Full canvas width
+      topReflection.height = BEZEL_SIZE;
+      const topCtx = topReflection.getContext('2d');
+      if (topCtx) {
+        topCtx.translate(BEZEL_SIZE, BEZEL_SIZE);
+        topCtx.scale(1, -1);
+        topCtx.drawImage(sourceCanvas, 0, 0, playFieldWidth, BEZEL_SIZE, 0, 0, playFieldWidth, BEZEL_SIZE);
+        // Draw to canvas at y=0, full width
+        ctx.save();
+        ctx.globalAlpha = reflectionOpacity;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.drawImage(topReflection, 0, 0);
+        ctx.restore();
+      }
+
+      // BOTTOM reflection - full width including where corners will be
+      const bottomReflection = document.createElement('canvas');
+      bottomReflection.width = canvasSize.width;
+      bottomReflection.height = BEZEL_SIZE;
+      const bottomCtx = bottomReflection.getContext('2d');
+      if (bottomCtx) {
+        bottomCtx.translate(BEZEL_SIZE, BEZEL_SIZE);
+        bottomCtx.scale(1, -1);
+        bottomCtx.drawImage(sourceCanvas, 0, playFieldHeight - BEZEL_SIZE, playFieldWidth, BEZEL_SIZE, 0, 0, playFieldWidth, BEZEL_SIZE);
+        // Draw to canvas
+        ctx.save();
+        ctx.globalAlpha = reflectionOpacity;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.drawImage(bottomReflection, 0, canvasSize.height - BEZEL_SIZE);
+        ctx.restore();
+      }
+
+      // LEFT reflection - full height including where corners will be
+      const leftReflection = document.createElement('canvas');
+      leftReflection.width = BEZEL_SIZE;
+      leftReflection.height = canvasSize.height; // Full canvas height
+      const leftCtx = leftReflection.getContext('2d');
+      if (leftCtx) {
+        leftCtx.translate(BEZEL_SIZE, BEZEL_SIZE);
+        leftCtx.scale(-1, 1);
+        leftCtx.drawImage(sourceCanvas, 0, 0, BEZEL_SIZE, playFieldHeight, 0, 0, BEZEL_SIZE, playFieldHeight);
+        // Draw to canvas at x=0, full height
+        ctx.save();
+        ctx.globalAlpha = reflectionOpacity;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.drawImage(leftReflection, 0, 0);
+        ctx.restore();
+      }
+
+      // RIGHT reflection - full height including where corners will be
+      const rightReflection = document.createElement('canvas');
+      rightReflection.width = BEZEL_SIZE;
+      rightReflection.height = canvasSize.height;
+      const rightCtx = rightReflection.getContext('2d');
+      if (rightCtx) {
+        rightCtx.translate(BEZEL_SIZE, BEZEL_SIZE);
+        rightCtx.scale(-1, 1);
+        rightCtx.drawImage(sourceCanvas, playFieldWidth - BEZEL_SIZE, 0, BEZEL_SIZE, playFieldHeight, 0, 0, BEZEL_SIZE, playFieldHeight);
+        // Draw to canvas
+        ctx.save();
+        ctx.globalAlpha = reflectionOpacity;
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.drawImage(rightReflection, canvasSize.width - BEZEL_SIZE, 0);
+        ctx.restore();
+      }
+    }
+
+    // Inner border removed - playfield borders are now fully visible
+
   }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, crtEffect, applyCRTEffect, showAudioPrompt]);
 
   // Update function refs when functions change (prevents game loop restart)
@@ -8986,24 +9142,37 @@ const Pong404: React.FC = () => {
   // Prevent React strict mode from causing duplicate WebSocket connections
   const hasInitialized = useRef(false);
 
-  // Initialize PixiJS for CRT shader effect
+  // Initialize PixiJS for CRT shader effect (only when CRT is enabled)
   useEffect(() => {
+    if (!crtEffect) return; // Skip initialization if CRT is disabled
     if (!pixiContainerRef.current || !canvasRef.current) return;
 
     let app: Application | null = null;
 
     (async () => {
-      app = new Application();
+      try {
+        app = new Application();
 
-      // Create SQUARE PIXI canvas (800x800) for square curvature
-      await app.init({
-        width: canvasSize.width,
-        height: canvasSize.height,
-        backgroundAlpha: 0,
-        antialias: false,
-      });
+        // Create canvas with bezel for Mega Bezel reflections
+        await app.init({
+          width: canvasSize.width,
+          height: canvasSize.height,
+          backgroundAlpha: 0,
+          antialias: false,
+        });
 
-      if (!pixiContainerRef.current) return;
+        if (!pixiContainerRef.current) {
+          console.warn('[PixiJS] Container ref no longer available after init');
+          return;
+        }
+        if (!app || !app.stage) {
+          console.error('[PixiJS] Stage is null - initialization failed');
+          return;
+        }
+      } catch (error) {
+        console.error('[PixiJS] Initialization error:', error);
+        return;
+      }
 
       pixiContainerRef.current.appendChild(app.canvas);
       pixiAppRef.current = app;
@@ -9019,6 +9188,10 @@ const Pong404: React.FC = () => {
       app.canvas.style.cursor = cursorHidden ? 'none' : 'default';
 
       // Create sprite that we'll update each frame
+      if (!canvasRef.current) {
+        console.error('Canvas ref is null');
+        return;
+      }
       let texture = Texture.from(canvasRef.current);
       const sprite = new Sprite(texture);
       sprite.width = canvasSize.width;
@@ -9057,6 +9230,11 @@ const Pong404: React.FC = () => {
       let frameCount = 0;
       let lastLogTime = 0;
       app.ticker.add(() => {
+        // Safety check: ensure app and stage still exist (prevents errors during cleanup)
+        if (!app || !app.stage) {
+          return;
+        }
+
         frameCount++;
 
         // Debug log every 120 frames (every 2 seconds at 60fps)
@@ -9113,7 +9291,7 @@ const Pong404: React.FC = () => {
         }
       }
     };
-  }, [canvasSize.width, canvasSize.height]);
+  }, [crtEffect, canvasSize.width, canvasSize.height]);
 
   // Toggle CRT filter on/off
   useEffect(() => {
@@ -9460,20 +9638,37 @@ const Pong404: React.FC = () => {
     // Prevent scrolling on mobile devices
     const preventDefault = (e: Event) => e.preventDefault();
 
+    // Force both HTML and body to prevent ANY scrolling and remove default spacing
+    document.documentElement.style.overflow = 'hidden';
+    document.documentElement.style.height = '100%';
+    document.documentElement.style.margin = '0';
+    document.documentElement.style.padding = '0';
     document.body.style.overflow = 'hidden';
     document.body.style.position = 'fixed';
     document.body.style.width = '100%';
     document.body.style.height = '100%';
+    document.body.style.top = '0';
+    document.body.style.left = '0';
+    document.body.style.margin = '0';
+    document.body.style.padding = '0';
 
     // Prevent scroll on touch devices
     document.addEventListener('touchmove', preventDefault, { passive: false });
     document.addEventListener('wheel', preventDefault, { passive: false });
 
     return () => {
+      document.documentElement.style.overflow = '';
+      document.documentElement.style.height = '';
+      document.documentElement.style.margin = '';
+      document.documentElement.style.padding = '';
       document.body.style.overflow = '';
       document.body.style.position = '';
       document.body.style.width = '';
       document.body.style.height = '';
+      document.body.style.top = '';
+      document.body.style.left = '';
+      document.body.style.margin = '';
+      document.body.style.padding = '';
       document.removeEventListener('touchmove', preventDefault);
       document.removeEventListener('wheel', preventDefault);
     };
@@ -9481,7 +9676,7 @@ const Pong404: React.FC = () => {
 
   return (
     <div
-      className="w-screen h-screen overflow-hidden flex items-center justify-center"
+      className="flex items-center justify-center"
       style={{
         touchAction: 'none',
         userSelect: 'none',
@@ -9491,14 +9686,15 @@ const Pong404: React.FC = () => {
         left: 0,
         width: '100%',
         height: '100%',
-        background: '#000000'
+        background: '#000000',
+        overflow: 'hidden' // Prevent box-shadows from causing scrolling
       }}
     >
-      {/* Container for game - fill entire height */}
+      {/* Container for game - use smaller of viewport dimensions */}
       <div style={{
         position: 'relative',
-        width: '100vh', // Square based on viewport height
-        height: '100vh',
+        width: '98vmin', // Nearly fill viewport with reflections
+        height: '98vmin',
         aspectRatio: '1 / 1',
         boxShadow: `
           0 0 240px 40px ${COLOR_PALETTE[gameState.colorIndex].foreground}40,
@@ -9520,6 +9716,8 @@ const Pong404: React.FC = () => {
           position: 'relative',
           width: '100%',
           height: '100%',
+          maxWidth: '100%',
+          maxHeight: '100%',
           aspectRatio: '1 / 1',
           boxShadow: `inset 0 0 80px 10px ${COLOR_PALETTE[gameState.colorIndex].foreground}25`,
           transition: 'box-shadow 0.3s ease',
@@ -9539,13 +9737,13 @@ const Pong404: React.FC = () => {
             background: COLOR_PALETTE[gameState.colorIndex].background,
             outline: 'none',
             objectFit: 'contain',
+            imageRendering: 'auto',
             cursor: cursorHidden ? 'none' : 'default',
             // Disable text smoothing and antialiasing for pixelated text
             fontSmooth: 'never',
             WebkitFontSmoothing: 'none',
             MozOsxFontSmoothing: 'unset',
             textRendering: 'geometricPrecision',
-            imageRendering: 'pixelated',
             visibility: crtEffect ? 'hidden' : 'visible', // Hide canvas when CRT is active
           } as React.CSSProperties}
           tabIndex={0}
