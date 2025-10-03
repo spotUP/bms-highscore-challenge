@@ -48,6 +48,9 @@ uniform float uResolutionY;
 uniform float uChromaticAberration;
 uniform float uDisharmonic;
 uniform vec2 uCenterOffset;
+uniform float uBezelSize;
+uniform float uReflectionOpacity;
+uniform float uBorderNormalized;
 
 // CRT barrel distortion for square display
 vec2 curveRemapUV(vec2 uv) {
@@ -88,7 +91,168 @@ float noise(vec2 co) {
     return fract(sin(dot(co.xy, vec2(12.9898, 78.233)) + uTime) * 43758.5453);
 }
 
+// Get reflection from playfield edge
+vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
+    // Determine which bezel region we're in using 45-degree miters
+    float distFromTop = screenCoord.y;
+    float distFromBottom = 1.0 - screenCoord.y;
+    float distFromLeft = screenCoord.x;
+    float distFromRight = 1.0 - screenCoord.x;
+
+    // Check if we're in bezel area
+    if (distFromTop >= uBezelSize && distFromBottom >= uBezelSize &&
+        distFromLeft >= uBezelSize && distFromRight >= uBezelSize) {
+        // Not in bezel
+        return vec4(0.0);
+    }
+
+    // Sample coordinates for reflection (in screen space, will convert to texture space)
+    vec2 sampleCoord;
+    float fadeAmount = 1.0;
+
+    // Reflection depth - how far into the playfield to sample (80px on 800px canvas for deeper reflections)
+    float reflectionDepth = 0.1; // 80/800 = 0.1
+
+    // Handle corners with 45-degree miter (like picture frame)
+    // The edge that's closer "owns" the corner pixel
+    if (distFromTop < uBezelSize && distFromLeft < uBezelSize) {
+        // Top-left corner - use 45-degree miter
+        if (distFromTop <= distFromLeft) {
+            // Top edge owns this pixel - sample from just inside border going inward
+            float depth = (uBezelSize - distFromTop) / uBezelSize; // 0 at outer edge, 1 at inner edge
+            sampleCoord = vec2(screenCoord.x, uBorderNormalized + depth * reflectionDepth);
+            fadeAmount = 1.0 - (distFromTop / uBezelSize);
+        } else {
+            // Left edge owns this pixel
+            float depth = (uBezelSize - distFromLeft) / uBezelSize;
+            sampleCoord = vec2(uBorderNormalized + depth * reflectionDepth, screenCoord.y);
+            fadeAmount = 1.0 - (distFromLeft / uBezelSize);
+        }
+    }
+    else if (distFromTop < uBezelSize && distFromRight < uBezelSize) {
+        // Top-right corner
+        if (distFromTop <= distFromRight) {
+            // Top edge owns this pixel
+            float depth = (uBezelSize - distFromTop) / uBezelSize;
+            sampleCoord = vec2(screenCoord.x, uBorderNormalized + depth * reflectionDepth);
+            fadeAmount = 1.0 - (distFromTop / uBezelSize);
+        } else {
+            // Right edge owns this pixel
+            float depth = (uBezelSize - distFromRight) / uBezelSize;
+            sampleCoord = vec2((1.0 - uBorderNormalized) - depth * reflectionDepth, screenCoord.y);
+            fadeAmount = 1.0 - (distFromRight / uBezelSize);
+        }
+    }
+    else if (distFromBottom < uBezelSize && distFromLeft < uBezelSize) {
+        // Bottom-left corner
+        if (distFromBottom <= distFromLeft) {
+            // Bottom edge owns this pixel
+            float depth = (uBezelSize - distFromBottom) / uBezelSize;
+            sampleCoord = vec2(screenCoord.x, (1.0 - uBorderNormalized) - depth * reflectionDepth);
+            fadeAmount = 1.0 - (distFromBottom / uBezelSize);
+        } else {
+            // Left edge owns this pixel
+            float depth = (uBezelSize - distFromLeft) / uBezelSize;
+            sampleCoord = vec2(uBorderNormalized + depth * reflectionDepth, screenCoord.y);
+            fadeAmount = 1.0 - (distFromLeft / uBezelSize);
+        }
+    }
+    else if (distFromBottom < uBezelSize && distFromRight < uBezelSize) {
+        // Bottom-right corner
+        if (distFromBottom <= distFromRight) {
+            // Bottom edge owns this pixel
+            float depth = (uBezelSize - distFromBottom) / uBezelSize;
+            sampleCoord = vec2(screenCoord.x, (1.0 - uBorderNormalized) - depth * reflectionDepth);
+            fadeAmount = 1.0 - (distFromBottom / uBezelSize);
+        } else {
+            // Right edge owns this pixel
+            float depth = (uBezelSize - distFromRight) / uBezelSize;
+            sampleCoord = vec2((1.0 - uBorderNormalized) - depth * reflectionDepth, screenCoord.y);
+            fadeAmount = 1.0 - (distFromRight / uBezelSize);
+        }
+    }
+    // Pure edges (not corners)
+    else if (distFromTop < uBezelSize) {
+        // Top edge - sample from inside the playfield border
+        float depth = (uBezelSize - distFromTop) / uBezelSize;
+        sampleCoord = vec2(screenCoord.x, uBorderNormalized + depth * reflectionDepth);
+        fadeAmount = 1.0 - (distFromTop / uBezelSize);
+    }
+    else if (distFromBottom < uBezelSize) {
+        // Bottom edge - sample from inside the playfield border
+        float depth = (uBezelSize - distFromBottom) / uBezelSize;
+        sampleCoord = vec2(screenCoord.x, (1.0 - uBorderNormalized) - depth * reflectionDepth);
+        fadeAmount = 1.0 - (distFromBottom / uBezelSize);
+    }
+    else if (distFromLeft < uBezelSize) {
+        // Left edge - sample from inside the playfield border
+        float depth = (uBezelSize - distFromLeft) / uBezelSize;
+        sampleCoord = vec2(uBorderNormalized + depth * reflectionDepth, screenCoord.y);
+        fadeAmount = 1.0 - (distFromLeft / uBezelSize);
+    }
+    else if (distFromRight < uBezelSize) {
+        // Right edge - sample from inside the playfield border
+        float depth = (uBezelSize - distFromRight) / uBezelSize;
+        sampleCoord = vec2((1.0 - uBorderNormalized) - depth * reflectionDepth, screenCoord.y);
+        fadeAmount = 1.0 - (distFromRight / uBezelSize);
+    }
+
+    // Convert sample coordinate from screen space to texture space
+    vec2 texSampleCoord = texCoordRatio * sampleCoord;
+
+    // Perspective distortion: reflections farther from edge should be dimmer and more blurred
+    // Calculate depth into the bezel (0 = at playfield edge, 1 = at outer bezel edge)
+    float bezelDepth = 1.0 - fadeAmount; // Inverted fadeAmount gives us depth
+
+    // Increase blur based on depth (perspective: farther = more blurred)
+    float baseBlur = 0.008; // Larger base blur
+    float perspectiveBlur = baseBlur * (1.0 + bezelDepth * 2.0); // Up to 3x blur at outer edge
+
+    // Sample with multi-level blur for soft reflections
+    vec4 reflection = vec4(0.0);
+
+    // Inner blur ring (sharp)
+    reflection += texture(uTexture, texSampleCoord) * 0.25;
+    reflection += texture(uTexture, texSampleCoord + vec2(perspectiveBlur * 0.5, 0.0)) * 0.125;
+    reflection += texture(uTexture, texSampleCoord - vec2(perspectiveBlur * 0.5, 0.0)) * 0.125;
+    reflection += texture(uTexture, texSampleCoord + vec2(0.0, perspectiveBlur * 0.5)) * 0.125;
+    reflection += texture(uTexture, texSampleCoord - vec2(0.0, perspectiveBlur * 0.5)) * 0.125;
+
+    // Outer blur ring (soft)
+    reflection += texture(uTexture, texSampleCoord + vec2(perspectiveBlur, 0.0)) * 0.0625;
+    reflection += texture(uTexture, texSampleCoord - vec2(perspectiveBlur, 0.0)) * 0.0625;
+    reflection += texture(uTexture, texSampleCoord + vec2(0.0, perspectiveBlur)) * 0.0625;
+    reflection += texture(uTexture, texSampleCoord - vec2(0.0, perspectiveBlur)) * 0.0625;
+
+    // Apply fade based on distance from edge
+    reflection.rgb *= fadeAmount * uReflectionOpacity;
+
+    // Perspective dimming: reflections farther from playfield are dimmer (like real reflections receding)
+    float perspectiveDim = 1.0 - (bezelDepth * 0.2); // Up to 20% dimmer at outer edge (reduced for brighter reflections)
+    reflection.rgb *= perspectiveDim;
+
+    // Additional corner darkening to hide visual artifacts
+    float minDist = min(min(distFromTop, distFromBottom), min(distFromLeft, distFromRight));
+    if (minDist < uBezelSize) {
+        // Darken corners slightly
+        float cornerDarken = smoothstep(0.0, uBezelSize, minDist);
+        reflection.rgb *= mix(0.5, 1.0, cornerDarken); // Lighter corners (50% brightness) for brighter overall reflections
+    }
+
+    return reflection;
+}
+
 void main(void) {
+    // Check if we're in the bezel area first
+    // Pass the texture coordinate ratio for proper sampling
+    vec2 texCoordRatio = vTextureCoord / vScreenCoord;
+    vec4 bezelReflection = getBezelReflection(vScreenCoord, texCoordRatio);
+    if (bezelReflection.a > 0.0 || bezelReflection.r > 0.0 || bezelReflection.g > 0.0 || bezelReflection.b > 0.0) {
+        // We're in the bezel - show reflection
+        finalColor = vec4(bezelReflection.rgb, 1.0);
+        return;
+    }
+
     // Apply barrel distortion using perfect screen coordinates for symmetry
     vec2 distortedScreenCoord = curveRemapUV(vScreenCoord);
 
@@ -227,6 +391,9 @@ export interface CRTShaderOptions {
   brightness?: number;
   chromaticAberration?: number;
   disharmonic?: number;
+  bezelSize?: number;
+  reflectionOpacity?: number;
+  borderNormalized?: number;
 }
 
 export class CRTFilter extends Filter {
@@ -266,6 +433,9 @@ export class CRTFilter extends Filter {
           uChromaticAberration: { value: options.chromaticAberration || 0.001, type: 'f32' },
           uDisharmonic: { value: options.disharmonic || 0.0, type: 'f32' },
           uCenterOffset: { value: [0.0, 0.0], type: 'vec2<f32>' }, // Perfect center
+          uBezelSize: { value: options.bezelSize || 0.03125, type: 'f32' }, // Default 25px on 800px canvas
+          uReflectionOpacity: { value: options.reflectionOpacity || 1.5, type: 'f32' },
+          uBorderNormalized: { value: options.borderNormalized || 0.015, type: 'f32' }, // Default 12px on 800px canvas
         },
       },
     });

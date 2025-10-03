@@ -901,8 +901,6 @@ const Pong404: React.FC = () => {
 
 
   // Responsive square canvas size for perfect square gameplay
-  const BEZEL_SIZE = 50;
-
   const [canvasSize, setCanvasSize] = useState(() => {
     const getOptimalCanvasSize = () => {
       if (typeof window === 'undefined') return 800;
@@ -916,13 +914,12 @@ const Pong404: React.FC = () => {
       if (viewportWidth < 768) {
         return Math.min(Math.floor(minDimension * 0.9), 600); // Cap at 600px for very large phones
       } else {
-        return 800; // Desktop size for playfield
+        return 800; // Desktop size
       }
     };
 
-    const playfieldSize = getOptimalCanvasSize();
-    // Add bezel margins to canvas size
-    return { width: playfieldSize + (BEZEL_SIZE * 2), height: playfieldSize + (BEZEL_SIZE * 2) };
+    const size = getOptimalCanvasSize();
+    return { width: size, height: size };
   });
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'warming' | 'connected' | 'error' | 'retrying' | 'server_down' | 'server_starting'>('idle');
   const [retryCount, setRetryCount] = useState(0);
@@ -971,9 +968,9 @@ const Pong404: React.FC = () => {
     bottom: null
   });
 
-  // Playfield size - canvas minus bezel margins
-  const playFieldWidth = canvasSize.width - (BEZEL_SIZE * 2);
-  const playFieldHeight = canvasSize.height - (BEZEL_SIZE * 2);
+  // Playfield size - same as canvas (border drawn at edges)
+  const playFieldWidth = canvasSize.width;
+  const playFieldHeight = canvasSize.height;
 
   const [gameState, _setGameState] = useState<GameState>({
     ball: {
@@ -2943,15 +2940,14 @@ const Pong404: React.FC = () => {
       };
 
       const playfieldSize = getOptimalCanvasSize();
-      const canvasSizeWithBezel = playfieldSize + (BEZEL_SIZE * 2);
 
       console.log('Canvas size update:', {
         viewport: { width: window.innerWidth, height: window.innerHeight },
         playfieldSize,
-        willSet: { width: canvasSizeWithBezel, height: canvasSizeWithBezel }
+        willSet: { width: playfieldSize, height: playfieldSize }
       });
 
-      setCanvasSize({ width: canvasSizeWithBezel, height: canvasSizeWithBezel });
+      setCanvasSize({ width: playfieldSize, height: playfieldSize });
 
       // Update game state when canvas size changes (use playfield size, not canvas size)
       setGameState(prev => ({
@@ -6700,6 +6696,23 @@ const Pong404: React.FC = () => {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return;
 
+    // DEBUG: Check if there's a transform or clip active
+    if (!window.__ctxDebugLogged) {
+      window.__ctxDebugLogged = true;
+      const transform = ctx.getTransform();
+      console.log('[CTX DEBUG] Canvas context state:', {
+        transformA: transform.a,
+        transformD: transform.d,
+        transformE: transform.e,
+        transformF: transform.f,
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height
+      });
+    }
+
+    // Reset transform to identity to ensure clean slate (fixes Retina/scaling issues)
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
     // Disable anti-aliasing to prevent sub-pixel rendering flicker
     ctx.imageSmoothingEnabled = false;
 
@@ -6728,7 +6741,7 @@ const Pong404: React.FC = () => {
     // Get current color scheme
     const currentColors = COLOR_PALETTE[gameState.colorIndex];
 
-    // Clear canvas with current background color
+    // Clear canvas with color scheme background
     ctx.fillStyle = currentColors.background;
     ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
@@ -6998,36 +7011,17 @@ const Pong404: React.FC = () => {
       ctx.fillText(`CRT EFFECT: ${crtEffect ? 'ON' : 'OFF'}`, canvasSize.width / 2, canvasSize.height / 2 + 200);
       ctx.shadowBlur = 0;
 
-      // 🖼️ MEGA BEZEL - Draw on start screen too
-      const BEZEL_SIZE_START = 50;
-      const gradient = ctx.createLinearGradient(0, 0, canvasSize.width, canvasSize.height);
-      gradient.addColorStop(0, 'rgba(0,0,0,0.7)');
-      gradient.addColorStop(0.5, 'rgba(17,17,17,0.7)');
-      gradient.addColorStop(1, 'rgba(0,0,0,0.7)');
-      ctx.fillStyle = gradient;
-
-      // Draw bezel frame
-      ctx.fillRect(0, 0, canvasSize.width, BEZEL_SIZE_START); // Top
-      ctx.fillRect(0, canvasSize.height - BEZEL_SIZE_START, canvasSize.width, BEZEL_SIZE_START); // Bottom
-      ctx.fillRect(0, 0, BEZEL_SIZE_START, canvasSize.height); // Left
-      ctx.fillRect(canvasSize.width - BEZEL_SIZE_START, 0, BEZEL_SIZE_START, canvasSize.height); // Right
-
-      // Inner border
-      ctx.strokeStyle = '#333333';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(BEZEL_SIZE_START, BEZEL_SIZE_START, canvasSize.width - BEZEL_SIZE_START * 2, canvasSize.height - BEZEL_SIZE_START * 2);
-
       return; // Don't render game elements when showing start screen
     }
 
-    // 📐 Offset canvas by bezel size so game is drawn inside the frame
+    // 📐 Dynamic playfield scaling transformation
     ctx.save(); // Save canvas state before transformation
-    ctx.translate(BEZEL_SIZE, BEZEL_SIZE); // Offset by bezel margins
 
-    // Apply dynamic playfield scaling transformation
+    // Apply dynamic playfield scaling transformation ONLY for dynamic_playfield pickup
+    const hasDynamicPlayfieldEffect = gameState.activeEffects?.some(effect => effect.type === 'dynamic_playfield') || false;
     const playfieldScale = gameState.playfieldScale || 1.0;
 
-    if (playfieldScale !== 1.0) {
+    if (hasDynamicPlayfieldEffect && playfieldScale !== 1.0) {
       // Transform from center of PLAYFIELD for symmetric scaling
       const centerX = playFieldWidth / 2;
       const centerY = playFieldHeight / 2;
@@ -7119,8 +7113,8 @@ const Pong404: React.FC = () => {
       ctx.lineWidth = BORDER_THICKNESS;
       ctx.shadowBlur = mainGlowSize;
       ctx.shadowColor = currentColors.foreground;
-      // Draw border at exact edges (0, 0, playFieldWidth, playFieldHeight)
-      ctx.strokeRect(0, 0, playFieldWidth, playFieldHeight);
+      // Draw border centered at BORDER_THICKNESS/2 from edges so full width is visible
+      ctx.strokeRect(BORDER_THICKNESS/2, BORDER_THICKNESS/2, playFieldWidth - BORDER_THICKNESS, playFieldHeight - BORDER_THICKNESS);
     }
 
     // Clear shadow for other elements
@@ -8959,222 +8953,18 @@ const Pong404: React.FC = () => {
       ctx.restore();
     }
 
-    // 📐 Restore canvas state after dynamic playfield scaling (always restore since we always save)
-    ctx.restore();
-
-    // 🪞 MEGA BEZEL REFLECTIONS - Create flipped copies of edges in separate canvases
-    // This eliminates transform precision issues
-
-    // Music-reactive reflection opacity
-    const reflectionMusicData = musicDataRef.current || { volume: 0, bass: 0, mid: 0, treble: 0 };
-    const baseOpacity = 0.15;  // More visible base
-    const maxOpacity = 0.30;   // More visible with music
-    const reflectionOpacity = baseOpacity + (reflectionMusicData.volume * (maxOpacity - baseOpacity));
-
-    // Capture ENTIRE canvas including borders (before drawing bezel)
-    const captureData = ctx.getImageData(0, 0, canvasSize.width, canvasSize.height);
-    const captureCanvas = document.createElement('canvas');
-    captureCanvas.width = canvasSize.width;
-    captureCanvas.height = canvasSize.height;
-    const captureCtx = captureCanvas.getContext('2d');
-    if (captureCtx) {
-      captureCtx.putImageData(captureData, 0, 0);
-    }
-
-    // Draw black bezel background with trapezoid shapes matching reflections
-    ctx.fillStyle = '#000000';
-
-    // TOP bezel - trapezoid
-    ctx.beginPath();
-    ctx.moveTo(0, 0); // Top-left (outer)
-    ctx.lineTo(canvasSize.width, 0); // Top-right (outer)
-    ctx.lineTo(canvasSize.width - BEZEL_SIZE, BEZEL_SIZE); // Bottom-right (inner)
-    ctx.lineTo(BEZEL_SIZE, BEZEL_SIZE); // Bottom-left (inner)
-    ctx.closePath();
-    ctx.fill();
-
-    // BOTTOM bezel - trapezoid
-    ctx.beginPath();
-    ctx.moveTo(BEZEL_SIZE, canvasSize.height - BEZEL_SIZE); // Top-left (inner)
-    ctx.lineTo(canvasSize.width - BEZEL_SIZE, canvasSize.height - BEZEL_SIZE); // Top-right (inner)
-    ctx.lineTo(canvasSize.width, canvasSize.height); // Bottom-right (outer)
-    ctx.lineTo(0, canvasSize.height); // Bottom-left (outer)
-    ctx.closePath();
-    ctx.fill();
-
-    // LEFT bezel - trapezoid
-    ctx.beginPath();
-    ctx.moveTo(0, 0); // Top-left (outer)
-    ctx.lineTo(BEZEL_SIZE, BEZEL_SIZE); // Top-right (inner)
-    ctx.lineTo(BEZEL_SIZE, canvasSize.height - BEZEL_SIZE); // Bottom-right (inner)
-    ctx.lineTo(0, canvasSize.height); // Bottom-left (outer)
-    ctx.closePath();
-    ctx.fill();
-
-    // RIGHT bezel - trapezoid
-    ctx.beginPath();
-    ctx.moveTo(canvasSize.width - BEZEL_SIZE, BEZEL_SIZE); // Top-left (inner)
-    ctx.lineTo(canvasSize.width, 0); // Top-right (outer)
-    ctx.lineTo(canvasSize.width, canvasSize.height); // Bottom-right (outer)
-    ctx.lineTo(canvasSize.width - BEZEL_SIZE, canvasSize.height - BEZEL_SIZE); // Bottom-left (inner)
-    ctx.closePath();
-    ctx.fill();
-
-    if (captureCtx) {
-      // Simple approach: 4 reflections meeting at mitered corners, no overlaps
-      // Each reflection is a trapezoid that meets adjacent ones at 45°
-
-      // TOP reflection - trapezoid shape with blur and fade
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const topReflection = document.createElement('canvas');
-      topReflection.width = canvasSize.width;
-      topReflection.height = BEZEL_SIZE;
-      const topCtx = topReflection.getContext('2d');
-      if (topCtx) {
-        // Sample from just inside the playfield border
-        topCtx.drawImage(captureCanvas,
-          BEZEL_SIZE, BEZEL_SIZE + BORDER_THICKNESS, playFieldWidth, BEZEL_SIZE,
-          0, 0, canvasSize.width, BEZEL_SIZE);
-
-        // Clip to trapezoid: top edge full width, bottom edge narrower with 45° sides
-        ctx.beginPath();
-        ctx.moveTo(0, 0); // Top-left (outer)
-        ctx.lineTo(canvasSize.width, 0); // Top-right (outer)
-        ctx.lineTo(canvasSize.width - BEZEL_SIZE, BEZEL_SIZE); // Bottom-right (inner)
-        ctx.lineTo(BEZEL_SIZE, BEZEL_SIZE); // Bottom-left (inner)
-        ctx.closePath();
-        ctx.clip();
-
-        // Add gradient fade from edge (bright) to playfield (dark)
-        const fadeGradient = ctx.createLinearGradient(0, 0, 0, BEZEL_SIZE);
-        fadeGradient.addColorStop(0, 'rgba(255,255,255,0)');
-        fadeGradient.addColorStop(0.3, 'rgba(255,255,255,' + (reflectionOpacity * 0.3) + ')');
-        fadeGradient.addColorStop(1, 'rgba(255,255,255,' + (reflectionOpacity * 0.1) + ')');
-
-        ctx.filter = 'blur(8px)';
-        ctx.globalAlpha = reflectionOpacity * 1.5;
-        ctx.drawImage(topReflection, 0, 0);
-        ctx.filter = 'none';
-      }
-      ctx.restore();
-
-      // BOTTOM reflection - trapezoid shape with blur and fade
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const bottomReflection = document.createElement('canvas');
-      bottomReflection.width = canvasSize.width;
-      bottomReflection.height = BEZEL_SIZE;
-      const bottomCtx = bottomReflection.getContext('2d');
-      if (bottomCtx) {
-        // Sample from just inside the playfield border
-        bottomCtx.drawImage(captureCanvas,
-          BEZEL_SIZE, BEZEL_SIZE + playFieldHeight - BEZEL_SIZE - BORDER_THICKNESS, playFieldWidth, BEZEL_SIZE,
-          0, 0, canvasSize.width, BEZEL_SIZE);
-
-        // Clip to trapezoid: top edge narrower, bottom edge full width with 45° sides
-        ctx.beginPath();
-        ctx.moveTo(BEZEL_SIZE, canvasSize.height - BEZEL_SIZE); // Top-left (inner)
-        ctx.lineTo(canvasSize.width - BEZEL_SIZE, canvasSize.height - BEZEL_SIZE); // Top-right (inner)
-        ctx.lineTo(canvasSize.width, canvasSize.height); // Bottom-right (outer)
-        ctx.lineTo(0, canvasSize.height); // Bottom-left (outer)
-        ctx.closePath();
-        ctx.clip();
-
-        ctx.filter = 'blur(8px)';
-        ctx.globalAlpha = reflectionOpacity * 1.5;
-        ctx.drawImage(bottomReflection, 0, canvasSize.height - BEZEL_SIZE);
-        ctx.filter = 'none';
-      }
-      ctx.restore();
-
-      // LEFT reflection - trapezoid shape with blur and fade
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const leftReflection = document.createElement('canvas');
-      leftReflection.width = BEZEL_SIZE;
-      leftReflection.height = canvasSize.height;
-      const leftCtx = leftReflection.getContext('2d');
-      if (leftCtx) {
-        // Sample from just inside the playfield border
-        leftCtx.drawImage(captureCanvas,
-          BEZEL_SIZE + BORDER_THICKNESS, BEZEL_SIZE, BEZEL_SIZE, playFieldHeight,
-          0, 0, BEZEL_SIZE, canvasSize.height);
-
-        // Clip to trapezoid: left edge full height, right edge narrower with 45° sides
-        ctx.beginPath();
-        ctx.moveTo(0, 0); // Top-left (outer)
-        ctx.lineTo(BEZEL_SIZE, BEZEL_SIZE); // Top-right (inner)
-        ctx.lineTo(BEZEL_SIZE, canvasSize.height - BEZEL_SIZE); // Bottom-right (inner)
-        ctx.lineTo(0, canvasSize.height); // Bottom-left (outer)
-        ctx.closePath();
-        ctx.clip();
-
-        ctx.filter = 'blur(8px)';
-        ctx.globalAlpha = reflectionOpacity * 1.5;
-        ctx.drawImage(leftReflection, 0, 0);
-        ctx.filter = 'none';
-      }
-      ctx.restore();
-
-      // RIGHT reflection - trapezoid shape with blur and fade
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const rightReflection = document.createElement('canvas');
-      rightReflection.width = BEZEL_SIZE;
-      rightReflection.height = canvasSize.height;
-      const rightCtx = rightReflection.getContext('2d');
-      if (rightCtx) {
-        // Sample from just inside the playfield border
-        rightCtx.drawImage(captureCanvas,
-          BEZEL_SIZE + playFieldWidth - BEZEL_SIZE - BORDER_THICKNESS, BEZEL_SIZE, BEZEL_SIZE, playFieldHeight,
-          0, 0, BEZEL_SIZE, canvasSize.height);
-
-        // Clip to trapezoid: left edge narrower, right edge full height with 45° sides
-        ctx.beginPath();
-        ctx.moveTo(canvasSize.width - BEZEL_SIZE, BEZEL_SIZE); // Top-left (inner)
-        ctx.lineTo(canvasSize.width, 0); // Top-right (outer)
-        ctx.lineTo(canvasSize.width, canvasSize.height); // Bottom-right (outer)
-        ctx.lineTo(canvasSize.width - BEZEL_SIZE, canvasSize.height - BEZEL_SIZE); // Bottom-left (inner)
-        ctx.closePath();
-        ctx.clip();
-
-        ctx.filter = 'blur(8px)';
-        ctx.globalAlpha = reflectionOpacity * 1.5;
-        ctx.drawImage(rightReflection, canvasSize.width - BEZEL_SIZE, 0);
-        ctx.filter = 'none';
-      }
-      ctx.restore();
-    }
-
-    // Draw playfield border on top of reflections to ensure full visibility
+    // Draw playfield border (while still in translated/scaled context)
     const glowIntensity = musicDataRef.current?.volume || 0;
     const mainGlowSize = 15 + glowIntensity * 25;
     ctx.strokeStyle = currentColors.foreground;
     ctx.lineWidth = BORDER_THICKNESS;
     ctx.shadowBlur = mainGlowSize;
     ctx.shadowColor = currentColors.foreground;
-    ctx.strokeRect(BEZEL_SIZE, BEZEL_SIZE, playFieldWidth, playFieldHeight);
+    ctx.strokeRect(BORDER_THICKNESS/2, BORDER_THICKNESS/2, playFieldWidth - BORDER_THICKNESS, playFieldHeight - BORDER_THICKNESS);
     ctx.shadowBlur = 0;
 
-    // Draw monitor frame around entire canvas
-    const frameWidth = 8;
-
-    // Outer frame (dark)
-    ctx.strokeStyle = '#1a1a1a';
-    ctx.lineWidth = frameWidth;
-    ctx.strokeRect(frameWidth / 2, frameWidth / 2, canvasSize.width - frameWidth, canvasSize.height - frameWidth);
-
-    // Inner frame highlight (lighter for 3D effect)
-    ctx.strokeStyle = '#333333';
-    ctx.lineWidth = 2;
-    const frameInset = 2;
-    ctx.strokeRect(frameWidth + frameInset, frameWidth + frameInset, canvasSize.width - (frameWidth + frameInset) * 2, canvasSize.height - (frameWidth + frameInset) * 2);
-
-    // Outer frame shadow (darker for depth)
-    ctx.strokeStyle = '#0a0a0a';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(frameWidth - 1, frameWidth - 1, canvasSize.width - (frameWidth - 1) * 2, canvasSize.height - (frameWidth - 1) * 2);
+    // 📐 Restore canvas state after dynamic playfield scaling (always restore since we always save)
+    ctx.restore();
 
   }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, crtEffect, applyCRTEffect, showAudioPrompt]);
 
@@ -9266,12 +9056,13 @@ const Pong404: React.FC = () => {
       try {
         app = new Application();
 
-        // Create canvas with bezel for Mega Bezel reflections
+        // Create PixiJS canvas with explicit resolution to avoid Retina scaling
         await app.init({
           width: canvasSize.width,
           height: canvasSize.height,
           backgroundAlpha: 0,
           antialias: false,
+          resolution: 1, // Force 1:1 pixel mapping, ignore devicePixelRatio
         });
 
         if (!pixiContainerRef.current) {
@@ -9290,12 +9081,12 @@ const Pong404: React.FC = () => {
       pixiContainerRef.current.appendChild(app.canvas);
       pixiAppRef.current = app;
 
-      // Style the PixiJS canvas - fill the container
+      // Style the PixiJS canvas - exact dimensions to avoid scaling
       app.canvas.style.position = 'absolute';
       app.canvas.style.top = '0';
       app.canvas.style.left = '0';
-      app.canvas.style.width = '100%';
-      app.canvas.style.height = '100%';
+      app.canvas.style.width = `${canvasSize.width}px`;
+      app.canvas.style.height = `${canvasSize.height}px`;
       app.canvas.style.display = 'block';
       // Set cursor style on PixiJS canvas to match game state
       app.canvas.style.cursor = cursorHidden ? 'none' : 'default';
@@ -9305,22 +9096,38 @@ const Pong404: React.FC = () => {
         console.error('Canvas ref is null');
         return;
       }
-      let texture = Texture.from(canvasRef.current);
+      // Force texture to exact canvas dimensions
+      let texture = Texture.from(canvasRef.current, {
+        scaleMode: 'nearest',
+        resolution: 1
+      });
+
+      // Override texture frame and source resolution to ensure exact 1:1 mapping
+      texture.frame.width = canvasRef.current.width;
+      texture.frame.height = canvasRef.current.height;
+      if (texture.source) {
+        texture.source.resolution = 1; // Force source resolution to 1
+      }
+      texture.updateUvs();
+
       const sprite = new Sprite(texture);
-      sprite.width = canvasSize.width;
-      sprite.height = canvasSize.height;
+      // Don't scale sprite - use 1:1 pixel mapping
+      sprite.width = canvasRef.current.width;
+      sprite.height = canvasRef.current.height;
       sprite.x = 0;
       sprite.y = 0;
       app.stage.addChild(sprite);
 
-      // Create and apply CRT filter with subtle authentic effects
       const filter = new CRTFilter({
-        curvature: 12.0,              // More curvature (higher = less curve)
-        scanlineIntensity: 0.1,       // Very subtle scanlines
-        vignetteIntensity: 0.15,      // Very light edge darkening
-        noiseIntensity: 0.05,         // Visible CRT noise/grain
-        brightness: 1.25,             // Brighter to compensate for effects
-        chromaticAberration: 0.004,   // More horizontal RGB separation with subtle bleed
+        curvature: 12.0,
+        scanlineIntensity: 0.1,
+        vignetteIntensity: 0.15,
+        noiseIntensity: 0.05,
+        brightness: 1.25,
+        chromaticAberration: 0.004,
+        bezelSize: 0.03125,  // 25px bezel on 800px canvas
+        reflectionOpacity: 1.5,  // Much brighter reflections
+        borderNormalized: BORDER_THICKNESS / canvasSize.width,  // Dynamic border based on canvas size
       });
 
       crtFilterRef.current = filter;
@@ -9372,11 +9179,16 @@ const Pong404: React.FC = () => {
           if (uniforms.uTime !== undefined) uniforms.uTime = Date.now() * 0.001;
           if (uniforms.uResolutionX !== undefined) uniforms.uResolutionX = canvasSize.width;
           if (uniforms.uResolutionY !== undefined) uniforms.uResolutionY = canvasSize.height;
+          if (uniforms.uBorderNormalized !== undefined) uniforms.uBorderNormalized = BORDER_THICKNESS / canvasSize.width;
 
           // Update CRT filter with music analysis data for RGB bleed effect
           const musicData = (window as any).generativeMusic?.getAnalysisData?.() || { volume: 0, disharmonic: 0, beat: 0 };
           if (uniforms.uDisharmonic !== undefined) {
             uniforms.uDisharmonic = musicData.disharmonic;
+          }
+          // Make reflections pulse with music
+          if (uniforms.uReflectionOpacity !== undefined) {
+            uniforms.uReflectionOpacity = 1.3 + musicData.disharmonic * 0.5; // 1.3 to 1.8 based on music
           }
         }
 
@@ -9803,11 +9615,11 @@ const Pong404: React.FC = () => {
         overflow: 'hidden' // Prevent box-shadows from causing scrolling
       }}
     >
-      {/* Container for game - use smaller of viewport dimensions */}
+      {/* Container for game - match canvas size exactly */}
       <div style={{
         position: 'relative',
-        width: '98vmin',
-        height: '98vmin',
+        width: `${canvasSize.width}px`,
+        height: `${canvasSize.height}px`,
         aspectRatio: '1 / 1',
         boxShadow: 'none',
       }}>
@@ -9838,11 +9650,8 @@ const Pong404: React.FC = () => {
             position: 'absolute',
             top: 0,
             left: 0,
-            width: '100%',
-            height: '100%',
             background: 'transparent',
             outline: 'none',
-            objectFit: 'contain',
             imageRendering: 'auto',
             cursor: cursorHidden ? 'none' : 'default',
             // Disable text smoothing and antialiasing for pixelated text
@@ -10115,8 +9924,8 @@ const Pong404: React.FC = () => {
           position: 'absolute',
           top: 0,
           left: 0,
-          width: '100%',
-          height: '100%',
+          width: `${canvasSize.width}px`,
+          height: `${canvasSize.height}px`,
           cursor: cursorHidden ? 'none' : 'default',
           imageRendering: 'pixelated',
           pointerEvents: 'none', // Let events pass through to canvas
