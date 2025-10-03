@@ -151,6 +151,40 @@ vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
     // Convert sample coordinate from screen space to texture space
     vec2 texSampleCoord = texCoordRatio * sampleCoord;
 
+    // Flip reflections within their own regions (mirror effect like real glass)
+    if (distFromTop == minDist) {
+        // Top reflection: flip upside down within the top region only
+        float topBound = texCoordRatio.y * playfieldTop;
+        float sampleBound = texCoordRatio.y * (playfieldTop + reflectionDepth);
+        float localY = texSampleCoord.y - topBound;
+        float regionHeight = sampleBound - topBound;
+        texSampleCoord.y = topBound + (regionHeight - localY);
+    }
+    else if (distFromBottom == minDist) {
+        // Bottom reflection: flip upside down within the bottom region only
+        float bottomBound = texCoordRatio.y * playfieldBottom;
+        float sampleBound = texCoordRatio.y * (playfieldBottom - reflectionDepth);
+        float localY = texSampleCoord.y - sampleBound;
+        float regionHeight = bottomBound - sampleBound;
+        texSampleCoord.y = sampleBound + (regionHeight - localY);
+    }
+    else if (distFromLeft == minDist) {
+        // Left reflection: flip horizontally within the left region only
+        float leftBound = texCoordRatio.x * playfieldLeft;
+        float sampleBound = texCoordRatio.x * (playfieldLeft + reflectionDepth);
+        float localX = texSampleCoord.x - leftBound;
+        float regionWidth = sampleBound - leftBound;
+        texSampleCoord.x = leftBound + (regionWidth - localX);
+    }
+    else if (distFromRight == minDist) {
+        // Right reflection: flip horizontally within the right region only
+        float rightBound = texCoordRatio.x * playfieldRight;
+        float sampleBound = texCoordRatio.x * (playfieldRight - reflectionDepth);
+        float localX = texSampleCoord.x - sampleBound;
+        float regionWidth = rightBound - sampleBound;
+        texSampleCoord.x = sampleBound + (regionWidth - localX);
+    }
+
     // Perspective distortion: reflections farther from edge should be dimmer and more blurred
     // Calculate depth into the bezel (0 = at playfield edge, 1 = at outer bezel edge)
     float bezelDepth = 1.0 - fadeAmount; // Inverted fadeAmount gives us depth

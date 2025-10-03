@@ -5274,20 +5274,12 @@ const Pong404: React.FC = () => {
           if (!isLeftFrozen) {
             const oldY = newState.paddles.left.y;
 
-            // Handle mouse control for left paddle (always enabled)
-            if (mouseY !== null) {
-              const targetY = mouseY - newState.paddles.left.height / 2;
-              // Clamp to keep paddle within playfield bounds (inside border)
-              const clampedY = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.left.height, targetY));
-              newState.paddles.left.velocity = clampedY - newState.paddles.left.y;
-              newState.paddles.left.y = clampedY;
-            }
           // Check if reverse controls is active and this player is affected
           const reverseControlsEffect = newState.activeEffects.find(e => e.type === 'reverse_controls');
           const shouldReverseLeftControls = reverseControlsEffect && reverseControlsEffect.activator !== 'left';
 
           // Left paddle - W/S keys (W = UP, S = DOWN) - with acceleration
-          // Allow simultaneous keyboard input regardless of mouse state
+          // Prioritize keyboard input over mouse
           let wPressed = keys.w;
           let sPressed = keys.s;
 
@@ -5307,8 +5299,15 @@ const Pong404: React.FC = () => {
             newState.paddles.left.velocity += 1.2; // Reduced acceleration
             newState.paddles.left.velocity = Math.min(newState.paddles.left.speed * 1.5, newState.paddles.left.velocity);
             newState.paddles.left.y += newState.paddles.left.velocity;
-          } else if (!(controlSide === 'left' && mouseY !== null)) {
-            // Only apply friction if neither keyboard nor mouse is active
+          } else if (controlSide === 'left' && mouseY !== null) {
+            // Use mouse control only when keyboard is not active
+            const targetY = mouseY - newState.paddles.left.height / 2;
+            // Clamp to keep paddle within playfield bounds (inside border)
+            const clampedY = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.left.height, targetY));
+            newState.paddles.left.velocity = clampedY - newState.paddles.left.y;
+            newState.paddles.left.y = clampedY;
+          } else {
+            // No input - apply friction
             newState.paddles.left.velocity *= 0.8; // Friction
             if (Math.abs(newState.paddles.left.velocity) < 0.1) {
               newState.paddles.left.velocity = 0; // Stop when very slow
@@ -5366,20 +5365,12 @@ const Pong404: React.FC = () => {
           if (!isRightFrozen) {
             const oldY = newState.paddles.right.y;
 
-            // Handle mouse control for right paddle (always enabled)
-            if (mouseY !== null) {
-              const targetY = mouseY - newState.paddles.right.height / 2;
-              // Clamp to keep paddle within playfield bounds (inside border)
-              const clampedY = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.right.height, targetY));
-              newState.paddles.right.velocity = clampedY - newState.paddles.right.y;
-              newState.paddles.right.y = clampedY;
-            }
           // Check if reverse controls is active and this player is affected
           const reverseControlsEffect = newState.activeEffects.find(e => e.type === 'reverse_controls');
           const shouldReverseControls = reverseControlsEffect && reverseControlsEffect.activator !== 'right';
 
           // Right paddle - Arrow keys (UP = UP, DOWN = DOWN) - with acceleration
-          // Allow simultaneous keyboard input regardless of mouse state
+          // Prioritize keyboard input over mouse
           let upPressed = keys.up;
           let downPressed = keys.down;
 
@@ -5399,8 +5390,15 @@ const Pong404: React.FC = () => {
             newState.paddles.right.velocity += 1.2; // Reduced acceleration
             newState.paddles.right.velocity = Math.min(newState.paddles.right.speed * 1.5, newState.paddles.right.velocity);
             newState.paddles.right.y += newState.paddles.right.velocity;
-          } else if (!(controlSide === 'right' && mouseY !== null)) {
-            // Only apply friction if neither keyboard nor mouse is active
+          } else if (controlSide === 'right' && mouseY !== null) {
+            // Use mouse control only when keyboard is not active
+            const targetY = mouseY - newState.paddles.right.height / 2;
+            // Clamp to keep paddle within playfield bounds (inside border)
+            const clampedY = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.right.height, targetY));
+            newState.paddles.right.velocity = clampedY - newState.paddles.right.y;
+            newState.paddles.right.y = clampedY;
+          } else {
+            // No input - apply friction
             newState.paddles.right.velocity *= 0.8; // Friction
             if (Math.abs(newState.paddles.right.velocity) < 0.1) {
               newState.paddles.right.velocity = 0; // Stop when very slow
@@ -5455,20 +5453,12 @@ const Pong404: React.FC = () => {
         if ((multiplayerStateRef.current?.playerSide === 'top' || localTestMode) && newState.paddles.top) {
           const oldX = newState.paddles.top.x;
 
-          // Handle mouse/touch control for top paddle (always enabled)
-          if (controlSide === 'top' && (mouseX !== null || touchX !== null)) {
-            const targetX = (touchX !== null ? touchX : mouseX!) - newState.paddles.top.width / 2;
-            // Clamp to keep paddle within playfield bounds
-            const clampedX = Math.max(0, Math.min(playFieldWidth - newState.paddles.top.width, targetX));
-            newState.paddles.top.velocity = clampedX - newState.paddles.top.x;
-            newState.paddles.top.x = clampedX;
-          }
           // Check if reverse controls affects top paddle
           const reverseControlsEffect = newState.activeEffects.find(e => e.type === 'reverse_controls');
           const shouldReverseTopControls = reverseControlsEffect && reverseControlsEffect.activator !== 'top';
 
           // Top paddle - A/D keys (A = LEFT, D = RIGHT) - with acceleration
-          // Allow simultaneous keyboard input regardless of mouse state
+          // Prioritize keyboard input over mouse
           let aPressed = keys.a;
           let dPressed = keys.d;
 
@@ -5488,8 +5478,15 @@ const Pong404: React.FC = () => {
             newState.paddles.top.velocity += 1.2; // Reduced acceleration
             newState.paddles.top.velocity = Math.min(newState.paddles.top.speed * 1.5, newState.paddles.top.velocity);
             newState.paddles.top.x += newState.paddles.top.velocity;
-          } else if (!(controlSide === 'top' && (mouseX !== null || touchX !== null))) {
-            // Only apply friction if neither keyboard nor mouse/touch is active
+          } else if (controlSide === 'top' && (mouseX !== null || touchX !== null)) {
+            // Use mouse/touch control only when keyboard is not active
+            const targetX = (touchX !== null ? touchX : mouseX!) - newState.paddles.top.width / 2;
+            // Clamp to keep paddle within playfield bounds
+            const clampedX = Math.max(0, Math.min(playFieldWidth - newState.paddles.top.width, targetX));
+            newState.paddles.top.velocity = clampedX - newState.paddles.top.x;
+            newState.paddles.top.x = clampedX;
+          } else {
+            // No input - apply friction
             newState.paddles.top.velocity *= 0.8; // Friction
             if (Math.abs(newState.paddles.top.velocity) < 0.1) {
               newState.paddles.top.velocity = 0; // Stop when very slow
@@ -5521,20 +5518,12 @@ const Pong404: React.FC = () => {
         if ((multiplayerStateRef.current?.playerSide === 'bottom' || localTestMode) && newState.paddles.bottom) {
           const oldX = newState.paddles.bottom.x;
 
-          // Handle mouse/touch control for bottom paddle (always enabled)
-          if (controlSide === 'bottom' && (mouseX !== null || touchX !== null)) {
-            const targetX = (touchX !== null ? touchX : mouseX!) - newState.paddles.bottom.width / 2;
-            // Clamp to keep paddle within playfield bounds
-            const clampedX = Math.max(0, Math.min(playFieldWidth - newState.paddles.bottom.width, targetX));
-            newState.paddles.bottom.velocity = clampedX - newState.paddles.bottom.x;
-            newState.paddles.bottom.x = clampedX;
-          }
           // Check if reverse controls affects bottom paddle
           const reverseControlsEffect = newState.activeEffects.find(e => e.type === 'reverse_controls');
           const shouldReverseBottomControls = reverseControlsEffect && reverseControlsEffect.activator !== 'bottom';
 
           // Bottom paddle - Left/Right arrow keys - with acceleration
-          // Allow simultaneous keyboard input regardless of mouse state
+          // Prioritize keyboard input over mouse
           let leftPressed = keys.left;
           let rightPressed = keys.right;
 
@@ -5554,8 +5543,15 @@ const Pong404: React.FC = () => {
             newState.paddles.bottom.velocity += 1.2; // Reduced acceleration
             newState.paddles.bottom.velocity = Math.min(newState.paddles.bottom.speed * 1.5, newState.paddles.bottom.velocity);
             newState.paddles.bottom.x += newState.paddles.bottom.velocity;
-          } else if (!(controlSide === 'bottom' && (mouseX !== null || touchX !== null))) {
-            // Only apply friction if neither keyboard nor mouse/touch is active
+          } else if (controlSide === 'bottom' && (mouseX !== null || touchX !== null)) {
+            // Use mouse/touch control only when keyboard is not active
+            const targetX = (touchX !== null ? touchX : mouseX!) - newState.paddles.bottom.width / 2;
+            // Clamp to keep paddle within playfield bounds
+            const clampedX = Math.max(0, Math.min(playFieldWidth - newState.paddles.bottom.width, targetX));
+            newState.paddles.bottom.velocity = clampedX - newState.paddles.bottom.x;
+            newState.paddles.bottom.x = clampedX;
+          } else {
+            // No input - apply friction
             newState.paddles.bottom.velocity *= 0.8; // Friction
             if (Math.abs(newState.paddles.bottom.velocity) < 0.1) {
               newState.paddles.bottom.velocity = 0; // Stop when very slow
