@@ -9393,8 +9393,9 @@ const Pong404: React.FC = () => {
         return;
       }
       // Force texture to exact canvas dimensions
+      // Use linear for smooth blur sampling (blur will average big pixels smoothly)
       let texture = Texture.from(canvasRef.current, {
-        scaleMode: 'nearest',
+        scaleMode: 'linear',
         resolution: 1
       });
 
@@ -9406,36 +9407,12 @@ const Pong404: React.FC = () => {
       }
       texture.updateUvs();
 
-      // Layer 1: Reflection sprite (back layer) - shows only bezel reflections
-      const reflectionSprite = new Sprite(texture);
-      reflectionSprite.width = canvasRef.current.width;
-      reflectionSprite.height = canvasRef.current.height;
-      reflectionSprite.x = 0;
-      reflectionSprite.y = 0;
-
-      // Create reflection-only filter (only renders reflections in bezel areas)
-      const reflectionFilter = new CRTFilter({
-        curvature: 0.001,  // Very small curvature
-        scanlineIntensity: 0,
-        vignetteIntensity: 0,
-        noiseIntensity: 0,
-        brightness: 1.0,
-        chromaticAberration: 0,
-        bezelSize: 0.0625,
-        reflectionOpacity: 1.5,
-        borderNormalized: BORDER_THICKNESS / canvasSize.width,
-        reflectionWidth: 50 / canvasSize.width,  // 50px wide reflections
-      });
-      reflectionSprite.filters = [reflectionFilter];
-      app.stage.addChild(reflectionSprite); // Add first (renders behind)
-
-      // Layer 2: Playfield sprite (front layer) - shows game content with CRT effects
+      // Single sprite with CRT effects and curved reflections
       const playfieldSprite = new Sprite(texture);
       playfieldSprite.width = canvasRef.current.width;
       playfieldSprite.height = canvasRef.current.height;
       playfieldSprite.x = 0;
       playfieldSprite.y = 0;
-      playfieldSprite.blendMode = 'normal'; // Normal blending
 
       const filter = new CRTFilter({
         curvature: 12.0,
@@ -9445,12 +9422,12 @@ const Pong404: React.FC = () => {
         brightness: 1.25,
         chromaticAberration: 0.004,
         bezelSize: 0.0625,
-        reflectionOpacity: 0.0,  // No reflections on playfield layer
+        reflectionOpacity: 1.5,  // Enable reflections on curved bezel
         borderNormalized: BORDER_THICKNESS / canvasSize.width,
         reflectionWidth: 50 / canvasSize.width,
       });
       playfieldSprite.filters = [filter];
-      app.stage.addChild(playfieldSprite); // Add second (renders on top)
+      app.stage.addChild(playfieldSprite);
 
       crtFilterRef.current = filter;
 

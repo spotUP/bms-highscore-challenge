@@ -93,14 +93,17 @@ float noise(vec2 co) {
 }
 
 // Get reflection from playfield edge
-vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
-    // Calculate distance from each edge (normalized 0-1, where 0 = at edge, 1 = at opposite edge)
-    float distFromTop = screenCoord.y;
-    float distFromBottom = 1.0 - screenCoord.y;
-    float distFromLeft = screenCoord.x;
-    float distFromRight = 1.0 - screenCoord.x;
+// curvedCoord: the coordinate AFTER curvature has been applied (this is where we are on the curved surface)
+// flatCoord: the original flat coordinate (this is where we sample the texture from)
+vec4 getBezelReflection(vec2 curvedCoord, vec2 flatCoord, vec2 texCoordRatio) {
+    // Calculate distance from each edge using CURVED coordinates
+    // This makes the reflection zones follow the curved surface
+    float distFromTop = curvedCoord.y;
+    float distFromBottom = 1.0 - curvedCoord.y;
+    float distFromLeft = curvedCoord.x;
+    float distFromRight = 1.0 - curvedCoord.x;
 
-    // Determine which edge we're closest to
+    // Determine which edge we're closest to on the CURVED surface
     float minDist = min(min(distFromTop, distFromBottom), min(distFromLeft, distFromRight));
 
     // Check if we're in the reflection zone (from screen edge outward to uReflectionWidth)
@@ -130,22 +133,23 @@ vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
     // Calculate fade (1 = at playfield edge, 0 = at screen edge)
     fadeAmount = 1.0 - depth;
 
-    // Determine which edge owns this pixel and calculate symmetric sample coordinate
+    // Sample from the FLAT (pre-curve) texture, but use CURVED coordinates to determine position
+    // This creates the illusion of reflections on curved glass
     if (distFromTop == minDist) {
         // Top edge - sample from inside top playfield boundary, going inward
-        sampleCoord = vec2(screenCoord.x, playfieldTop + depth * reflectionDepth);
+        sampleCoord = vec2(flatCoord.x, playfieldTop + depth * reflectionDepth);
     }
     else if (distFromBottom == minDist) {
-        // Bottom edge - sample from inside bottom playfield boundary, going inward (symmetric to top)
-        sampleCoord = vec2(screenCoord.x, playfieldBottom - depth * reflectionDepth);
+        // Bottom edge - sample from inside bottom playfield boundary, going inward
+        sampleCoord = vec2(flatCoord.x, playfieldBottom - depth * reflectionDepth);
     }
     else if (distFromLeft == minDist) {
         // Left edge - sample from inside left playfield boundary, going inward
-        sampleCoord = vec2(playfieldLeft + depth * reflectionDepth, screenCoord.y);
+        sampleCoord = vec2(playfieldLeft + depth * reflectionDepth, flatCoord.y);
     }
     else {
-        // Right edge - sample from inside right playfield boundary, going inward (symmetric to left)
-        sampleCoord = vec2(playfieldRight - depth * reflectionDepth, screenCoord.y);
+        // Right edge - sample from inside right playfield boundary, going inward
+        sampleCoord = vec2(playfieldRight - depth * reflectionDepth, flatCoord.y);
     }
 
     // Convert sample coordinate from screen space to texture space
@@ -233,7 +237,7 @@ void main(void) {
     if (isReflectionLayer) {
         // Reflection layer: render ONLY reflections in bezel areas, black everywhere else
         vec2 texCoordRatio = vTextureCoord / vScreenCoord;
-        vec4 bezelReflection = getBezelReflection(vScreenCoord, texCoordRatio);
+        vec4 bezelReflection = getBezelReflection(vScreenCoord, vScreenCoord, texCoordRatio);
 
         if (bezelReflection.a > 0.0 || bezelReflection.r > 0.0 || bezelReflection.g > 0.0 || bezelReflection.b > 0.0) {
             // Show reflection
@@ -254,8 +258,16 @@ void main(void) {
     // This is the key: check bounds in screen space BEFORE converting to texture space
     if (distortedScreenCoord.x < 0.0 || distortedScreenCoord.x > 1.0 ||
         distortedScreenCoord.y < 0.0 || distortedScreenCoord.y > 1.0) {
-        // Outside curved bounds - transparent to show reflection layer
-        finalColor = vec4(0.0, 0.0, 0.0, 0.0);
+        // Outside curved bounds - render reflections on the curved bezel
+        // Pass BOTH curved (distorted) and flat (original) coordinates
+        vec2 texCoordRatio = vTextureCoord / vScreenCoord;
+        vec4 bezelReflection = getBezelReflection(distortedScreenCoord, vScreenCoord, texCoordRatio);
+
+        if (bezelReflection.a > 0.0 || bezelReflection.r > 0.0 || bezelReflection.g > 0.0 || bezelReflection.b > 0.0) {
+            finalColor = vec4(bezelReflection.rgb, 1.0);
+        } else {
+            finalColor = vec4(0.0, 0.0, 0.0, 1.0);
+        }
         return;
     }
 
