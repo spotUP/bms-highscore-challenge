@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import SamJs from 'sam-js';
 import { Application, Sprite, Texture } from 'pixi.js';
@@ -169,10 +169,21 @@ interface WebSocketMessage {
 const PADDLE_SPEED = 12; // Faster base speed for keyboard control
 // NOTE: Paddle dimensions are server-authoritative. Client receives actual dimensions from server gameState.
 // These constants are fallback values for initialization only - server defines the true values.
-const PADDLE_LENGTH = 140; // SERVER-AUTHORITATIVE: Fallback for initialization, server defines true value
-const PADDLE_THICKNESS = 12; // SERVER-AUTHORITATIVE: Fallback for initialization, server defines true value
-const BORDER_THICKNESS = 12; // Thickness of playfield border drawn in render function
-const BALL_SPEED = 4; // Moderate speed for playable gameplay
+// Reference size for original design (all constants are based on 800px canvas)
+const REFERENCE_SIZE = 800;
+
+// Base constants at reference size (800px)
+const BASE_PADDLE_LENGTH = 140; // SERVER-AUTHORITATIVE: Fallback for initialization, server defines true value
+const BASE_PADDLE_THICKNESS = 12; // SERVER-AUTHORITATIVE: Fallback for initialization, server defines true value
+const BASE_BORDER_THICKNESS = 12; // Thickness of playfield border drawn in render function
+const BASE_BALL_SPEED = 4; // Moderate speed for playable gameplay
+const BASE_BALL_SIZE = 8; // Ball size at reference size
+
+// Legacy constants for backward compatibility (will be replaced with scaled versions)
+const PADDLE_LENGTH = BASE_PADDLE_LENGTH;
+const PADDLE_THICKNESS = BASE_PADDLE_THICKNESS;
+const BORDER_THICKNESS = BASE_BORDER_THICKNESS;
+const BALL_SPEED = BASE_BALL_SPEED;
 const MIN_BALL_SPEED = 3;  // Slower minimum speed
 const MAX_BALL_SPEED = 6; // Slower maximum speed
 // [TARGET] Game runs at display refresh rate with frame-rate independent ball physics for constant speed
@@ -907,15 +918,14 @@ const Pong404: React.FC = () => {
 
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      const minDimension = Math.min(viewportWidth, viewportHeight);
 
-      // For mobile devices (< 768px), use 90% of the smallest viewport dimension
-      // For desktop, use the fixed 800px size
-      if (viewportWidth < 768) {
-        return Math.min(Math.floor(minDimension * 0.9), 600); // Cap at 600px for very large phones
-      } else {
-        return 800; // Desktop size
-      }
+      // Use 95% of the smallest viewport dimension to leave room for UI
+      // This makes the game fill as much space as possible while maintaining square aspect
+      const availableSpace = Math.min(viewportWidth, viewportHeight);
+      const canvasSize = Math.floor(availableSpace * 0.95);
+
+      // Minimum size for playability
+      return Math.max(canvasSize, 400);
     };
 
     const size = getOptimalCanvasSize();
@@ -971,6 +981,16 @@ const Pong404: React.FC = () => {
   // Playfield size - same as canvas (border drawn at edges)
   const playFieldWidth = canvasSize.width;
   const playFieldHeight = canvasSize.height;
+
+  // Calculate scale factor and scaled constants based on current canvas size
+  const scaleFactor = useMemo(() => canvasSize.width / REFERENCE_SIZE, [canvasSize.width]);
+  const scaledConstants = useMemo(() => ({
+    paddleLength: BASE_PADDLE_LENGTH * scaleFactor,
+    paddleThickness: BASE_PADDLE_THICKNESS * scaleFactor,
+    borderThickness: BASE_BORDER_THICKNESS * scaleFactor,
+    ballSpeed: BASE_BALL_SPEED * scaleFactor,
+    ballSize: BASE_BALL_SIZE * scaleFactor,
+  }), [scaleFactor]);
 
   const [gameState, _setGameState] = useState<GameState>({
     ball: {
@@ -2928,51 +2948,52 @@ const Pong404: React.FC = () => {
       const getOptimalCanvasSize = () => {
         const viewportWidth = window.innerWidth;
         const viewportHeight = window.innerHeight;
-        const minDimension = Math.min(viewportWidth, viewportHeight);
 
-        // For mobile devices (< 768px), use 90% of the smallest viewport dimension
-        // For desktop, use the fixed 800px size
-        if (viewportWidth < 768) {
-          return Math.min(Math.floor(minDimension * 0.9), 600); // Cap at 600px for very large phones
-        } else {
-          return 800; // Desktop size
-        }
+        // Use 95% of the smallest viewport dimension to leave room for UI
+        const availableSpace = Math.min(viewportWidth, viewportHeight);
+        const canvasSize = Math.floor(availableSpace * 0.95);
+
+        // Minimum size for playability
+        return Math.max(canvasSize, 400);
       };
 
-      const playfieldSize = getOptimalCanvasSize();
+      const newSize = getOptimalCanvasSize();
+      const oldSize = canvasSize.width; // Current canvas size
+      const scaleFactor = newSize / oldSize;
 
       console.log('Canvas size update:', {
         viewport: { width: window.innerWidth, height: window.innerHeight },
-        playfieldSize,
-        willSet: { width: playfieldSize, height: playfieldSize }
+        oldSize,
+        newSize,
+        scaleFactor
       });
 
-      setCanvasSize({ width: playfieldSize, height: playfieldSize });
+      setCanvasSize({ width: newSize, height: newSize });
 
-      // Update game state when canvas size changes (use playfield size, not canvas size)
+      // Scale game state positions proportionally
       setGameState(prev => ({
         ...prev,
         ball: {
           ...prev.ball,
-          x: Math.min(prev.ball.x, playfieldSize - prev.ball.size),
-          y: Math.min(prev.ball.y, playfieldSize - prev.ball.size)
+          x: prev.ball.x * scaleFactor,
+          y: prev.ball.y * scaleFactor
         },
         paddles: {
           left: {
             ...prev.paddles.left,
-            y: Math.min(prev.paddles.left.y, playfieldSize - prev.paddles.left.height)
+            y: prev.paddles.left.y * scaleFactor
           },
           right: {
             ...prev.paddles.right,
-            y: Math.min(prev.paddles.right.y, playfieldSize - prev.paddles.right.height)
+            y: prev.paddles.right.y * scaleFactor
           },
           top: {
             ...prev.paddles.top,
-            x: Math.min(prev.paddles.top.x, playfieldSize - prev.paddles.top.width)
+            x: prev.paddles.top.x * scaleFactor
           },
           bottom: {
             ...prev.paddles.bottom,
-            x: Math.min(prev.paddles.bottom.x, playfieldSize - prev.paddles.bottom.width)
+            x: prev.paddles.bottom.x * scaleFactor
           }
         }
       }));
@@ -7110,11 +7131,11 @@ const Pong404: React.FC = () => {
       const mainGlowSize = 15 + glowIntensity * 25; // 15-40px based on music (much more visible)
 
       ctx.strokeStyle = currentColors.foreground;
-      ctx.lineWidth = BORDER_THICKNESS;
+      ctx.lineWidth = scaledConstants.borderThickness;
       ctx.shadowBlur = mainGlowSize;
       ctx.shadowColor = currentColors.foreground;
-      // Draw border centered at BORDER_THICKNESS/2 from edges so full width is visible
-      ctx.strokeRect(BORDER_THICKNESS/2, BORDER_THICKNESS/2, playFieldWidth - BORDER_THICKNESS, playFieldHeight - BORDER_THICKNESS);
+      // Draw border centered at borderThickness/2 from edges so full width is visible
+      ctx.strokeRect(scaledConstants.borderThickness/2, scaledConstants.borderThickness/2, playFieldWidth - scaledConstants.borderThickness, playFieldHeight - scaledConstants.borderThickness);
     }
 
     // Clear shadow for other elements
@@ -8957,16 +8978,16 @@ const Pong404: React.FC = () => {
     const glowIntensity = musicDataRef.current?.volume || 0;
     const mainGlowSize = 15 + glowIntensity * 25;
     ctx.strokeStyle = currentColors.foreground;
-    ctx.lineWidth = BORDER_THICKNESS;
+    ctx.lineWidth = scaledConstants.borderThickness;
     ctx.shadowBlur = mainGlowSize;
     ctx.shadowColor = currentColors.foreground;
-    ctx.strokeRect(BORDER_THICKNESS/2, BORDER_THICKNESS/2, playFieldWidth - BORDER_THICKNESS, playFieldHeight - BORDER_THICKNESS);
+    ctx.strokeRect(scaledConstants.borderThickness/2, scaledConstants.borderThickness/2, playFieldWidth - scaledConstants.borderThickness, playFieldHeight - scaledConstants.borderThickness);
     ctx.shadowBlur = 0;
 
     // 📐 Restore canvas state after dynamic playfield scaling (always restore since we always save)
     ctx.restore();
 
-  }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, crtEffect, applyCRTEffect, showAudioPrompt]);
+  }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, crtEffect, applyCRTEffect, showAudioPrompt, scaledConstants]);
 
   // Update function refs when functions change (prevents game loop restart)
   useEffect(() => {
@@ -9125,9 +9146,9 @@ const Pong404: React.FC = () => {
         noiseIntensity: 0.05,
         brightness: 1.25,
         chromaticAberration: 0.004,
-        bezelSize: 0.03125,  // 25px bezel on 800px canvas
+        bezelSize: 0.03125 * scaleFactor,  // 25px bezel on 800px reference, scaled to current size
         reflectionOpacity: 1.5,  // Much brighter reflections
-        borderNormalized: BORDER_THICKNESS / canvasSize.width,  // Dynamic border based on canvas size
+        borderNormalized: scaledConstants.borderThickness / canvasSize.width,  // Dynamic border based on canvas size
       });
 
       crtFilterRef.current = filter;
@@ -9179,7 +9200,7 @@ const Pong404: React.FC = () => {
           if (uniforms.uTime !== undefined) uniforms.uTime = Date.now() * 0.001;
           if (uniforms.uResolutionX !== undefined) uniforms.uResolutionX = canvasSize.width;
           if (uniforms.uResolutionY !== undefined) uniforms.uResolutionY = canvasSize.height;
-          if (uniforms.uBorderNormalized !== undefined) uniforms.uBorderNormalized = BORDER_THICKNESS / canvasSize.width;
+          if (uniforms.uBorderNormalized !== undefined) uniforms.uBorderNormalized = scaledConstants.borderThickness / canvasSize.width;
 
           // Update CRT filter with music analysis data for RGB bleed effect
           const musicData = (window as any).generativeMusic?.getAnalysisData?.() || { volume: 0, disharmonic: 0, beat: 0 };
@@ -9216,7 +9237,7 @@ const Pong404: React.FC = () => {
         }
       }
     };
-  }, [crtEffect, canvasSize.width, canvasSize.height]);
+  }, [crtEffect, canvasSize.width, canvasSize.height, scaleFactor, scaledConstants]);
 
   // Toggle CRT filter on/off
   useEffect(() => {
