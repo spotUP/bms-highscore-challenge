@@ -50,7 +50,8 @@ uniform float uDisharmonic;
 uniform vec2 uCenterOffset;
 uniform float uBezelSize;
 uniform float uReflectionOpacity;
-uniform float uBorderNormalized;
+uniform float uBorderNormalized;  // Inner edge of reflections (where border is, 12px)
+uniform float uReflectionWidth;   // Outer edge of reflections (50px)
 
 // CRT barrel distortion for square display
 vec2 curveRemapUV(vec2 uv) {
@@ -99,10 +100,13 @@ vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
     float distFromLeft = screenCoord.x;
     float distFromRight = 1.0 - screenCoord.x;
 
-    // Check if we're in bezel area
-    if (distFromTop >= uBezelSize && distFromBottom >= uBezelSize &&
-        distFromLeft >= uBezelSize && distFromRight >= uBezelSize) {
-        // Not in bezel
+    // Determine which edge we're closest to
+    float minDist = min(min(distFromTop, distFromBottom), min(distFromLeft, distFromRight));
+
+    // Check if we're in the reflection zone (from screen edge outward to uReflectionWidth)
+    // Reflections appear from screen edge (0px) outward to reflection width (50px)
+    if (minDist >= uReflectionWidth) {
+        // Too far from edges - outside reflection area
         return vec4(0.0);
     }
 
@@ -119,11 +123,9 @@ vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
     float playfieldLeft = uBorderNormalized;
     float playfieldRight = 1.0 - uBorderNormalized;
 
-    // Determine which edge we're on (find the minimum distance)
-    float minDist = min(min(distFromTop, distFromBottom), min(distFromLeft, distFromRight));
-
-    // Calculate normalized depth into bezel (0 = at playfield edge, 1 = at screen edge)
-    float depth = (uBezelSize - minDist) / uBezelSize;
+    // Calculate normalized depth within reflection zone
+    // depth = 0 at screen edge (0), depth = 1 at reflection outer edge (uReflectionWidth)
+    float depth = minDist / uReflectionWidth;
 
     // Calculate fade (1 = at playfield edge, 0 = at screen edge)
     fadeAmount = 1.0 - depth;
@@ -181,10 +183,9 @@ vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
     reflection.rgb *= perspectiveDim;
 
     // Additional corner darkening to hide visual artifacts
-    float minDistToEdge = min(min(distFromTop, distFromBottom), min(distFromLeft, distFromRight));
-    if (minDistToEdge < uBezelSize) {
-        // Darken corners slightly
-        float cornerDarken = smoothstep(0.0, uBezelSize, minDistToEdge);
+    if (minDist < uReflectionWidth) {
+        // Darken corners slightly within reflection zone
+        float cornerDarken = smoothstep(uBorderNormalized, uReflectionWidth, minDist);
         reflection.rgb *= mix(0.5, 1.0, cornerDarken); // Lighter corners (50% brightness) for brighter overall reflections
     }
 
@@ -192,27 +193,42 @@ vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
 }
 
 void main(void) {
-    // Check if we're in the bezel area first
-    // Pass the texture coordinate ratio for proper sampling
-    vec2 texCoordRatio = vTextureCoord / vScreenCoord;
-    vec4 bezelReflection = getBezelReflection(vScreenCoord, texCoordRatio);
-    if (bezelReflection.a > 0.0 || bezelReflection.r > 0.0 || bezelReflection.g > 0.0 || bezelReflection.b > 0.0) {
-        // We're in the bezel - show reflection
-        finalColor = vec4(bezelReflection.rgb, 1.0);
+    // Check if this is the reflection-only layer (uReflectionOpacity > 0 with minimal curvature)
+    bool isReflectionLayer = (uReflectionOpacity > 0.0 && uCurvature < 1.0);
+
+    if (isReflectionLayer) {
+        // Reflection layer: render ONLY reflections in bezel areas, black everywhere else
+        vec2 texCoordRatio = vTextureCoord / vScreenCoord;
+        vec4 bezelReflection = getBezelReflection(vScreenCoord, texCoordRatio);
+
+        if (bezelReflection.a > 0.0 || bezelReflection.r > 0.0 || bezelReflection.g > 0.0 || bezelReflection.b > 0.0) {
+            // Show reflection
+            finalColor = vec4(bezelReflection.rgb, 1.0);
+        } else {
+            // Black everywhere else
+            finalColor = vec4(0.0, 0.0, 0.0, 1.0);
+        }
         return;
     }
+
+    // Playfield layer: render full game with CRT effects, no reflections
 
     // Apply barrel distortion using perfect screen coordinates for symmetry
     vec2 distortedScreenCoord = curveRemapUV(vScreenCoord);
 
-    // Calculate the distorted texture coordinate
-    vec2 uv = distortedScreenCoord * (vTextureCoord / vScreenCoord);
-
-    // Check if we're outside the curved screen
-    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
-        finalColor = vec4(0.0, 0.0, 0.0, 1.0);
+    // Check if DISTORTED SCREEN COORD is outside bounds (symmetric check in screen space)
+    // This is the key: check bounds in screen space BEFORE converting to texture space
+    if (distortedScreenCoord.x < 0.0 || distortedScreenCoord.x > 1.0 ||
+        distortedScreenCoord.y < 0.0 || distortedScreenCoord.y > 1.0) {
+        // Outside curved bounds - transparent to show reflection layer
+        finalColor = vec4(0.0, 0.0, 0.0, 0.0);
         return;
     }
+
+    // Calculate the distorted texture coordinate
+    // Convert distorted screen space (0-1) to texture space using the original ratio
+    vec2 texCoordRatio = vTextureCoord / vScreenCoord;
+    vec2 uv = distortedScreenCoord * texCoordRatio;
 
     // #2 - RGB misalignment in corners (convergence issues)
     vec2 cornerOffset = (uv - 0.5) * 2.0; // -1 to 1 from center
@@ -343,6 +359,7 @@ export interface CRTShaderOptions {
   bezelSize?: number;
   reflectionOpacity?: number;
   borderNormalized?: number;
+  reflectionWidth?: number;
 }
 
 export class CRTFilter extends Filter {
@@ -384,7 +401,8 @@ export class CRTFilter extends Filter {
           uCenterOffset: { value: [0.0, 0.0], type: 'vec2<f32>' }, // Perfect center
           uBezelSize: { value: options.bezelSize || 0.03125, type: 'f32' }, // Default 25px on 800px canvas
           uReflectionOpacity: { value: options.reflectionOpacity || 1.5, type: 'f32' },
-          uBorderNormalized: { value: options.borderNormalized || 0.015, type: 'f32' }, // Default 12px on 800px canvas
+          uBorderNormalized: { value: options.borderNormalized || 0.015, type: 'f32' }, // Default 12px on 800px canvas (inner edge of reflections)
+          uReflectionWidth: { value: options.reflectionWidth || 0.0625, type: 'f32' }, // Default 50px on 800px canvas (outer edge of reflections)
         },
       },
     });

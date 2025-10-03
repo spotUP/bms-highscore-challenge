@@ -9410,13 +9410,36 @@ const Pong404: React.FC = () => {
       }
       texture.updateUvs();
 
-      const sprite = new Sprite(texture);
-      // Don't scale sprite - use 1:1 pixel mapping
-      sprite.width = canvasRef.current.width;
-      sprite.height = canvasRef.current.height;
-      sprite.x = 0;
-      sprite.y = 0;
-      app.stage.addChild(sprite);
+      // Layer 1: Reflection sprite (back layer) - shows only bezel reflections
+      const reflectionSprite = new Sprite(texture);
+      reflectionSprite.width = canvasRef.current.width;
+      reflectionSprite.height = canvasRef.current.height;
+      reflectionSprite.x = 0;
+      reflectionSprite.y = 0;
+
+      // Create reflection-only filter (only renders reflections in bezel areas)
+      const reflectionFilter = new CRTFilter({
+        curvature: 0.001,  // Very small curvature
+        scanlineIntensity: 0,
+        vignetteIntensity: 0,
+        noiseIntensity: 0,
+        brightness: 1.0,
+        chromaticAberration: 0,
+        bezelSize: 0.0625,
+        reflectionOpacity: 1.5,
+        borderNormalized: BORDER_THICKNESS / canvasSize.width,
+        reflectionWidth: 50 / canvasSize.width,  // 50px wide reflections
+      });
+      reflectionSprite.filters = [reflectionFilter];
+      app.stage.addChild(reflectionSprite); // Add first (renders behind)
+
+      // Layer 2: Playfield sprite (front layer) - shows game content with CRT effects
+      const playfieldSprite = new Sprite(texture);
+      playfieldSprite.width = canvasRef.current.width;
+      playfieldSprite.height = canvasRef.current.height;
+      playfieldSprite.x = 0;
+      playfieldSprite.y = 0;
+      playfieldSprite.blendMode = 'normal'; // Normal blending
 
       const filter = new CRTFilter({
         curvature: 12.0,
@@ -9425,15 +9448,15 @@ const Pong404: React.FC = () => {
         noiseIntensity: 0.05,
         brightness: 1.25,
         chromaticAberration: 0.004,
-        bezelSize: 0.0625,  // 50px bezel on 800px canvas (doubled from 25px)
-        reflectionOpacity: 1.5,  // Much brighter reflections
-        borderNormalized: BORDER_THICKNESS / canvasSize.width,  // Dynamic border based on canvas size
+        bezelSize: 0.0625,
+        reflectionOpacity: 0.0,  // No reflections on playfield layer
+        borderNormalized: BORDER_THICKNESS / canvasSize.width,
+        reflectionWidth: 50 / canvasSize.width,
       });
+      playfieldSprite.filters = [filter];
+      app.stage.addChild(playfieldSprite); // Add second (renders on top)
 
       crtFilterRef.current = filter;
-
-      // Apply filter to the ENTIRE STAGE (not just sprite) for centered distortion
-      app.stage.filters = [filter];
 
       // console.log('[CRT] Filter created and applied:', {
       //   hasCrtFilter: !!filter,
