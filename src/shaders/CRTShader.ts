@@ -135,55 +135,73 @@ vec4 getBezelReflection(vec2 curvedCoord, vec2 flatCoord, vec2 texCoordRatio) {
 
     // Sample from the FLAT (pre-curve) texture, but use CURVED coordinates to determine position
     // This creates the illusion of reflections on curved glass
+    // We need to sample the BORDER which exists between screen edge and playfieldTop/Bottom/Left/Right
+    // The border region: from 0.0 to uBorderNormalized on each side
+    // We want to sample: border region + some playfield content
+
+    // Hardcoded sampling parameters found through interactive tuning
+    // These values capture the yellow border in reflections
+    float sampleStart;
+    float totalDepth;
+
     if (distFromTop == minDist) {
-        // Top edge - sample from inside top playfield boundary, going inward
-        sampleCoord = vec2(flatCoord.x, playfieldTop + depth * reflectionDepth);
+        sampleStart = 0.08;
+        totalDepth = 0.09;
+        // Top edge - sample from screen edge (0.0), going into playfield
+        sampleCoord = vec2(flatCoord.x, sampleStart + depth * totalDepth);
     }
     else if (distFromBottom == minDist) {
-        // Bottom edge - sample from inside bottom playfield boundary, going inward
-        sampleCoord = vec2(flatCoord.x, playfieldBottom - depth * reflectionDepth);
+        sampleStart = 0.08;
+        totalDepth = 0.09;
+        // Bottom edge - sample from screen edge, going into playfield
+        sampleCoord = vec2(flatCoord.x, 1.0 - (sampleStart + depth * totalDepth));
     }
     else if (distFromLeft == minDist) {
-        // Left edge - sample from inside left playfield boundary, going inward
-        sampleCoord = vec2(playfieldLeft + depth * reflectionDepth, flatCoord.y);
+        sampleStart = 0.10;
+        totalDepth = 0.11;
+        // Left edge - sample from screen edge, going into playfield
+        sampleCoord = vec2(sampleStart + depth * totalDepth, flatCoord.y);
     }
     else {
-        // Right edge - sample from inside right playfield boundary, going inward
-        sampleCoord = vec2(playfieldRight - depth * reflectionDepth, flatCoord.y);
+        sampleStart = 0.09;
+        totalDepth = 0.10;
+        // Right edge - sample from screen edge, going into playfield
+        sampleCoord = vec2(1.0 - (sampleStart + depth * totalDepth), flatCoord.y);
     }
 
     // Convert sample coordinate from screen space to texture space
     vec2 texSampleCoord = texCoordRatio * sampleCoord;
 
     // Flip reflections within their own regions (mirror effect like real glass)
+    // Flip the entire sampling range from 0.0 to totalDepth
     if (distFromTop == minDist) {
-        // Top reflection: flip upside down within the top region only
-        float topBound = texCoordRatio.y * playfieldTop;
-        float sampleBound = texCoordRatio.y * (playfieldTop + reflectionDepth);
+        // Top reflection: flip upside down from 0.0 to totalDepth
+        float topBound = 0.0;
+        float sampleBound = texCoordRatio.y * totalDepth;
         float localY = texSampleCoord.y - topBound;
         float regionHeight = sampleBound - topBound;
         texSampleCoord.y = topBound + (regionHeight - localY);
     }
     else if (distFromBottom == minDist) {
-        // Bottom reflection: flip upside down within the bottom region only
-        float bottomBound = texCoordRatio.y * playfieldBottom;
-        float sampleBound = texCoordRatio.y * (playfieldBottom - reflectionDepth);
+        // Bottom reflection: flip upside down from (1.0 - totalDepth) to 1.0
+        float bottomBound = texCoordRatio.y;
+        float sampleBound = texCoordRatio.y * (1.0 - totalDepth);
         float localY = texSampleCoord.y - sampleBound;
         float regionHeight = bottomBound - sampleBound;
         texSampleCoord.y = sampleBound + (regionHeight - localY);
     }
     else if (distFromLeft == minDist) {
-        // Left reflection: flip horizontally within the left region only
-        float leftBound = texCoordRatio.x * playfieldLeft;
-        float sampleBound = texCoordRatio.x * (playfieldLeft + reflectionDepth);
+        // Left reflection: flip horizontally from 0.0 to totalDepth
+        float leftBound = 0.0;
+        float sampleBound = texCoordRatio.x * totalDepth;
         float localX = texSampleCoord.x - leftBound;
         float regionWidth = sampleBound - leftBound;
         texSampleCoord.x = leftBound + (regionWidth - localX);
     }
     else if (distFromRight == minDist) {
-        // Right reflection: flip horizontally within the right region only
-        float rightBound = texCoordRatio.x * playfieldRight;
-        float sampleBound = texCoordRatio.x * (playfieldRight - reflectionDepth);
+        // Right reflection: flip horizontally from (1.0 - totalDepth) to 1.0
+        float rightBound = texCoordRatio.x;
+        float sampleBound = texCoordRatio.x * (1.0 - totalDepth);
         float localX = texSampleCoord.x - sampleBound;
         float regionWidth = rightBound - sampleBound;
         texSampleCoord.x = sampleBound + (regionWidth - localX);
