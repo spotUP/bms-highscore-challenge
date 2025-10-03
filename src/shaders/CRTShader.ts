@@ -93,7 +93,7 @@ float noise(vec2 co) {
 
 // Get reflection from playfield edge
 vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
-    // Determine which bezel region we're in using 45-degree miters
+    // Calculate distance from each edge (normalized 0-1, where 0 = at edge, 1 = at opposite edge)
     float distFromTop = screenCoord.y;
     float distFromBottom = 1.0 - screenCoord.y;
     float distFromLeft = screenCoord.x;
@@ -110,93 +110,40 @@ vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
     vec2 sampleCoord;
     float fadeAmount = 1.0;
 
-    // Reflection depth - how far into the playfield to sample (160px on 800px canvas for deeper reflections)
-    float reflectionDepth = 0.2; // 160/800 = 0.2 (doubled for larger reflections)
+    // Reflection depth - how far into the playfield to sample (160px on 800px canvas)
+    float reflectionDepth = 0.2; // 160/800 = 0.2
 
-    // Handle corners with 45-degree miter (like picture frame)
-    // The edge that's closer "owns" the corner pixel
-    if (distFromTop < uBezelSize && distFromLeft < uBezelSize) {
-        // Top-left corner - use 45-degree miter
-        if (distFromTop <= distFromLeft) {
-            // Top edge owns this pixel - sample from just inside border going inward
-            float depth = (uBezelSize - distFromTop) / uBezelSize; // 0 at outer edge, 1 at inner edge
-            sampleCoord = vec2(screenCoord.x, uBorderNormalized + depth * reflectionDepth);
-            fadeAmount = 1.0 - (distFromTop / uBezelSize);
-        } else {
-            // Left edge owns this pixel
-            float depth = (uBezelSize - distFromLeft) / uBezelSize;
-            sampleCoord = vec2(uBorderNormalized + depth * reflectionDepth, screenCoord.y);
-            fadeAmount = 1.0 - (distFromLeft / uBezelSize);
-        }
+    // Playfield boundaries (where content starts/ends, accounting for border)
+    float playfieldTop = uBorderNormalized;
+    float playfieldBottom = 1.0 - uBorderNormalized;
+    float playfieldLeft = uBorderNormalized;
+    float playfieldRight = 1.0 - uBorderNormalized;
+
+    // Determine which edge we're on (find the minimum distance)
+    float minDist = min(min(distFromTop, distFromBottom), min(distFromLeft, distFromRight));
+
+    // Calculate normalized depth into bezel (0 = at playfield edge, 1 = at screen edge)
+    float depth = (uBezelSize - minDist) / uBezelSize;
+
+    // Calculate fade (1 = at playfield edge, 0 = at screen edge)
+    fadeAmount = 1.0 - depth;
+
+    // Determine which edge owns this pixel and calculate symmetric sample coordinate
+    if (distFromTop == minDist) {
+        // Top edge - sample from inside top playfield boundary, going inward
+        sampleCoord = vec2(screenCoord.x, playfieldTop + depth * reflectionDepth);
     }
-    else if (distFromTop < uBezelSize && distFromRight < uBezelSize) {
-        // Top-right corner
-        if (distFromTop <= distFromRight) {
-            // Top edge owns this pixel - mirror from below
-            float depth = (uBezelSize - distFromTop) / uBezelSize;
-            float mirrorY = uBorderNormalized + uBezelSize * 2.0;
-            sampleCoord = vec2(screenCoord.x, mirrorY + depth * reflectionDepth);
-            fadeAmount = 1.0 - (distFromTop / uBezelSize);
-        } else {
-            // Right edge owns this pixel
-            float depth = (uBezelSize - distFromRight) / uBezelSize;
-            sampleCoord = vec2((1.0 - uBorderNormalized) - depth * reflectionDepth, screenCoord.y);
-            fadeAmount = 1.0 - (distFromRight / uBezelSize);
-        }
+    else if (distFromBottom == minDist) {
+        // Bottom edge - sample from inside bottom playfield boundary, going inward (symmetric to top)
+        sampleCoord = vec2(screenCoord.x, playfieldBottom - depth * reflectionDepth);
     }
-    else if (distFromBottom < uBezelSize && distFromLeft < uBezelSize) {
-        // Bottom-left corner
-        if (distFromBottom <= distFromLeft) {
-            // Bottom edge owns this pixel
-            float depth = (uBezelSize - distFromBottom) / uBezelSize;
-            sampleCoord = vec2(screenCoord.x, (1.0 - uBorderNormalized) - depth * reflectionDepth);
-            fadeAmount = 1.0 - (distFromBottom / uBezelSize);
-        } else {
-            // Left edge owns this pixel - mirror from right
-            float depth = (uBezelSize - distFromLeft) / uBezelSize;
-            float mirrorX = uBorderNormalized + uBezelSize * 2.0;
-            sampleCoord = vec2(mirrorX + depth * reflectionDepth, screenCoord.y);
-            fadeAmount = 1.0 - (distFromLeft / uBezelSize);
-        }
+    else if (distFromLeft == minDist) {
+        // Left edge - sample from inside left playfield boundary, going inward
+        sampleCoord = vec2(playfieldLeft + depth * reflectionDepth, screenCoord.y);
     }
-    else if (distFromBottom < uBezelSize && distFromRight < uBezelSize) {
-        // Bottom-right corner
-        if (distFromBottom <= distFromRight) {
-            // Bottom edge owns this pixel
-            float depth = (uBezelSize - distFromBottom) / uBezelSize;
-            sampleCoord = vec2(screenCoord.x, (1.0 - uBorderNormalized) - depth * reflectionDepth);
-            fadeAmount = 1.0 - (distFromBottom / uBezelSize);
-        } else {
-            // Right edge owns this pixel
-            float depth = (uBezelSize - distFromRight) / uBezelSize;
-            sampleCoord = vec2((1.0 - uBorderNormalized) - depth * reflectionDepth, screenCoord.y);
-            fadeAmount = 1.0 - (distFromRight / uBezelSize);
-        }
-    }
-    // Pure edges (not corners)
-    else if (distFromTop < uBezelSize) {
-        // Top edge - sample from inside the playfield border
-        float depth = (uBezelSize - distFromTop) / uBezelSize;
-        sampleCoord = vec2(screenCoord.x, uBorderNormalized + depth * reflectionDepth);
-        fadeAmount = 1.0 - (distFromTop / uBezelSize);
-    }
-    else if (distFromBottom < uBezelSize) {
-        // Bottom edge - sample from inside the playfield border
-        float depth = (uBezelSize - distFromBottom) / uBezelSize;
-        sampleCoord = vec2(screenCoord.x, (1.0 - uBorderNormalized) - depth * reflectionDepth);
-        fadeAmount = 1.0 - (distFromBottom / uBezelSize);
-    }
-    else if (distFromLeft < uBezelSize) {
-        // Left edge - sample from inside the playfield border
-        float depth = (uBezelSize - distFromLeft) / uBezelSize;
-        sampleCoord = vec2(uBorderNormalized + depth * reflectionDepth, screenCoord.y);
-        fadeAmount = 1.0 - (distFromLeft / uBezelSize);
-    }
-    else if (distFromRight < uBezelSize) {
-        // Right edge - sample from inside the playfield border
-        float depth = (uBezelSize - distFromRight) / uBezelSize;
-        sampleCoord = vec2((1.0 - uBorderNormalized) - depth * reflectionDepth, screenCoord.y);
-        fadeAmount = 1.0 - (distFromRight / uBezelSize);
+    else {
+        // Right edge - sample from inside right playfield boundary, going inward (symmetric to left)
+        sampleCoord = vec2(playfieldRight - depth * reflectionDepth, screenCoord.y);
     }
 
     // Convert sample coordinate from screen space to texture space
