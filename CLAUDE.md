@@ -167,3 +167,4 @@ killall -9 node && sleep 1 && npm run dev
 - http://localhost:8080/404 (NOT 8082, NOT 8083)
 - the ambient sound system is old and not used we use generated music with tone.js now
 - remember the mega bezel reflection shader should never be implemented in the canvas, it should be implemented directly into the crt shader
+- remember the playfield border belongs to the playfield
