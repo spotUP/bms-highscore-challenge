@@ -429,6 +429,7 @@ class ServerCollisionDetector {
 // Server-side collision detection constants (match client-side values)
 const COLLISION_BUFFER = 0; // No buffer for pixel-perfect collision detection
 const BORDER_THICKNESS = 12; // Border thickness to match client-side visual rendering
+const PADDLE_GAP = 42; // Gap between paddles and borders (matching client)
 const SPEED_BOOST = 1.02; // Speed boost for collision excitement
 
 // Types for game entities
@@ -1636,10 +1637,10 @@ class PongWebSocketServer {
         greatWallSide: null
       },
       paddles: {
-        left: { x: BORDER_THICKNESS * 2, y: 250, height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: 32, velocity: 0, targetY: 250, originalHeight: PADDLE_LENGTH },
-        right: { x: 800 - PADDLE_THICKNESS - (BORDER_THICKNESS * 2), y: 250, height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: 32, velocity: 0, targetY: 250, originalHeight: PADDLE_LENGTH },
-        top: { x: 360, y: BORDER_THICKNESS * 2, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: 32, velocity: 0, targetX: 360, originalWidth: PADDLE_LENGTH },
-        bottom: { x: 360, y: 800 - PADDLE_THICKNESS - (BORDER_THICKNESS * 2), height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: 32, velocity: 0, targetX: 360, originalWidth: PADDLE_LENGTH }
+        left: { x: BORDER_THICKNESS + PADDLE_GAP, y: 250, height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: 32, velocity: 0, targetY: 250, originalHeight: PADDLE_LENGTH },
+        right: { x: 800 - BORDER_THICKNESS - PADDLE_GAP - PADDLE_THICKNESS, y: 250, height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: 32, velocity: 0, targetY: 250, originalHeight: PADDLE_LENGTH },
+        top: { x: 360, y: BORDER_THICKNESS + PADDLE_GAP, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: 32, velocity: 0, targetX: 360, originalWidth: PADDLE_LENGTH },
+        bottom: { x: 360, y: 800 - BORDER_THICKNESS - PADDLE_GAP - PADDLE_THICKNESS, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: 32, velocity: 0, targetX: 360, originalWidth: PADDLE_LENGTH }
       },
       score: {
         left: 0,
@@ -1887,11 +1888,11 @@ class PongWebSocketServer {
         top: gameState.ball.y,
         bottom: gameState.ball.y + gameState.ball.size
       };
-      console.log(`🎯 BALL BOUNDS: L=${ballBounds.left.toFixed(1)} R=${ballBounds.right.toFixed(1)} T=${ballBounds.top.toFixed(1)} B=${ballBounds.bottom.toFixed(1)}`);
+      // console.log(`🎯 BALL BOUNDS: L=${ballBounds.left.toFixed(1)} R=${ballBounds.right.toFixed(1)} T=${ballBounds.top.toFixed(1)} B=${ballBounds.bottom.toFixed(1)}`);
 
       // Show canvas boundaries and paddle zones
       console.log(`🏟️  CANVAS: ${canvasSize.width}x${canvasSize.height}`);
-      console.log(`🚧 PADDLE ZONES: Left[x≤44] Right[x≥${canvasSize.width-44}] Top[y≤44] Bottom[y≥${canvasSize.height-44}]`);
+      // console.log(`🚧 PADDLE ZONES: Left[x≤44] Right[x≥${canvasSize.width-44}] Top[y≤44] Bottom[y≥${canvasSize.height-44}]`);
     }
 
     // Update AI paddles to track the ball
@@ -2242,22 +2243,22 @@ class PongWebSocketServer {
     if (!humanPlayers.left) {
       const velocity = gameState.paddles.left.y - oldPositions.left.y;
       gameState.paddles.left.velocity = velocity;
-      if (Math.abs(velocity) > 0.1) console.log(`⚡ LEFT AI velocity: ${velocity.toFixed(2)}`);
+      // if (Math.abs(velocity) > 0.1) console.log(`⚡ LEFT AI velocity: ${velocity.toFixed(2)}`);
     }
     if (!humanPlayers.right) {
       const velocity = gameState.paddles.right.y - oldPositions.right.y;
       gameState.paddles.right.velocity = velocity;
-      if (Math.abs(velocity) > 0.1) console.log(`⚡ RIGHT AI velocity: ${velocity.toFixed(2)}`);
+      // if (Math.abs(velocity) > 0.1) console.log(`⚡ RIGHT AI velocity: ${velocity.toFixed(2)}`);
     }
     if (!humanPlayers.top) {
       const velocity = gameState.paddles.top.x - oldPositions.top.x;
       gameState.paddles.top.velocity = velocity;
-      if (Math.abs(velocity) > 0.1) console.log(`⚡ TOP AI velocity: ${velocity.toFixed(2)}`);
+      // if (Math.abs(velocity) > 0.1) console.log(`⚡ TOP AI velocity: ${velocity.toFixed(2)}`);
     }
     if (!humanPlayers.bottom) {
       const velocity = gameState.paddles.bottom.x - oldPositions.bottom.x;
       gameState.paddles.bottom.velocity = velocity;
-      if (Math.abs(velocity) > 0.1) console.log(`⚡ BOTTOM AI velocity: ${velocity.toFixed(2)}`);
+      // if (Math.abs(velocity) > 0.1) console.log(`⚡ BOTTOM AI velocity: ${velocity.toFixed(2)}`);
     }
 
     // 🏓 PADDLE-TO-PADDLE COLLISION DETECTION
@@ -2354,7 +2355,7 @@ class PongWebSocketServer {
 
     // Create paddle objects
     const leftPaddle: Paddle = {
-      x: BORDER_THICKNESS * 2,
+      x: gameState.paddles.left.x,
       y: gameState.paddles.left.y,
       width: gameState.paddles.left.width,
       height: gameState.paddles.left.height,
@@ -2363,7 +2364,7 @@ class PongWebSocketServer {
     };
 
     const rightPaddle: Paddle = {
-      x: canvasSize.width - gameState.paddles.right.width - (BORDER_THICKNESS * 2),
+      x: gameState.paddles.right.x,
       y: gameState.paddles.right.y,
       width: gameState.paddles.right.width,
       height: gameState.paddles.right.height,
@@ -2460,7 +2461,7 @@ class PongWebSocketServer {
               ? ballCenterX - (paddle.x + paddle.width/2)
               : ballCenterY - (paddle.y + paddle.height/2)
           );
-          console.log(`🔍 ${paddle.side.toUpperCase()} collision check: hit=${collision.hit}, distance=${distance.toFixed(1)}`);
+          // console.log(`🔍 ${paddle.side.toUpperCase()} collision check: hit=${collision.hit}, distance=${distance.toFixed(1)}`);
         }
 
         if (collision.hit) {
@@ -2848,8 +2849,8 @@ class PongWebSocketServer {
     if (gameState.ball.isMagnetic) {
       const magnetStrength = 0.3;
       const magneticPaddles = [
-        { x: 24, y: gameState.paddles.left.y + gameState.paddles.left.height / 2 },
-        { x: canvasSize.width - 24, y: gameState.paddles.right.y + gameState.paddles.right.height / 2 }
+        { x: gameState.paddles.left.x + gameState.paddles.left.width / 2, y: gameState.paddles.left.y + gameState.paddles.left.height / 2 },
+        { x: gameState.paddles.right.x + gameState.paddles.right.width / 2, y: gameState.paddles.right.y + gameState.paddles.right.height / 2 }
       ];
 
       for (const paddle of magneticPaddles) {
@@ -2907,14 +2908,14 @@ class PongWebSocketServer {
         // Check paddle collisions BEFORE moving (to prevent pass-through)
         // Use SAME paddle creation logic as main ball (with hardcoded X/Y positions)
         const leftPaddle: Paddle = {
-          x: BORDER_THICKNESS * 2,
+          x: gameState.paddles.left.x,
           y: gameState.paddles.left.y,
           width: gameState.paddles.left.width,
           height: gameState.paddles.left.height,
           side: 'left'
         };
         const rightPaddle: Paddle = {
-          x: canvasSize.width - gameState.paddles.right.width - (BORDER_THICKNESS * 2),
+          x: gameState.paddles.right.x,
           y: gameState.paddles.right.y,
           width: gameState.paddles.right.width,
           height: gameState.paddles.right.height,
@@ -3174,8 +3175,8 @@ class PongWebSocketServer {
         }
 
         // Create paddle collision objects
-        const leftPaddle = { x: BORDER_THICKNESS * 2, y: gameState.paddles.left.y, width: gameState.paddles.left.width, height: gameState.paddles.left.height, side: 'left' as const, velocity: gameState.paddles.left.velocity || 0 };
-        const rightPaddle = { x: canvasSize.width - gameState.paddles.right.width - (BORDER_THICKNESS * 2), y: gameState.paddles.right.y, width: gameState.paddles.right.width, height: gameState.paddles.right.height, side: 'right' as const, velocity: gameState.paddles.right.velocity || 0 };
+        const leftPaddle = { x: gameState.paddles.left.x, y: gameState.paddles.left.y, width: gameState.paddles.left.width, height: gameState.paddles.left.height, side: 'left' as const, velocity: gameState.paddles.left.velocity || 0 };
+        const rightPaddle = { x: gameState.paddles.right.x, y: gameState.paddles.right.y, width: gameState.paddles.right.width, height: gameState.paddles.right.height, side: 'right' as const, velocity: gameState.paddles.right.velocity || 0 };
         const topPaddle = { x: gameState.paddles.top.x, y: gameState.paddles.top.y, width: gameState.paddles.top.width, height: gameState.paddles.top.height, side: 'top' as const, velocity: gameState.paddles.top.velocity || 0 };
         const bottomPaddle = { x: gameState.paddles.bottom.x, y: gameState.paddles.bottom.y, width: gameState.paddles.bottom.width, height: gameState.paddles.bottom.height, side: 'bottom' as const, velocity: gameState.paddles.bottom.velocity || 0 };
         const machineGunPaddles: Paddle[] = [leftPaddle, rightPaddle, topPaddle, bottomPaddle];
@@ -3593,14 +3594,14 @@ class PongWebSocketServer {
 
       // Log ball movement every few frames for tracking trajectory
       if (frameCount % 400 < 50) { // Every ~7 frames at 60fps
-        console.log(`🚀 BALL MOVEMENT: (${prevX.toFixed(1)}, ${prevY.toFixed(1)}) → (${gameState.ball.x.toFixed(1)}, ${gameState.ball.y.toFixed(1)}) | Δ(${gameState.ball.dx.toFixed(2)}, ${gameState.ball.dy.toFixed(2)})`);
+        // console.log(`🚀 BALL MOVEMENT: (${prevX.toFixed(1)}, ${prevY.toFixed(1)}) → (${gameState.ball.x.toFixed(1)}, ${gameState.ball.y.toFixed(1)}) | Δ(${gameState.ball.dx.toFixed(2)}, ${gameState.ball.dy.toFixed(2)})`);
 
         // Check distance from boundaries
         const distToLeft = gameState.ball.x;
         const distToRight = canvasSize.width - (gameState.ball.x + gameState.ball.size);
         const distToTop = gameState.ball.y;
         const distToBottom = canvasSize.height - (gameState.ball.y + gameState.ball.size);
-        console.log(`🌍 BOUNDARY DISTANCES: L=${distToLeft.toFixed(1)} R=${distToRight.toFixed(1)} T=${distToTop.toFixed(1)} B=${distToBottom.toFixed(1)}`);
+        // console.log(`🌍 BOUNDARY DISTANCES: L=${distToLeft.toFixed(1)} R=${distToRight.toFixed(1)} T=${distToTop.toFixed(1)} B=${distToBottom.toFixed(1)}`);
 
         // Check if ball is approaching boundaries
         const approachingLeft = gameState.ball.dx < 0 && distToLeft < 100;
@@ -3609,7 +3610,7 @@ class PongWebSocketServer {
         const approachingBottom = gameState.ball.dy > 0 && distToBottom < 100;
 
         if (approachingLeft || approachingRight || approachingTop || approachingBottom) {
-          console.log(`⚠️ BOUNDARY APPROACH: Left=${approachingLeft} Right=${approachingRight} Top=${approachingTop} Bottom=${approachingBottom}`);
+          // console.log(`⚠️ BOUNDARY APPROACH: Left=${approachingLeft} Right=${approachingRight} Top=${approachingTop} Bottom=${approachingBottom}`);
         }
       }
 
@@ -3652,7 +3653,7 @@ class PongWebSocketServer {
     const nearBottom = ballForCollision.y + ballForCollision.size > canvasSize.height - 50;
 
     if (nearLeft || nearRight || nearTop || nearBottom) {
-      console.log(`⚠️ NEAR BOUNDARY: Ball at (${ballForCollision.x.toFixed(1)}, ${ballForCollision.y.toFixed(1)}), velocity (${gameState.ball.dx.toFixed(2)}, ${gameState.ball.dy.toFixed(2)})`);
+      // console.log(`⚠️ NEAR BOUNDARY: Ball at (${ballForCollision.x.toFixed(1)}, ${ballForCollision.y.toFixed(1)}), velocity (${gameState.ball.dx.toFixed(2)}, ${gameState.ball.dy.toFixed(2)})`);
       console.log(`  Near: L=${nearLeft} R=${nearRight} T=${nearTop} B=${nearBottom}`);
     }
 

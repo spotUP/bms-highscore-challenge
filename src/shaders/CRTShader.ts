@@ -110,8 +110,8 @@ vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
     vec2 sampleCoord;
     float fadeAmount = 1.0;
 
-    // Reflection depth - how far into the playfield to sample (80px on 800px canvas for deeper reflections)
-    float reflectionDepth = 0.1; // 80/800 = 0.1
+    // Reflection depth - how far into the playfield to sample (160px on 800px canvas for deeper reflections)
+    float reflectionDepth = 0.2; // 160/800 = 0.2 (doubled for larger reflections)
 
     // Handle corners with 45-degree miter (like picture frame)
     // The edge that's closer "owns" the corner pixel
@@ -132,9 +132,10 @@ vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
     else if (distFromTop < uBezelSize && distFromRight < uBezelSize) {
         // Top-right corner
         if (distFromTop <= distFromRight) {
-            // Top edge owns this pixel
+            // Top edge owns this pixel - mirror from below
             float depth = (uBezelSize - distFromTop) / uBezelSize;
-            sampleCoord = vec2(screenCoord.x, uBorderNormalized + depth * reflectionDepth);
+            float mirrorY = uBorderNormalized + uBezelSize * 2.0;
+            sampleCoord = vec2(screenCoord.x, mirrorY + depth * reflectionDepth);
             fadeAmount = 1.0 - (distFromTop / uBezelSize);
         } else {
             // Right edge owns this pixel
@@ -151,9 +152,10 @@ vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
             sampleCoord = vec2(screenCoord.x, (1.0 - uBorderNormalized) - depth * reflectionDepth);
             fadeAmount = 1.0 - (distFromBottom / uBezelSize);
         } else {
-            // Left edge owns this pixel
+            // Left edge owns this pixel - mirror from right
             float depth = (uBezelSize - distFromLeft) / uBezelSize;
-            sampleCoord = vec2(uBorderNormalized + depth * reflectionDepth, screenCoord.y);
+            float mirrorX = uBorderNormalized + uBezelSize * 2.0;
+            sampleCoord = vec2(mirrorX + depth * reflectionDepth, screenCoord.y);
             fadeAmount = 1.0 - (distFromLeft / uBezelSize);
         }
     }
@@ -232,10 +234,10 @@ vec4 getBezelReflection(vec2 screenCoord, vec2 texCoordRatio) {
     reflection.rgb *= perspectiveDim;
 
     // Additional corner darkening to hide visual artifacts
-    float minDist = min(min(distFromTop, distFromBottom), min(distFromLeft, distFromRight));
-    if (minDist < uBezelSize) {
+    float minDistToEdge = min(min(distFromTop, distFromBottom), min(distFromLeft, distFromRight));
+    if (minDistToEdge < uBezelSize) {
         // Darken corners slightly
-        float cornerDarken = smoothstep(0.0, uBezelSize, minDist);
+        float cornerDarken = smoothstep(0.0, uBezelSize, minDistToEdge);
         reflection.rgb *= mix(0.5, 1.0, cornerDarken); // Lighter corners (50% brightness) for brighter overall reflections
     }
 

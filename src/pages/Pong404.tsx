@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import SamJs from 'sam-js';
 import { Application, Sprite, Texture } from 'pixi.js';
@@ -165,36 +165,29 @@ interface WebSocketMessage {
   data?: any;
 }
 
-// Canvas size will be calculated dynamically based on viewport
-const PADDLE_SPEED = 12; // Faster base speed for keyboard control
-// NOTE: Paddle dimensions are server-authoritative. Client receives actual dimensions from server gameState.
-// These constants are fallback values for initialization only - server defines the true values.
-// Reference size for original design (all constants are based on 800px canvas)
+// Reference size - all game constants are designed for this size
 const REFERENCE_SIZE = 800;
 
 // Base constants at reference size (800px)
+const BASE_PADDLE_SPEED = 12;
 const BASE_PADDLE_LENGTH = 140; // SERVER-AUTHORITATIVE: Fallback for initialization, server defines true value
 const BASE_PADDLE_THICKNESS = 12; // SERVER-AUTHORITATIVE: Fallback for initialization, server defines true value
-const BASE_BORDER_THICKNESS = 12; // Thickness of playfield border drawn in render function
-const BASE_BALL_SPEED = 4; // Moderate speed for playable gameplay
-const BASE_BALL_SIZE = 8; // Ball size at reference size
+const BASE_BORDER_THICKNESS = 12;
+const BASE_PADDLE_GAP = 42; // Gap between paddles and borders (in 800x800 reference)
+const BASE_BALL_SPEED = 4;
+const BASE_MIN_BALL_SPEED = 3;
+const BASE_MAX_BALL_SPEED = 6;
+const BASE_BALL_SIZE = 12;
+const BASE_COLLISION_BUFFER = 2;
+const BASE_PANIC_VELOCITY_MULTIPLIER = 8;
+const BASE_EXTREME_PANIC_MULTIPLIER = 20;
 
-// Legacy constants for backward compatibility (will be replaced with scaled versions)
-const PADDLE_LENGTH = BASE_PADDLE_LENGTH;
-const PADDLE_THICKNESS = BASE_PADDLE_THICKNESS;
-const BORDER_THICKNESS = BASE_BORDER_THICKNESS;
-const BALL_SPEED = BASE_BALL_SPEED;
-const MIN_BALL_SPEED = 3;  // Slower minimum speed
-const MAX_BALL_SPEED = 6; // Slower maximum speed
-// [TARGET] Game runs at display refresh rate with frame-rate independent ball physics for constant speed
-const PADDLE_ACCELERATION = 0.2; // Reduced acceleration for smoother control
-const PADDLE_FRICTION = 0.88; // Slightly more friction for better control
-const HUMAN_REACTION_DELAY = 8; // Reduced delay for more responsive AI at 60fps
-const PANIC_MOVE_CHANCE = 0.08; // Lower chance for panic moves at 60fps
-const COLLISION_BUFFER = 2; // Small buffer for larger 24px ball to improve collision reliability
-const PANIC_VELOCITY_MULTIPLIER = 8; // Reduced panic speed multiplier
-const EXTREME_PANIC_CHANCE = 0.04; // Lower extreme panic chance
-const EXTREME_PANIC_MULTIPLIER = 20; // Reduced extreme panic speed
+// Non-scaled constants
+const PADDLE_ACCELERATION = 0.2; // Acceleration ratio, doesn't scale
+const PADDLE_FRICTION = 0.88; // Friction ratio, doesn't scale
+const HUMAN_REACTION_DELAY = 8; // Frame-based, doesn't scale
+const PANIC_MOVE_CHANCE = 0.08; // Probability, doesn't scale
+const EXTREME_PANIC_CHANCE = 0.04; // Probability, doesn't scale
 
 // Continuous collision detection helper functions for catching fast-moving balls
 const lineIntersectsRect = (x1: number, y1: number, x2: number, y2: number,
@@ -918,14 +911,12 @@ const Pong404: React.FC = () => {
 
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
+      const minDimension = Math.min(viewportWidth, viewportHeight);
 
-      // Use 95% of the smallest viewport dimension to leave room for UI
-      // This makes the game fill as much space as possible while maintaining square aspect
-      const availableSpace = Math.min(viewportWidth, viewportHeight);
-      const canvasSize = Math.floor(availableSpace * 0.95);
-
-      // Minimum size for playability
-      return Math.max(canvasSize, 400);
+      // Use 95% of the smallest viewport dimension to maximize space
+      // Minimum 400px for playability
+      const size = Math.floor(minDimension * 0.95);
+      return Math.max(size, 400);
     };
 
     const size = getOptimalCanvasSize();
@@ -957,10 +948,10 @@ const Pong404: React.FC = () => {
     top: { height: number; width: number };
     bottom: { height: number; width: number };
   }>({
-    left: { height: PADDLE_LENGTH, width: PADDLE_THICKNESS },
-    right: { height: PADDLE_LENGTH, width: PADDLE_THICKNESS },
-    top: { height: PADDLE_THICKNESS, width: PADDLE_LENGTH },
-    bottom: { height: PADDLE_THICKNESS, width: PADDLE_LENGTH }
+    left: { height: BASE_PADDLE_LENGTH, width: BASE_PADDLE_THICKNESS },
+    right: { height: BASE_PADDLE_LENGTH, width: BASE_PADDLE_THICKNESS },
+    top: { height: BASE_PADDLE_THICKNESS, width: BASE_PADDLE_LENGTH },
+    bottom: { height: BASE_PADDLE_THICKNESS, width: BASE_PADDLE_LENGTH }
   });
 
   const paddleSizeAnimationsRef = useRef<{
@@ -978,28 +969,49 @@ const Pong404: React.FC = () => {
     bottom: null
   });
 
-  // Playfield size - same as canvas (border drawn at edges)
-  const playFieldWidth = canvasSize.width;
-  const playFieldHeight = canvasSize.height;
+  // Calculate scale factor based on current canvas size
+  const scaleFactor = canvasSize.width / REFERENCE_SIZE;
 
-  // Calculate scale factor and scaled constants based on current canvas size
-  const scaleFactor = useMemo(() => canvasSize.width / REFERENCE_SIZE, [canvasSize.width]);
-  const scaledConstants = useMemo(() => ({
-    paddleLength: BASE_PADDLE_LENGTH * scaleFactor,
-    paddleThickness: BASE_PADDLE_THICKNESS * scaleFactor,
-    borderThickness: BASE_BORDER_THICKNESS * scaleFactor,
-    ballSpeed: BASE_BALL_SPEED * scaleFactor,
-    ballSize: BASE_BALL_SIZE * scaleFactor,
-  }), [scaleFactor]);
+  // Use base constants directly since we're working in 800x800 coordinate space
+  const PADDLE_SPEED = BASE_PADDLE_SPEED;
+  const PADDLE_LENGTH = BASE_PADDLE_LENGTH;
+  const PADDLE_THICKNESS = BASE_PADDLE_THICKNESS;
+  const BORDER_THICKNESS = BASE_BORDER_THICKNESS;
+  const PADDLE_GAP = BASE_PADDLE_GAP;
+  const BALL_SPEED = BASE_BALL_SPEED;
+  const MIN_BALL_SPEED = BASE_MIN_BALL_SPEED;
+  const MAX_BALL_SPEED = BASE_MAX_BALL_SPEED;
+  const BALL_SIZE = BASE_BALL_SIZE;
+  const COLLISION_BUFFER = BASE_COLLISION_BUFFER;
+  const PANIC_VELOCITY_MULTIPLIER = BASE_PANIC_VELOCITY_MULTIPLIER;
+  const EXTREME_PANIC_MULTIPLIER = BASE_EXTREME_PANIC_MULTIPLIER;
+
+  // Playfield size - same as canvas (border drawn at edges)
+  // Simple scaling: everything is in 800x800 coordinate space
+  const displaySize = Math.min(canvasSize.width, canvasSize.height);
+  const scale = displaySize / REFERENCE_SIZE;
+  const xOffset = (canvasSize.width - displaySize) / 2;
+  const yOffset = (canvasSize.height - displaySize) / 2;
+
+  // Keep using 800x800 coordinate system everywhere
+  const playFieldWidth = REFERENCE_SIZE;
+  const playFieldHeight = REFERENCE_SIZE;
+  const gameAreaSize = REFERENCE_SIZE;
+
+  // Helper to get centered ball position (relative to game area, not canvas)
+  const getCenteredBallPosition = () => ({
+    x: gameAreaSize / 2,
+    y: gameAreaSize / 2
+  });
 
   const [gameState, _setGameState] = useState<GameState>({
     ball: {
-      x: playFieldWidth / 2,
-      y: playFieldHeight / 2,
+      x: 400,
+      y: 400,
       dx: 0,
       dy: 0,
-      size: 12,
-      originalSize: 12,
+      size: BALL_SIZE,
+      originalSize: BALL_SIZE,
       isDrunk: false,
       drunkAngle: 0,
       isTeleporting: false,
@@ -1038,10 +1050,10 @@ const Pong404: React.FC = () => {
       isHypnotic: false,
     },
     paddles: {
-      left: { x: BORDER_THICKNESS, y: playFieldHeight / 2 - PADDLE_LENGTH/2, height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: playFieldHeight / 2 - PADDLE_LENGTH/2, originalHeight: PADDLE_LENGTH },
-      right: { x: playFieldWidth - BORDER_THICKNESS - PADDLE_THICKNESS, y: playFieldHeight / 2 - PADDLE_LENGTH/2, height: PADDLE_LENGTH, width: PADDLE_THICKNESS, speed: PADDLE_SPEED, velocity: 0, targetY: playFieldHeight / 2 - PADDLE_LENGTH/2, originalHeight: PADDLE_LENGTH },
-      top: { x: playFieldWidth / 2 - PADDLE_LENGTH/2, y: BORDER_THICKNESS, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: playFieldWidth / 2 - PADDLE_LENGTH/2, originalWidth: PADDLE_LENGTH },
-      bottom: { x: playFieldWidth / 2 - PADDLE_LENGTH/2, y: playFieldHeight - BORDER_THICKNESS - PADDLE_THICKNESS, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: PADDLE_SPEED, velocity: 0, targetX: playFieldWidth / 2 - PADDLE_LENGTH/2, originalWidth: PADDLE_LENGTH },
+      left: { x: BASE_BORDER_THICKNESS + BASE_PADDLE_GAP, y: 400 - BASE_PADDLE_LENGTH/2, height: BASE_PADDLE_LENGTH, width: BASE_PADDLE_THICKNESS, speed: BASE_PADDLE_SPEED, velocity: 0, targetY: 400 - BASE_PADDLE_LENGTH/2, originalHeight: BASE_PADDLE_LENGTH },
+      right: { x: 800 - BASE_BORDER_THICKNESS - BASE_PADDLE_GAP - BASE_PADDLE_THICKNESS, y: 400 - BASE_PADDLE_LENGTH/2, height: BASE_PADDLE_LENGTH, width: BASE_PADDLE_THICKNESS, speed: BASE_PADDLE_SPEED, velocity: 0, targetY: 400 - BASE_PADDLE_LENGTH/2, originalHeight: BASE_PADDLE_LENGTH },
+      top: { x: 400 - BASE_PADDLE_LENGTH/2, y: BASE_BORDER_THICKNESS + BASE_PADDLE_GAP, height: BASE_PADDLE_THICKNESS, width: BASE_PADDLE_LENGTH, speed: BASE_PADDLE_SPEED, velocity: 0, targetX: 400 - BASE_PADDLE_LENGTH/2, originalWidth: BASE_PADDLE_LENGTH },
+      bottom: { x: 400 - BASE_PADDLE_LENGTH/2, y: 800 - BASE_BORDER_THICKNESS - BASE_PADDLE_GAP - BASE_PADDLE_THICKNESS, height: BASE_PADDLE_THICKNESS, width: BASE_PADDLE_LENGTH, speed: BASE_PADDLE_SPEED, velocity: 0, targetX: 400 - BASE_PADDLE_LENGTH/2, originalWidth: BASE_PADDLE_LENGTH },
     },
     score: { left: 0, right: 0, top: 0, bottom: 0 }, // 4-player scoring
     isPlaying: false,
@@ -1579,25 +1591,25 @@ const Pong404: React.FC = () => {
             paddles: {
               left: {
                 ...message.data.gameState.paddles.left,
-                x: message.data.gameState.paddles.left.x ?? BORDER_THICKNESS,
+                x: message.data.gameState.paddles.left.x ?? (BORDER_THICKNESS + PADDLE_GAP),
                 height: PADDLE_LENGTH,
                 width: PADDLE_THICKNESS
               },
               right: {
                 ...message.data.gameState.paddles.right,
-                x: message.data.gameState.paddles.right.x ?? (playFieldWidth - BORDER_THICKNESS - PADDLE_THICKNESS),
+                x: message.data.gameState.paddles.right.x ?? (gameAreaSize - BORDER_THICKNESS - PADDLE_GAP - PADDLE_THICKNESS),
                 height: PADDLE_LENGTH,
                 width: PADDLE_THICKNESS
               },
               top: message.data.gameState.paddles.top ? {
                 ...message.data.gameState.paddles.top,
-                y: message.data.gameState.paddles.top.y ?? BORDER_THICKNESS,
+                y: message.data.gameState.paddles.top.y ?? (BORDER_THICKNESS + PADDLE_GAP),
                 height: PADDLE_THICKNESS,
                 width: PADDLE_LENGTH
               } : prevState.paddles.top,
               bottom: message.data.gameState.paddles.bottom ? {
                 ...message.data.gameState.paddles.bottom,
-                y: message.data.gameState.paddles.bottom.y ?? (playFieldHeight - BORDER_THICKNESS - PADDLE_THICKNESS),
+                y: message.data.gameState.paddles.bottom.y ?? (gameAreaSize - BORDER_THICKNESS - PADDLE_GAP - PADDLE_THICKNESS),
                 height: PADDLE_THICKNESS,
                 width: PADDLE_LENGTH
               } : prevState.paddles.bottom
@@ -1653,8 +1665,7 @@ const Pong404: React.FC = () => {
             score: { left: 0, right: 0, top: 0, bottom: 0 }, // Reset all scores
             ball: {
               ...prev.ball,
-              x: canvasSize.width / 2,
-              y: canvasSize.height / 2,
+              ...getCenteredBallPosition(),
               dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
               dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8,
               lastTouchedBy: null,
@@ -2163,26 +2174,83 @@ const Pong404: React.FC = () => {
           const playerSide = multiplayerState.playerSide;
           const currentState = currentGameStateRef.current;
 
+          // Scale network state from reference size (800px) to current canvas size
+          // Calculate directly to avoid stale closure values
+          const networkScaleFactor = 1; // Already using 800x800 coordinates
+
           networkGameStateRef.current = {
             ...message.data,
-            // Enforce correct paddle dimensions
-            // For YOUR paddle: keep local position, for AI paddles: use server position
+            // Scale ball position and dimensions
+            ball: message.data.ball ? {
+              ...message.data.ball,
+              x: message.data.ball.x * networkScaleFactor,
+              y: message.data.ball.y * networkScaleFactor,
+              dx: message.data.ball.dx * networkScaleFactor,
+              dy: message.data.ball.dy * networkScaleFactor,
+              size: message.data.ball.size * networkScaleFactor,
+              originalSize: message.data.ball.originalSize ? message.data.ball.originalSize * networkScaleFactor : BALL_SIZE
+            } : message.data.ball,
+            // Scale paddle positions and dimensions
             paddles: {
-              left: {
+              left: message.data.paddles?.left ? {
                 ...message.data.paddles.left,
-                x: message.data.paddles.left?.x ?? BORDER_THICKNESS,
-                width: PADDLE_THICKNESS,
-                height: PADDLE_LENGTH
-              },
-              right: {
+                x: (message.data.paddles.left.x ?? (BASE_BORDER_THICKNESS + BASE_PADDLE_GAP)) * networkScaleFactor,
+                y: message.data.paddles.left.y * networkScaleFactor,
+                width: (message.data.paddles.left.width ?? BASE_PADDLE_THICKNESS) * networkScaleFactor,
+                height: (message.data.paddles.left.height ?? BASE_PADDLE_LENGTH) * networkScaleFactor,
+                speed: message.data.paddles.left.speed * networkScaleFactor,
+                velocity: message.data.paddles.left.velocity * networkScaleFactor,
+                targetY: message.data.paddles.left.targetY !== undefined ? message.data.paddles.left.targetY * networkScaleFactor : undefined,
+                originalHeight: message.data.paddles.left.originalHeight !== undefined ? message.data.paddles.left.originalHeight * networkScaleFactor : undefined
+              } : networkGameStateRef.current?.paddles.left,
+              right: message.data.paddles?.right ? {
                 ...message.data.paddles.right,
-                x: message.data.paddles.right?.x ?? (playFieldWidth - BORDER_THICKNESS - PADDLE_THICKNESS),
-                width: PADDLE_THICKNESS,
-                height: PADDLE_LENGTH
-              },
-              top: message.data.paddles.top || networkGameStateRef.current?.paddles.top || { x: 360, y: 60, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: 32, velocity: 0 },
-              bottom: message.data.paddles.bottom || networkGameStateRef.current?.paddles.bottom || { x: 360, y: 728, height: PADDLE_THICKNESS, width: PADDLE_LENGTH, speed: 32, velocity: 0 }
-            }
+                x: (message.data.paddles.right.x ?? (REFERENCE_SIZE - BASE_BORDER_THICKNESS - BASE_PADDLE_GAP - BASE_PADDLE_THICKNESS)) * networkScaleFactor,
+                y: message.data.paddles.right.y * networkScaleFactor,
+                width: (message.data.paddles.right.width ?? BASE_PADDLE_THICKNESS) * networkScaleFactor,
+                height: (message.data.paddles.right.height ?? BASE_PADDLE_LENGTH) * networkScaleFactor,
+                speed: message.data.paddles.right.speed * networkScaleFactor,
+                velocity: message.data.paddles.right.velocity * networkScaleFactor,
+                targetY: message.data.paddles.right.targetY !== undefined ? message.data.paddles.right.targetY * networkScaleFactor : undefined,
+                originalHeight: message.data.paddles.right.originalHeight !== undefined ? message.data.paddles.right.originalHeight * networkScaleFactor : undefined
+              } : networkGameStateRef.current?.paddles.right,
+              top: message.data.paddles?.top ? {
+                ...message.data.paddles.top,
+                x: message.data.paddles.top.x * networkScaleFactor,
+                y: (message.data.paddles.top.y ?? (BASE_BORDER_THICKNESS + BASE_PADDLE_GAP)) * networkScaleFactor,
+                width: (message.data.paddles.top.width ?? BASE_PADDLE_LENGTH) * networkScaleFactor,
+                height: (message.data.paddles.top.height ?? BASE_PADDLE_THICKNESS) * networkScaleFactor,
+                speed: message.data.paddles.top.speed * networkScaleFactor,
+                velocity: message.data.paddles.top.velocity * networkScaleFactor,
+                targetX: message.data.paddles.top.targetX !== undefined ? message.data.paddles.top.targetX * networkScaleFactor : undefined,
+                originalWidth: message.data.paddles.top.originalWidth !== undefined ? message.data.paddles.top.originalWidth * networkScaleFactor : undefined
+              } : networkGameStateRef.current?.paddles.top,
+              bottom: message.data.paddles?.bottom ? {
+                ...message.data.paddles.bottom,
+                x: message.data.paddles.bottom.x * networkScaleFactor,
+                y: (message.data.paddles.bottom.y ?? (REFERENCE_SIZE - BASE_BORDER_THICKNESS - BASE_PADDLE_GAP - BASE_PADDLE_THICKNESS)) * networkScaleFactor,
+                width: (message.data.paddles.bottom.width ?? BASE_PADDLE_LENGTH) * networkScaleFactor,
+                height: (message.data.paddles.bottom.height ?? BASE_PADDLE_THICKNESS) * networkScaleFactor,
+                speed: message.data.paddles.bottom.speed * networkScaleFactor,
+                velocity: message.data.paddles.bottom.velocity * networkScaleFactor,
+                targetX: message.data.paddles.bottom.targetX !== undefined ? message.data.paddles.bottom.targetX * networkScaleFactor : undefined,
+                originalWidth: message.data.paddles.bottom.originalWidth !== undefined ? message.data.paddles.bottom.originalWidth * networkScaleFactor : undefined
+              } : networkGameStateRef.current?.paddles.bottom
+            },
+            // Scale pickups if present
+            pickups: message.data.pickups ? message.data.pickups.map(pickup => ({
+              ...pickup,
+              x: pickup.x * networkScaleFactor,
+              y: pickup.y * networkScaleFactor,
+              size: pickup.size * networkScaleFactor
+            })) : message.data.pickups,
+            // Scale coins if present
+            coins: message.data.coins ? message.data.coins.map(coin => ({
+              ...coin,
+              x: coin.x * networkScaleFactor,
+              y: coin.y * networkScaleFactor,
+              size: coin.size * networkScaleFactor
+            })) : message.data.coins
           };
           lastNetworkReceiveTimeRef.current = Date.now();
         }
@@ -2193,6 +2261,9 @@ const Pong404: React.FC = () => {
           setGameState(prevState => {
             // Apply delta to create new authoritative network state
             const networkState = { ...prevState };
+
+            // Scale network coordinates from reference size (800px) to current canvas size
+            const networkScaleFactor = 1; // Already using 800x800 coordinates
 
             if (messageData.ball) {
               console.log(`[GAME] RECEIVING BALL UPDATE:`, {
@@ -2209,7 +2280,16 @@ const Pong404: React.FC = () => {
                 playMelodyNoteRef.current?.('paddle', null, 'both');
               }
 
-              networkState.ball = { ...prevState.ball, ...messageData.ball };
+              // Scale ball coordinates from server (reference size) to client canvas size
+              const scaledBall = { ...messageData.ball };
+              if (scaledBall.x !== undefined) scaledBall.x *= networkScaleFactor;
+              if (scaledBall.y !== undefined) scaledBall.y *= networkScaleFactor;
+              if (scaledBall.dx !== undefined) scaledBall.dx *= networkScaleFactor;
+              if (scaledBall.dy !== undefined) scaledBall.dy *= networkScaleFactor;
+              if (scaledBall.size !== undefined) scaledBall.size *= networkScaleFactor;
+              if (scaledBall.originalSize !== undefined) scaledBall.originalSize *= networkScaleFactor;
+
+              networkState.ball = { ...prevState.ball, ...scaledBall };
             }
 
             if (messageData.score) {
@@ -2238,9 +2318,23 @@ const Pong404: React.FC = () => {
             if (messageData.gameEnded !== undefined) networkState.gameEnded = messageData.gameEnded;
 
             if (messageData.pickups) {
-              networkState.pickups = messageData.pickups;
+              // Scale pickup coordinates
+              networkState.pickups = messageData.pickups.map(pickup => ({
+                ...pickup,
+                x: pickup.x * networkScaleFactor,
+                y: pickup.y * networkScaleFactor,
+                size: pickup.size * networkScaleFactor
+              }));
             }
-            if (messageData.coins) networkState.coins = messageData.coins;
+            if (messageData.coins) {
+              // Scale coin coordinates
+              networkState.coins = messageData.coins.map(coin => ({
+                ...coin,
+                x: coin.x * networkScaleFactor,
+                y: coin.y * networkScaleFactor,
+                size: coin.size * networkScaleFactor
+              }));
+            }
             // Sync nextPickupTime from server (server controls pickup timing in multiplayer)
             if (messageData.nextPickupTime !== undefined) {
               networkState.nextPickupTime = messageData.nextPickupTime;
@@ -2248,7 +2342,14 @@ const Pong404: React.FC = () => {
 
             if (messageData.activeEffects) networkState.activeEffects = messageData.activeEffects;
 
-            if (messageData.pickupEffect) networkState.pickupEffect = messageData.pickupEffect;
+            if (messageData.pickupEffect) {
+              // Scale pickup effect coordinates
+              networkState.pickupEffect = {
+                ...messageData.pickupEffect,
+                x: messageData.pickupEffect.x * networkScaleFactor,
+                y: messageData.pickupEffect.y * networkScaleFactor
+              };
+            }
             if (messageData.decrunchEffect) networkState.decrunchEffect = messageData.decrunchEffect;
             if (messageData.rumbleEffect) networkState.rumbleEffect = messageData.rumbleEffect;
 
@@ -2334,6 +2435,9 @@ const Pong404: React.FC = () => {
             // Apply delta to create new authoritative network state
             const networkState = { ...prevState };
 
+            // Scale network coordinates from reference size (800px) to current canvas size
+            const networkScaleFactor = 1; // Already using 800x800 coordinates
+
             if (message.data.ball) {
               // Detect paddle collision by checking if lastTouchedBy changed
               if (message.data.ball.lastTouchedBy &&
@@ -2347,7 +2451,20 @@ const Pong404: React.FC = () => {
                 playMelodyNoteRef.current?.('powerup', null, 'both');
               }
 
-              networkState.ball = { ...prevState.ball, ...message.data.ball };
+              // Scale ball coordinates from server (reference size) to client canvas size
+              const scaledBall = { ...message.data.ball };
+              if (scaledBall.x !== undefined) scaledBall.x *= networkScaleFactor;
+              if (scaledBall.y !== undefined) scaledBall.y *= networkScaleFactor;
+              if (scaledBall.dx !== undefined) scaledBall.dx *= networkScaleFactor;
+              if (scaledBall.dy !== undefined) scaledBall.dy *= networkScaleFactor;
+              if (scaledBall.size !== undefined) scaledBall.size *= networkScaleFactor;
+              if (scaledBall.originalSize !== undefined) scaledBall.originalSize *= networkScaleFactor;
+              if (scaledBall.aimX !== undefined) scaledBall.aimX *= networkScaleFactor;
+              if (scaledBall.aimY !== undefined) scaledBall.aimY *= networkScaleFactor;
+              if (scaledBall.aimTargetX !== undefined) scaledBall.aimTargetX *= networkScaleFactor;
+              if (scaledBall.aimTargetY !== undefined) scaledBall.aimTargetY *= networkScaleFactor;
+
+              networkState.ball = { ...prevState.ball, ...scaledBall };
             }
 
             if (message.data.score) {
@@ -2369,16 +2486,40 @@ const Pong404: React.FC = () => {
             if (message.data.winner !== undefined) networkState.winner = message.data.winner;
             if (message.data.gameEnded !== undefined) networkState.gameEnded = message.data.gameEnded;
 
-            if (message.data.pickups) networkState.pickups = message.data.pickups;
+            if (message.data.pickups) {
+              // Scale pickup coordinates
+              networkState.pickups = message.data.pickups.map(pickup => ({
+                ...pickup,
+                x: pickup.x * networkScaleFactor,
+                y: pickup.y * networkScaleFactor,
+                size: pickup.size * networkScaleFactor
+              }));
+            }
             if (message.data.coins) {
-              networkState.coins = message.data.coins;
+              // Scale coin coordinates
+              networkState.coins = message.data.coins.map(coin => ({
+                ...coin,
+                x: coin.x * networkScaleFactor,
+                y: coin.y * networkScaleFactor,
+                size: coin.size * networkScaleFactor
+              }));
               // Clear coin sound tracking when new coins arrive
               if (message.data.coins.length === 0) {
                 coinSoundsPlayedRef.current.clear();
               }
             }
             if (message.data.activeEffects) networkState.activeEffects = message.data.activeEffects;
-            if (message.data.extraBalls) networkState.extraBalls = message.data.extraBalls;
+            if (message.data.extraBalls) {
+              // Scale extra ball coordinates
+              networkState.extraBalls = message.data.extraBalls.map(ball => ({
+                ...ball,
+                x: ball.x * networkScaleFactor,
+                y: ball.y * networkScaleFactor,
+                dx: ball.dx * networkScaleFactor,
+                dy: ball.dy * networkScaleFactor,
+                size: ball.size * networkScaleFactor
+              }));
+            }
             if (message.data.machineGunBalls !== undefined) {
               // Detect when new machine gun balls are fired and play laser sound
               const previousCount = previousMachineGunBallCountRef.current;
@@ -2394,11 +2535,26 @@ const Pong404: React.FC = () => {
 
               // Update tracked count
               previousMachineGunBallCountRef.current = newCount;
-              networkState.machineGunBalls = message.data.machineGunBalls;
+              // Scale machine gun ball coordinates
+              networkState.machineGunBalls = message.data.machineGunBalls.map(ball => ({
+                ...ball,
+                x: ball.x * networkScaleFactor,
+                y: ball.y * networkScaleFactor,
+                dx: ball.dx * networkScaleFactor,
+                dy: ball.dy * networkScaleFactor,
+                size: ball.size * networkScaleFactor
+              }));
             }
             if (message.data.machineGunActive !== undefined) networkState.machineGunActive = message.data.machineGunActive;
 
-            if (message.data.pickupEffect) networkState.pickupEffect = message.data.pickupEffect;
+            if (message.data.pickupEffect) {
+              // Scale pickup effect coordinates
+              networkState.pickupEffect = {
+                ...message.data.pickupEffect,
+                x: message.data.pickupEffect.x * networkScaleFactor,
+                y: message.data.pickupEffect.y * networkScaleFactor
+              };
+            }
             if (message.data.rumbleEffect) networkState.rumbleEffect = message.data.rumbleEffect;
 
             // Update color index from server
@@ -2409,39 +2565,46 @@ const Pong404: React.FC = () => {
             // Update paddles from server - for player's paddle, keep position but accept size changes
             if (message.data.paddles) {
               const playerSide = multiplayerStateRef.current?.playerSide;
+
+              // Helper to scale paddle properties
+              const scalePaddle = (paddle: any) => {
+                if (!paddle) return paddle;
+                return {
+                  ...paddle,
+                  x: paddle.x * networkScaleFactor,
+                  y: paddle.y * networkScaleFactor,
+                  width: paddle.width * networkScaleFactor,
+                  height: paddle.height * networkScaleFactor,
+                  speed: paddle.speed * networkScaleFactor,
+                  velocity: paddle.velocity * networkScaleFactor,
+                  targetX: paddle.targetX !== undefined ? paddle.targetX * networkScaleFactor : undefined,
+                  targetY: paddle.targetY !== undefined ? paddle.targetY * networkScaleFactor : undefined,
+                  originalWidth: paddle.originalWidth !== undefined ? paddle.originalWidth * networkScaleFactor : undefined,
+                  originalHeight: paddle.originalHeight !== undefined ? paddle.originalHeight * networkScaleFactor : undefined
+                };
+              };
+
               networkState.paddles = {
                 left: message.data.paddles.left ? (playerSide === 'left' ? {
-                  ...message.data.paddles.left,
+                  ...scalePaddle(message.data.paddles.left),
                   x: prevState.paddles.left.x,
                   y: prevState.paddles.left.y
-                } : {
-                  ...prevState.paddles.left,
-                  ...message.data.paddles.left
-                }) : prevState.paddles.left,
+                } : scalePaddle(message.data.paddles.left)) : prevState.paddles.left,
                 right: message.data.paddles.right ? (playerSide === 'right' ? {
-                  ...message.data.paddles.right,
+                  ...scalePaddle(message.data.paddles.right),
                   x: prevState.paddles.right.x,
                   y: prevState.paddles.right.y
-                } : {
-                  ...prevState.paddles.right,
-                  ...message.data.paddles.right
-                }) : prevState.paddles.right,
+                } : scalePaddle(message.data.paddles.right)) : prevState.paddles.right,
                 top: message.data.paddles.top ? (playerSide === 'top' ? {
-                  ...message.data.paddles.top,
+                  ...scalePaddle(message.data.paddles.top),
                   x: prevState.paddles.top.x,
                   y: prevState.paddles.top.y
-                } : {
-                  ...prevState.paddles.top,
-                  ...message.data.paddles.top
-                }) : prevState.paddles.top,
+                } : scalePaddle(message.data.paddles.top)) : prevState.paddles.top,
                 bottom: message.data.paddles.bottom ? (playerSide === 'bottom' ? {
-                  ...message.data.paddles.bottom,
+                  ...scalePaddle(message.data.paddles.bottom),
                   x: prevState.paddles.bottom.x,
                   y: prevState.paddles.bottom.y
-                } : {
-                  ...prevState.paddles.bottom,
-                  ...message.data.paddles.bottom
-                }) : prevState.paddles.bottom
+                } : scalePaddle(message.data.paddles.bottom)) : prevState.paddles.bottom
               };
             }
 
@@ -2460,7 +2623,13 @@ const Pong404: React.FC = () => {
 
             // 🕳️ Sync black holes from server
             if (message.data.blackHoles !== undefined) {
-              networkState.blackHoles = message.data.blackHoles;
+              // Scale black hole coordinates
+              networkState.blackHoles = message.data.blackHoles.map(hole => ({
+                ...hole,
+                x: hole.x * networkScaleFactor,
+                y: hole.y * networkScaleFactor,
+                radius: hole.radius * networkScaleFactor
+              }));
             }
 
             // 🎵 Sync detroit mode from server
@@ -2542,7 +2711,7 @@ const Pong404: React.FC = () => {
       default:
         break;
     }
-  }, [multiplayerState.playerId, multiplayerState.roomId]);
+  }, [multiplayerState.playerId, multiplayerState.roomId, canvasSize.width]);
 
   // Send paddle updates immediately for zero-latency feel
   const lastPaddlePositionRef = useRef<number>(0);
@@ -2558,14 +2727,17 @@ const Pong404: React.FC = () => {
       if (y !== lastPaddlePositionRef.current) {
         paddleUpdateSequenceRef.current++;
 
+        // Scale back to reference size (800px) before sending to server
+        const invScaleFactor = REFERENCE_SIZE / canvasSize.width;
+
         // Send unreliable message for paddle updates (order doesn't matter, latest wins)
         wsRef.current.send(JSON.stringify({
           t: 'up', // update_paddle
           p: multiplayerState.playerId,
           d: {
-            y,
-            v: velocity, // velocity for prediction
-            tY: targetY || y, // target for smoothing
+            y: y * invScaleFactor, // Scale back to reference size
+            v: velocity * invScaleFactor, // Scale velocity
+            tY: (targetY || y) * invScaleFactor, // Scale target
             ts: now, // timestamp for lag compensation
             seq: paddleUpdateSequenceRef.current // sequence to ignore out-of-order
           }
@@ -2575,7 +2747,7 @@ const Pong404: React.FC = () => {
         lastPaddleUpdateTimeRef.current = now;
       }
     }
-  }, [multiplayerState.playerId, multiplayerState.isConnected, multiplayerState.playerSide]);
+  }, [multiplayerState.playerId, multiplayerState.isConnected, multiplayerState.playerSide, canvasSize.width]);
 
   // Update horizontal paddle position (top/bottom paddles use X coordinate)
   const updateHorizontalPaddlePosition = useCallback((x: number, velocity = 0, targetX?: number) => {
@@ -2586,14 +2758,17 @@ const Pong404: React.FC = () => {
       if (x !== lastPaddlePositionRef.current) {
         paddleUpdateSequenceRef.current++;
 
+        // Scale back to reference size (800px) before sending to server
+        const invScaleFactor = REFERENCE_SIZE / canvasSize.width;
+
         // Send paddle update with X coordinate instead of Y
         wsRef.current.send(JSON.stringify({
           t: 'up', // update_paddle
           p: multiplayerState.playerId,
           d: {
-            x, // Use x for horizontal paddles
-            v: velocity,
-            tX: targetX || x, // targetX for horizontal paddles
+            x: x * invScaleFactor, // Scale back to reference size
+            v: velocity * invScaleFactor, // Scale velocity
+            tX: (targetX || x) * invScaleFactor, // Scale target
             ts: now,
             seq: paddleUpdateSequenceRef.current
           }
@@ -2603,7 +2778,7 @@ const Pong404: React.FC = () => {
         lastPaddleUpdateTimeRef.current = now;
       }
     }
-  }, [multiplayerState.playerId, multiplayerState.isConnected, multiplayerState.playerSide]);
+  }, [multiplayerState.playerId, multiplayerState.isConnected, multiplayerState.playerSide, canvasSize.width]);
 
   // Toggle LAN mode - sends message to server
   const toggleLanMode = useCallback(() => {
@@ -2945,64 +3120,113 @@ const Pong404: React.FC = () => {
   // Handle window resize - responsive canvas sizing
   useEffect(() => {
     const updateCanvasSize = () => {
-      const getOptimalCanvasSize = () => {
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const minDimension = Math.min(viewportWidth, viewportHeight);
 
-        // Use 95% of the smallest viewport dimension to leave room for UI
-        const availableSpace = Math.min(viewportWidth, viewportHeight);
-        const canvasSize = Math.floor(availableSpace * 0.95);
+      // Use 95% of the smallest viewport dimension to maximize space
+      const newSize = Math.max(Math.floor(minDimension * 0.95), 400);
+      const oldSize = canvasSize.width;
 
-        // Minimum size for playability
-        return Math.max(canvasSize, 400);
-      };
+      // Only update if size actually changed
+      if (newSize === oldSize) return;
 
-      const newSize = getOptimalCanvasSize();
-      const oldSize = canvasSize.width; // Current canvas size
-      const scaleFactor = newSize / oldSize;
+      // Calculate scaling ratio for existing game elements
+      const scaleRatio = newSize / oldSize;
 
       console.log('Canvas size update:', {
-        viewport: { width: window.innerWidth, height: window.innerHeight },
+        viewport: { width: viewportWidth, height: viewportHeight },
         oldSize,
         newSize,
-        scaleFactor
+        scaleRatio
       });
 
       setCanvasSize({ width: newSize, height: newSize });
 
-      // Scale game state positions proportionally
+      // In multiplayer mode, don't rescale network state - it will be updated on next server message
+      // Server always sends coordinates in 800x800 reference space, which will be scaled to new canvas size
+      if (gameState.gameMode === 'multiplayer') {
+        console.log('Canvas resized in multiplayer mode - waiting for next server update');
+        return; // Don't rescale - next server update will have correct coordinates
+      }
+
+      // Scale all game state proportionally (single player/auto mode only)
       setGameState(prev => ({
         ...prev,
         ball: {
           ...prev.ball,
-          x: prev.ball.x * scaleFactor,
-          y: prev.ball.y * scaleFactor
+          x: prev.ball.x * scaleRatio,
+          y: prev.ball.y * scaleRatio,
+          dx: prev.ball.dx * scaleRatio,
+          dy: prev.ball.dy * scaleRatio,
+          size: prev.ball.size * scaleRatio,
+          originalSize: prev.ball.originalSize * scaleRatio
         },
         paddles: {
           left: {
             ...prev.paddles.left,
-            y: prev.paddles.left.y * scaleFactor
+            x: prev.paddles.left.x * scaleRatio,
+            y: prev.paddles.left.y * scaleRatio,
+            height: prev.paddles.left.height * scaleRatio,
+            width: prev.paddles.left.width * scaleRatio,
+            speed: prev.paddles.left.speed * scaleRatio,
+            velocity: prev.paddles.left.velocity * scaleRatio,
+            targetY: prev.paddles.left.targetY !== undefined ? prev.paddles.left.targetY * scaleRatio : undefined,
+            originalHeight: prev.paddles.left.originalHeight !== undefined ? prev.paddles.left.originalHeight * scaleRatio : undefined
           },
           right: {
             ...prev.paddles.right,
-            y: prev.paddles.right.y * scaleFactor
+            x: prev.paddles.right.x * scaleRatio,
+            y: prev.paddles.right.y * scaleRatio,
+            height: prev.paddles.right.height * scaleRatio,
+            width: prev.paddles.right.width * scaleRatio,
+            speed: prev.paddles.right.speed * scaleRatio,
+            velocity: prev.paddles.right.velocity * scaleRatio,
+            targetY: prev.paddles.right.targetY !== undefined ? prev.paddles.right.targetY * scaleRatio : undefined,
+            originalHeight: prev.paddles.right.originalHeight !== undefined ? prev.paddles.right.originalHeight * scaleRatio : undefined
           },
           top: {
             ...prev.paddles.top,
-            x: prev.paddles.top.x * scaleFactor
+            x: prev.paddles.top.x * scaleRatio,
+            y: prev.paddles.top.y * scaleRatio,
+            height: prev.paddles.top.height * scaleRatio,
+            width: prev.paddles.top.width * scaleRatio,
+            speed: prev.paddles.top.speed * scaleRatio,
+            velocity: prev.paddles.top.velocity * scaleRatio,
+            targetX: prev.paddles.top.targetX !== undefined ? prev.paddles.top.targetX * scaleRatio : undefined,
+            originalWidth: prev.paddles.top.originalWidth !== undefined ? prev.paddles.top.originalWidth * scaleRatio : undefined
           },
           bottom: {
             ...prev.paddles.bottom,
-            x: prev.paddles.bottom.x * scaleFactor
+            x: prev.paddles.bottom.x * scaleRatio,
+            y: prev.paddles.bottom.y * scaleRatio,
+            height: prev.paddles.bottom.height * scaleRatio,
+            width: prev.paddles.bottom.width * scaleRatio,
+            speed: prev.paddles.bottom.speed * scaleRatio,
+            velocity: prev.paddles.bottom.velocity * scaleRatio,
+            targetX: prev.paddles.bottom.targetX !== undefined ? prev.paddles.bottom.targetX * scaleRatio : undefined,
+            originalWidth: prev.paddles.bottom.originalWidth !== undefined ? prev.paddles.bottom.originalWidth * scaleRatio : undefined
           }
-        }
+        },
+        pickups: prev.pickups.map(pickup => ({
+          ...pickup,
+          x: pickup.x * scaleRatio,
+          y: pickup.y * scaleRatio,
+          size: pickup.size * scaleRatio
+        })),
+        coins: prev.coins.map(coin => ({
+          ...coin,
+          x: coin.x * scaleRatio,
+          y: coin.y * scaleRatio,
+          size: coin.size * scaleRatio
+        }))
       }));
     };
 
-    updateCanvasSize();
+    // Initial setup is already done, this only handles resize
     window.addEventListener('resize', updateCanvasSize);
     return () => window.removeEventListener('resize', updateCanvasSize);
-  }, []);
+  }, [canvasSize.width, gameState.gameMode]);
 
   // Initialize Web Audio API with reverb effects (only after user gesture)
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -4184,11 +4408,12 @@ const Pong404: React.FC = () => {
   const createPickup = useCallback(() => {
     const pickupType = PICKUP_TYPES[Math.floor(Math.random() * PICKUP_TYPES.length)];
     // Stay well away from paddle zones and edges
+    const gameAreaSize = Math.min(canvasSize.width, canvasSize.height);
     const horizontalPadding = 150; // Keep away from left/right paddles
     const verticalPadding = 120;   // Keep away from top/bottom paddles
     return {
-      x: horizontalPadding + Math.random() * (canvasSize.width - horizontalPadding * 2),
-      y: verticalPadding + Math.random() * (canvasSize.height - verticalPadding * 2),
+      x: horizontalPadding + Math.random() * (gameAreaSize - horizontalPadding * 2),
+      y: verticalPadding + Math.random() * (gameAreaSize - verticalPadding * 2),
       size: 144, // Much bigger to accommodate 12x12 pixel size (12x12 grid)
       type: pickupType.type,
       pattern: pickupType.pattern,
@@ -4308,9 +4533,10 @@ const Pong404: React.FC = () => {
       }
     }
 
-    // Reset ball to center
-    newState.ball.x = canvasSize.width / 2;
-    newState.ball.y = canvasSize.height / 2;
+    // Reset ball to center (relative to game area, not canvas)
+    const gameAreaSize = Math.min(canvasSize.width, canvasSize.height);
+    newState.ball.x = gameAreaSize / 2;
+    newState.ball.y = gameAreaSize / 2;
     newState.ball.lastTouchedBy = null; // Reset tracking
     newState.ball.previousTouchedBy = null;
 
@@ -4355,18 +4581,19 @@ const Pong404: React.FC = () => {
 
         // Override paddles: keep local player paddle from previous frame to avoid network jitter
         // Server paddles for AI, local paddle for smooth player control
+        // IMPORTANT: Use server's x position for player paddle to ensure it's at correct scaled position after resize
         newState.paddles = {
           left: playerSide === 'left'
-            ? { ...prevState.paddles.left, height: networkGameStateRef.current.paddles.left.height, width: networkGameStateRef.current.paddles.left.width } // Keep local position but use server size
+            ? { ...networkGameStateRef.current.paddles.left, y: prevState.paddles.left.y, velocity: prevState.paddles.left.velocity } // Use server scale but keep local Y position
             : networkGameStateRef.current.paddles.left, // Use server paddle entirely
           right: playerSide === 'right'
-            ? { ...prevState.paddles.right, height: networkGameStateRef.current.paddles.right.height, width: networkGameStateRef.current.paddles.right.width } // Keep local position but use server size
+            ? { ...networkGameStateRef.current.paddles.right, y: prevState.paddles.right.y, velocity: prevState.paddles.right.velocity } // Use server scale but keep local Y position
             : networkGameStateRef.current.paddles.right, // Use server paddle entirely
           top: playerSide === 'top'
-            ? { ...prevState.paddles.top, height: networkGameStateRef.current.paddles.top.height, width: networkGameStateRef.current.paddles.top.width } // Keep local position but use server size
+            ? { ...networkGameStateRef.current.paddles.top, x: prevState.paddles.top.x, velocity: prevState.paddles.top.velocity } // Use server scale but keep local X position
             : networkGameStateRef.current.paddles.top, // Use server paddle entirely
           bottom: playerSide === 'bottom'
-            ? { ...prevState.paddles.bottom, height: networkGameStateRef.current.paddles.bottom.height, width: networkGameStateRef.current.paddles.bottom.width } // Keep local position but use server size
+            ? { ...networkGameStateRef.current.paddles.bottom, x: prevState.paddles.bottom.x, velocity: prevState.paddles.bottom.velocity } // Use server scale but keep local X position
             : networkGameStateRef.current.paddles.bottom // Use server paddle entirely
         };
 
@@ -4875,7 +5102,8 @@ const Pong404: React.FC = () => {
             paddle.y += paddle.velocity;
 
             // Keep paddle within bounds (accounting for border)
-            paddle.y = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - paddle.height, paddle.y));
+            const gameAreaSize = Math.min(canvasSize.width, canvasSize.height);
+            paddle.y = Math.max(BORDER_THICKNESS, Math.min(gameAreaSize - BORDER_THICKNESS - paddle.height, paddle.y));
           };
 
           // Check if left paddle is frozen (all paddles except the one who last touched)
@@ -5001,7 +5229,8 @@ const Pong404: React.FC = () => {
           paddle.x += paddle.velocity;
 
           // Keep paddle within bounds (accounting for border)
-          paddle.x = Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - paddle.width, paddle.x));
+          const gameAreaSize = Math.min(canvasSize.width, canvasSize.height);
+          paddle.x = Math.max(BORDER_THICKNESS, Math.min(gameAreaSize - BORDER_THICKNESS - paddle.width, paddle.x));
         };
 
         if (newState.paddles.top) {
@@ -5366,10 +5595,11 @@ const Pong404: React.FC = () => {
         }
 
         // Left paddle vs Bottom paddle (left side, bottom corner)
-        if (newState.paddles.left.y + newState.paddles.left.height >= canvasSize.height - newState.paddles.bottom.height &&
+        const gameAreaSize = Math.min(canvasSize.width, canvasSize.height);
+        if (newState.paddles.left.y + newState.paddles.left.height >= gameAreaSize - newState.paddles.bottom.height &&
             newState.paddles.left.x <= newState.paddles.bottom.x + newState.paddles.bottom.width) {
           // Push left paddle up to avoid overlap
-          newState.paddles.left.y = Math.min(newState.paddles.left.y, canvasSize.height - newState.paddles.bottom.height - newState.paddles.left.height);
+          newState.paddles.left.y = Math.min(newState.paddles.left.y, gameAreaSize - newState.paddles.bottom.height - newState.paddles.left.height);
         }
 
         // Right paddle vs Top paddle (right side, top corner)
@@ -5380,10 +5610,10 @@ const Pong404: React.FC = () => {
         }
 
         // Right paddle vs Bottom paddle (right side, bottom corner)
-        if (newState.paddles.right.y + newState.paddles.right.height >= canvasSize.height - newState.paddles.bottom.height &&
+        if (newState.paddles.right.y + newState.paddles.right.height >= gameAreaSize - newState.paddles.bottom.height &&
             newState.paddles.right.x + newState.paddles.right.width >= newState.paddles.bottom.x) {
           // Push right paddle up to avoid overlap
-          newState.paddles.right.y = Math.min(newState.paddles.right.y, canvasSize.height - newState.paddles.bottom.height - newState.paddles.right.height);
+          newState.paddles.right.y = Math.min(newState.paddles.right.y, gameAreaSize - newState.paddles.bottom.height - newState.paddles.right.height);
         }
 
         // Top paddle vs Left paddle (already handled above)
@@ -5395,10 +5625,11 @@ const Pong404: React.FC = () => {
         // Bottom paddle vs Right paddle (already handled above)
 
         // Re-clamp all paddles after collision resolution to ensure they stay in bounds (accounting for border)
-        newState.paddles.left.y = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.left.height, newState.paddles.left.y));
-        newState.paddles.right.y = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - newState.paddles.right.height, newState.paddles.right.y));
-        newState.paddles.top.x = Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - newState.paddles.top.width, newState.paddles.top.x));
-        newState.paddles.bottom.x = Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - newState.paddles.bottom.width, newState.paddles.bottom.x));
+        // gameAreaSize already declared above
+        newState.paddles.left.y = Math.max(BORDER_THICKNESS, Math.min(gameAreaSize - BORDER_THICKNESS - newState.paddles.left.height, newState.paddles.left.y));
+        newState.paddles.right.y = Math.max(BORDER_THICKNESS, Math.min(gameAreaSize - BORDER_THICKNESS - newState.paddles.right.height, newState.paddles.right.y));
+        newState.paddles.top.x = Math.max(BORDER_THICKNESS, Math.min(gameAreaSize - BORDER_THICKNESS - newState.paddles.top.width, newState.paddles.top.x));
+        newState.paddles.bottom.x = Math.max(BORDER_THICKNESS, Math.min(gameAreaSize - BORDER_THICKNESS - newState.paddles.bottom.width, newState.paddles.bottom.x));
 
         // AI CONTROL FOR NON-HUMAN PADDLES IN MULTIPLAYER
         const currentPlayerSide = multiplayerStateRef.current?.playerSide;
@@ -5442,7 +5673,8 @@ const Pong404: React.FC = () => {
             }
 
             // Keep within bounds (accounting for border)
-            paddle.y = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - paddle.height, paddle.y));
+            const gameAreaSize = Math.min(canvasSize.width, canvasSize.height);
+            paddle.y = Math.max(BORDER_THICKNESS, Math.min(gameAreaSize - BORDER_THICKNESS - paddle.height, paddle.y));
           } else {
             // Paddle is frozen - stop all movement
             newState.paddles.left.velocity = 0;
@@ -5499,7 +5731,8 @@ const Pong404: React.FC = () => {
             }
 
             // Keep within bounds (accounting for border)
-            paddle.y = Math.max(BORDER_THICKNESS, Math.min(playFieldHeight - BORDER_THICKNESS - paddle.height, paddle.y));
+            const gameAreaSize = Math.min(canvasSize.width, canvasSize.height);
+            paddle.y = Math.max(BORDER_THICKNESS, Math.min(gameAreaSize - BORDER_THICKNESS - paddle.height, paddle.y));
           } else {
             // Paddle is frozen - stop all movement
             newState.paddles.right.velocity = 0;
@@ -5590,7 +5823,8 @@ const Pong404: React.FC = () => {
           const maxSpeed = paddle.speed * 0.9;
           paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
           paddle.x += paddle.velocity;
-          paddle.x = Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - paddle.width, paddle.x));
+          const gameAreaSize = Math.min(canvasSize.width, canvasSize.height);
+          paddle.x = Math.max(BORDER_THICKNESS, Math.min(gameAreaSize - BORDER_THICKNESS - paddle.width, paddle.x));
         };
 
         // Apply AI to top paddle (only if no player is controlling it)
@@ -5779,7 +6013,8 @@ const Pong404: React.FC = () => {
           paddle.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, paddle.velocity));
           const timeWarpFactor = newState.timeWarpFactor || 1.0;
           paddle.x += paddle.velocity * timeWarpFactor;
-          paddle.x = Math.max(BORDER_THICKNESS, Math.min(playFieldWidth - BORDER_THICKNESS - paddle.width, paddle.x));
+          const gameAreaSize = Math.min(canvasSize.width, canvasSize.height);
+          paddle.x = Math.max(BORDER_THICKNESS, Math.min(gameAreaSize - BORDER_THICKNESS - paddle.width, paddle.x));
         };
 
         if (newState.paddles.top) {
@@ -5989,8 +6224,7 @@ const Pong404: React.FC = () => {
                 ...prevState.ball,
                 dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
                 dy: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
-                x: canvasSize.width / 2,
-                y: canvasSize.height / 2
+                ...getCenteredBallPosition()
               },
               score: { left: 0, right: 0, top: 0, bottom: 0 },
               winner: null,
@@ -6031,8 +6265,7 @@ const Pong404: React.FC = () => {
             isPlaying: true,
             ball: {
               ...prev.ball,
-              x: canvasSize.width / 2,
-              y: canvasSize.height / 2,
+              ...getCenteredBallPosition(),
               dx: 6,
               dy: 6,
             }
@@ -6074,8 +6307,7 @@ const Pong404: React.FC = () => {
             isPlaying: true,
             ball: {
               ...prev.ball,
-              x: canvasSize.width / 2,
-              y: canvasSize.height / 2,
+              ...getCenteredBallPosition(),
               dx: 6,
               dy: 6,
             }
@@ -6434,8 +6666,7 @@ const Pong404: React.FC = () => {
               gameEnded: false,
               ball: {
                 ...prev.ball,
-                x: canvasSize.width / 2,
-                y: canvasSize.height / 2,
+                ...getCenteredBallPosition(),
                 dx: Math.random() > 0.5 ? MIN_BALL_SPEED : -MIN_BALL_SPEED,
                 dy: (Math.random() - 0.5) * MIN_BALL_SPEED * 0.8
               }
@@ -6913,10 +7144,11 @@ const Pong404: React.FC = () => {
     if (showAudioPrompt) {
       // Draw playfield borders - same as gameplay area
       ctx.strokeStyle = currentColors.foreground;
-      ctx.lineWidth = 12;
+      const audioBorderWidth = 12 * scaleFactor;
+      ctx.lineWidth = audioBorderWidth;
       ctx.setLineDash([]); // Solid lines for borders
       ctx.beginPath();
-      const borderInset = 6; // Half of line width
+      const borderInset = audioBorderWidth / 2; // Half of line width
       // Top border - full width
       ctx.moveTo(0, borderInset);
       ctx.lineTo(canvasSize.width, borderInset);
@@ -6933,25 +7165,29 @@ const Pong404: React.FC = () => {
 
       // Main prompt
       ctx.fillStyle = currentColors.foreground;
-      ctx.font = 'bold 32px "Press Start 2P", monospace';
+      const audioPromptSize = Math.round(32 * scaleFactor);
+      ctx.font = `bold ${audioPromptSize}px "Press Start 2P", monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.shadowBlur = 4; // Reduced from 8 for subtler glow
+      ctx.shadowBlur = 4 * scaleFactor;
       ctx.shadowColor = currentColors.foreground;
-      ctx.fillText('AUDIO REQUIRED', canvasSize.width / 2, canvasSize.height / 2 - 80);
+      ctx.fillText('AUDIO REQUIRED', canvasSize.width / 2, canvasSize.height / 2 - (80 * scaleFactor));
 
       // Instructions
-      ctx.font = 'bold 16px "Press Start 2P", monospace';
-      ctx.fillText('This game uses sound effects', canvasSize.width / 2, canvasSize.height / 2 - 20);
-      ctx.fillText('and speech synthesis', canvasSize.width / 2, canvasSize.height / 2 + 10);
+      const audioInstructionSize = Math.round(16 * scaleFactor);
+      ctx.font = `bold ${audioInstructionSize}px "Press Start 2P", monospace`;
+      ctx.fillText('This game uses sound effects', canvasSize.width / 2, canvasSize.height / 2 - (20 * scaleFactor));
+      ctx.fillText('and speech synthesis', canvasSize.width / 2, canvasSize.height / 2 + (10 * scaleFactor));
 
       // Interaction prompt
-      ctx.font = 'bold 20px "Press Start 2P", monospace';
-      ctx.fillText('CLICK ANYWHERE TO CONTINUE', canvasSize.width / 2, canvasSize.height / 2 + 80);
+      const audioInteractionSize = Math.round(20 * scaleFactor);
+      ctx.font = `bold ${audioInteractionSize}px "Press Start 2P", monospace`;
+      ctx.fillText('CLICK ANYWHERE TO CONTINUE', canvasSize.width / 2, canvasSize.height / 2 + (80 * scaleFactor));
 
       // Small footer
-      ctx.font = 'bold 12px "Press Start 2P", monospace';
-      ctx.fillText('Required for browser audio policy compliance', canvasSize.width / 2, canvasSize.height / 2 + 120);
+      const audioFooterSize = Math.round(12 * scaleFactor);
+      ctx.font = `bold ${audioFooterSize}px "Press Start 2P", monospace`;
+      ctx.fillText('Required for browser audio policy compliance', canvasSize.width / 2, canvasSize.height / 2 + (120 * scaleFactor));
       ctx.shadowBlur = 0;
 
       return; // Don't render anything else when showing audio prompt
@@ -6961,10 +7197,11 @@ const Pong404: React.FC = () => {
     if (gameState.showStartScreen) {
       // Draw playfield borders - same as gameplay area
       ctx.strokeStyle = currentColors.foreground;
-      ctx.lineWidth = 12;
+      const startBorderWidth = 12 * scaleFactor;
+      ctx.lineWidth = startBorderWidth;
       ctx.setLineDash([]); // Solid lines for borders
       ctx.beginPath();
-      const borderInset = 6; // Half of line width
+      const borderInset = startBorderWidth / 2; // Half of line width
       // Top border - full width
       ctx.moveTo(0, borderInset);
       ctx.lineTo(canvasSize.width, borderInset);
@@ -6981,35 +7218,41 @@ const Pong404: React.FC = () => {
 
       // Main title
       ctx.fillStyle = currentColors.foreground;
-      ctx.font = 'bold 48px "Press Start 2P", monospace';
+      const titleSize = Math.round(48 * scaleFactor);
+      ctx.font = `bold ${titleSize}px "Press Start 2P", monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.shadowBlur = 4; // Reduced from 8 for subtler glow
+      ctx.shadowBlur = 4 * scaleFactor;
       ctx.shadowColor = currentColors.foreground;
-      ctx.fillText('SPACE BLAZERS', canvasSize.width / 2, canvasSize.height / 2 - 200);
+      ctx.fillText('SPACE BLAZERS', canvasSize.width / 2, canvasSize.height / 2 - (200 * scaleFactor));
 
       // Controls section
-      ctx.font = 'bold 24px "Press Start 2P", monospace';
-      ctx.fillText('CONTROLS', canvasSize.width / 2, canvasSize.height / 2 - 120);
+      const controlsTitleSize = Math.round(24 * scaleFactor);
+      ctx.font = `bold ${controlsTitleSize}px "Press Start 2P", monospace`;
+      ctx.fillText('CONTROLS', canvasSize.width / 2, canvasSize.height / 2 - (120 * scaleFactor));
 
-      ctx.font = '16px "Press Start 2P", monospace';
-      const controlsY = canvasSize.height / 2 - 80;
+      const controlsTextSize = Math.round(16 * scaleFactor);
+      ctx.font = `${controlsTextSize}px "Press Start 2P", monospace`;
+      const controlsY = canvasSize.height / 2 - (80 * scaleFactor);
+      const controlsLineHeight = 30 * scaleFactor;
 
       // Player controls
       ctx.textAlign = 'left';
-      ctx.fillText('PLAYER 1 (LEFT): W/S KEYS', canvasSize.width / 2 - 300, controlsY);
-      ctx.fillText('PLAYER 2 (RIGHT): ↑/↓ KEYS OR MOUSE/TOUCH', canvasSize.width / 2 - 300, controlsY + 30);
-      ctx.fillText('PLAYER 3 (TOP): A/D KEYS', canvasSize.width / 2 - 300, controlsY + 60);
-      ctx.fillText('PLAYER 4 (BOTTOM): ←/→ KEYS', canvasSize.width / 2 - 300, controlsY + 90);
+      const controlsX = canvasSize.width / 2 - (300 * scaleFactor);
+      ctx.fillText('PLAYER 1 (LEFT): W/S KEYS', controlsX, controlsY);
+      ctx.fillText('PLAYER 2 (RIGHT): ↑/↓ KEYS OR MOUSE/TOUCH', controlsX, controlsY + controlsLineHeight);
+      ctx.fillText('PLAYER 3 (TOP): A/D KEYS', controlsX, controlsY + (controlsLineHeight * 2));
+      ctx.fillText('PLAYER 4 (BOTTOM): ←/→ KEYS', controlsX, controlsY + (controlsLineHeight * 3));
 
       // Options
-      ctx.fillText('OPTIONS:', canvasSize.width / 2 - 300, controlsY + 140);
-      ctx.fillText('C - TOGGLE CRT EFFECT', canvasSize.width / 2 - 300, controlsY + 170);
-      ctx.fillText('M - TOGGLE MUSIC', canvasSize.width / 2 - 300, controlsY + 200);
-      ctx.fillText('F - TOGGLE FULLSCREEN', canvasSize.width / 2 - 300, controlsY + 230);
+      ctx.fillText('OPTIONS:', controlsX, controlsY + (controlsLineHeight * 4.67));
+      ctx.fillText('C - TOGGLE CRT EFFECT', controlsX, controlsY + (controlsLineHeight * 5.67));
+      ctx.fillText('M - TOGGLE MUSIC', controlsX, controlsY + (controlsLineHeight * 6.67));
+      ctx.fillText('F - TOGGLE FULLSCREEN', controlsX, controlsY + (controlsLineHeight * 7.67));
 
       // Start instructions with blinking effect
-      ctx.font = 'bold 20px "Press Start 2P", monospace';
+      const startPromptSize = Math.round(20 * scaleFactor);
+      ctx.font = `bold ${startPromptSize}px "Press Start 2P", monospace`;
       ctx.textAlign = 'center';
 
       // Create blinking effect - visible for 0.8s, invisible for 0.4s (1.2s cycle)
@@ -7020,7 +7263,7 @@ const Pong404: React.FC = () => {
         // Use a bright attention-grabbing color - cyan from the palette
         ctx.fillStyle = '#00f5ff'; // Cyan color for visibility
         ctx.shadowColor = '#00f5ff';
-        ctx.fillText('PRESS ANY KEY TO START', canvasSize.width / 2, canvasSize.height / 2 + 260);
+        ctx.fillText('PRESS ANY KEY TO START', canvasSize.width / 2, canvasSize.height / 2 + (260 * scaleFactor));
       }
 
       // Reset color back to normal for other elements
@@ -7028,8 +7271,9 @@ const Pong404: React.FC = () => {
       ctx.shadowColor = currentColors.foreground;
 
       // Footer with CRT status
-      ctx.font = '14px "Press Start 2P", monospace';
-      ctx.fillText(`CRT EFFECT: ${crtEffect ? 'ON' : 'OFF'}`, canvasSize.width / 2, canvasSize.height / 2 + 200);
+      const footerSize = Math.round(14 * scaleFactor);
+      ctx.font = `${footerSize}px "Press Start 2P", monospace`;
+      ctx.fillText(`CRT EFFECT: ${crtEffect ? 'ON' : 'OFF'}`, canvasSize.width / 2, canvasSize.height / 2 + (200 * scaleFactor));
       ctx.shadowBlur = 0;
 
       return; // Don't render game elements when showing start screen
@@ -7038,14 +7282,24 @@ const Pong404: React.FC = () => {
     // 📐 Dynamic playfield scaling transformation
     ctx.save(); // Save canvas state before transformation
 
+    // Calculate game area centering
+    const gameAreaSize = Math.min(canvasSize.width, canvasSize.height);
+    const xOffset = (canvasSize.width - gameAreaSize) / 2;
+    const yOffset = (canvasSize.height - gameAreaSize) / 2;
+
+    // Apply transformation once: translate and scale to fit the canvas
+    ctx.save();
+    ctx.translate(xOffset, yOffset);
+    ctx.scale(scale, scale);
+
     // Apply dynamic playfield scaling transformation ONLY for dynamic_playfield pickup
     const hasDynamicPlayfieldEffect = gameState.activeEffects?.some(effect => effect.type === 'dynamic_playfield') || false;
     const playfieldScale = gameState.playfieldScale || 1.0;
 
     if (hasDynamicPlayfieldEffect && playfieldScale !== 1.0) {
-      // Transform from center of PLAYFIELD for symmetric scaling
-      const centerX = playFieldWidth / 2;
-      const centerY = playFieldHeight / 2;
+      // Transform from center of GAME AREA for symmetric scaling
+      const centerX = gameAreaSize / 2;
+      const centerY = gameAreaSize / 2;
 
       ctx.translate(centerX, centerY); // Move origin to center
       ctx.scale(playfieldScale, playfieldScale); // Apply scale
@@ -7088,7 +7342,7 @@ const Pong404: React.FC = () => {
       ctx.lineWidth = protectedSide === 'left' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
       ctx.beginPath();
       ctx.moveTo(BORDER_THICKNESS/2, BORDER_THICKNESS/2);
-      ctx.lineTo(BORDER_THICKNESS/2, playFieldHeight - BORDER_THICKNESS/2);
+      ctx.lineTo(BORDER_THICKNESS/2, gameAreaSize - BORDER_THICKNESS/2);
       ctx.stroke();
 
       // Right border
@@ -7097,8 +7351,8 @@ const Pong404: React.FC = () => {
       ctx.shadowColor = protectedSide === 'right' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'right' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
       ctx.beginPath();
-      ctx.moveTo(playFieldWidth - BORDER_THICKNESS/2, BORDER_THICKNESS/2);
-      ctx.lineTo(playFieldWidth - BORDER_THICKNESS/2, playFieldHeight - BORDER_THICKNESS/2);
+      ctx.moveTo(gameAreaSize - BORDER_THICKNESS/2, BORDER_THICKNESS/2);
+      ctx.lineTo(gameAreaSize - BORDER_THICKNESS/2, gameAreaSize - BORDER_THICKNESS/2);
       ctx.stroke();
 
       // Top border
@@ -7108,7 +7362,7 @@ const Pong404: React.FC = () => {
       ctx.lineWidth = protectedSide === 'top' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
       ctx.beginPath();
       ctx.moveTo(BORDER_THICKNESS/2, BORDER_THICKNESS/2);
-      ctx.lineTo(playFieldWidth - BORDER_THICKNESS/2, BORDER_THICKNESS/2);
+      ctx.lineTo(gameAreaSize - BORDER_THICKNESS/2, BORDER_THICKNESS/2);
       ctx.stroke();
 
       // Bottom border
@@ -7117,8 +7371,8 @@ const Pong404: React.FC = () => {
       ctx.shadowColor = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
       ctx.lineWidth = protectedSide === 'bottom' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
       ctx.beginPath();
-      ctx.moveTo(BORDER_THICKNESS/2, playFieldHeight - BORDER_THICKNESS/2);
-      ctx.lineTo(playFieldWidth - BORDER_THICKNESS/2, playFieldHeight - BORDER_THICKNESS/2);
+      ctx.moveTo(BORDER_THICKNESS/2, gameAreaSize - BORDER_THICKNESS/2);
+      ctx.lineTo(gameAreaSize - BORDER_THICKNESS/2, gameAreaSize - BORDER_THICKNESS/2);
       ctx.stroke();
     } else {
       // Normal border drawing with dramatic music-reactive inner glow
@@ -7131,11 +7385,11 @@ const Pong404: React.FC = () => {
       const mainGlowSize = 15 + glowIntensity * 25; // 15-40px based on music (much more visible)
 
       ctx.strokeStyle = currentColors.foreground;
-      ctx.lineWidth = scaledConstants.borderThickness;
+      ctx.lineWidth = BORDER_THICKNESS;
       ctx.shadowBlur = mainGlowSize;
       ctx.shadowColor = currentColors.foreground;
-      // Draw border centered at borderThickness/2 from edges so full width is visible
-      ctx.strokeRect(scaledConstants.borderThickness/2, scaledConstants.borderThickness/2, playFieldWidth - scaledConstants.borderThickness, playFieldHeight - scaledConstants.borderThickness);
+      // Draw border centered at BORDER_THICKNESS/2 from edges so full width is visible
+      ctx.strokeRect(BASE_BORDER_THICKNESS/2, BASE_BORDER_THICKNESS/2, 800 - BASE_BORDER_THICKNESS, 800 - BASE_BORDER_THICKNESS);
     }
 
     // Clear shadow for other elements
@@ -7378,7 +7632,7 @@ const Pong404: React.FC = () => {
         // Draw faint outline for invisible ball
         ctx.globalAlpha = 0.2;
         ctx.strokeStyle = currentColors.foreground;
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1 * scaleFactor;
         ctx.strokeRect(gameState.ball.x, gameState.ball.y, gameState.ball.size, gameState.ball.size);
         ctx.globalAlpha = 1;
       }
@@ -7388,7 +7642,7 @@ const Pong404: React.FC = () => {
       if (gameState.ball.isAiming) {
         const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
         const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
-        const aimTargetX = gameState.ball.aimTargetX || ballCenterX + 100;
+        const aimTargetX = gameState.ball.aimTargetX || ballCenterX + (100 * scaleFactor);
         const aimTargetY = gameState.ball.aimTargetY || ballCenterY;
 
         // Draw aiming line with pulsing effect
@@ -7397,8 +7651,9 @@ const Pong404: React.FC = () => {
 
         ctx.globalAlpha = pulse;
         ctx.strokeStyle = '#ff4500'; // Orange aim line
-        ctx.lineWidth = 3;
-        ctx.setLineDash([10, 5]); // Dashed line
+        ctx.lineWidth = 3 * scaleFactor;
+        const dashPattern = [10 * scaleFactor, 5 * scaleFactor];
+        ctx.setLineDash(dashPattern); // Dashed line
         ctx.beginPath();
         ctx.moveTo(ballCenterX, ballCenterY);
         ctx.lineTo(aimTargetX, aimTargetY);
@@ -7407,10 +7662,10 @@ const Pong404: React.FC = () => {
 
         // Draw target crosshair (vertical line only)
         ctx.strokeStyle = '#ff4500';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2 * scaleFactor;
         ctx.beginPath();
-        ctx.moveTo(aimTargetX, aimTargetY - 10);
-        ctx.lineTo(aimTargetX, aimTargetY + 10);
+        ctx.moveTo(aimTargetX, aimTargetY - (10 * scaleFactor));
+        ctx.lineTo(aimTargetX, aimTargetY + (10 * scaleFactor));
         ctx.stroke();
 
         ctx.globalAlpha = 1; // Reset alpha
@@ -7456,7 +7711,7 @@ const Pong404: React.FC = () => {
 
           // Draw brick border/outline
           ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1;
+          ctx.lineWidth = 1 * scaleFactor;
           ctx.strokeRect(brick.x, brick.y, brick.width, brick.height);
         }
       });
@@ -7487,7 +7742,7 @@ const Pong404: React.FC = () => {
         // Pulsing animation with more complex waves
         const pulse = Math.sin(force.animationPhase) * 0.4 + 1;
         const secondaryPulse = Math.cos(force.animationPhase * 1.3) * 0.2 + 1;
-        const size = Math.max(1, 25 * pulse * secondaryPulse); // Ensure positive size
+        const size = Math.max(1 * scaleFactor, 25 * scaleFactor * pulse * secondaryPulse); // Ensure positive size
 
         // Fade out near end of life with more dramatic effect
         const alpha = lifeProgress > 0.7 ? 1 - Math.pow((lifeProgress - 0.7) / 0.3, 2) : 1;
@@ -7502,11 +7757,11 @@ const Pong404: React.FC = () => {
           // Attractor: Inward spiraling energy with cyan color
           ctx.strokeStyle = force.color;
           ctx.fillStyle = force.color;
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 3 * scaleFactor;
 
           // Draw multiple concentric rotating rings
           for (let ring = 0; ring < 4; ring++) {
-            const ringRadius = (size * 0.3) + ring * 12;
+            const ringRadius = (size * 0.3) + ring * (12 * scaleFactor);
             const rotation = force.animationPhase * (ring + 1) * 0.8;
 
             ctx.beginPath();
@@ -7535,12 +7790,12 @@ const Pong404: React.FC = () => {
           ctx.globalAlpha = alpha * spawnScale * 0.6;
           for (let p = 0; p < 8; p++) {
             const particleAngle = (p / 8) * Math.PI * 2 + force.animationPhase * 2;
-            const particleRadius = size * 0.6 + Math.sin(force.animationPhase * 3 + p) * 8;
+            const particleRadius = size * 0.6 + Math.sin(force.animationPhase * 3 + p) * (8 * scaleFactor);
             const px = centerX + Math.cos(particleAngle) * particleRadius;
             const py = centerY + Math.sin(particleAngle) * particleRadius;
 
             ctx.beginPath();
-            ctx.arc(px, py, 2, 0, Math.PI * 2);
+            ctx.arc(px, py, 2 * scaleFactor, 0, Math.PI * 2);
             ctx.fill();
           }
 
@@ -7548,13 +7803,13 @@ const Pong404: React.FC = () => {
           // Repulsor: Outward explosive energy with pink/red color
           ctx.strokeStyle = force.color;
           ctx.fillStyle = force.color;
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 3 * scaleFactor;
 
           // Draw explosive radiating spikes
           for (let spike = 0; spike < 16; spike++) {
             const angle = (spike / 16) * Math.PI * 2 + force.animationPhase;
             const innerRadius = size * 0.2;
-            const outerRadius = size * 0.8 + Math.sin(force.animationPhase * 3 + spike * 0.5) * 15;
+            const outerRadius = size * 0.8 + Math.sin(force.animationPhase * 3 + spike * 0.5) * (15 * scaleFactor);
 
             const innerX = centerX + Math.cos(angle) * innerRadius;
             const innerY = centerY + Math.sin(angle) * innerRadius;
@@ -7582,12 +7837,12 @@ const Pong404: React.FC = () => {
           ctx.globalAlpha = alpha * spawnScale * 0.5;
           for (let p = 0; p < 12; p++) {
             const burstAngle = (p / 12) * Math.PI * 2 + force.animationPhase * -1.5;
-            const burstRadius = size * 0.9 + Math.cos(force.animationPhase * 2 + p * 0.7) * 10;
+            const burstRadius = size * 0.9 + Math.cos(force.animationPhase * 2 + p * 0.7) * (10 * scaleFactor);
             const bx = centerX + Math.cos(burstAngle) * burstRadius;
             const by = centerY + Math.sin(burstAngle) * burstRadius;
 
             ctx.beginPath();
-            ctx.arc(bx, by, 3, 0, Math.PI * 2);
+            ctx.arc(bx, by, 3 * scaleFactor, 0, Math.PI * 2);
             ctx.fill();
           }
         }
@@ -7595,8 +7850,9 @@ const Pong404: React.FC = () => {
         // Draw influence radius with dynamic opacity
         ctx.globalAlpha = alpha * spawnScale * 0.15 * (pulse * 0.5 + 0.5);
         ctx.strokeStyle = force.color;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([5, 5]);
+        ctx.lineWidth = 2 * scaleFactor;
+        const influenceDash = [5 * scaleFactor, 5 * scaleFactor];
+        ctx.setLineDash(influenceDash);
         ctx.beginPath();
         ctx.arc(centerX, centerY, force.radius, 0, Math.PI * 2);
         ctx.stroke();
@@ -8206,44 +8462,48 @@ const Pong404: React.FC = () => {
     if (gameState.pickupEffect.isActive) {
       const elapsed = Date.now() - gameState.pickupEffect.startTime;
       const progress = elapsed / 1000; // 1 second duration
-      const radius = Math.max(0, progress * 50); // Expanding circle (prevent negative)
+      const radius = Math.max(0, progress * (50 * scaleFactor)); // Expanding circle (prevent negative)
       const alpha = Math.max(0, 1 - progress); // Fading out
+      const pickupCenter = 12 * scaleFactor;
 
       ctx.globalAlpha = alpha;
       ctx.strokeStyle = currentColors.foreground;
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 3 * scaleFactor;
 
       // Draw expanding circle
       ctx.beginPath();
-      ctx.arc(gameState.pickupEffect.x + 12, gameState.pickupEffect.y + 12, radius, 0, Math.PI * 2);
+      ctx.arc(gameState.pickupEffect.x + pickupCenter, gameState.pickupEffect.y + pickupCenter, radius, 0, Math.PI * 2);
       ctx.stroke();
 
       // Draw sparkle effect
+      const sparkleSize = 4 * scaleFactor;
       for (let i = 0; i < 8; i++) {
         const angle = (i / 8) * Math.PI * 2;
-        const sparkleX = gameState.pickupEffect.x + 12 + Math.cos(angle) * radius * 0.7;
-        const sparkleY = gameState.pickupEffect.y + 12 + Math.sin(angle) * radius * 0.7;
+        const sparkleX = gameState.pickupEffect.x + pickupCenter + Math.cos(angle) * radius * 0.7;
+        const sparkleY = gameState.pickupEffect.y + pickupCenter + Math.sin(angle) * radius * 0.7;
         ctx.fillStyle = currentColors.foreground;
-        ctx.fillRect(sparkleX - 2, sparkleY - 2, 4, 4);
+        ctx.fillRect(sparkleX - (sparkleSize / 2), sparkleY - (sparkleSize / 2), sparkleSize, sparkleSize);
       }
 
       ctx.globalAlpha = 1;
     }
 
     // Draw scores (classic Pong font style) - using pixelated arcade font and dynamic color
-    ctx.font = 'bold 32px "Press Start 2P", monospace'; // Smaller font for 4 players
+    const scoreFontSize = Math.round(32 * scaleFactor);
+    ctx.font = `bold ${scoreFontSize}px "Press Start 2P", monospace`; // Scaled font for 4 players
     ctx.fillStyle = currentColors.foreground; // Use dynamic color for scores too
     ctx.textAlign = 'center';
 
-    // 4-player score positions - 48px from paddle edge towards center
+    // 4-player score positions - 48px (scaled) from paddle edge towards center
+    const scoreOffset = 48 * scaleFactor;
     const leftPaddleRight = gameState.paddles.left.x + gameState.paddles.left.width;
-    const leftScoreX = leftPaddleRight + 48; // 48px from left paddle's right edge
+    const leftScoreX = leftPaddleRight + scoreOffset; // Scaled offset from left paddle's right edge
     const rightPaddleLeft = gameState.paddles.right.x;
-    const rightScoreX = rightPaddleLeft - 48; // 48px from right paddle's left edge
+    const rightScoreX = rightPaddleLeft - scoreOffset; // Scaled offset from right paddle's left edge
     const topPaddleBottom = gameState.paddles.top.y + gameState.paddles.top.height;
-    const topScoreY = topPaddleBottom + 48; // 48px below top paddle
+    const topScoreY = topPaddleBottom + scoreOffset; // Scaled offset below top paddle
     const bottomPaddleTop = gameState.paddles.bottom.y;
-    const bottomScoreY = bottomPaddleTop - 48; // 48px above bottom paddle
+    const bottomScoreY = bottomPaddleTop - scoreOffset; // Scaled offset above bottom paddle
 
     // Display all 4 player scores with padding
     const leftScore = gameState.score.left.toString().padStart(2, '0');
@@ -8253,7 +8513,7 @@ const Pong404: React.FC = () => {
 
     // Left player score (left side, middle height)
     ctx.textAlign = 'center';
-    ctx.shadowBlur = 2; // Subtle glow on scores
+    ctx.shadowBlur = 2 * scaleFactor; // Scaled glow on scores
     ctx.shadowColor = currentColors.foreground;
     ctx.fillText(leftScore, leftScoreX, playFieldHeight / 2);
 
@@ -8268,14 +8528,15 @@ const Pong404: React.FC = () => {
     ctx.shadowBlur = 0;
 
     // 📊 FPS Counter (top-right corner) - should show 60 FPS consistently
-    ctx.font = 'bold 12px "Press Start 2P", monospace';
+    const fpsFontSize = Math.round(12 * scaleFactor);
+    ctx.font = `bold ${fpsFontSize}px "Press Start 2P", monospace`;
     ctx.textAlign = 'right';
     const fpsDisplay = fpsRef.current === 0 ? 60 : fpsRef.current; // Show 60 during startup
 
     // Draw FPS counter (only if enabled with 'P' key)
     if (showFPS) {
       // Color code FPS - green for 60, yellow for 45-59, red for below 45
-      ctx.shadowBlur = 4; // Reduced from 8 for subtler glow
+      ctx.shadowBlur = 4 * scaleFactor; // Scaled glow
       if (fpsDisplay >= 60) {
         ctx.fillStyle = '#00ff00'; // Bright green for perfect 60 FPS
         ctx.shadowColor = '#00ff00';
@@ -8287,7 +8548,7 @@ const Pong404: React.FC = () => {
         ctx.shadowColor = '#ff0000';
       }
 
-      ctx.fillText(`${fpsDisplay} FPS`, playFieldWidth - 20, 30);
+      ctx.fillText(`${fpsDisplay} FPS`, playFieldWidth - (20 * scaleFactor), 30 * scaleFactor);
       ctx.shadowBlur = 0;
     }
 
@@ -8308,52 +8569,57 @@ const Pong404: React.FC = () => {
 
       // Winner announcement - animated white
       ctx.fillStyle = '#ffffff';
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 8 * scaleFactor;
       ctx.shadowColor = '#ffffff';
-      ctx.font = 'bold 64px "Press Start 2P", monospace';
+      const winnerFontSize = Math.round(64 * scaleFactor);
+      ctx.font = `bold ${winnerFontSize}px "Press Start 2P", monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
       const winnerText = `${gameState.winner.toUpperCase()} WINS!`;
-      ctx.fillText(winnerText, 0, -40);
+      ctx.fillText(winnerText, 0, -40 * scaleFactor);
 
       // Victory subtitle - monochrome white, no outline
-      ctx.font = 'bold 32px "Press Start 2P", monospace';
+      const subtitleFontSize = Math.round(32 * scaleFactor);
+      ctx.font = `bold ${subtitleFontSize}px "Press Start 2P", monospace`;
       ctx.fillStyle = '#ffffff';
-      ctx.fillText('FIRST TO 11!', 0, 20);
+      ctx.fillText('FIRST TO 11!', 0, 20 * scaleFactor);
 
       // Victory score display - monochrome white, no outline
-      ctx.font = 'bold 24px "Press Start 2P", monospace';
+      const scoreFinalFontSize = Math.round(24 * scaleFactor);
+      ctx.font = `bold ${scoreFinalFontSize}px "Press Start 2P", monospace`;
       ctx.fillStyle = '#ffffff';
       const finalScore = gameState.score[gameState.winner];
-      ctx.fillText(`FINAL SCORE: ${finalScore}`, 0, 60);
+      ctx.fillText(`FINAL SCORE: ${finalScore}`, 0, 60 * scaleFactor);
 
       ctx.restore();
 
 
       // Continue button prompt - monochrome
-      ctx.font = 'bold 16px "Press Start 2P", monospace';
+      const continuePromptFontSize = Math.round(16 * scaleFactor);
+      ctx.font = `bold ${continuePromptFontSize}px "Press Start 2P", monospace`;
       ctx.fillStyle = '#ffffff';
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 8 * scaleFactor;
       ctx.shadowColor = '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
-      ctx.fillText('PRESS SPACEBAR TO PLAY AGAIN', playFieldWidth / 2, playFieldHeight - 50);
+      ctx.fillText('PRESS SPACEBAR TO PLAY AGAIN', playFieldWidth / 2, playFieldHeight - (50 * scaleFactor));
       ctx.shadowBlur = 0;
     }
 
     // Draw robot speech text (only visible during actual gameplay, not on connection/start screens)
     if (robotText && gameState.isPlaying && !gameState.showStartScreen) {
-      ctx.font = 'bold 20px "Press Start 2P", monospace';
+      const robotFontSize = Math.round(20 * scaleFactor);
+      ctx.font = `bold ${robotFontSize}px "Press Start 2P", monospace`;
       ctx.fillStyle = currentColors.foreground;
-      ctx.shadowBlur = 4; // Reduced from 8 for subtler glow
+      ctx.shadowBlur = 4 * scaleFactor; // Scaled glow
       ctx.shadowColor = currentColors.foreground;
       ctx.textAlign = 'center';
 
       // Wrap text to fit within playfield with margins
-      const lines = wrapText(ctx, robotText, playFieldWidth - 100); // 50px margin on each side
-      const lineHeight = 30; // Space between lines for 20px font
-      const startY = 150 - ((lines.length - 1) * lineHeight / 2); // Center vertically around y=150
+      const lines = wrapText(ctx, robotText, playFieldWidth - (100 * scaleFactor)); // Scaled margin on each side
+      const lineHeight = 30 * scaleFactor; // Scaled space between lines
+      const startY = (150 * scaleFactor) - ((lines.length - 1) * lineHeight / 2); // Scaled center position
 
       // Draw each line of wrapped text
       lines.forEach((line, index) => {
@@ -8371,11 +8637,12 @@ const Pong404: React.FC = () => {
 
       if (currentPiece) {
         ctx.save();
-        ctx.font = 'bold 24px "Press Start 2P", monospace';
+        const trackNameSize = Math.round(24 * scaleFactor);
+        ctx.font = `bold ${trackNameSize}px "Press Start 2P", monospace`;
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.shadowBlur = 15;
+        ctx.shadowBlur = 15 * scaleFactor;
         ctx.shadowColor = '#00ffff';
 
         // Fade effect based on time elapsed since showing
@@ -8385,7 +8652,7 @@ const Pong404: React.FC = () => {
         ctx.globalAlpha = alpha;
 
         const trackText = `♫ ${currentPiece.title.toUpperCase()} ♫`;
-        ctx.fillText(trackText, playFieldWidth / 2, 100);
+        ctx.fillText(trackText, playFieldWidth / 2, 100 * scaleFactor);
 
         ctx.shadowBlur = 0;
         ctx.restore();
@@ -8394,7 +8661,8 @@ const Pong404: React.FC = () => {
 
     // Draw active effects status with live countdown and robot voice announcements
     if (gameState.activeEffects.length > 0) {
-      ctx.font = 'bold 20px "Press Start 2P", monospace';
+      const effectsSize = Math.round(20 * scaleFactor);
+      ctx.font = `bold ${effectsSize}px "Press Start 2P", monospace`;
       ctx.fillStyle = currentColors.foreground;
       ctx.shadowBlur = 8;
       ctx.shadowColor = currentColors.foreground;
@@ -8515,7 +8783,8 @@ const Pong404: React.FC = () => {
     }
 
     // Add on-screen text overlays
-    ctx.font = 'bold 16px "Press Start 2P", monospace';
+    const overlayTextSize = Math.round(16 * scaleFactor);
+    ctx.font = `bold ${overlayTextSize}px "Press Start 2P", monospace`;
     ctx.fillStyle = currentColors.foreground;
     ctx.globalAlpha = 1; // Full opacity for all text
 
@@ -8526,24 +8795,28 @@ const Pong404: React.FC = () => {
       const rightX = playFieldWidth * 0.75; // Right quarter position
 
       // Left side - 404 and PAGE NOT FOUND (centered vertically)
-      ctx.font = 'bold 48px "Press Start 2P", monospace';
+      const auto404Size = Math.round(48 * scaleFactor);
+      ctx.font = `bold ${auto404Size}px "Press Start 2P", monospace`;
       ctx.textAlign = 'center';
-      ctx.fillText('404', leftX, centerY - 20);
+      ctx.fillText('404', leftX, centerY - (20 * scaleFactor));
 
-      ctx.font = 'bold 16px "Press Start 2P", monospace';
-      ctx.fillText('PAGE NOT FOUND', leftX, centerY + 20);
+      const autoPageSize = Math.round(16 * scaleFactor);
+      ctx.font = `bold ${autoPageSize}px "Press Start 2P", monospace`;
+      ctx.fillText('PAGE NOT FOUND', leftX, centerY + (20 * scaleFactor));
 
       // Right side - Enjoy message (centered vertically)
-      ctx.font = 'bold 12px "Press Start 2P", monospace';
+      const autoEnjoySize = Math.round(12 * scaleFactor);
+      ctx.font = `bold ${autoEnjoySize}px "Press Start 2P", monospace`;
       // Break the text into multiple lines, centered around centerY
-      ctx.fillText('But hey,', rightX, centerY - 40);
-      ctx.fillText('enjoy some', rightX, centerY - 15);
-      ctx.fillText('classic Pong', rightX, centerY + 10);
-      ctx.fillText('while you\'re here!', rightX, centerY + 35);
+      ctx.fillText('But hey,', rightX, centerY - (40 * scaleFactor));
+      ctx.fillText('enjoy some', rightX, centerY - (15 * scaleFactor));
+      ctx.fillText('classic Pong', rightX, centerY + (10 * scaleFactor));
+      ctx.fillText('while you\'re here!', rightX, centerY + (35 * scaleFactor));
 
       // Spacebar instruction at bottom center with connection status
       ctx.textAlign = 'center';
-      ctx.font = 'bold 10px "Press Start 2P", monospace';
+      const autoSpacebarSize = Math.round(10 * scaleFactor);
+      ctx.font = `bold ${autoSpacebarSize}px "Press Start 2P", monospace`;
 
       // Show connection status with visual indicators
       if (connectionStatus === 'connecting' || connectionStatus === 'server_down' || connectionStatus === 'server_starting') {
@@ -8552,23 +8825,23 @@ const Pong404: React.FC = () => {
 
         if (connectionStatus === 'server_down') {
           ctx.fillStyle = '#ff4444'; // Red for server down
-          ctx.fillText(`SERVER DOWN`, playFieldWidth / 2, playFieldHeight - 160);
+          ctx.fillText(`SERVER DOWN`, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
         } else if (connectionStatus === 'server_starting') {
           if (isVisible) {
             ctx.fillStyle = '#ffaa00'; // Orange for server starting
-            ctx.fillText(`STARTING SERVER`, playFieldWidth / 2, playFieldHeight - 160);
+            ctx.fillText(`STARTING SERVER`, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
           }
         } else {
           if (isVisible) {
             ctx.fillStyle = currentColors.foreground; // Normal color for connecting
-            ctx.fillText(`CONNECTING`, playFieldWidth / 2, playFieldHeight - 160);
+            ctx.fillText(`CONNECTING`, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
           }
         }
 
         ctx.fillStyle = currentColors.foreground; // Reset color for other text
-        ctx.fillText(connectionMessage || 'Connecting to multiplayer server...', playFieldWidth / 2, playFieldHeight - 140);
-        ctx.fillText('Press D for debug mode to see connection logs', playFieldWidth / 2, playFieldHeight - 120);
-        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - 100);
+        ctx.fillText(connectionMessage || 'Connecting to multiplayer server...', playFieldWidth / 2, playFieldHeight - (140 * scaleFactor));
+        ctx.fillText('Press D for debug mode to see connection logs', playFieldWidth / 2, playFieldHeight - (120 * scaleFactor));
+        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
       } else if (connectionStatus === 'warming') {
         // Enhanced warming display with phase-specific feedback
         const elapsed = connectionStartTime > 0 ? Math.floor((Date.now() - connectionStartTime) / 1000) : 0;
@@ -8601,18 +8874,19 @@ const Pong404: React.FC = () => {
           phaseText = 'FINALIZING';
         }
 
-        ctx.fillText(`${phaseEmoji} SERVER ${phaseText} ${phaseEmoji}`, playFieldWidth / 2, playFieldHeight - 180);
-        ctx.fillText(connectionMessage, playFieldWidth / 2, playFieldHeight - 160);
+        ctx.fillText(`${phaseEmoji} SERVER ${phaseText} ${phaseEmoji}`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
+        ctx.fillText(connectionMessage, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
 
         // Enhanced progress bar with time estimate
-        const progressWidth = 300;
-        const progressHeight = 8;
+        const progressWidth = 300 * scaleFactor;
+        const progressHeight = 8 * scaleFactor;
         const progressX = canvasSize.width / 2 - progressWidth / 2;
-        const progressY = canvasSize.height - 145;
+        const progressY = canvasSize.height - (145 * scaleFactor);
+        const progressBorder = 2 * scaleFactor;
 
         // Background bar with border
         ctx.fillStyle = '#222';
-        ctx.fillRect(progressX - 2, progressY - 2, progressWidth + 4, progressHeight + 4);
+        ctx.fillRect(progressX - progressBorder, progressY - progressBorder, progressWidth + (progressBorder * 2), progressHeight + (progressBorder * 2));
         ctx.fillStyle = '#333';
         ctx.fillRect(progressX, progressY, progressWidth, progressHeight);
 
@@ -8622,35 +8896,37 @@ const Pong404: React.FC = () => {
 
         // Progress percentage and time info
         ctx.fillStyle = currentColors.foreground;
-        ctx.font = 'bold 8px "Press Start 2P", monospace';
+        const progressInfoSize = Math.round(8 * scaleFactor);
+        ctx.font = `bold ${progressInfoSize}px "Press Start 2P", monospace`;
         const progressPercent = Math.floor(actualProgress * 100);
         const timeRemaining = Math.max(0, estimatedTotal - elapsed);
-        ctx.fillText(`${progressPercent}% - ~${timeRemaining}s remaining`, playFieldWidth / 2, playFieldHeight - 130);
+        ctx.fillText(`${progressPercent}% - ~${timeRemaining}s remaining`, playFieldWidth / 2, playFieldHeight - (130 * scaleFactor));
 
         // Retry count display
         if (retryCount > 0) {
-          ctx.fillText(`Retry attempt ${retryCount}/5`, playFieldWidth / 2, playFieldHeight - 115);
+          ctx.fillText(`Retry attempt ${retryCount}/5`, playFieldWidth / 2, playFieldHeight - (115 * scaleFactor));
         }
 
         // Restore text color and font
-        ctx.font = 'bold 10px "Press Start 2P", monospace';
+        const warmingHelpSize = Math.round(10 * scaleFactor);
+        ctx.font = `bold ${warmingHelpSize}px "Press Start 2P", monospace`;
         ctx.fillStyle = currentColors.foreground;
-        ctx.fillText('Free servers take time to boot up - please be patient!', playFieldWidth / 2, playFieldHeight - 100);
-        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - 85);
+        ctx.fillText('Free servers take time to boot up - please be patient!', playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
+        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - (85 * scaleFactor));
       } else if (connectionStatus === 'retrying') {
         // Enhanced retry display with progress visualization
         const dots = '.'.repeat((Math.floor(Date.now() / 300) % 4) + 1);
         const retryFrames = ['[REFRESH]', '⏳', '🔁', '[BOLT]'];
         const retryEmoji = retryFrames[Math.floor(Date.now() / 400) % retryFrames.length];
 
-        ctx.fillText(`${retryEmoji} RETRYING CONNECTION${dots}`, playFieldWidth / 2, playFieldHeight - 180);
-        ctx.fillText(connectionMessage || `Retry attempt ${retryCount}/5...`, playFieldWidth / 2, playFieldHeight - 160);
+        ctx.fillText(`${retryEmoji} RETRYING CONNECTION${dots}`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
+        ctx.fillText(connectionMessage || `Retry attempt ${retryCount}/5...`, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
 
         // Retry attempt progress bar
-        const retryProgressWidth = 250;
-        const retryProgressHeight = 6;
+        const retryProgressWidth = 250 * scaleFactor;
+        const retryProgressHeight = 6 * scaleFactor;
         const retryProgressX = canvasSize.width / 2 - retryProgressWidth / 2;
-        const retryProgressY = canvasSize.height - 145;
+        const retryProgressY = canvasSize.height - (145 * scaleFactor);
 
         // Background
         ctx.fillStyle = '#333';
@@ -8664,36 +8940,28 @@ const Pong404: React.FC = () => {
 
         // Retry status text
         ctx.fillStyle = currentColors.foreground;
-        ctx.font = 'bold 8px "Press Start 2P", monospace';
-        ctx.fillText(`Attempt ${retryCount}/5 - ${Math.max(0, 5 - retryCount)} retries remaining`, playFieldWidth / 2, playFieldHeight - 130);
+        const retryStatusSize = Math.round(8 * scaleFactor);
+        ctx.font = `bold ${retryStatusSize}px "Press Start 2P", monospace`;
+        ctx.fillText(`Attempt ${retryCount}/5 - ${Math.max(0, 5 - retryCount)} retries remaining`, playFieldWidth / 2, playFieldHeight - (130 * scaleFactor));
 
         // Restore font and show additional info
-        ctx.font = 'bold 10px "Press Start 2P", monospace';
-        ctx.fillText('Server may be sleeping - retrying automatically', playFieldWidth / 2, playFieldHeight - 115);
-        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - 100);
-      } else if (connectionStatus === 'retrying') {
-        // Blink every 500ms
-        const isVisible = Math.floor(Date.now() / 500) % 2 === 0;
-        if (isVisible) {
-          ctx.fillStyle = '#ffaa00'; // Orange for retrying
-          ctx.fillText('RETRYING CONNECTION', playFieldWidth / 2, playFieldHeight - 160);
-        }
-        ctx.fillStyle = currentColors.foreground;
-        ctx.fillText(connectionMessage || `Retrying connection (attempt ${retryCount})...`, playFieldWidth / 2, playFieldHeight - 140);
-        ctx.fillText('Please wait...', playFieldWidth / 2, playFieldHeight - 120);
+        const retryHelpSize = Math.round(10 * scaleFactor);
+        ctx.font = `bold ${retryHelpSize}px "Press Start 2P", monospace`;
+        ctx.fillText('Server may be sleeping - retrying automatically', playFieldWidth / 2, playFieldHeight - (115 * scaleFactor));
+        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
       } else if (connectionStatus === 'error') {
         ctx.fillStyle = '#ff0000'; // Red for error
-        ctx.fillText('[X] CONNECTION FAILED', playFieldWidth / 2, playFieldHeight - 160);
+        ctx.fillText('[X] CONNECTION FAILED', playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
         ctx.fillStyle = currentColors.foreground;
-        ctx.fillText(connectionMessage || 'Server may be sleeping or unreachable', playFieldWidth / 2, playFieldHeight - 140);
-        ctx.fillText(`Failed ${retryCount} time${retryCount !== 1 ? 's' : ''}`, playFieldWidth / 2, playFieldHeight - 120);
+        ctx.fillText(connectionMessage || 'Server may be sleeping or unreachable', playFieldWidth / 2, playFieldHeight - (140 * scaleFactor));
+        ctx.fillText(`Failed ${retryCount} time${retryCount !== 1 ? 's' : ''}`, playFieldWidth / 2, playFieldHeight - (120 * scaleFactor));
         ctx.fillStyle = '#00ff00'; // Green for retry prompt
-        ctx.fillText('Press ANY KEY to retry connection', playFieldWidth / 2, playFieldHeight - 100);
+        ctx.fillText('Press ANY KEY to retry connection', playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
       } else {
-        ctx.fillText('Press ANY KEY to join online multiplayer', playFieldWidth / 2, playFieldHeight - 160);
-        ctx.fillText('Move your paddle: W/S keys OR hover mouse', playFieldWidth / 2, playFieldHeight - 140);
-        ctx.fillText('Press D for debug mode, C for CRT effect', playFieldWidth / 2, playFieldHeight - 120);
-        ctx.fillText(`CRT Effect: ${crtEffect ? 'ON' : 'OFF'}`, playFieldWidth / 2, playFieldHeight - 100);
+        ctx.fillText('Press ANY KEY to join online multiplayer', playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
+        ctx.fillText('Move your paddle: W/S keys OR hover mouse', playFieldWidth / 2, playFieldHeight - (140 * scaleFactor));
+        ctx.fillText('Press D for debug mode, C for CRT effect', playFieldWidth / 2, playFieldHeight - (120 * scaleFactor));
+        ctx.fillText(`CRT Effect: ${crtEffect ? 'ON' : 'OFF'}`, playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
       }
     } else if (gameState.gameMode === 'multiplayer') {
       // Calculate fade out for ALL multiplayer info text
@@ -8715,7 +8983,8 @@ const Pong404: React.FC = () => {
 
         // Multiplayer mode display
         ctx.textAlign = 'center';
-        ctx.font = 'bold 12px "Press Start 2P", monospace';
+        const multiInfoSize = Math.round(12 * scaleFactor);
+        ctx.font = `bold ${multiInfoSize}px "Press Start 2P", monospace`;
 
         // Show other fading info text (not connection status)
         // Connection status is now shown below outside the fade zone
@@ -8730,22 +8999,24 @@ const Pong404: React.FC = () => {
 
       if (connectionStatus === 'connecting' || connectionStatus === 'server_down' || connectionStatus === 'server_starting') {
         const dots = '.'.repeat((Math.floor(Date.now() / 500) % 3) + 1);
-        ctx.font = 'bold 12px "Press Start 2P", monospace';
+        const multiConnectSize = Math.round(12 * scaleFactor);
+        ctx.font = `bold ${multiConnectSize}px "Press Start 2P", monospace`;
 
         if (connectionStatus === 'server_down') {
           ctx.fillStyle = '#ff4444'; // Red for server down
-          ctx.fillText(`WEBSOCKET SERVER DOWN`, playFieldWidth / 2, playFieldHeight - 180);
+          ctx.fillText(`WEBSOCKET SERVER DOWN`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
         } else if (connectionStatus === 'server_starting') {
           ctx.fillStyle = '#ffaa00'; // Orange for server starting
-          ctx.fillText(`STARTING WEBSOCKET SERVER${dots}`, playFieldWidth / 2, playFieldHeight - 180);
+          ctx.fillText(`STARTING WEBSOCKET SERVER${dots}`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
         } else {
           ctx.fillStyle = currentColors.foreground; // Normal color for connecting
-          ctx.fillText(`CONNECTING TO MULTIPLAYER${dots}`, playFieldWidth / 2, playFieldHeight - 180);
+          ctx.fillText(`CONNECTING TO MULTIPLAYER${dots}`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
         }
 
         ctx.fillStyle = currentColors.foreground; // Reset color for other text
-        ctx.font = 'bold 10px "Press Start 2P", monospace';
-        ctx.fillText(connectionMessage || 'Establishing connection...', playFieldWidth / 2, playFieldHeight - 160);
+        const multiMsgSize = Math.round(10 * scaleFactor);
+        ctx.font = `bold ${multiMsgSize}px "Press Start 2P", monospace`;
+        ctx.fillText(connectionMessage || 'Establishing connection...', playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
       } else if (connectionStatus === 'warming') {
         const elapsed = connectionStartTime > 0 ? Math.floor((Date.now() - connectionStartTime) / 1000) : 0;
         let phaseText = 'WARMING UP';
@@ -8760,22 +9031,28 @@ const Pong404: React.FC = () => {
           phaseText = 'FINALIZING';
         }
 
-        ctx.font = 'bold 12px "Press Start 2P", monospace';
-        ctx.fillText(`SERVER ${phaseText}`, playFieldWidth / 2, playFieldHeight - 180);
-        ctx.font = 'bold 10px "Press Start 2P", monospace';
-        ctx.fillText(connectionMessage, playFieldWidth / 2, playFieldHeight - 160);
-        ctx.fillText(`${elapsed}s elapsed - Please wait...`, playFieldWidth / 2, playFieldHeight - 145);
+        const multiWarmSize = Math.round(12 * scaleFactor);
+        ctx.font = `bold ${multiWarmSize}px "Press Start 2P", monospace`;
+        ctx.fillText(`SERVER ${phaseText}`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
+        const multiWarmMsgSize = Math.round(10 * scaleFactor);
+        ctx.font = `bold ${multiWarmMsgSize}px "Press Start 2P", monospace`;
+        ctx.fillText(connectionMessage, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
+        ctx.fillText(`${elapsed}s elapsed - Please wait...`, playFieldWidth / 2, playFieldHeight - (145 * scaleFactor));
       } else if (connectionStatus === 'retrying') {
         const dots = '.'.repeat((Math.floor(Date.now() / 300) % 4) + 1);
-        ctx.font = 'bold 12px "Press Start 2P", monospace';
-        ctx.fillText(`RETRYING CONNECTION${dots}`, playFieldWidth / 2, playFieldHeight - 180);
-        ctx.font = 'bold 10px "Press Start 2P", monospace';
-        ctx.fillText(connectionMessage || `Attempt ${retryCount}/5...`, playFieldWidth / 2, playFieldHeight - 160);
+        const multiRetrySize = Math.round(12 * scaleFactor);
+        ctx.font = `bold ${multiRetrySize}px "Press Start 2P", monospace`;
+        ctx.fillText(`RETRYING CONNECTION${dots}`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
+        const multiRetryMsgSize = Math.round(10 * scaleFactor);
+        ctx.font = `bold ${multiRetryMsgSize}px "Press Start 2P", monospace`;
+        ctx.fillText(connectionMessage || `Attempt ${retryCount}/5...`, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
       } else if (connectionStatus === 'error') {
-        ctx.font = 'bold 12px "Press Start 2P", monospace';
-        ctx.fillText('[X] CONNECTION FAILED', playFieldWidth / 2, playFieldHeight - 180);
-        ctx.font = 'bold 10px "Press Start 2P", monospace';
-        ctx.fillText('Press ANY KEY to retry', playFieldWidth / 2, playFieldHeight - 160);
+        const multiErrorSize = Math.round(12 * scaleFactor);
+        ctx.font = `bold ${multiErrorSize}px "Press Start 2P", monospace`;
+        ctx.fillText('[X] CONNECTION FAILED', playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
+        const multiErrorMsgSize = Math.round(10 * scaleFactor);
+        ctx.font = `bold ${multiErrorMsgSize}px "Press Start 2P", monospace`;
+        ctx.fillText('Press ANY KEY to retry', playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
       }
 
       // Show spectator status when connected (player side text removed)
@@ -8786,9 +9063,10 @@ const Pong404: React.FC = () => {
         if (currentMultiplayerState.playerSide === 'spectator') {
           ctx.fillStyle = currentColors.foreground;
           ctx.textAlign = 'center';
-          ctx.font = 'bold 12px "Press Start 2P", monospace';
-          ctx.fillText('MULTIPLAYER MODE', playFieldWidth / 2, playFieldHeight - 180);
-          ctx.fillText('SPECTATING', playFieldWidth / 2, playFieldHeight - 160);
+          const spectatorSize = Math.round(12 * scaleFactor);
+          ctx.font = `bold ${spectatorSize}px "Press Start 2P", monospace`;
+          ctx.fillText('MULTIPLAYER MODE', playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
+          ctx.fillText('SPECTATING', playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
         }
       }
 
@@ -8805,9 +9083,10 @@ const Pong404: React.FC = () => {
 
       // Debug mode indicator
       ctx.fillStyle = 'rgba(255, 255, 0, 1.0)';
-      ctx.font = '16px monospace';
+      const debugFontSize = Math.round(16 * scaleFactor);
+      ctx.font = `${debugFontSize}px monospace`;
       ctx.textAlign = 'left';
-      ctx.fillText('DEBUG MODE: Collision Zones Visible', 10, 30);
+      ctx.fillText('DEBUG MODE: Collision Zones Visible', 10 * scaleFactor, 30 * scaleFactor);
 
       const COLLISION_BUFFER = 2;
       const BOUNDARY_SPACING = BORDER_THICKNESS * 2;
@@ -8978,16 +9257,16 @@ const Pong404: React.FC = () => {
     const glowIntensity = musicDataRef.current?.volume || 0;
     const mainGlowSize = 15 + glowIntensity * 25;
     ctx.strokeStyle = currentColors.foreground;
-    ctx.lineWidth = scaledConstants.borderThickness;
+    ctx.lineWidth = BORDER_THICKNESS;
     ctx.shadowBlur = mainGlowSize;
     ctx.shadowColor = currentColors.foreground;
-    ctx.strokeRect(scaledConstants.borderThickness/2, scaledConstants.borderThickness/2, playFieldWidth - scaledConstants.borderThickness, playFieldHeight - scaledConstants.borderThickness);
+    ctx.strokeRect(BORDER_THICKNESS/2, BORDER_THICKNESS/2, playFieldWidth - BORDER_THICKNESS, playFieldHeight - BORDER_THICKNESS);
     ctx.shadowBlur = 0;
 
     // 📐 Restore canvas state after dynamic playfield scaling (always restore since we always save)
     ctx.restore();
 
-  }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, crtEffect, applyCRTEffect, showAudioPrompt, scaledConstants]);
+  }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, crtEffect, applyCRTEffect, showAudioPrompt]);
 
   // Update function refs when functions change (prevents game loop restart)
   useEffect(() => {
@@ -9146,9 +9425,9 @@ const Pong404: React.FC = () => {
         noiseIntensity: 0.05,
         brightness: 1.25,
         chromaticAberration: 0.004,
-        bezelSize: 0.03125 * scaleFactor,  // 25px bezel on 800px reference, scaled to current size
+        bezelSize: 0.0625,  // 50px bezel on 800px canvas (doubled from 25px)
         reflectionOpacity: 1.5,  // Much brighter reflections
-        borderNormalized: scaledConstants.borderThickness / canvasSize.width,  // Dynamic border based on canvas size
+        borderNormalized: BORDER_THICKNESS / canvasSize.width,  // Dynamic border based on canvas size
       });
 
       crtFilterRef.current = filter;
@@ -9200,7 +9479,7 @@ const Pong404: React.FC = () => {
           if (uniforms.uTime !== undefined) uniforms.uTime = Date.now() * 0.001;
           if (uniforms.uResolutionX !== undefined) uniforms.uResolutionX = canvasSize.width;
           if (uniforms.uResolutionY !== undefined) uniforms.uResolutionY = canvasSize.height;
-          if (uniforms.uBorderNormalized !== undefined) uniforms.uBorderNormalized = scaledConstants.borderThickness / canvasSize.width;
+          if (uniforms.uBorderNormalized !== undefined) uniforms.uBorderNormalized = BORDER_THICKNESS / canvasSize.width;
 
           // Update CRT filter with music analysis data for RGB bleed effect
           const musicData = (window as any).generativeMusic?.getAnalysisData?.() || { volume: 0, disharmonic: 0, beat: 0 };
@@ -9237,7 +9516,7 @@ const Pong404: React.FC = () => {
         }
       }
     };
-  }, [crtEffect, canvasSize.width, canvasSize.height, scaleFactor, scaledConstants]);
+  }, [crtEffect, canvasSize.width, canvasSize.height]);
 
   // Toggle CRT filter on/off
   useEffect(() => {
@@ -9375,8 +9654,7 @@ const Pong404: React.FC = () => {
               gameEnded: false,
               ball: {
                 ...prev.ball,
-                x: canvasSize.width / 2,
-                y: canvasSize.height / 2,
+                ...getCenteredBallPosition(),
                 dx: Math.random() > 0.5 ? 6 : -6,
                 dy: (Math.random() - 0.5) * 6 * 0.8
               }
@@ -9641,25 +9919,19 @@ const Pong404: React.FC = () => {
         position: 'relative',
         width: `${canvasSize.width}px`,
         height: `${canvasSize.height}px`,
-        aspectRatio: '1 / 1',
+        margin: 'auto',
         boxShadow: 'none',
       }}>
       <div style={{
         position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-        height: '100%',
+        width: `${canvasSize.width}px`,
+        height: `${canvasSize.height}px`,
       }}>
         {/* Shared container for canvas and PIXI to ensure perfect alignment */}
         <div style={{
           position: 'relative',
-          width: '100%',
-          height: '100%',
-          maxWidth: '100%',
-          maxHeight: '100%',
-          aspectRatio: '1 / 1',
+          width: `${canvasSize.width}px`,
+          height: `${canvasSize.height}px`,
         }}>
         {/* Canvas for game rendering - hidden when CRT is active (PixiJS shows it instead) */}
         <canvas
@@ -9671,6 +9943,8 @@ const Pong404: React.FC = () => {
             position: 'absolute',
             top: 0,
             left: 0,
+            width: `${canvasSize.width}px`,
+            height: `${canvasSize.height}px`,
             background: 'transparent',
             outline: 'none',
             imageRendering: 'auto',
