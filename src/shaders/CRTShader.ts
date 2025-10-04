@@ -1,6 +1,6 @@
 import { Filter, GlProgram, GpuProgram } from 'pixi.js';
 
-// Authentic CRT shader with scanlines, phosphor glow, and barrel distortion v2
+// Authentic CRT shader with scanlines, phosphor glow, and barrel distortion
 const vertex = `
 in vec2 aPosition;
 out vec2 vTextureCoord;
@@ -52,11 +52,6 @@ uniform float uBezelSize;
 uniform float uReflectionOpacity;
 uniform float uBorderNormalized;  // Inner edge of reflections (where border is, 12px)
 uniform float uReflectionWidth;   // Outer edge of reflections (50px)
-uniform sampler2D uFrameTexture;  // Mega bezel frame texture
-uniform sampler2D uTubeShadowTexture; // Tube shadow texture
-uniform float uFrameOpacity;
-uniform float uFrameHighlight;
-uniform float uFrameShadowWidth;
 
 // CRT barrel distortion for square display
 vec2 curveRemapUV(vec2 uv) {
@@ -97,51 +92,38 @@ float noise(vec2 co) {
     return fract(sin(dot(co.xy, vec2(12.9898, 78.233)) + uTime) * 43758.5453);
 }
 
-// Corner masking function from mega bezel - creates smooth rounded corners
+// Corner masking function - creates smooth rounded corners
 float getCornerMask(vec2 coord, float aspectRatio, float cornerRadius, float edgeSharpness) {
-    // Convert to centered coordinates (-0.5 to 0.5)
     vec2 centered = coord - 0.5;
-
-    // Scale by aspect ratio for proper corners
     vec2 newCoord = min(coord, vec2(1.0) - coord) * vec2(aspectRatio, 1.0);
     vec2 cornerDistance = vec2(max(cornerRadius / 1000.0, (1.0 - edgeSharpness) * 0.01));
     newCoord = cornerDistance - min(newCoord, cornerDistance);
     float distance = sqrt(dot(newCoord, newCoord));
-
     return clamp((cornerDistance.x - distance) * (edgeSharpness * 500.0 + 100.0), 0.0, 1.0);
 }
 
-// Get various mask regions for frame composition
-float getTubeMask(vec2 coord) {
-    // The playfield/tube area - where the game is rendered
-    float cornerRadius = 0.03; // Adjust for desired corner roundness
-    return getCornerMask(coord, 1.0, cornerRadius * 1000.0, 0.99);
-}
+// Render beveled bezel background
+vec3 renderBeveledBezel(vec2 coord) {
+    float distFromTop = coord.y;
+    float distFromBottom = 1.0 - coord.y;
+    float distFromLeft = coord.x;
+    float distFromRight = 1.0 - coord.x;
+    float minDistFromEdge = min(min(distFromTop, distFromBottom), min(distFromLeft, distFromRight));
 
-float getBezelMask(vec2 coord) {
-    // Bezel is slightly larger than tube (not used for frame, kept for reference)
-    vec2 expandedCoord = (coord - 0.5) * 0.95 + 0.5;
-    float cornerRadius = 0.035;
-    return 1.0 - getCornerMask(expandedCoord, 1.0, cornerRadius * 1000.0, 0.95);
-}
+    vec3 bezelColor = vec3(0.06, 0.06, 0.06);
+    float bevelDepth = smoothstep(0.0, uReflectionWidth, minDistFromEdge);
 
-float getFrameMask(vec2 coord) {
-    // Frame is the outer boundary - everything outside this is beyond the monitor
-    // Make frame extend much further out (smaller scale = bigger frame)
-    vec2 expandedCoord = (coord - 0.5) * 0.75 + 0.5; // 75% scale = 25% frame on each side
-    float cornerRadius = 0.06;
-    return 1.0 - getCornerMask(expandedCoord, 1.0, cornerRadius * 1000.0, 0.90);
+    vec3 highlightColor = vec3(0.15, 0.15, 0.15);
+    vec3 shadowColor = vec3(0.02, 0.02, 0.02);
+
+    bezelColor = mix(highlightColor, shadowColor, bevelDepth);
+    return bezelColor;
 }
 
 // Get reflection from playfield edge
 // curvedCoord: the coordinate AFTER curvature has been applied (this is where we are on the curved surface)
 // flatCoord: the original flat coordinate (this is where we sample the texture from)
 vec4 getBezelReflection(vec2 curvedCoord, vec2 flatCoord, vec2 texCoordRatio) {
-    // Early exit if reflections are disabled
-    if (uReflectionOpacity <= 0.0) {
-        return vec4(0.0);
-    }
-
     // Calculate distance from each edge using CURVED coordinates
     // This makes the reflection zones follow the curved surface
     float distFromTop = curvedCoord.y;
@@ -159,19 +141,26 @@ vec4 getBezelReflection(vec2 curvedCoord, vec2 flatCoord, vec2 texCoordRatio) {
         return vec4(0.0);
     }
 
-    // Hide reflections in corner areas - they cause pink artifacts
-    // Only hide if we're near both horizontal AND vertical edges (actual corners)
-    float distFromHorizontalEdge = min(distFromTop, distFromBottom);
-    float distFromVerticalEdge = min(distFromLeft, distFromRight);
+    // Corner fade - fade out reflections at the outer screen corners
+    // This prevents the magenta border artifacts in corners
+    // Calculate distance from each outer corner
+    vec2 toTopLeft = vec2(curvedCoord.x, curvedCoord.y);
+    vec2 toTopRight = vec2(1.0 - curvedCoord.x, curvedCoord.y);
+    vec2 toBottomLeft = vec2(curvedCoord.x, 1.0 - curvedCoord.y);
+    vec2 toBottomRight = vec2(1.0 - curvedCoord.x, 1.0 - curvedCoord.y);
 
-    // If close to both edges simultaneously, we're in a corner - hide reflection
-    if (distFromHorizontalEdge < uReflectionWidth && distFromVerticalEdge < uReflectionWidth) {
-        // Fade out reflections in corners
-        float cornerFade = max(distFromHorizontalEdge, distFromVerticalEdge) / uReflectionWidth;
-        if (cornerFade < 0.5) {
-            return vec4(0.0);
-        }
-    }
+    float distToNearestCorner = min(
+        min(length(toTopLeft), length(toTopRight)),
+        min(length(toBottomLeft), length(toBottomRight))
+    );
+
+    // Fade reflections near outer corners
+    // Use a larger radius to ensure we cover the magenta artifacts
+    float cornerFadeRadius = uReflectionWidth * 4.0;
+    float cornerFade = smoothstep(0.0, cornerFadeRadius, distToNearestCorner);
+
+    // Apply stronger fade with power function to eliminate magenta more aggressively
+    cornerFade = cornerFade * cornerFade * cornerFade * cornerFade; // Quartic (^4) for very strong fade near corners
 
     // Sample coordinates for reflection (in screen space, will convert to texture space)
     vec2 sampleCoord;
@@ -267,109 +256,42 @@ vec4 getBezelReflection(vec2 curvedCoord, vec2 flatCoord, vec2 texCoordRatio) {
         texSampleCoord.x = sampleBound + (regionWidth - localX);
     }
 
-    // No blur - sharp reflections
-    vec4 reflection = texture(uTexture, texSampleCoord);
+    // Perspective distortion: reflections farther from edge should be dimmer and more blurred
+    // Calculate depth into the bezel (0 = at playfield edge, 1 = at outer bezel edge)
+    float bezelDepth = 1.0 - fadeAmount; // Inverted fadeAmount gives us depth
 
-    // Apply fade based on distance from edge and reflection opacity
+    // Increase blur based on depth (perspective: farther = more blurred)
+    float baseBlur = 0.008; // Larger base blur
+    float perspectiveBlur = baseBlur * (1.0 + bezelDepth * 2.0); // Up to 3x blur at outer edge
+
+    // Sample with multi-level blur for soft reflections
+    // Clamp all texture coordinates to valid range [0, 1]
+    vec4 reflection = vec4(0.0);
+
+    // Inner blur ring (sharp)
+    reflection += texture(uTexture, clamp(texSampleCoord, 0.0, 1.0)) * 0.25;
+    reflection += texture(uTexture, clamp(texSampleCoord + vec2(perspectiveBlur * 0.5, 0.0), 0.0, 1.0)) * 0.125;
+    reflection += texture(uTexture, clamp(texSampleCoord - vec2(perspectiveBlur * 0.5, 0.0), 0.0, 1.0)) * 0.125;
+    reflection += texture(uTexture, clamp(texSampleCoord + vec2(0.0, perspectiveBlur * 0.5), 0.0, 1.0)) * 0.125;
+    reflection += texture(uTexture, clamp(texSampleCoord - vec2(0.0, perspectiveBlur * 0.5), 0.0, 1.0)) * 0.125;
+
+    // Outer blur ring (soft)
+    reflection += texture(uTexture, clamp(texSampleCoord + vec2(perspectiveBlur, 0.0), 0.0, 1.0)) * 0.0625;
+    reflection += texture(uTexture, clamp(texSampleCoord - vec2(perspectiveBlur, 0.0), 0.0, 1.0)) * 0.0625;
+    reflection += texture(uTexture, clamp(texSampleCoord + vec2(0.0, perspectiveBlur), 0.0, 1.0)) * 0.0625;
+    reflection += texture(uTexture, clamp(texSampleCoord - vec2(0.0, perspectiveBlur), 0.0, 1.0)) * 0.0625;
+
+    // Apply fade based on distance from edge
     reflection.rgb *= fadeAmount * uReflectionOpacity;
 
-    // Luminance filtering - only show brighter content
-    float luminance = dot(reflection.rgb, vec3(0.299, 0.587, 0.114));
-    float luminanceFilter = smoothstep(0.1, 0.5, luminance);
-    reflection.rgb *= luminanceFilter * 0.8;
+    // Perspective dimming: reflections farther from playfield are dimmer (like real reflections receding)
+    float perspectiveDim = 1.0 - (bezelDepth * 0.2); // Up to 20% dimmer at outer edge (reduced for brighter reflections)
+    reflection.rgb *= perspectiveDim;
+
+    // Apply corner fade to eliminate magenta border artifacts
+    reflection.rgb *= cornerFade;
 
     return reflection;
-}
-
-// Render beveled bezel background
-vec3 renderBeveledBezel(vec2 coord) {
-    // Calculate distance from edges
-    float distFromTop = coord.y;
-    float distFromBottom = 1.0 - coord.y;
-    float distFromLeft = coord.x;
-    float distFromRight = 1.0 - coord.x;
-
-    float minDistFromEdge = min(min(distFromTop, distFromBottom), min(distFromLeft, distFromRight));
-
-    // Base grey color - darker than frame
-    vec3 bezelColor = vec3(0.15, 0.15, 0.15);
-
-    // Bevel effect - lighter at outer edge, darker towards playfield
-    float bevelDepth = smoothstep(0.0, uReflectionWidth, minDistFromEdge);
-
-    // Outer highlight (dark grey)
-    vec3 highlightColor = vec3(0.25, 0.25, 0.25);
-    // Inner shadow (almost black)
-    vec3 shadowColor = vec3(0.08, 0.08, 0.08);
-
-    // Mix based on bevel depth
-    bezelColor = mix(highlightColor, shadowColor, bevelDepth);
-
-    return bezelColor;
-}
-
-// Render the monitor frame with mega bezel technique
-vec4 renderFrame(vec2 coord) {
-    // Mega Bezel Frame - Proper Implementation
-    // Based on libretro/slang-shaders analysis
-
-    float aspectRatio = 1.0; // Assume square for now
-    float tubeAspect = 1.0;
-
-    // Step 1: Calculate BEZEL_OUTSIDE_CURVED_COORD (simplified - no curvature)
-    vec2 bezelOutsideCoord = coord;
-
-    // Step 2: Calculate FRAME_OUTSIDE_CURVED_COORD (mega bezel technique)
-    float frmThickness = 1.0; // HSM_FRM_THICKNESS normalized (100/100 = 1.0)
-    vec2 frameOutsideCoord = (bezelOutsideCoord - 0.5) / (frmThickness + 1.0) + 0.5;
-
-    // Step 3: Calculate Masks for outer frame border
-    // OUTSIDE_BEZEL_MASK - starts from very outer edge (0.0)
-    float outsideBezelMask = 1.0 - getCornerMask(bezelOutsideCoord, tubeAspect, 3.0, 0.98);
-
-    // OUTSIDE_FRAME_MASK - creates inner boundary of frame (starts after bezel+reflections)
-    // Frame width should be visible around the bezel area
-    vec2 frameCoordCtr = frameOutsideCoord - 0.5;
-    float frameInnerBoundary = 0.88; // Smaller = thicker frame
-    float outsideFrameMask = 1.0 - getCornerMask(frameCoordCtr + 0.5, tubeAspect, 8.0, frameInnerBoundary);
-
-    // FRAME_MASK = OUTSIDE_BEZEL_MASK * (1 - OUTSIDE_FRAME_MASK)
-    float frameMask = outsideBezelMask * (1.0 - outsideFrameMask);
-
-    if (frameMask < 0.01) {
-        return vec4(0.0); // Not in frame
-    }
-
-    // Step 4: Beveled Frame with highlights and shadows
-    vec3 frameBaseColor = vec3(0.25, 0.25, 0.25); // Medium grey
-
-    // Calculate distance from outer edge for bevel effect
-    float distFromOuterEdge = min(min(coord.x, 1.0 - coord.x), min(coord.y, 1.0 - coord.y));
-    float distFromInnerEdge = min(0.50 - abs(frameCoordCtr.x), 0.50 - abs(frameCoordCtr.y));
-
-    // Outer bevel - lighter highlight at very outer edge
-    float outerBevel = smoothstep(0.0, 0.02, distFromOuterEdge);
-    vec3 outerHighlight = vec3(0.45, 0.45, 0.45);
-
-    // Inner bevel - darker shadow at inner edge
-    float innerBevel = smoothstep(0.0, 0.02, distFromInnerEdge);
-    vec3 innerShadow = vec3(0.15, 0.15, 0.15);
-
-    // Combine bevels
-    vec3 frameColor = mix(outerHighlight, frameBaseColor, outerBevel);
-    frameColor = mix(innerShadow, frameColor, innerBevel);
-
-    // Add subtle noise for texture
-    float noiseMask = noise(coord * 200.0);
-    frameColor = mix(frameColor, frameColor * 1.1 * noiseMask, 0.15);
-
-    // Step 6: Skip texture for now - it contains unwanted reflections
-    // TODO: Use only the grayscale lighting data from texture, not colors
-    // vec4 frameTextureSample = texture(uFrameTexture, frameOutsideCoord);
-    // vec3 frameTextureColor = frameTextureSample.rgb;
-    // frameColor = mix(frameColor, frameTextureColor, 0.5);
-
-    return vec4(frameColor, 1.0);
 }
 
 void main(void) {
@@ -396,22 +318,11 @@ void main(void) {
     // Apply barrel distortion using perfect screen coordinates for symmetry
     vec2 distortedScreenCoord = curveRemapUV(vScreenCoord);
 
-    // FIRST: Check if we should render the frame (independent of curvature)
-    // Frame should render in the bezel area around the playfield
-    if (uFrameOpacity > 0.0) {
-        vec4 frame = renderFrame(vScreenCoord);
-        if (frame.a > 0.01) {
-            // We're in the frame region - render the frame
-            finalColor = vec4(frame.rgb, 1.0);
-            return;
-        }
-    }
-
     // Check if DISTORTED SCREEN COORD is outside bounds (symmetric check in screen space)
     // This is the key: check bounds in screen space BEFORE converting to texture space
     if (distortedScreenCoord.x < 0.0 || distortedScreenCoord.x > 1.0 ||
         distortedScreenCoord.y < 0.0 || distortedScreenCoord.y > 1.0) {
-        // Outside curved bounds - this is the bezel area (but not frame)
+        // Outside curved bounds - this is the bezel area
 
         // Start with beveled bezel background
         vec3 bezelBackground = renderBeveledBezel(vScreenCoord);
@@ -422,8 +333,13 @@ void main(void) {
             vec4 bezelReflection = getBezelReflection(distortedScreenCoord, vScreenCoord, texCoordRatio);
 
             if (bezelReflection.a > 0.0 || bezelReflection.r > 0.0 || bezelReflection.g > 0.0 || bezelReflection.b > 0.0) {
-                // Blend reflection over beveled bezel background
-                finalColor = vec4(bezelBackground + bezelReflection.rgb, 1.0);
+                // Reduce reflection intensity for subtle plastic-like effect
+                vec3 subtleReflection = bezelReflection.rgb * 0.15;
+
+                // Screen blend mode - reflects light on plastic surface while showing bezel through
+                // Screen formula: 1 - (1 - base) * (1 - blend)
+                vec3 screenBlend = vec3(1.0) - (vec3(1.0) - bezelBackground) * (vec3(1.0) - subtleReflection);
+                finalColor = vec4(screenBlend, 1.0);
                 return;
             }
         }
@@ -568,11 +484,6 @@ export interface CRTShaderOptions {
   reflectionOpacity?: number;
   borderNormalized?: number;
   reflectionWidth?: number;
-  frameTexture?: any; // PixiJS Texture
-  tubeShadowTexture?: any; // PixiJS Texture
-  frameOpacity?: number;
-  frameHighlight?: number;
-  frameShadowWidth?: number;
 }
 
 export class CRTFilter extends Filter {
@@ -591,7 +502,7 @@ export class CRTFilter extends Filter {
     const glProgram = GlProgram.from({
       vertex,
       fragment,
-      name: 'crt-filter-v3',
+      name: 'crt-filter',
     });
 
     // Pass uniforms through resources with explicit type definitions for PixiJS v8
@@ -613,16 +524,10 @@ export class CRTFilter extends Filter {
           uDisharmonic: { value: options.disharmonic || 0.0, type: 'f32' },
           uCenterOffset: { value: [0.0, 0.0], type: 'vec2<f32>' }, // Perfect center
           uBezelSize: { value: options.bezelSize || 0.03125, type: 'f32' }, // Default 25px on 800px canvas
-          uReflectionOpacity: { value: options.reflectionOpacity !== undefined ? options.reflectionOpacity : 1.5, type: 'f32' },
+          uReflectionOpacity: { value: options.reflectionOpacity || 1.5, type: 'f32' },
           uBorderNormalized: { value: options.borderNormalized || 0.015, type: 'f32' }, // Default 12px on 800px canvas (inner edge of reflections)
           uReflectionWidth: { value: options.reflectionWidth || 0.0625, type: 'f32' }, // Default 50px on 800px canvas (outer edge of reflections)
-          uFrameOpacity: { value: options.frameOpacity !== undefined ? options.frameOpacity : 0.0, type: 'f32' }, // Off by default
-          uFrameHighlight: { value: options.frameHighlight || 1.0, type: 'f32' },
-          uFrameShadowWidth: { value: options.frameShadowWidth || 0.02, type: 'f32' },
         },
-        // Only add textures if they exist
-        ...(options.frameTexture ? { uFrameTexture: options.frameTexture } : {}),
-        ...(options.tubeShadowTexture ? { uTubeShadowTexture: options.tubeShadowTexture } : {}),
       },
     });
   }
