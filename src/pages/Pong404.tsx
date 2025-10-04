@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import SamJs from 'sam-js';
-import { Application, Sprite, Texture } from 'pixi.js';
+import { Application, Sprite, Texture, Assets } from 'pixi.js';
 import { CRTFilter } from '../shaders/CRTShader';
 import { getDynamicTauntSystem, GameContext, PlayerBehavior } from '../utils/browserTauntSystem';
 import { CollisionManager, CollisionDetector, CollisionResult } from '../utils/CollisionDetection';
@@ -771,6 +771,8 @@ const Pong404: React.FC = () => {
   const pixiAppRef = useRef<Application | null>(null);
   const pixiContainerRef = useRef<HTMLDivElement>(null);
   const crtFilterRef = useRef<CRTFilter | null>(null);
+  const frameTextureRef = useRef<Texture | null>(null);
+  const tubeShadowTextureRef = useRef<Texture | null>(null);
   const animationFrameRef = useRef<number>(0);
   const coinSoundsPlayedRef = useRef<Set<string>>(new Set());
   const previousMachineGunBallCountRef = useRef<number>(0);
@@ -9414,22 +9416,69 @@ const Pong404: React.FC = () => {
       playfieldSprite.x = 0;
       playfieldSprite.y = 0;
 
-      const filter = new CRTFilter({
-        curvature: 12.0,
-        scanlineIntensity: 0.1,
-        vignetteIntensity: 0.15,
-        noiseIntensity: 0.05,
-        brightness: 1.25,
-        chromaticAberration: 0.004,
-        bezelSize: 0.0625,
-        reflectionOpacity: 1.5,  // Enable reflections on curved bezel
-        borderNormalized: BORDER_THICKNESS / canvasSize.width,
-        reflectionWidth: 50 / canvasSize.width,
-      });
-      playfieldSprite.filters = [filter];
-      app.stage.addChild(playfieldSprite);
+      // Load frame textures BEFORE creating filter
+      const loadFrameTextures = async () => {
+        console.log('[FRAME] Starting frame texture load...');
 
-      crtFilterRef.current = filter;
+        // Load frame texture
+        if (!frameTextureRef.current) {
+          try {
+            frameTextureRef.current = await Assets.load('/assets/FrameTexture_2800x2120.png');
+            console.log('[FRAME] Frame texture loaded:', frameTextureRef.current);
+          } catch (error) {
+            console.error('[FRAME] Failed to load frame texture:', error);
+          }
+        }
+
+        // Load tube shadow texture
+        if (!tubeShadowTextureRef.current) {
+          try {
+            tubeShadowTextureRef.current = await Assets.load('/assets/Tube_Shadow_1600x1200.png');
+            console.log('[FRAME] Tube shadow texture loaded:', tubeShadowTextureRef.current);
+          } catch (error) {
+            console.error('[FRAME] Failed to load tube shadow texture:', error);
+          }
+        }
+
+        return {
+          frameTexture: frameTextureRef.current,
+          tubeShadowTexture: tubeShadowTextureRef.current
+        };
+      };
+
+      // Load textures first, then create filter
+      loadFrameTextures().then((textures) => {
+        console.log('[FRAME] Textures loaded, creating filter with:', textures);
+
+        const filterOptions = {
+          curvature: 12.0,
+          scanlineIntensity: 0.1,
+          vignetteIntensity: 0.15,
+          noiseIntensity: 0.05,
+          brightness: 1.25,
+          chromaticAberration: 0.004,
+          bezelSize: 0.0625,
+          reflectionOpacity: 0.3,
+          borderNormalized: BORDER_THICKNESS / canvasSize.width,
+          reflectionWidth: 50 / canvasSize.width,
+          // Use loaded textures or create white fallback
+          frameTexture: textures.frameTexture || Texture.WHITE,
+          tubeShadowTexture: textures.tubeShadowTexture || Texture.WHITE,
+          frameOpacity: 1.0, // Enable frame rendering
+          frameHighlight: 1.5,
+          frameShadowWidth: 0.03,
+        };
+
+        const filter = new CRTFilter(filterOptions);
+
+        playfieldSprite.filters = [filter];
+
+        crtFilterRef.current = filter;
+
+        console.log('[FRAME] Filter created and applied');
+      });
+
+      app.stage.addChild(playfieldSprite);
 
       // console.log('[CRT] Filter created and applied:', {
       //   hasCrtFilter: !!filter,
@@ -9467,8 +9516,8 @@ const Pong404: React.FC = () => {
         // }
 
         // PixiJS v8: Access uniforms via filter.resources.crtUniforms.uniforms (nested!)
-        if (filter && filter.resources && filter.resources.crtUniforms) {
-          const uniformGroup = filter.resources.crtUniforms;
+        if (crtFilterRef.current && crtFilterRef.current.resources && crtFilterRef.current.resources.crtUniforms) {
+          const uniformGroup = crtFilterRef.current.resources.crtUniforms;
           const uniforms = uniformGroup.uniforms; // The actual uniforms are nested inside!
 
           // Update uniforms directly
@@ -9482,10 +9531,10 @@ const Pong404: React.FC = () => {
           if (uniforms.uDisharmonic !== undefined) {
             uniforms.uDisharmonic = musicData.disharmonic;
           }
-          // Make reflections pulse with music
-          if (uniforms.uReflectionOpacity !== undefined) {
-            uniforms.uReflectionOpacity = 1.3 + musicData.disharmonic * 0.5; // 1.3 to 1.8 based on music
-          }
+          // Make reflections pulse with music (DISABLED while building frame)
+          // if (uniforms.uReflectionOpacity !== undefined) {
+          //   uniforms.uReflectionOpacity = 1.3 + musicData.disharmonic * 0.5; // 1.3 to 1.8 based on music
+          // }
         }
 
         // Force texture update from canvas source every frame
@@ -9906,7 +9955,7 @@ const Pong404: React.FC = () => {
         left: 0,
         width: '100%',
         height: '100%',
-        background: '#000000',
+        background: '#1a1a1a',
         overflow: 'hidden' // Prevent box-shadows from causing scrolling
       }}
     >
@@ -9916,7 +9965,12 @@ const Pong404: React.FC = () => {
         width: `${canvasSize.width}px`,
         height: `${canvasSize.height}px`,
         margin: 'auto',
-        boxShadow: 'none',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
+        border: '32px solid',
+        borderImage: 'linear-gradient(135deg, #444 0%, #2a2a2a 25%, #222 50%, #1a1a1a 75%, #1a1a1a 100%) 1',
+        borderRadius: '32px',
+        boxSizing: 'content-box',
+        overflow: 'hidden',
       }}>
       <div style={{
         position: 'relative',
@@ -10257,6 +10311,33 @@ const Pong404: React.FC = () => {
 
       {/* Ambient Music - only plays on this page */}
       <GlobalAmbientMusic lanMode={lanMode} isSpectatorMode={isSpectatorMode} />
+
+      {/* Bezel Frame Overlay - fitted to canvas outline */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          pointerEvents: 'none',
+          zIndex: 999999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <img
+          src="/bezel_new.png"
+          alt=""
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover', // Cover instead of contain to fill and align with canvas
+            display: 'none', // Hidden - using shader-rendered mega bezel frame instead
+          }}
+        />
+      </div>
 
       </div>
     </div>
