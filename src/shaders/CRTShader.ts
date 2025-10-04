@@ -92,6 +92,34 @@ float noise(vec2 co) {
     return fract(sin(dot(co.xy, vec2(12.9898, 78.233)) + uTime) * 43758.5453);
 }
 
+// Corner masking function - creates smooth rounded corners
+float getCornerMask(vec2 coord, float aspectRatio, float cornerRadius, float edgeSharpness) {
+    vec2 centered = coord - 0.5;
+    vec2 newCoord = min(coord, vec2(1.0) - coord) * vec2(aspectRatio, 1.0);
+    vec2 cornerDistance = vec2(max(cornerRadius / 1000.0, (1.0 - edgeSharpness) * 0.01));
+    newCoord = cornerDistance - min(newCoord, cornerDistance);
+    float distance = sqrt(dot(newCoord, newCoord));
+    return clamp((cornerDistance.x - distance) * (edgeSharpness * 500.0 + 100.0), 0.0, 1.0);
+}
+
+// Render beveled bezel background
+vec3 renderBeveledBezel(vec2 coord) {
+    float distFromTop = coord.y;
+    float distFromBottom = 1.0 - coord.y;
+    float distFromLeft = coord.x;
+    float distFromRight = 1.0 - coord.x;
+    float minDistFromEdge = min(min(distFromTop, distFromBottom), min(distFromLeft, distFromRight));
+
+    vec3 bezelColor = vec3(0.06, 0.06, 0.06);
+    float bevelDepth = smoothstep(0.0, uReflectionWidth, minDistFromEdge);
+
+    vec3 highlightColor = vec3(0.15, 0.15, 0.15);
+    vec3 shadowColor = vec3(0.02, 0.02, 0.02);
+
+    bezelColor = mix(highlightColor, shadowColor, bevelDepth);
+    return bezelColor;
+}
+
 // Get reflection from playfield edge
 // curvedCoord: the coordinate AFTER curvature has been applied (this is where we are on the curved surface)
 // flatCoord: the original flat coordinate (this is where we sample the texture from)
@@ -112,6 +140,27 @@ vec4 getBezelReflection(vec2 curvedCoord, vec2 flatCoord, vec2 texCoordRatio) {
         // Too far from edges - outside reflection area
         return vec4(0.0);
     }
+
+    // Corner fade - fade out reflections at the outer screen corners
+    // This prevents the magenta border artifacts in corners
+    // Calculate distance from each outer corner
+    vec2 toTopLeft = vec2(curvedCoord.x, curvedCoord.y);
+    vec2 toTopRight = vec2(1.0 - curvedCoord.x, curvedCoord.y);
+    vec2 toBottomLeft = vec2(curvedCoord.x, 1.0 - curvedCoord.y);
+    vec2 toBottomRight = vec2(1.0 - curvedCoord.x, 1.0 - curvedCoord.y);
+
+    float distToNearestCorner = min(
+        min(length(toTopLeft), length(toTopRight)),
+        min(length(toBottomLeft), length(toBottomRight))
+    );
+
+    // Fade reflections near outer corners
+    // Use a larger radius to ensure we cover the magenta artifacts
+    float cornerFadeRadius = uReflectionWidth * 4.0;
+    float cornerFade = smoothstep(0.0, cornerFadeRadius, distToNearestCorner);
+
+    // Apply stronger fade with power function to eliminate magenta more aggressively
+    cornerFade = cornerFade * cornerFade * cornerFade * cornerFade; // Quartic (^4) for very strong fade near corners
 
     // Sample coordinates for reflection (in screen space, will convert to texture space)
     vec2 sampleCoord;
@@ -216,20 +265,21 @@ vec4 getBezelReflection(vec2 curvedCoord, vec2 flatCoord, vec2 texCoordRatio) {
     float perspectiveBlur = baseBlur * (1.0 + bezelDepth * 2.0); // Up to 3x blur at outer edge
 
     // Sample with multi-level blur for soft reflections
+    // Clamp all texture coordinates to valid range [0, 1]
     vec4 reflection = vec4(0.0);
 
     // Inner blur ring (sharp)
-    reflection += texture(uTexture, texSampleCoord) * 0.25;
-    reflection += texture(uTexture, texSampleCoord + vec2(perspectiveBlur * 0.5, 0.0)) * 0.125;
-    reflection += texture(uTexture, texSampleCoord - vec2(perspectiveBlur * 0.5, 0.0)) * 0.125;
-    reflection += texture(uTexture, texSampleCoord + vec2(0.0, perspectiveBlur * 0.5)) * 0.125;
-    reflection += texture(uTexture, texSampleCoord - vec2(0.0, perspectiveBlur * 0.5)) * 0.125;
+    reflection += texture(uTexture, clamp(texSampleCoord, 0.0, 1.0)) * 0.25;
+    reflection += texture(uTexture, clamp(texSampleCoord + vec2(perspectiveBlur * 0.5, 0.0), 0.0, 1.0)) * 0.125;
+    reflection += texture(uTexture, clamp(texSampleCoord - vec2(perspectiveBlur * 0.5, 0.0), 0.0, 1.0)) * 0.125;
+    reflection += texture(uTexture, clamp(texSampleCoord + vec2(0.0, perspectiveBlur * 0.5), 0.0, 1.0)) * 0.125;
+    reflection += texture(uTexture, clamp(texSampleCoord - vec2(0.0, perspectiveBlur * 0.5), 0.0, 1.0)) * 0.125;
 
     // Outer blur ring (soft)
-    reflection += texture(uTexture, texSampleCoord + vec2(perspectiveBlur, 0.0)) * 0.0625;
-    reflection += texture(uTexture, texSampleCoord - vec2(perspectiveBlur, 0.0)) * 0.0625;
-    reflection += texture(uTexture, texSampleCoord + vec2(0.0, perspectiveBlur)) * 0.0625;
-    reflection += texture(uTexture, texSampleCoord - vec2(0.0, perspectiveBlur)) * 0.0625;
+    reflection += texture(uTexture, clamp(texSampleCoord + vec2(perspectiveBlur, 0.0), 0.0, 1.0)) * 0.0625;
+    reflection += texture(uTexture, clamp(texSampleCoord - vec2(perspectiveBlur, 0.0), 0.0, 1.0)) * 0.0625;
+    reflection += texture(uTexture, clamp(texSampleCoord + vec2(0.0, perspectiveBlur), 0.0, 1.0)) * 0.0625;
+    reflection += texture(uTexture, clamp(texSampleCoord - vec2(0.0, perspectiveBlur), 0.0, 1.0)) * 0.0625;
 
     // Apply fade based on distance from edge
     reflection.rgb *= fadeAmount * uReflectionOpacity;
@@ -238,12 +288,8 @@ vec4 getBezelReflection(vec2 curvedCoord, vec2 flatCoord, vec2 texCoordRatio) {
     float perspectiveDim = 1.0 - (bezelDepth * 0.2); // Up to 20% dimmer at outer edge (reduced for brighter reflections)
     reflection.rgb *= perspectiveDim;
 
-    // Additional corner darkening to hide visual artifacts
-    if (minDist < uReflectionWidth) {
-        // Darken corners slightly within reflection zone
-        float cornerDarken = smoothstep(uBorderNormalized, uReflectionWidth, minDist);
-        reflection.rgb *= mix(0.5, 1.0, cornerDarken); // Lighter corners (50% brightness) for brighter overall reflections
-    }
+    // Apply corner fade to eliminate magenta border artifacts
+    reflection.rgb *= cornerFade;
 
     return reflection;
 }
@@ -276,16 +322,30 @@ void main(void) {
     // This is the key: check bounds in screen space BEFORE converting to texture space
     if (distortedScreenCoord.x < 0.0 || distortedScreenCoord.x > 1.0 ||
         distortedScreenCoord.y < 0.0 || distortedScreenCoord.y > 1.0) {
-        // Outside curved bounds - render reflections on the curved bezel
-        // Pass BOTH curved (distorted) and flat (original) coordinates
-        vec2 texCoordRatio = vTextureCoord / vScreenCoord;
-        vec4 bezelReflection = getBezelReflection(distortedScreenCoord, vScreenCoord, texCoordRatio);
+        // Outside curved bounds - this is the bezel area
 
-        if (bezelReflection.a > 0.0 || bezelReflection.r > 0.0 || bezelReflection.g > 0.0 || bezelReflection.b > 0.0) {
-            finalColor = vec4(bezelReflection.rgb, 1.0);
-        } else {
-            finalColor = vec4(0.0, 0.0, 0.0, 1.0);
+        // Start with beveled bezel background
+        vec3 bezelBackground = renderBeveledBezel(vScreenCoord);
+
+        // Render reflections on top of bezel (if enabled)
+        if (uReflectionOpacity > 0.0) {
+            vec2 texCoordRatio = vTextureCoord / vScreenCoord;
+            vec4 bezelReflection = getBezelReflection(distortedScreenCoord, vScreenCoord, texCoordRatio);
+
+            if (bezelReflection.a > 0.0 || bezelReflection.r > 0.0 || bezelReflection.g > 0.0 || bezelReflection.b > 0.0) {
+                // Reduce reflection intensity for subtle plastic-like effect
+                vec3 subtleReflection = bezelReflection.rgb * 0.15;
+
+                // Screen blend mode - reflects light on plastic surface while showing bezel through
+                // Screen formula: 1 - (1 - base) * (1 - blend)
+                vec3 screenBlend = vec3(1.0) - (vec3(1.0) - bezelBackground) * (vec3(1.0) - subtleReflection);
+                finalColor = vec4(screenBlend, 1.0);
+                return;
+            }
         }
+
+        // No reflections - show just beveled bezel
+        finalColor = vec4(bezelBackground, 1.0);
         return;
     }
 

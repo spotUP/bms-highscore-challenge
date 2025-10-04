@@ -9404,6 +9404,8 @@ const Pong404: React.FC = () => {
       texture.frame.height = canvasRef.current.height;
       if (texture.source) {
         texture.source.resolution = 1; // Force source resolution to 1
+        // Set texture wrapping to CLAMP to prevent magenta artifacts in corners
+        texture.source.style.addressMode = 'clamp-to-edge';
       }
       texture.updateUvs();
 
@@ -9422,9 +9424,9 @@ const Pong404: React.FC = () => {
         brightness: 1.25,
         chromaticAberration: 0.004,
         bezelSize: 0.0625,
-        reflectionOpacity: 1.5,  // Enable reflections on curved bezel
+        reflectionOpacity: 0.8,  // Enable reflections on curved bezel
         borderNormalized: BORDER_THICKNESS / canvasSize.width,
-        reflectionWidth: 50 / canvasSize.width,
+        reflectionWidth: 80 / canvasSize.width,
       });
       playfieldSprite.filters = [filter];
       app.stage.addChild(playfieldSprite);
@@ -9906,17 +9908,26 @@ const Pong404: React.FC = () => {
         left: 0,
         width: '100%',
         height: '100%',
-        background: '#000000',
+        background: '#1a1a1a',
         overflow: 'hidden' // Prevent box-shadows from causing scrolling
       }}
     >
+      {/* Outer frame wrapper for rounded corners */}
+      <div style={{
+        padding: '32px',
+        margin: 'auto',
+        background: 'linear-gradient(135deg, #444 0%, #2a2a2a 25%, #222 50%, #1a1a1a 75%, #1a1a1a 100%)',
+        borderRadius: '32px',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
+        width: 'fit-content',
+      }}>
       {/* Container for game - match canvas size exactly */}
       <div style={{
         position: 'relative',
         width: `${canvasSize.width}px`,
         height: `${canvasSize.height}px`,
-        margin: 'auto',
-        boxShadow: 'none',
+        borderRadius: '8px',
+        overflow: 'hidden',
       }}>
       <div style={{
         position: 'relative',
@@ -10235,6 +10246,7 @@ const Pong404: React.FC = () => {
         pointerEvents: 'none',
         zIndex: 15, // Above everything to be visible
       }} />
+      </div>
       </div>
       </div>
 
