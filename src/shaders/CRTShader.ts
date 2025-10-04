@@ -199,31 +199,32 @@ vec4 getBezelReflection(vec2 curvedCoord, vec2 flatCoord, vec2 texCoordRatio) {
     // The border region: from 0.0 to uBorderNormalized on each side
     // We want to sample: border region + some playfield content
 
-    // Sampling parameters to capture the yellow border in reflections
+    // Hardcoded sampling parameters found through interactive tuning
+    // These values capture the yellow border in reflections
     float sampleStart;
     float totalDepth;
 
     if (distFromTop == minDist) {
-        sampleStart = 0.0;  // Start from screen edge (0.0) to capture background
-        totalDepth = 0.17;  // Sample deeper to get border + content
+        sampleStart = 0.08;
+        totalDepth = 0.09;
         // Top edge - sample from screen edge (0.0), going into playfield
         sampleCoord = vec2(flatCoord.x, sampleStart + depth * totalDepth);
     }
     else if (distFromBottom == minDist) {
-        sampleStart = 0.0;  // Start from screen edge (0.0) to capture background
-        totalDepth = 0.17;  // Sample deeper to get border + content
+        sampleStart = 0.08;
+        totalDepth = 0.09;
         // Bottom edge - sample from screen edge, going into playfield
         sampleCoord = vec2(flatCoord.x, 1.0 - (sampleStart + depth * totalDepth));
     }
     else if (distFromLeft == minDist) {
-        sampleStart = 0.0;  // Start from screen edge (0.0) to capture background
-        totalDepth = 0.17;  // Sample deeper to get border + content
+        sampleStart = 0.10;
+        totalDepth = 0.11;
         // Left edge - sample from screen edge, going into playfield
         sampleCoord = vec2(sampleStart + depth * totalDepth, flatCoord.y);
     }
     else {
-        sampleStart = 0.0;  // Start from screen edge (0.0) to capture background
-        totalDepth = 0.17;  // Sample deeper to get border + content
+        sampleStart = 0.09;
+        totalDepth = 0.10;
         // Right edge - sample from screen edge, going into playfield
         sampleCoord = vec2(1.0 - (sampleStart + depth * totalDepth), flatCoord.y);
     }

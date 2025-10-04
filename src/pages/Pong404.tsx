@@ -9460,7 +9460,7 @@ const Pong404: React.FC = () => {
           bezelSize: 0.0625,
           reflectionOpacity: 0.3,
           borderNormalized: BORDER_THICKNESS / canvasSize.width,
-          reflectionWidth: 50 / canvasSize.width,
+          reflectionWidth: 80 / canvasSize.width,
           // Use loaded textures or create white fallback
           frameTexture: textures.frameTexture || Texture.WHITE,
           tubeShadowTexture: textures.tubeShadowTexture || Texture.WHITE,
