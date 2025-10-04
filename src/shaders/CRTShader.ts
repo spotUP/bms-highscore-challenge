@@ -52,6 +52,14 @@ uniform float uBezelSize;
 uniform float uReflectionOpacity;
 uniform float uBorderNormalized;  // Inner edge of reflections (where border is, 12px)
 uniform float uReflectionWidth;   // Outer edge of reflections (50px)
+uniform float uTopOffset;
+uniform float uTopDepth;
+uniform float uRightOffset;
+uniform float uRightDepth;
+uniform float uBottomOffset;
+uniform float uBottomDepth;
+uniform float uLeftOffset;
+uniform float uLeftDepth;
 
 // CRT barrel distortion for square display
 vec2 curveRemapUV(vec2 uv) {
@@ -136,10 +144,15 @@ vec4 getBezelReflection(vec2 curvedCoord, vec2 flatCoord, vec2 texCoordRatio) {
 
     // Check if we're in the reflection zone (from screen edge outward to uReflectionWidth)
     // Reflections appear from screen edge (0px) outward to reflection width (50px)
-    if (minDist >= uReflectionWidth) {
+    // Add anti-aliasing with smoothstep to avoid hard edge
+    float edgeAA = 0.01; // Anti-aliasing width (10 pixels on 1000px screen for very smooth transition)
+    if (minDist >= uReflectionWidth + edgeAA) {
         // Too far from edges - outside reflection area
         return vec4(0.0);
     }
+
+    // Anti-aliased edge fade with wider transition zone
+    float edgeFade = 1.0 - smoothstep(uReflectionWidth - edgeAA * 2.0, uReflectionWidth + edgeAA, minDist);
 
     // Corner fade - fade out reflections at the outer screen corners
     // This prevents the magenta border artifacts in corners
@@ -180,7 +193,8 @@ vec4 getBezelReflection(vec2 curvedCoord, vec2 flatCoord, vec2 texCoordRatio) {
     float depth = minDist / uReflectionWidth;
 
     // Calculate fade (1 = at playfield edge, 0 = at screen edge)
-    fadeAmount = 1.0 - depth;
+    // Use smoothstep for smooth transition at the playfield boundary
+    fadeAmount = 1.0 - smoothstep(0.0, 1.0, depth);
 
     // Sample from the FLAT (pre-curve) texture, but use CURVED coordinates to determine position
     // This creates the illusion of reflections on curved glass
@@ -188,32 +202,31 @@ vec4 getBezelReflection(vec2 curvedCoord, vec2 flatCoord, vec2 texCoordRatio) {
     // The border region: from 0.0 to uBorderNormalized on each side
     // We want to sample: border region + some playfield content
 
-    // Hardcoded sampling parameters found through interactive tuning
-    // These values capture the yellow border in reflections
+    // Use dynamic reflection parameters from uniforms (controlled by keyboard)
     float sampleStart;
     float totalDepth;
 
     if (distFromTop == minDist) {
-        sampleStart = 0.08;
-        totalDepth = 0.09;
+        sampleStart = uTopOffset;
+        totalDepth = uTopDepth;
         // Top edge - sample from screen edge (0.0), going into playfield
         sampleCoord = vec2(flatCoord.x, sampleStart + depth * totalDepth);
     }
     else if (distFromBottom == minDist) {
-        sampleStart = 0.08;
-        totalDepth = 0.09;
+        sampleStart = uBottomOffset;
+        totalDepth = uBottomDepth;
         // Bottom edge - sample from screen edge, going into playfield
         sampleCoord = vec2(flatCoord.x, 1.0 - (sampleStart + depth * totalDepth));
     }
     else if (distFromLeft == minDist) {
-        sampleStart = 0.10;
-        totalDepth = 0.11;
+        sampleStart = uLeftOffset;
+        totalDepth = uLeftDepth;
         // Left edge - sample from screen edge, going into playfield
         sampleCoord = vec2(sampleStart + depth * totalDepth, flatCoord.y);
     }
     else {
-        sampleStart = 0.09;
-        totalDepth = 0.10;
+        sampleStart = uRightOffset;
+        totalDepth = uRightDepth;
         // Right edge - sample from screen edge, going into playfield
         sampleCoord = vec2(1.0 - (sampleStart + depth * totalDepth), flatCoord.y);
     }
@@ -290,6 +303,9 @@ vec4 getBezelReflection(vec2 curvedCoord, vec2 flatCoord, vec2 texCoordRatio) {
 
     // Apply corner fade to eliminate magenta border artifacts
     reflection.rgb *= cornerFade;
+
+    // Apply anti-aliased edge fade for smooth transition
+    reflection.rgb *= edgeFade;
 
     return reflection;
 }
@@ -527,6 +543,14 @@ export class CRTFilter extends Filter {
           uReflectionOpacity: { value: options.reflectionOpacity || 1.5, type: 'f32' },
           uBorderNormalized: { value: options.borderNormalized || 0.015, type: 'f32' }, // Default 12px on 800px canvas (inner edge of reflections)
           uReflectionWidth: { value: options.reflectionWidth || 0.0625, type: 'f32' }, // Default 50px on 800px canvas (outer edge of reflections)
+          uTopOffset: { value: 0.190, type: 'f32' },
+          uTopDepth: { value: 0.175, type: 'f32' },
+          uRightOffset: { value: 0.190, type: 'f32' },
+          uRightDepth: { value: 0.175, type: 'f32' },
+          uBottomOffset: { value: 0.190, type: 'f32' },
+          uBottomDepth: { value: 0.175, type: 'f32' },
+          uLeftOffset: { value: 0.190, type: 'f32' },
+          uLeftDepth: { value: 0.175, type: 'f32' },
         },
       },
     });

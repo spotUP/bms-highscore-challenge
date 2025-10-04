@@ -429,7 +429,7 @@ class ServerCollisionDetector {
 // Server-side collision detection constants (match client-side values)
 const COLLISION_BUFFER = 0; // No buffer for pixel-perfect collision detection
 const BORDER_THICKNESS = 12; // Border thickness to match client-side visual rendering
-const PADDLE_GAP = 42; // Gap between paddles and borders (matching client)
+const PADDLE_GAP = 21; // Gap between paddles and borders (matching client) - halved from 42
 const SPEED_BOOST = 1.02; // Speed boost for collision excitement
 
 // Types for game entities

@@ -173,7 +173,7 @@ const BASE_PADDLE_SPEED = 12;
 const BASE_PADDLE_LENGTH = 140; // SERVER-AUTHORITATIVE: Fallback for initialization, server defines true value
 const BASE_PADDLE_THICKNESS = 12; // SERVER-AUTHORITATIVE: Fallback for initialization, server defines true value
 const BASE_BORDER_THICKNESS = 12;
-const BASE_PADDLE_GAP = 42; // Gap between paddles and borders (in 800x800 reference)
+const BASE_PADDLE_GAP = 21; // Gap between paddles and borders (in 800x800 reference) - halved from 42
 const BASE_BALL_SPEED = 4;
 const BASE_MIN_BALL_SPEED = 3;
 const BASE_MAX_BALL_SPEED = 6;
@@ -816,6 +816,19 @@ const Pong404: React.FC = () => {
   const updateGameStateRef = useRef<any>(null);
   const updatePaddlePositionRef = useRef<any>(null);
   const updateGameRef = useRef<any>(null);
+
+  // 🔧 Reflection adjustment controls (all sides controlled together)
+  const [reflectionParams, setReflectionParams] = useState({
+    offset: 0.190,
+    depth: 0.175,
+  });
+  const reflectionParamsRef = useRef(reflectionParams);
+
+  // Sync reflectionParams state to ref whenever it changes
+  useEffect(() => {
+    reflectionParamsRef.current = reflectionParams;
+  }, [reflectionParams]);
+
   const renderRef = useRef<any>(null);
 
   // Music analysis data for reactive visual effects
@@ -6119,6 +6132,47 @@ const Pong404: React.FC = () => {
         return;
       }
 
+      // 🔧 Reflection adjustment controls (all sides together)
+      // 5/6 for offset, 7/8 for depth, 9 to save current values
+      const step = e.shiftKey ? 0.001 : 0.01; // Fine adjustment with Shift
+
+      if (e.key === '9') {
+        e.preventDefault();
+        console.log('💾 SAVE THESE REFLECTION VALUES:');
+        console.log(`offset: ${reflectionParams.offset.toFixed(3)}`);
+        console.log(`depth: ${reflectionParams.depth.toFixed(3)}`);
+        console.log('\nPaste into code:');
+        console.log(`const [reflectionParams, setReflectionParams] = useState({`);
+        console.log(`  offset: ${reflectionParams.offset.toFixed(3)},`);
+        console.log(`  depth: ${reflectionParams.depth.toFixed(3)},`);
+        console.log(`});`);
+        return;
+      }
+
+      if (e.key === '5' || e.key === '6' || e.key === '7' || e.key === '8') {
+        e.preventDefault();
+        setReflectionParams(prev => {
+          let newParams = { ...prev };
+
+          if (e.key === '5') {
+            newParams.offset = Math.max(0, prev.offset - step);
+            console.log(`🔧 All sides offset: ${newParams.offset.toFixed(3)}`);
+          } else if (e.key === '6') {
+            newParams.offset = Math.min(1, prev.offset + step);
+            console.log(`🔧 All sides offset: ${newParams.offset.toFixed(3)}`);
+          } else if (e.key === '7') {
+            newParams.depth = Math.max(0, prev.depth - step);
+            console.log(`🔧 All sides depth: ${newParams.depth.toFixed(3)}`);
+          } else if (e.key === '8') {
+            newParams.depth = Math.min(1, prev.depth + step);
+            console.log(`🔧 All sides depth: ${newParams.depth.toFixed(3)}`);
+          }
+
+          return newParams;
+        });
+        return;
+      }
+
       // Handle pickup testing with keys 0, 1, and 2
       if (e.key === '0') {
         e.preventDefault();
@@ -7313,8 +7367,9 @@ const Pong404: React.FC = () => {
 
     // Disharmonic RGB bleed effect active in CRT shader
 
+    // DISABLED - Border drawing removed for cleaner bezel reflections
     // Check if Great Wall is active and draw individual borders with color highlight
-    if (gameState.ball.hasGreatWall && gameState.ball.greatWallSide) {
+    if (false && gameState.ball.hasGreatWall && gameState.ball.greatWallSide) {
       const protectedSide = gameState.ball.greatWallSide;
 
       // Electric pulsing effect - use time for animation
@@ -9425,7 +9480,7 @@ const Pong404: React.FC = () => {
         chromaticAberration: 0.004,
         bezelSize: 0.0625,
         reflectionOpacity: 0.8,  // Enable reflections on curved bezel
-        borderNormalized: BORDER_THICKNESS / canvasSize.width,
+        borderNormalized: 0,  // No border - reflections start at playfield edge
         reflectionWidth: 80 / canvasSize.width,
       });
       playfieldSprite.filters = [filter];
@@ -9447,6 +9502,7 @@ const Pong404: React.FC = () => {
       // PixiJS will detect the canvas has changed and update the texture
       let frameCount = 0;
       let lastLogTime = 0;
+      let loggedReflectionParams = false;
       app.ticker.add(() => {
         // Safety check: ensure app and stage still exist (prevents errors during cleanup)
         if (!app || !app.stage) {
@@ -9477,7 +9533,7 @@ const Pong404: React.FC = () => {
           if (uniforms.uTime !== undefined) uniforms.uTime = Date.now() * 0.001;
           if (uniforms.uResolutionX !== undefined) uniforms.uResolutionX = canvasSize.width;
           if (uniforms.uResolutionY !== undefined) uniforms.uResolutionY = canvasSize.height;
-          if (uniforms.uBorderNormalized !== undefined) uniforms.uBorderNormalized = BORDER_THICKNESS / canvasSize.width;
+          if (uniforms.uBorderNormalized !== undefined) uniforms.uBorderNormalized = 0;  // No border
 
           // Update CRT filter with music analysis data for RGB bleed effect
           const musicData = (window as any).generativeMusic?.getAnalysisData?.() || { volume: 0, disharmonic: 0, beat: 0 };
@@ -9487,6 +9543,28 @@ const Pong404: React.FC = () => {
           // Make reflections pulse with music
           if (uniforms.uReflectionOpacity !== undefined) {
             uniforms.uReflectionOpacity = 1.3 + musicData.disharmonic * 0.5; // 1.3 to 1.8 based on music
+          }
+
+          // Update reflection adjustment parameters (use ref for latest values, apply to all sides)
+          const params = reflectionParamsRef.current;
+          if (uniforms.uTopOffset !== undefined) {
+            uniforms.uTopOffset = params.offset;
+            uniforms.uTopDepth = params.depth;
+            uniforms.uRightOffset = params.offset;
+            uniforms.uRightDepth = params.depth;
+            uniforms.uBottomOffset = params.offset;
+            uniforms.uBottomDepth = params.depth;
+            uniforms.uLeftOffset = params.offset;
+            uniforms.uLeftDepth = params.depth;
+
+            // Log reflection params once
+            if (!loggedReflectionParams) {
+              console.log('🔧 Reflection uniform values (all sides):', {
+                offset: uniforms.uTopOffset,
+                depth: uniforms.uTopDepth
+              });
+              loggedReflectionParams = true;
+            }
           }
         }
 
