@@ -47,6 +47,7 @@ const RAWGGamesBrowser = lazy(() => import("./pages/RAWGGamesBrowser"));
 const GamesBrowser = lazy(() => import("./pages/GamesBrowser"));
 const ClearLogoTest = lazy(() => import("./components/ClearLogoTest"));
 const Pong404 = lazy(() => import("./pages/Pong404"));
+const PongSlangDemo = lazy(() => import("./pages/PongSlangDemo"));
 
 const queryClient = new QueryClient();
 
@@ -209,6 +210,8 @@ const App = () => (
                           <Route path="/t/:slug/statistics" element={<Layout topNavProps={{ hideStatistics: true }}><TournamentAccessGuard><Statistics /></TournamentAccessGuard></Layout>} />
                           <Route path="/t/:slug/achievements" element={<Layout><TournamentAccessGuard><Achievements /></TournamentAccessGuard></Layout>} />
                           <Route path="/t/:slug/mobile-entry" element={<Layout><TournamentAccessGuard><MobileEntry /></TournamentAccessGuard></Layout>} />
+                          {/* Slang Shader Demo */}
+                          <Route path="/slang-demo" element={<PongSlangDemo />} />
                           {/* 404 Catch-all route */}
                           <Route path="*" element={<Pong404 />} />
                         </Routes>

@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import SamJs from 'sam-js';
-import { Application, Sprite, Texture } from 'pixi.js';
-import { CRTFilter } from '../shaders/CRTShader';
 import { getDynamicTauntSystem, GameContext, PlayerBehavior } from '../utils/browserTauntSystem';
 import { CollisionManager, CollisionDetector, CollisionResult } from '../utils/CollisionDetection';
 import GlobalAmbientMusic from '../components/GlobalAmbientMusic';
+import { ThreeContext } from '../three/ThreeContext';
+import { GameObjects } from '../three/GameObjects';
+import { PickupAtlas } from '../three/PickupAtlas';
 
 interface Pickup {
   x: number;
@@ -408,12 +409,12 @@ const PRECALC_CONSTANTS = {
     0.8 + 0.2 * Math.sin((i / 60) * Math.PI * 2)
   ),
 
-  // CRT flicker values (precalculated for 60fps) - static value removes jitter
+  // Flicker values (precalculated for 60fps) - static value removes jitter
   flickerValues: Array.from({ length: 60 }, () => 0.98)
 };
 
 // [TARGET] PRECALCULATED PICKUP PATTERNS (eliminates nested loops during gameplay)
-const PRECALC_PICKUP_PATTERNS = {
+export const PRECALC_PICKUP_PATTERNS = {
   lightning: Array.from({ length: 4 }, (_, row) =>
     Array.from({ length: 4 }, (_, col) =>
       (row < 2 && col >= 2 && col <= 3) ||
@@ -767,14 +768,15 @@ const PRECALC_PICKUP_PATTERNS = {
 };
 
 const Pong404: React.FC = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const pixiAppRef = useRef<Application | null>(null);
-  const pixiContainerRef = useRef<HTMLDivElement>(null);
-  const crtFilterRef = useRef<CRTFilter | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null); // WebGL canvas (Three.js)
   const animationFrameRef = useRef<number>(0);
   const coinSoundsPlayedRef = useRef<Set<string>>(new Set());
   const previousMachineGunBallCountRef = useRef<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
+
+  // Three.js refs for WebGL rendering
+  const threeContextRef = useRef<ThreeContext | null>(null);
+  const gameObjectsRef = useRef<GameObjects | null>(null);
 
   // Detect mobile device for performance optimizations
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -816,18 +818,6 @@ const Pong404: React.FC = () => {
   const updateGameStateRef = useRef<any>(null);
   const updatePaddlePositionRef = useRef<any>(null);
   const updateGameRef = useRef<any>(null);
-
-  // 🔧 Reflection adjustment controls (all sides controlled together)
-  const [reflectionParams, setReflectionParams] = useState({
-    offset: 0.190,
-    depth: 0.175,
-  });
-  const reflectionParamsRef = useRef(reflectionParams);
-
-  // Sync reflectionParams state to ref whenever it changes
-  useEffect(() => {
-    reflectionParamsRef.current = reflectionParams;
-  }, [reflectionParams]);
 
   const renderRef = useRef<any>(null);
 
@@ -944,7 +934,6 @@ const Pong404: React.FC = () => {
   const debugPickupIndexRef = useRef(0); // Ref to track current index in event handlers
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [currentPhase, setCurrentPhase] = useState<'initializing' | 'warming' | 'booting' | 'finalizing'>('initializing');
-  const [isCRTEnabled, setIsCRTEnabled] = useState(false);
   const [showFPS, setShowFPS] = useState(false);
   const [paddleAnimationProgress, setPaddleAnimationProgress] = useState(0); // 0 to 1
   const paddleAnimationStartTimeRef = useRef<number>(0);
@@ -1195,7 +1184,6 @@ const Pong404: React.FC = () => {
   }, []);
 
   const [localTestMode, setLocalTestMode] = useState(false);
-  const [crtEffect, setCrtEffect] = useState(true); // CRT shader enabled by default
   const [lanMode, setLanMode] = useState(false); // LAN mode - mute all clients, only spectator plays audio
   const [showAudioPrompt, setShowAudioPrompt] = useState(!isSpectatorMode); // Show audio interaction prompt on first load (skip for spectators)
   const audioPromptDismissedRef = useRef(isSpectatorMode); // Track if audio prompt was dismissed (auto-dismiss for spectators)
@@ -6132,47 +6120,6 @@ const Pong404: React.FC = () => {
         return;
       }
 
-      // 🔧 Reflection adjustment controls (all sides together)
-      // 5/6 for offset, 7/8 for depth, 9 to save current values
-      const step = e.shiftKey ? 0.001 : 0.01; // Fine adjustment with Shift
-
-      if (e.key === '9') {
-        e.preventDefault();
-        console.log('💾 SAVE THESE REFLECTION VALUES:');
-        console.log(`offset: ${reflectionParams.offset.toFixed(3)}`);
-        console.log(`depth: ${reflectionParams.depth.toFixed(3)}`);
-        console.log('\nPaste into code:');
-        console.log(`const [reflectionParams, setReflectionParams] = useState({`);
-        console.log(`  offset: ${reflectionParams.offset.toFixed(3)},`);
-        console.log(`  depth: ${reflectionParams.depth.toFixed(3)},`);
-        console.log(`});`);
-        return;
-      }
-
-      if (e.key === '5' || e.key === '6' || e.key === '7' || e.key === '8') {
-        e.preventDefault();
-        setReflectionParams(prev => {
-          let newParams = { ...prev };
-
-          if (e.key === '5') {
-            newParams.offset = Math.max(0, prev.offset - step);
-            console.log(`🔧 All sides offset: ${newParams.offset.toFixed(3)}`);
-          } else if (e.key === '6') {
-            newParams.offset = Math.min(1, prev.offset + step);
-            console.log(`🔧 All sides offset: ${newParams.offset.toFixed(3)}`);
-          } else if (e.key === '7') {
-            newParams.depth = Math.max(0, prev.depth - step);
-            console.log(`🔧 All sides depth: ${newParams.depth.toFixed(3)}`);
-          } else if (e.key === '8') {
-            newParams.depth = Math.min(1, prev.depth + step);
-            console.log(`🔧 All sides depth: ${newParams.depth.toFixed(3)}`);
-          }
-
-          return newParams;
-        });
-        return;
-      }
-
       // Handle pickup testing with keys 0, 1, and 2
       if (e.key === '0') {
         e.preventDefault();
@@ -6228,6 +6175,84 @@ const Pong404: React.FC = () => {
           console.log(`🔧 Not connected to multiplayer - cannot test pickup`);
         }
 
+        return;
+      }
+
+      // Motion blur debug controls (M key - toggle on/off)
+      if (e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        if (threeContextRef.current) {
+          const currentlyEnabled = threeContextRef.current.postProcessor.isMotionBlurEnabled();
+          threeContextRef.current.postProcessor.setMotionBlurEnabled(!currentlyEnabled);
+          console.log('[Motion Blur] Toggled:', !currentlyEnabled ? 'ON' : 'OFF');
+        }
+        return;
+      }
+
+      // Motion blur blend factor (B key - trail length)
+      if (e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        if (threeContextRef.current) {
+          // Cycle blend factor (trail length): 0.70 -> 0.75 -> 0.80 -> 0.85 -> 0.70
+          const factors = [0.70, 0.75, 0.80, 0.85];
+          // We don't track current factor, so just cycle through
+          const nextFactor = factors[Math.floor(Math.random() * factors.length)];
+          threeContextRef.current.postProcessor.setMotionBlurBlendFactor(nextFactor);
+          console.log('[Motion Blur] Blend factor:', nextFactor);
+        }
+        return;
+      }
+
+      // Motion blur trail dimming (N key - trail brightness)
+      if (e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        if (threeContextRef.current) {
+          // Cycle trail dimming: 0.90 -> 0.95 -> 0.98 -> 1.00 -> 0.90
+          const dimmingLevels = [0.90, 0.95, 0.98, 1.00];
+          const nextDimming = dimmingLevels[Math.floor(Math.random() * dimmingLevels.length)];
+          threeContextRef.current.postProcessor.setMotionBlurTrailDimming(nextDimming);
+          console.log('[Motion Blur] Trail dimming:', nextDimming);
+        }
+        return;
+      }
+
+      // Performance monitoring (P key)
+      if (e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        if (threeContextRef.current) {
+          // Log performance metrics
+          threeContextRef.current.performanceMonitor.logMetrics();
+
+          // Log trail statistics
+          if (gameObjectsRef.current) {
+            const trailStats = gameObjectsRef.current.trailRenderer.getStats();
+            console.log('[Trail Stats] ================');
+            console.log('[Trail Stats] Active Particles:', trailStats.particleCount);
+            console.log('[Trail Stats] Active Trails:', trailStats.trailCount);
+            console.log('[Trail Stats] Max Instances:', trailStats.maxInstances);
+            console.log('[Trail Stats] Instance Usage:', Math.round(trailStats.instanceUsage * 100) + '%');
+            console.log('[Trail Stats] ================');
+          }
+
+          // Log geometry pool statistics
+          const { GeometryPool } = require('../three/GeometryPool');
+          const poolStats = GeometryPool.getStats();
+          console.log('[Geometry Pool] ================');
+          console.log('[Geometry Pool] Cached Geometries:', poolStats.geometries);
+          console.log('[Geometry Pool] Cached Materials:', poolStats.materials);
+          console.log('[Geometry Pool] ================');
+        }
+        return;
+      }
+
+      // Mega Bezel toggle (Z key)
+      if (e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (threeContextRef.current) {
+          const currentlyEnabled = threeContextRef.current.postProcessor.isBezelEnabled();
+          threeContextRef.current.postProcessor.setBezelEnabled(!currentlyEnabled);
+          console.log('[Mega Bezel] Toggled:', !currentlyEnabled ? 'ON' : 'OFF');
+        }
         return;
       }
 
@@ -6338,8 +6363,8 @@ const Pong404: React.FC = () => {
       }
 
       // Handle non-spacebar audio prompt dismissal (other keys just dismiss, don't start game)
-      // Exclude 'c', 'm', and 'f' keys from starting the game (they toggle CRT/music/fullscreen)
-      if (showAudioPrompt && !audioPromptDismissedRef.current && e.key !== ' ' && e.key.toLowerCase() !== 'c' && e.key.toLowerCase() !== 'm' && e.key.toLowerCase() !== 'f') {
+      // Exclude 'm' and 'f' keys from starting the game (they toggle music/fullscreen)
+      if (showAudioPrompt && !audioPromptDismissedRef.current && e.key !== ' ' && e.key.toLowerCase() !== 'm' && e.key.toLowerCase() !== 'f') {
         audioPromptDismissedRef.current = true;
         setShowAudioPrompt(false);
 
@@ -6377,13 +6402,6 @@ const Pong404: React.FC = () => {
         }, 100);
 
         return;
-      }
-
-      // Handle CRT toggle - should work at any time, even on audio prompt
-      if (e.key.toLowerCase() === 'c') {
-        e.preventDefault();
-        setCrtEffect(prev => !prev);
-        return; // Don't process any other logic
       }
 
       // Handle LAN mode toggle (M key) - only in spectator mode
@@ -6819,7 +6837,7 @@ const Pong404: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [connectionStatus, multiplayerState.isConnected, gameState.gameMode, connectWebSocket, resetRoom, localTestMode, crtEffect]);
+  }, [connectionStatus, multiplayerState.isConnected, gameState.gameMode, connectWebSocket, resetRoom, localTestMode]);
 
   // Auto-initialize spectator mode
   useEffect(() => {
@@ -6879,2445 +6897,76 @@ const Pong404: React.FC = () => {
     return lines;
   }, []);
 
-  // [ROCKET] OPTIMIZED CRT Effect - uses cached time for better performance
-  const applyCRTEffect = useCallback((ctx: CanvasRenderingContext2D, canvasSize: { width: number; height: number }) => {
-    const time = cachedTimeRef.current * 0.001;
-    const frameCount = Math.floor(time * 15); // Frame count for animation timing
-
-    ctx.save();
-
-    // [ROCKET] OPTIMIZED CRT Curvature Effect - Use cached gradient
-    const centerX = canvasSize.width / 2;
-    const centerY = canvasSize.height / 2;
-
-    // Check if gradient cache needs update (canvas size changed)
-    const cache = gradientCacheRef.current;
-    const sizeChanged = !cache.lastCanvasSize ||
-      cache.lastCanvasSize.width !== canvasSize.width ||
-      cache.lastCanvasSize.height !== canvasSize.height;
-
-    if (sizeChanged || !cache.curvature) {
-      // Create and cache the curvature gradient
-      cache.curvature = ctx.createRadialGradient(
-        centerX, centerY, 0,
-        centerX, centerY, Math.max(canvasSize.width, canvasSize.height) * 0.7
-      );
-      cache.curvature.addColorStop(0, 'rgba(255, 255, 255, 1)');
-      cache.curvature.addColorStop(0.6, 'rgba(255, 255, 255, 0.95)');
-      cache.curvature.addColorStop(0.9, 'rgba(255, 255, 255, 0.8)');
-      cache.curvature.addColorStop(1, 'rgba(255, 255, 255, 0.65)');
-    }
-
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.fillStyle = cache.curvature;
-    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
-
-    // [ROCKET] OPTIMIZED Scanlines - Enhanced during Detroit mode
-    ctx.globalCompositeOperation = 'multiply';
-    ctx.globalAlpha = 1;
-
-    // Detroit mode: Animated rainbow scanlines synced to beat
-    let scanlineOffset = 0;
-    let scanlineGradient = cache.scanline;
-
-    if (gameState.detroitMode) {
-      const timeSinceStart = Date.now() - (gameState.detroitStartTime || 0);
-      const beatDuration = 461; // 130 BPM
-      const beatPhase = (timeSinceStart % beatDuration) / beatDuration;
-      const beat = Math.floor(timeSinceStart / beatDuration);
-      const hue = (beat * 45) % 360;
-
-      // Animate scanline position
-      scanlineOffset = Math.floor(beatPhase * 4) % 4;
-
-      // Rainbow scanlines
-      scanlineGradient = ctx.createLinearGradient(0, 0, 0, 4);
-      scanlineGradient.addColorStop(0, `hsla(${hue}, 100%, 50%, 0.3)`);
-      scanlineGradient.addColorStop(0.5, `hsla(${(hue + 60) % 360}, 100%, 50%, 0.4)`);
-      scanlineGradient.addColorStop(1, `hsla(${(hue + 120) % 360}, 100%, 50%, 0.3)`);
-    } else {
-      // Static scanline pattern - no animation to prevent flickering
-      if (!cache.scanline) {
-        cache.scanline = ctx.createLinearGradient(0, 0, 0, 4);
-        cache.scanline.addColorStop(0, 'rgba(0, 0, 0, 0.2)');
-        cache.scanline.addColorStop(0.5, 'rgba(0, 0, 0, 0.3)');
-        cache.scanline.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
-      }
-      scanlineGradient = cache.scanline;
-    }
-
-    ctx.fillStyle = scanlineGradient;
-
-    // Draw scanlines every 2 pixels
-    for (let y = scanlineOffset; y < canvasSize.height; y += 4) {
-      ctx.fillRect(0, y, canvasSize.width, 1);
-    }
-
-
-    // [ROCKET] OPTIMIZED Vignette - Use cached gradient
-    ctx.globalCompositeOperation = 'multiply';
-
-    if (sizeChanged || !cache.vignette) {
-      // Create and cache the vignette gradient
-      cache.vignette = ctx.createRadialGradient(
-        canvasSize.width / 2, canvasSize.height / 2, 0,
-        canvasSize.width / 2, canvasSize.height / 2, canvasSize.width * 0.7
-      );
-      cache.vignette.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
-      cache.vignette.addColorStop(0.8, 'rgba(255, 255, 255, 0.9)');
-      cache.vignette.addColorStop(1, 'rgba(255, 255, 255, 0.7)');
-
-      // Update cached canvas size
-      cache.lastCanvasSize = { width: canvasSize.width, height: canvasSize.height };
-    }
-
-    ctx.fillStyle = cache.vignette;
-    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
-
-    // Screen flicker disabled - no animation
-
-    // Phosphor Glow disabled - no frame-based flickering
-    // RGB Bleed Effect disabled - no frame-based flickering
-
-    // CRT Noise disabled - no flickering static
-
-
-    // Refresh Line disabled - no flickering line animation
-
-    ctx.restore();
-  }, [gameState.colorIndex]);
-
-
-  // Time warp effect - pitch shifting now handled by Tone.js GlobalAmbientMusic component
-
-  // High-performance render function
+  // High-performance render function - Pure WebGL via Three.js with motion blur
   const render = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return;
-
-    // DEBUG: Check if there's a transform or clip active
-    if (!window.__ctxDebugLogged) {
-      window.__ctxDebugLogged = true;
-      const transform = ctx.getTransform();
-      console.log('[CTX DEBUG] Canvas context state:', {
-        transformA: transform.a,
-        transformD: transform.d,
-        transformE: transform.e,
-        transformF: transform.f,
-        canvasWidth: canvas.width,
-        canvasHeight: canvas.height
-      });
-    }
-
-    // Reset transform to identity to ensure clean slate (fixes Retina/scaling issues)
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-    // Disable anti-aliasing to prevent sub-pixel rendering flicker
-    ctx.imageSmoothingEnabled = false;
-
-    // 📊 FPS Counter calculation (efficient)
-    frameCountRef.current++;
-    const now = Date.now();
-    if (now - lastFpsUpdateRef.current >= 1000) { // Update every second
-      fpsRef.current = Math.round((frameCountRef.current * 1000) / (now - lastFpsUpdateRef.current));
-      frameCountRef.current = 0;
-      lastFpsUpdateRef.current = now;
-    }
-
-    // Rumble effect disabled - using only disharmonic music shake
-
-    // Optimize canvas for performance and pixel-perfect rendering
-    ctx.imageSmoothingEnabled = false; // Disable anti-aliasing for pixel-perfect rendering
-
-    // Disable text smoothing and antialiasing for pixelated text
-    ctx.textRenderingOptimization = 'optimizeSpeed';
-    ctx.fontKerning = 'none';
-    (ctx as any).textRenderingOptimization = 'geometricPrecision';
-    (ctx as any).fontSmooth = 'never';
-    (ctx as any).webkitFontSmoothing = 'none';
-    (ctx as any).mozOsxFontSmoothing = 'unset';
-
-    // Get current color scheme
-    const currentColors = COLOR_PALETTE[gameState.colorIndex];
-
-    // Clear canvas with color scheme background
-    ctx.fillStyle = currentColors.background;
-    ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
-
-    // 🎵 DETROIT TECHNO VISUAL EFFECTS - Synced to 130 BPM (461ms per beat)
-    if (gameState.detroitMode) {
-      const timeSinceStart = Date.now() - (gameState.detroitStartTime || 0);
-      const beatDuration = 461; // 130 BPM = 461ms per beat
-      const beatPhase = (timeSinceStart % beatDuration) / beatDuration;
-      const beat = Math.floor(timeSinceStart / beatDuration);
-      const step16th = Math.floor(timeSinceStart / (beatDuration / 4)) % 16;
-
-      // 1. Rainbow color cycling synced to beats
-      const hue = (beat * 45) % 360; // Change hue every beat
-      const rainbowColor = `hsl(${hue}, 100%, 50%)`;
-
-      // 2. Kick drum flash (every 4 steps = every beat)
-      if (step16th % 4 === 0 && beatPhase < 0.15) {
-        const kickFlash = 1 - (beatPhase / 0.15);
-        ctx.globalAlpha = kickFlash * 0.3;
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
-        ctx.globalAlpha = 1;
-      }
-
-      // 3. Strobing borders on synth stabs (steps 0 and 4)
-      if ((step16th === 0 || step16th === 4) && beatPhase < 0.2) {
-        const borderSize = 20 + beatPhase * 40;
-        const strobeBrightness = 1 - (beatPhase / 0.2);
-        ctx.globalAlpha = strobeBrightness * 0.8;
-        ctx.strokeStyle = rainbowColor;
-        ctx.lineWidth = borderSize;
-        ctx.strokeRect(borderSize / 2, borderSize / 2, canvasSize.width - borderSize, canvasSize.height - borderSize);
-        ctx.globalAlpha = 1;
-      }
-
-      // 4. Rotating corner particles
-      const particleCount = 8;
-      for (let i = 0; i < particleCount; i++) {
-        const angle = (timeSinceStart / 1000) + (i * Math.PI * 2 / particleCount);
-        const radius = 150 + Math.sin(timeSinceStart / 200 + i) * 50;
-        const corners = [
-          { x: canvasSize.width / 2, y: canvasSize.height / 2 },
-        ];
-
-        corners.forEach(corner => {
-          const px = corner.x + Math.cos(angle) * radius;
-          const py = corner.y + Math.sin(angle) * radius;
-          const particleHue = (hue + i * 45) % 360;
-          ctx.fillStyle = `hsl(${particleHue}, 100%, 50%)`;
-          ctx.globalAlpha = 0.6;
-          ctx.beginPath();
-          ctx.arc(px, py, 8, 0, Math.PI * 2);
-          ctx.fill();
-        });
-      }
-      ctx.globalAlpha = 1;
-
-      // 5. (REMOVED - Detroit text logo)
-
-      // 6. Scanline intensity pulse on kick
-      if (step16th % 4 === 0 && beatPhase < 0.2) {
-        const scanlineIntensity = (1 - beatPhase / 0.2) * 0.3;
-        ctx.globalAlpha = scanlineIntensity;
-        for (let y = 0; y < canvasSize.height; y += 4) {
-          ctx.fillStyle = '#000000';
-          ctx.fillRect(0, y, canvasSize.width, 2);
-        }
-        ctx.globalAlpha = 1;
-      }
-
-      // 7. Grid overlay pulsing with hi-hats (every 2 steps)
-      if (beatPhase < 0.08) {
-        const gridAlpha = (1 - beatPhase / 0.08) * 0.15;
-        ctx.globalAlpha = gridAlpha;
-        ctx.strokeStyle = rainbowColor;
-        ctx.lineWidth = 1;
-
-        // Vertical lines
-        for (let x = 0; x < playFieldWidth; x += 40) {
-          ctx.beginPath();
-          ctx.moveTo(x, 0);
-          ctx.lineTo(x, playFieldHeight);
-          ctx.stroke();
-        }
-
-        // Horizontal lines
-        for (let y = 0; y < playFieldHeight; y += 40) {
-          ctx.beginPath();
-          ctx.moveTo(0, y);
-          ctx.lineTo(playFieldWidth, y);
-          ctx.stroke();
-        }
-        ctx.globalAlpha = 1;
-      }
-    }
-
-    // [VISUALIZER] Audio visualizer - frequency bars (drawn BEHIND scaled content)
-    if (analyserNodeRef.current && frequencyDataRef.current) {
-      analyserNodeRef.current.getByteFrequencyData(frequencyDataRef.current);
-
-      const barCount = 32; // Number of frequency bars
-      const barWidth = canvasSize.width / barCount;
-      const dataStep = Math.floor(frequencyDataRef.current.length / barCount);
-
-      // Helper function to lighten a hex color
-      const lightenColor = (hex: string, percent: number) => {
-        const num = parseInt(hex.replace('#', ''), 16);
-        const r = Math.min(255, Math.floor((num >> 16) + ((255 - (num >> 16)) * percent)));
-        const g = Math.min(255, Math.floor(((num >> 8) & 0x00FF) + ((255 - ((num >> 8) & 0x00FF)) * percent)));
-        const b = Math.min(255, Math.floor((num & 0x0000FF) + ((255 - (num & 0x0000FF)) * percent)));
-        return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
-      };
-
-      // Use lighter shade of background for visualizer
-      const visualizerColor = lightenColor(currentColors.background, 0.25);
-
-      // Frequency bars centered horizontally (mirrored from center)
-      ctx.fillStyle = visualizerColor;
-      ctx.globalAlpha = 0.4;
-
-      const centerX = canvasSize.width / 2;
-      const maxBarHeight = 300;
-
-      for (let i = 0; i < barCount / 2; i++) {
-        const dataIndex = i * dataStep;
-        const value = frequencyDataRef.current[dataIndex] / 255;
-        const barHeight = Math.pow(value, 0.5) * maxBarHeight;
-
-        const x = i * barWidth;
-
-        // Left half - bars extending upward from center
-        ctx.fillRect(x, centerX - barHeight, barWidth - 1, barHeight);
-
-        // Left half - bars extending downward from center
-        ctx.fillRect(x, centerX, barWidth - 1, barHeight);
-
-        // Right half - mirrored bars extending upward from center
-        ctx.fillRect(canvasSize.width - x - barWidth + 1, centerX - barHeight, barWidth - 1, barHeight);
-
-        // Right half - mirrored bars extending downward from center
-        ctx.fillRect(canvasSize.width - x - barWidth + 1, centerX, barWidth - 1, barHeight);
-      }
-
-      ctx.globalAlpha = 1.0; // Reset alpha
-    }
-
-    // [AUDIO] AUDIO INTERACTION PROMPT (first load only)
-    if (showAudioPrompt) {
-      // Draw playfield borders - same as gameplay area
-      ctx.strokeStyle = currentColors.foreground;
-      const audioBorderWidth = 12 * scaleFactor;
-      ctx.lineWidth = audioBorderWidth;
-      ctx.setLineDash([]); // Solid lines for borders
-      ctx.beginPath();
-      const borderInset = audioBorderWidth / 2; // Half of line width
-      // Top border - full width
-      ctx.moveTo(0, borderInset);
-      ctx.lineTo(canvasSize.width, borderInset);
-      // Bottom border - full width
-      ctx.moveTo(0, canvasSize.height - borderInset);
-      ctx.lineTo(canvasSize.width, canvasSize.height - borderInset);
-      // Left border - full height
-      ctx.moveTo(borderInset, 0);
-      ctx.lineTo(borderInset, canvasSize.height);
-      // Right border - full height
-      ctx.moveTo(canvasSize.width - borderInset, 0);
-      ctx.lineTo(canvasSize.width - borderInset, canvasSize.height);
-      ctx.stroke();
-
-      // Main prompt
-      ctx.fillStyle = currentColors.foreground;
-      const audioPromptSize = Math.round(32 * scaleFactor);
-      ctx.font = `bold ${audioPromptSize}px "Press Start 2P", monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.shadowBlur = 4 * scaleFactor;
-      ctx.shadowColor = currentColors.foreground;
-      ctx.fillText('AUDIO REQUIRED', canvasSize.width / 2, canvasSize.height / 2 - (80 * scaleFactor));
-
-      // Instructions
-      const audioInstructionSize = Math.round(16 * scaleFactor);
-      ctx.font = `bold ${audioInstructionSize}px "Press Start 2P", monospace`;
-      ctx.fillText('This game uses sound effects', canvasSize.width / 2, canvasSize.height / 2 - (20 * scaleFactor));
-      ctx.fillText('and speech synthesis', canvasSize.width / 2, canvasSize.height / 2 + (10 * scaleFactor));
-
-      // Interaction prompt
-      const audioInteractionSize = Math.round(20 * scaleFactor);
-      ctx.font = `bold ${audioInteractionSize}px "Press Start 2P", monospace`;
-      ctx.fillText('CLICK ANYWHERE TO CONTINUE', canvasSize.width / 2, canvasSize.height / 2 + (80 * scaleFactor));
-
-      // Small footer
-      const audioFooterSize = Math.round(12 * scaleFactor);
-      ctx.font = `bold ${audioFooterSize}px "Press Start 2P", monospace`;
-      ctx.fillText('Required for browser audio policy compliance', canvasSize.width / 2, canvasSize.height / 2 + (120 * scaleFactor));
-      ctx.shadowBlur = 0;
-
-      return; // Don't render anything else when showing audio prompt
-    }
-
-    // [ROCKET] START SCREEN
-    if (gameState.showStartScreen) {
-      // Draw playfield borders - same as gameplay area
-      ctx.strokeStyle = currentColors.foreground;
-      const startBorderWidth = 12 * scaleFactor;
-      ctx.lineWidth = startBorderWidth;
-      ctx.setLineDash([]); // Solid lines for borders
-      ctx.beginPath();
-      const borderInset = startBorderWidth / 2; // Half of line width
-      // Top border - full width
-      ctx.moveTo(0, borderInset);
-      ctx.lineTo(canvasSize.width, borderInset);
-      // Bottom border - full width
-      ctx.moveTo(0, canvasSize.height - borderInset);
-      ctx.lineTo(canvasSize.width, canvasSize.height - borderInset);
-      // Left border - full height
-      ctx.moveTo(borderInset, 0);
-      ctx.lineTo(borderInset, canvasSize.height);
-      // Right border - full height
-      ctx.moveTo(canvasSize.width - borderInset, 0);
-      ctx.lineTo(canvasSize.width - borderInset, canvasSize.height);
-      ctx.stroke();
-
-      // Main title
-      ctx.fillStyle = currentColors.foreground;
-      const titleSize = Math.round(48 * scaleFactor);
-      ctx.font = `bold ${titleSize}px "Press Start 2P", monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.shadowBlur = 4 * scaleFactor;
-      ctx.shadowColor = currentColors.foreground;
-      ctx.fillText('SPACE BLAZERS', canvasSize.width / 2, canvasSize.height / 2 - (200 * scaleFactor));
-
-      // Controls section
-      const controlsTitleSize = Math.round(24 * scaleFactor);
-      ctx.font = `bold ${controlsTitleSize}px "Press Start 2P", monospace`;
-      ctx.fillText('CONTROLS', canvasSize.width / 2, canvasSize.height / 2 - (120 * scaleFactor));
-
-      const controlsTextSize = Math.round(16 * scaleFactor);
-      ctx.font = `${controlsTextSize}px "Press Start 2P", monospace`;
-      const controlsY = canvasSize.height / 2 - (80 * scaleFactor);
-      const controlsLineHeight = 30 * scaleFactor;
-
-      // Player controls
-      ctx.textAlign = 'left';
-      const controlsX = canvasSize.width / 2 - (300 * scaleFactor);
-      ctx.fillText('PLAYER 1 (LEFT): W/S KEYS', controlsX, controlsY);
-      ctx.fillText('PLAYER 2 (RIGHT): ↑/↓ KEYS OR MOUSE/TOUCH', controlsX, controlsY + controlsLineHeight);
-      ctx.fillText('PLAYER 3 (TOP): A/D KEYS', controlsX, controlsY + (controlsLineHeight * 2));
-      ctx.fillText('PLAYER 4 (BOTTOM): ←/→ KEYS', controlsX, controlsY + (controlsLineHeight * 3));
-
-      // Options
-      ctx.fillText('OPTIONS:', controlsX, controlsY + (controlsLineHeight * 4.67));
-      ctx.fillText('C - TOGGLE CRT EFFECT', controlsX, controlsY + (controlsLineHeight * 5.67));
-      ctx.fillText('M - TOGGLE MUSIC', controlsX, controlsY + (controlsLineHeight * 6.67));
-      ctx.fillText('F - TOGGLE FULLSCREEN', controlsX, controlsY + (controlsLineHeight * 7.67));
-
-      // Start instructions with blinking effect
-      const startPromptSize = Math.round(20 * scaleFactor);
-      ctx.font = `bold ${startPromptSize}px "Press Start 2P", monospace`;
-      ctx.textAlign = 'center';
-
-      // Create blinking effect - visible for 0.8s, invisible for 0.4s (1.2s cycle)
-      const blinkCycle = (Date.now() % 1200) / 1200; // 0 to 1
-      const isVisible = blinkCycle < 0.67; // Visible for 67% of the cycle
-
-      if (isVisible) {
-        // Use a bright attention-grabbing color - cyan from the palette
-        ctx.fillStyle = '#00f5ff'; // Cyan color for visibility
-        ctx.shadowColor = '#00f5ff';
-        ctx.fillText('PRESS ANY KEY TO START', canvasSize.width / 2, canvasSize.height / 2 + (260 * scaleFactor));
-      }
-
-      // Reset color back to normal for other elements
-      ctx.fillStyle = currentColors.foreground;
-      ctx.shadowColor = currentColors.foreground;
-
-      // Footer with CRT status
-      const footerSize = Math.round(14 * scaleFactor);
-      ctx.font = `${footerSize}px "Press Start 2P", monospace`;
-      ctx.fillText(`CRT EFFECT: ${crtEffect ? 'ON' : 'OFF'}`, canvasSize.width / 2, canvasSize.height / 2 + (200 * scaleFactor));
-      ctx.shadowBlur = 0;
-
-      return; // Don't render game elements when showing start screen
-    }
-
-    // 📐 Dynamic playfield scaling transformation
-    ctx.save(); // Save canvas state before transformation
-
-    // Calculate game area centering
-    const gameAreaSize = Math.min(canvasSize.width, canvasSize.height);
-    const xOffset = (canvasSize.width - gameAreaSize) / 2;
-    const yOffset = (canvasSize.height - gameAreaSize) / 2;
-
-    // Apply transformation once: translate and scale to fit the canvas
-    ctx.save();
-    ctx.translate(xOffset, yOffset);
-    ctx.scale(scale, scale);
-
-    // Apply dynamic playfield scaling transformation ONLY for dynamic_playfield pickup
-    const hasDynamicPlayfieldEffect = gameState.activeEffects?.some(effect => effect.type === 'dynamic_playfield') || false;
-    const playfieldScale = gameState.playfieldScale || 1.0;
-
-    if (hasDynamicPlayfieldEffect && playfieldScale !== 1.0) {
-      // Transform from center of GAME AREA for symmetric scaling
-      const centerX = gameAreaSize / 2;
-      const centerY = gameAreaSize / 2;
-
-      ctx.translate(centerX, centerY); // Move origin to center
-      ctx.scale(playfieldScale, playfieldScale); // Apply scale
-      ctx.translate(-centerX, -centerY); // Move origin back
-    }
-
-    // Draw playfield borders at the edge of the canvas with music-reactive glow
-    const musicData = musicDataRef.current;
-
-    // Ensure we always have some glow even if music data is not available
-    const baseGlow = 8; // Minimum glow even without music
-    const musicVolume = Math.max(0.2, musicData.volume); // Use at least 20% volume for visibility
-
-    // Music data logging moved to GlobalAmbientMusic.tsx for better debugging
-
-    // Disharmonic RGB bleed effect active in CRT shader
-
-    // DISABLED - Border drawing removed for cleaner bezel reflections
-    // Check if Great Wall is active and draw individual borders with color highlight
-    if (false && gameState.ball.hasGreatWall && gameState.ball.greatWallSide) {
-      const protectedSide = gameState.ball.greatWallSide;
-
-      // Electric pulsing effect - use time for animation
-      const pulseTime = Date.now() / 200; // Faster pulse
-      const pulseIntensity = 0.5 + Math.sin(pulseTime) * 0.5; // 0 to 1
-      const glowIntensity = 10 + pulseIntensity * 20; // 10-30px blur (reduced from 20-60)
-
-      // Electric blue color with pulsing opacity
-      const electricBlue = `rgba(0, 204, 255, ${0.7 + pulseIntensity * 0.3})`;
-
-      ctx.setLineDash([]); // Solid lines for borders
-
-      // Draw borders with centered stroke at BORDER_THICKNESS/2 from edges
-      // Music-reactive glow for non-protected sides
-      const musicGlow = baseGlow + musicVolume * 12; // 8-20px based on music
-
-      // Left border
-      ctx.strokeStyle = protectedSide === 'left' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'left' ? glowIntensity : musicGlow;
-      ctx.shadowColor = protectedSide === 'left' ? electricBlue : currentColors.foreground;
-      ctx.lineWidth = protectedSide === 'left' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
-      ctx.beginPath();
-      ctx.moveTo(BORDER_THICKNESS/2, BORDER_THICKNESS/2);
-      ctx.lineTo(BORDER_THICKNESS/2, gameAreaSize - BORDER_THICKNESS/2);
-      ctx.stroke();
-
-      // Right border
-      ctx.strokeStyle = protectedSide === 'right' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'right' ? glowIntensity : musicGlow;
-      ctx.shadowColor = protectedSide === 'right' ? electricBlue : currentColors.foreground;
-      ctx.lineWidth = protectedSide === 'right' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
-      ctx.beginPath();
-      ctx.moveTo(gameAreaSize - BORDER_THICKNESS/2, BORDER_THICKNESS/2);
-      ctx.lineTo(gameAreaSize - BORDER_THICKNESS/2, gameAreaSize - BORDER_THICKNESS/2);
-      ctx.stroke();
-
-      // Top border
-      ctx.strokeStyle = protectedSide === 'top' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'top' ? glowIntensity : musicGlow;
-      ctx.shadowColor = protectedSide === 'top' ? electricBlue : currentColors.foreground;
-      ctx.lineWidth = protectedSide === 'top' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
-      ctx.beginPath();
-      ctx.moveTo(BORDER_THICKNESS/2, BORDER_THICKNESS/2);
-      ctx.lineTo(gameAreaSize - BORDER_THICKNESS/2, BORDER_THICKNESS/2);
-      ctx.stroke();
-
-      // Bottom border
-      ctx.strokeStyle = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
-      ctx.shadowBlur = protectedSide === 'bottom' ? glowIntensity : musicGlow;
-      ctx.shadowColor = protectedSide === 'bottom' ? electricBlue : currentColors.foreground;
-      ctx.lineWidth = protectedSide === 'bottom' ? (4 + pulseIntensity * 4) : BORDER_THICKNESS;
-      ctx.beginPath();
-      ctx.moveTo(BORDER_THICKNESS/2, gameAreaSize - BORDER_THICKNESS/2);
-      ctx.lineTo(gameAreaSize - BORDER_THICKNESS/2, gameAreaSize - BORDER_THICKNESS/2);
-      ctx.stroke();
-    } else {
-      // Normal border drawing with dramatic music-reactive inner glow
-      ctx.setLineDash([]);
-
-      // Music-reactive glow intensity (use musicVolume which has minimum baseline)
-      const glowIntensity = musicVolume; // 0.2 minimum, 1 at peak
-
-      // Main border with dramatic inner glow
-      const mainGlowSize = 15 + glowIntensity * 25; // 15-40px based on music (much more visible)
-
-      ctx.strokeStyle = currentColors.foreground;
-      ctx.lineWidth = BORDER_THICKNESS;
-      ctx.shadowBlur = mainGlowSize;
-      ctx.shadowColor = currentColors.foreground;
-      // Draw border centered at BORDER_THICKNESS/2 from edges so full width is visible
-      ctx.strokeRect(BASE_BORDER_THICKNESS/2, BASE_BORDER_THICKNESS/2, 800 - BASE_BORDER_THICKNESS, 800 - BASE_BORDER_THICKNESS);
-    }
-
-    // Clear shadow for other elements
-    ctx.shadowBlur = 0;
-
-
-    // Draw comet trails first (behind everything) - enhanced in spectator mode
-    const currentTime = Date.now();
-
-    // Draw ball trail
-    if (gameState.trails?.ball?.length > 1) {
-      for (let i = 0; i < gameState.trails.ball.length - 1; i++) {
-        const point = gameState.trails.ball[i];
-        const age = currentTime - point.timestamp;
-        const alpha = Math.max(0, 1 - (age / 750)); // Fade over 750ms (half length)
-
-        if (alpha > 0) {
-          // Ball trail visibility - barely visible
-          const ballTrailOpacity = 0.02;
-          ctx.globalAlpha = alpha * ballTrailOpacity;
-          ctx.fillStyle = currentColors.foreground;
-
-          // Keep full thickness for longer, then gradually thin out
-          const thicknessFactor = alpha > 0.4 ? 1.0 : (0.3 + alpha * 0.7);
-          const trailSize = gameState.ball.size * thicknessFactor;
-          ctx.fillRect(
-            point.x - trailSize / 2,
-            point.y - trailSize / 2,
-            trailSize,
-            trailSize
-          );
-        }
-      }
-    }
-
-    // Draw paddle trails
-    const renderVerticalPaddleTrail = (trail: TrailPoint[], paddleX: number, color: string) => {
-      if (trail.length > 1) {
-        const maxAge = 200; // Match filtering time - quick fade
-        for (let i = 0; i < trail.length - 1; i++) {
-          const point = trail[i];
-          const age = currentTime - point.timestamp;
-          // Skip very recent points (last 50ms) to avoid drawing on top of the paddle itself
-          if (age < 50) continue;
-          const alpha = Math.max(0, 1 - (age / maxAge)); // Fade over 200ms to match trail retention
-
-
-          if (alpha > 0 && point.width && point.height && point.width > 0 && point.height > 0) {
-            // Paddle trail visibility - subtle but visible
-            const paddleTrailOpacity = 0.04;
-            ctx.globalAlpha = alpha * paddleTrailOpacity;
-            ctx.fillStyle = color;
-
-            // Keep same width as paddle throughout the trail (no thinning)
-            ctx.fillRect(
-              paddleX - point.width / 2,
-              point.y - point.height / 2,
-              point.width,
-              point.height
-            );
-          }
-        }
-      }
-    };
-
-    const renderHorizontalPaddleTrail = (trail: TrailPoint[], paddleY: number, color: string) => {
-      if (trail.length > 1) {
-        const maxAge = 200; // Match filtering time - quick fade
-        for (let i = 0; i < trail.length - 1; i++) {
-          const point = trail[i];
-          const age = currentTime - point.timestamp;
-          // Skip very recent points (last 50ms) to avoid drawing on top of the paddle itself
-          if (age < 50) continue;
-          const alpha = Math.max(0, 1 - (age / maxAge)); // Fade over 200ms to match trail retention
-
-          if (alpha > 0 && point.width && point.height && point.width > 0 && point.height > 0) {
-            // Paddle trail visibility - subtle but visible
-            const paddleTrailOpacity = 0.04;
-            ctx.globalAlpha = alpha * paddleTrailOpacity;
-            ctx.fillStyle = color;
-
-            // Keep same width as paddle throughout the trail (no thinning)
-            ctx.fillRect(
-              point.x - point.width / 2,
-              paddleY - point.height / 2,
-              point.width,
-              point.height
-            );
-          }
-        }
-      }
-    };
-
-    // Draw all paddles - simple and clean
-    // Get player side and color FIRST before using them
-    const currentPlayerSide = multiplayerStateRef.current?.playerSide;
-    const humanPlayerColor = getHumanPlayerColor(gameState.colorIndex);
-
-    // Determine paddle colors for trails (must be after currentPlayerSide and humanPlayerColor)
-    const getColorForSide = (side: string) => {
-      const isHumanControlled = (gameState.gameMode === 'multiplayer' && currentPlayerSide === side) ||
-                                (gameState.gameMode === 'player' && side === 'right');
-      return isHumanControlled ? humanPlayerColor : currentColors.foreground;
-    };
-
-    // Helper function to draw a paddle
-    const drawPaddle = (paddle: any, side: string, x: number, y: number) => {
-      // Don't draw paddles on start screen or connection screens
-      if (gameState.showStartScreen) {
-        return;
-      }
-
-      // Use fallback dimensions if paddle dimensions are invalid (multiplayer server may not send them)
-      const width = paddle.width || (side === 'left' || side === 'right' ? PADDLE_THICKNESS : PADDLE_LENGTH);
-      const height = paddle.height || (side === 'left' || side === 'right' ? PADDLE_LENGTH : PADDLE_THICKNESS);
-
-      // Detect size changes and start animation for this specific paddle
-      const prevSize = previousPaddleSizesRef.current[side as 'left' | 'right' | 'top' | 'bottom'];
-      const sizeChanged = prevSize.height !== height || prevSize.width !== width;
-
-      if (sizeChanged) {
-        console.log(`[PADDLE ANIM] ${side} paddle size changed: ${prevSize.height}x${prevSize.width} -> ${height}x${width}`);
-        const anim = paddleSizeAnimationsRef.current[side as 'left' | 'right' | 'top' | 'bottom'];
-        if (!anim || anim.startTime < Date.now() - 500) {
-          // Start new animation for this paddle
-          paddleSizeAnimationsRef.current[side as 'left' | 'right' | 'top' | 'bottom'] = {
-            startTime: Date.now(),
-            startSize: { ...prevSize },
-            targetSize: { height, width },
-            startPosition: { x, y },
-            duration: 400 // 400ms bouncy animation
-          };
-          console.log(`[PADDLE ANIM] Started animation for ${side} paddle`);
-        }
-        // Update previous size
-        previousPaddleSizesRef.current[side as 'left' | 'right' | 'top' | 'bottom'] = { height, width };
-      }
-
-      // Calculate animation progress for this specific paddle
-      let animatedWidth = width;
-      let animatedHeight = height;
-      const anim = paddleSizeAnimationsRef.current[side as 'left' | 'right' | 'top' | 'bottom'];
-
-      if (anim && anim.startTime > 0) {
-        const elapsed = Date.now() - anim.startTime;
-        const progress = Math.min(elapsed / anim.duration, 1);
-
-        if (progress < 1) {
-          // Bouncy easing with overshoot (elasticOut)
-          const eased = progress < 0.5
-            ? 0.5 * Math.pow(2 * progress, 3)
-            : 0.5 * (Math.pow(2 * progress - 2, 3) + 2);
-
-          // Add bounce overshoot
-          const bounce = Math.sin(progress * Math.PI * 1.5) * 0.15 * (1 - progress);
-          const finalProgress = eased + bounce;
-
-          // Interpolate size
-          animatedWidth = anim.startSize.width + (anim.targetSize.width - anim.startSize.width) * finalProgress;
-          animatedHeight = anim.startSize.height + (anim.targetSize.height - anim.startSize.height) * finalProgress;
-        } else {
-          // Animation complete
-          paddleSizeAnimationsRef.current[side as 'left' | 'right' | 'top' | 'bottom'] = null;
-        }
-      }
-
-      const isHumanControlled = (gameState.gameMode === 'multiplayer' && currentPlayerSide === side) ||
-                                (gameState.gameMode === 'player' && side === 'right');
-      const paddleColor = isHumanControlled ? humanPlayerColor : currentColors.foreground;
-
-      // Calculate center point and grow from center
-      const centerX = x + width / 2;
-      const centerY = y + height / 2;
-
-      // Use animated dimensions and grow from center
-      const scaledX = centerX - animatedWidth / 2;
-      const scaledY = centerY - animatedHeight / 2;
-
-      // Draw music-reactive glow effect
-      ctx.shadowBlur = 3 + musicData.volume * 7; // Subtle glow 3-10px
-      ctx.shadowColor = paddleColor;
-
-      ctx.globalAlpha = 1; // Ensure paddles are fully opaque
-      ctx.fillStyle = paddleColor;
-      // Round to whole pixels to prevent sub-pixel anti-aliasing flicker
-      ctx.fillRect(Math.round(scaledX), Math.round(scaledY), Math.round(animatedWidth), Math.round(animatedHeight));
-
-      // Reset shadow
-      ctx.shadowBlur = 0;
-    };
-
-    // Draw all four paddles FIRST
-    drawPaddle(gameState.paddles.left, 'left', gameState.paddles.left.x, gameState.paddles.left.y);
-    drawPaddle(gameState.paddles.right, 'right', gameState.paddles.right.x, gameState.paddles.right.y);
-    if (gameState.paddles.top) {
-      drawPaddle(gameState.paddles.top, 'top', gameState.paddles.top.x, gameState.paddles.top.y);
-    }
-    if (gameState.paddles.bottom) {
-      drawPaddle(gameState.paddles.bottom, 'bottom', gameState.paddles.bottom.x, gameState.paddles.bottom.y);
-    }
-
-    // Render paddle trails AFTER paddles (so they appear on top)
-    // Render left and right paddle trails (vertical paddles) - use actual paddle center positions
-    if (gameState.trails?.leftPaddle) {
-      renderVerticalPaddleTrail(gameState.trails.leftPaddle, gameState.paddles.left.x + gameState.paddles.left.width / 2, getColorForSide('left'));
-    }
-    if (gameState.trails?.rightPaddle) {
-      renderVerticalPaddleTrail(gameState.trails.rightPaddle, gameState.paddles.right.x + gameState.paddles.right.width / 2, getColorForSide('right'));
-    }
-
-    // Render top and bottom paddle trails (horizontal paddles) - use actual paddle center positions
-    if (gameState.paddles.top && gameState.trails?.topPaddle) {
-      renderHorizontalPaddleTrail(gameState.trails.topPaddle, gameState.paddles.top.y + gameState.paddles.top.height / 2, getColorForSide('top'));
-    }
-    if (gameState.paddles.bottom && gameState.trails?.bottomPaddle) {
-      renderHorizontalPaddleTrail(gameState.trails.bottomPaddle, gameState.paddles.bottom.y + gameState.paddles.bottom.height / 2, getColorForSide('bottom'));
-    }
-
-    // Reset alpha for normal rendering
-    ctx.globalAlpha = 1;
-
-    // Draw ball - using dynamic color (hide during pause)
-    if (!gameState.isPaused) {
-      // Check if ball should be invisible
-      const invisibleEffect = gameState.activeEffects?.find(e => e.type === 'invisible_ball');
-      if (!invisibleEffect) {
-        // 🌀 Check if ball is curved (spinning)
-        const isCurved = gameState.ball.spin && Math.abs(gameState.ball.spin) > 2.5;
-
-        // Draw music-reactive glow effect for ball
-        ctx.shadowBlur = 3 + musicData.volume * 7; // Subtle glow 3-10px
-        ctx.shadowColor = isCurved ? '#ff0000' : currentColors.foreground;
-
-        ctx.fillStyle = isCurved ? '#ff0000' : currentColors.foreground; // 🌀 Red when curved
-        ctx.fillRect(gameState.ball.x, gameState.ball.y, gameState.ball.size, gameState.ball.size);
-
-        // Reset shadow
-        ctx.shadowBlur = 0;
-      } else {
-        // Draw faint outline for invisible ball
-        ctx.globalAlpha = 0.2;
-        ctx.strokeStyle = currentColors.foreground;
-        ctx.lineWidth = 1 * scaleFactor;
-        ctx.strokeRect(gameState.ball.x, gameState.ball.y, gameState.ball.size, gameState.ball.size);
-        ctx.globalAlpha = 1;
-      }
-
-
-      // [TARGET] Draw Super Striker aiming line
-      if (gameState.ball.isAiming) {
-        const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
-        const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
-        const aimTargetX = gameState.ball.aimTargetX || ballCenterX + (100 * scaleFactor);
-        const aimTargetY = gameState.ball.aimTargetY || ballCenterY;
-
-        // Draw aiming line with pulsing effect
-        const aimElapsed = Date.now() - gameState.ball.aimStartTime;
-        const pulse = Math.sin(aimElapsed * 0.01) * 0.3 + 0.7; // Pulsing alpha
-
-        ctx.globalAlpha = pulse;
-        ctx.strokeStyle = '#ff4500'; // Orange aim line
-        ctx.lineWidth = 3 * scaleFactor;
-        const dashPattern = [10 * scaleFactor, 5 * scaleFactor];
-        ctx.setLineDash(dashPattern); // Dashed line
-        ctx.beginPath();
-        ctx.moveTo(ballCenterX, ballCenterY);
-        ctx.lineTo(aimTargetX, aimTargetY);
-        ctx.stroke();
-        ctx.setLineDash([]); // Reset dash
-
-        // Draw target crosshair (vertical line only)
-        ctx.strokeStyle = '#ff4500';
-        ctx.lineWidth = 2 * scaleFactor;
-        ctx.beginPath();
-        ctx.moveTo(aimTargetX, aimTargetY - (10 * scaleFactor));
-        ctx.lineTo(aimTargetX, aimTargetY + (10 * scaleFactor));
-        ctx.stroke();
-
-        ctx.globalAlpha = 1; // Reset alpha
-      }
-    }
-
-    // 🟠 Draw extra balls (for multi-ball effect)
-    if (!gameState.isPaused) {
-      (gameState.extraBalls || []).forEach((extraBall, index) => {
-        if (index === 0 && gameState.extraBalls.length > 0) {
-          console.log(`[MULTIBALL] Rendering ${gameState.extraBalls.length} extra balls`);
-        }
-        ctx.fillStyle = currentColors.foreground;
-        ctx.fillRect(extraBall.x, extraBall.y, extraBall.size, extraBall.size);
-      });
-    }
-
-    // 🪞 Draw mirror balls (for mirror mode effect)
-    if (!gameState.isPaused && gameState.ball.isMirror && gameState.ball.mirrorBalls && gameState.ball.mirrorBalls.length > 0) {
-      gameState.ball.mirrorBalls.forEach((mirrorBall: any) => {
-        // Draw mirror ball with semi-transparent effect
-        ctx.globalAlpha = 0.7;
-        ctx.fillStyle = currentColors.foreground;
-        ctx.fillRect(mirrorBall.x, mirrorBall.y, gameState.ball.size, gameState.ball.size);
-
-        // Draw subtle glow to distinguish from main ball
-        ctx.shadowColor = currentColors.foreground;
-        ctx.shadowBlur = 8;
-        ctx.fillRect(mirrorBall.x, mirrorBall.y, gameState.ball.size, gameState.ball.size);
-        ctx.shadowBlur = 0;
-        ctx.globalAlpha = 1.0;
-      });
-    }
-
-    // 🧱 Draw Arkanoid bricks
-    if (!gameState.isPaused && gameState.arkanoidActive && gameState.arkanoidBricks && Array.isArray(gameState.arkanoidBricks)) {
-      gameState.arkanoidBricks.forEach((brick: any) => {
-        if (brick && typeof brick.x === 'number' && typeof brick.y === 'number' &&
-            typeof brick.width === 'number' && typeof brick.height === 'number') {
-          // Draw brick with color
-          ctx.fillStyle = brick.color || '#ff4500';
-          ctx.fillRect(brick.x, brick.y, brick.width, brick.height);
-
-          // Draw brick border/outline
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1 * scaleFactor;
-          ctx.strokeRect(brick.x, brick.y, brick.width, brick.height);
-        }
-      });
-    }
-
-    // 🔫 Draw machine gun balls
-    if (!gameState.isPaused && gameState.machineGunBalls && Array.isArray(gameState.machineGunBalls)) {
-      const mgBalls = gameState.machineGunBalls;
-      if (mgBalls.length > 0) {
-        mgBalls.forEach((mgBall: any, index: number) => {
-          if (mgBall && typeof mgBall.x === 'number' && typeof mgBall.y === 'number' && typeof mgBall.size === 'number') {
-            ctx.fillStyle = '#ff8800'; // Orange machine gun balls
-            ctx.fillRect(mgBall.x, mgBall.y, mgBall.size, mgBall.size);
-          }
-        });
-      }
-    }
-
-
-    // 🌪️ Draw physics forces (attractors and repulsors) with enhanced animations
-    if (!gameState.isPaused) {
-      (gameState.physicsForces || []).forEach(force => {
-        const centerX = force.x;
-        const centerY = force.y;
-        const age = currentTime - force.spawnTime;
-        const lifeProgress = age / force.lifespan;
-
-        // Pulsing animation with more complex waves
-        const pulse = Math.sin(force.animationPhase) * 0.4 + 1;
-        const secondaryPulse = Math.cos(force.animationPhase * 1.3) * 0.2 + 1;
-        const size = Math.max(1 * scaleFactor, 25 * scaleFactor * pulse * secondaryPulse); // Ensure positive size
-
-        // Fade out near end of life with more dramatic effect
-        const alpha = lifeProgress > 0.7 ? 1 - Math.pow((lifeProgress - 0.7) / 0.3, 2) : 1;
-
-        // Spawn animation - grow from nothing
-        const spawnProgress = Math.min(age / 500, 1); // 500ms spawn animation
-        const spawnScale = Math.sin(spawnProgress * Math.PI * 0.5);
-
-        ctx.globalAlpha = alpha * spawnScale;
-
-        if (force.type === 'attractor') {
-          // Attractor: Inward spiraling energy with cyan color
-          ctx.strokeStyle = force.color;
-          ctx.fillStyle = force.color;
-          ctx.lineWidth = 3 * scaleFactor;
-
-          // Draw multiple concentric rotating rings
-          for (let ring = 0; ring < 4; ring++) {
-            const ringRadius = (size * 0.3) + ring * (12 * scaleFactor);
-            const rotation = force.animationPhase * (ring + 1) * 0.8;
-
-            ctx.beginPath();
-            for (let i = 0; i < 6; i++) {
-              const angle = (i / 6) * Math.PI * 2 + rotation;
-              const x = centerX + Math.cos(angle) * ringRadius;
-              const y = centerY + Math.sin(angle) * ringRadius;
-
-              if (i === 0) {
-                ctx.moveTo(x, y);
-              } else {
-                ctx.lineTo(x, y);
-              }
-            }
-            ctx.closePath();
-            ctx.stroke();
-          }
-
-          // Central glowing core with particles
-          ctx.globalAlpha = alpha * spawnScale * 0.8;
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, size * 0.2, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Particle swirl effect
-          ctx.globalAlpha = alpha * spawnScale * 0.6;
-          for (let p = 0; p < 8; p++) {
-            const particleAngle = (p / 8) * Math.PI * 2 + force.animationPhase * 2;
-            const particleRadius = size * 0.6 + Math.sin(force.animationPhase * 3 + p) * (8 * scaleFactor);
-            const px = centerX + Math.cos(particleAngle) * particleRadius;
-            const py = centerY + Math.sin(particleAngle) * particleRadius;
-
-            ctx.beginPath();
-            ctx.arc(px, py, 2 * scaleFactor, 0, Math.PI * 2);
-            ctx.fill();
-          }
-
-        } else {
-          // Repulsor: Outward explosive energy with pink/red color
-          ctx.strokeStyle = force.color;
-          ctx.fillStyle = force.color;
-          ctx.lineWidth = 3 * scaleFactor;
-
-          // Draw explosive radiating spikes
-          for (let spike = 0; spike < 16; spike++) {
-            const angle = (spike / 16) * Math.PI * 2 + force.animationPhase;
-            const innerRadius = size * 0.2;
-            const outerRadius = size * 0.8 + Math.sin(force.animationPhase * 3 + spike * 0.5) * (15 * scaleFactor);
-
-            const innerX = centerX + Math.cos(angle) * innerRadius;
-            const innerY = centerY + Math.sin(angle) * innerRadius;
-            const outerX = centerX + Math.cos(angle) * outerRadius;
-            const outerY = centerY + Math.sin(angle) * outerRadius;
-
-            ctx.beginPath();
-            ctx.moveTo(innerX, innerY);
-            ctx.lineTo(outerX, outerY);
-            ctx.stroke();
-          }
-
-          // Central explosive diamond with energy
-          ctx.globalAlpha = alpha * spawnScale * 0.9;
-          ctx.beginPath();
-          const diamondSize = size * 0.3;
-          ctx.moveTo(centerX, centerY - diamondSize);
-          ctx.lineTo(centerX + diamondSize, centerY);
-          ctx.lineTo(centerX, centerY + diamondSize);
-          ctx.lineTo(centerX - diamondSize, centerY);
-          ctx.closePath();
-          ctx.fill();
-
-          // Energy burst particles
-          ctx.globalAlpha = alpha * spawnScale * 0.5;
-          for (let p = 0; p < 12; p++) {
-            const burstAngle = (p / 12) * Math.PI * 2 + force.animationPhase * -1.5;
-            const burstRadius = size * 0.9 + Math.cos(force.animationPhase * 2 + p * 0.7) * (10 * scaleFactor);
-            const bx = centerX + Math.cos(burstAngle) * burstRadius;
-            const by = centerY + Math.sin(burstAngle) * burstRadius;
-
-            ctx.beginPath();
-            ctx.arc(bx, by, 3 * scaleFactor, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
-
-        // Draw influence radius with dynamic opacity
-        ctx.globalAlpha = alpha * spawnScale * 0.15 * (pulse * 0.5 + 0.5);
-        ctx.strokeStyle = force.color;
-        ctx.lineWidth = 2 * scaleFactor;
-        const influenceDash = [5 * scaleFactor, 5 * scaleFactor];
-        ctx.setLineDash(influenceDash);
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, force.radius, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        ctx.globalAlpha = 1;
-      });
-    }
-
-    // Draw labyrinth maze walls if active
-    if (gameState.labyrinthActive && gameState.mazeWalls) {
-      ctx.fillStyle = '#ffffff';
-      ctx.globalAlpha = 0.8;
-
-      gameState.mazeWalls.forEach((wall: any) => {
-        ctx.fillRect(wall.x, wall.y, wall.width, wall.height);
-      });
-
-      ctx.globalAlpha = 1;
-    }
-
-    // Draw labyrinth coins if active
-    if (gameState.labyrinthActive && gameState.labyrinthCoins) {
-      const time = cachedTimeRef.current * 0.005;
-      const pulseIndex = Math.floor(time % 60);
-      const pulse = PRECALC_CONSTANTS.pulseValues[pulseIndex];
-      const now = Date.now();
-
-      gameState.labyrinthCoins.forEach((coin: any) => {
-        ctx.save();
-
-        const centerX = coin.x + 8;
-        const centerY = coin.y + 8;
-
-        if (coin.collected && coin.collectedAt) {
-          // Spin animation: 3 full rotations over 800ms with ease-out
-          const elapsed = now - coin.collectedAt;
-          const duration = 800; // 800ms total animation
-          const maxRotations = 3 * Math.PI * 2; // 3 full spins
-
-          if (elapsed < duration) {
-            // Ease-out cubic curve: 1 - (1-t)^3
-            const t = elapsed / duration;
-            const easeOut = 1 - Math.pow(1 - t, 3);
-            const rotation = easeOut * maxRotations;
-
-            // Calculate scale for 3D effect (cos gives width, simulating rotation around Y-axis)
-            const scaleX = Math.abs(Math.cos(rotation));
-
-            // Fade out during last 200ms
-            const fadeStart = duration - 200;
-            const alpha = elapsed > fadeStart ? 1 - ((elapsed - fadeStart) / 200) : 1;
-
-            ctx.globalAlpha = alpha;
-            ctx.translate(centerX, centerY);
-            ctx.scale(scaleX, 1);
-            ctx.translate(-centerX, -centerY);
-
-            // Draw coin
-            ctx.fillStyle = '#ffd700';
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Draw shine (only visible when facing forward)
-            if (scaleX > 0.3) {
-              ctx.fillStyle = '#ffff00';
-              ctx.beginPath();
-              ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
-              ctx.fill();
-            }
-          }
-          // Don't render after animation completes
-        } else if (!coin.collected) {
-          // Normal static coin rendering
-          ctx.globalAlpha = pulse;
-
-          // Draw coin as a circle
-          ctx.fillStyle = '#ffd700'; // Gold color
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Draw inner shine
-          ctx.fillStyle = '#ffff00';
-          ctx.beginPath();
-          ctx.arc(centerX, centerY, 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
-
-        ctx.restore();
-      });
-    }
-
-    // Draw black holes if active
-    if (gameState.blackHoles && gameState.blackHoles.length > 0) {
-      const time = cachedTimeRef.current * 0.01;
-
-      gameState.blackHoles.forEach((hole: any) => {
-        ctx.save();
-
-        // Draw event horizon (outer dark circle with pulsing)
-        const pulse = 0.9 + Math.sin(time * 2) * 0.1;
-        const gradient = ctx.createRadialGradient(hole.x, hole.y, 0, hole.x, hole.y, hole.radius * pulse);
-        gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-        gradient.addColorStop(0.6, 'rgba(30, 0, 60, 0.8)');
-        gradient.addColorStop(0.85, 'rgba(138, 43, 226, 0.4)');
-        gradient.addColorStop(1, 'rgba(138, 43, 226, 0)');
-
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(hole.x, hole.y, hole.radius * pulse, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Draw accretion disk (swirling rings)
-        ctx.globalAlpha = 0.6;
-        for (let i = 0; i < 3; i++) {
-          const ringRadius = hole.radius * 0.7 + i * 8;
-          const ringOffset = (time * (i + 1) * 0.5) % (Math.PI * 2);
-
-          ctx.strokeStyle = `rgba(138, 43, 226, ${0.5 - i * 0.15})`;
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-
-          // Draw spiral segments
-          for (let angle = 0; angle < Math.PI * 2; angle += 0.3) {
-            const totalAngle = angle + ringOffset;
-            const x = hole.x + Math.cos(totalAngle) * ringRadius;
-            const y = hole.y + Math.sin(totalAngle) * ringRadius;
-
-            if (angle === 0) {
-              ctx.moveTo(x, y);
-            } else {
-              ctx.lineTo(x, y);
-            }
-          }
-          ctx.stroke();
-        }
-
-        // Draw singularity (center black core)
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = '#000000';
-        ctx.beginPath();
-        ctx.arc(hole.x, hole.y, hole.radius * 0.2, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
-      });
-    }
-
-    // Draw pickups if they exist
-    gameState.pickups?.forEach((pickup) => {
-      const time = cachedTimeRef.current * 0.005;
-      // [ROCKET] OPTIMIZED pulse using precalculated values
-      const pulseIndex = Math.floor(time % 60);
-      const pulse = PRECALC_CONSTANTS.pulseValues[pulseIndex];
-
-      ctx.save();
-
-      // Add disharmonic shake effect - increased multiplier for more visible shake
-      let shakeX = (Math.random() - 0.5) * musicData.disharmonic * 25;
-      let shakeY = (Math.random() - 0.5) * musicData.disharmonic * 25;
-
-      // Detroit mode: Enhanced shake on kick drum
-      if (gameState.detroitMode) {
-        const timeSinceStart = Date.now() - (gameState.detroitStartTime || 0);
-        const beatDuration = 461; // 130 BPM
-        const beatPhase = (timeSinceStart % beatDuration) / beatDuration;
-        const step16th = Math.floor(timeSinceStart / (beatDuration / 4)) % 16;
-
-        // Kick drum shake (every 4 steps)
-        if (step16th % 4 === 0 && beatPhase < 0.1) {
-          const kickShakeIntensity = (1 - beatPhase / 0.1) * 15;
-          shakeX += (Math.random() - 0.5) * kickShakeIntensity;
-          shakeY += (Math.random() - 0.5) * kickShakeIntensity;
-        }
-      }
-
-      ctx.translate(shakeX, shakeY);
-
-      ctx.globalAlpha = pulse;
-
-      // Draw pixelated pattern with NO gaps between pixels
-      const drawPixelatedPattern = (pattern: string, x: number, y: number, size: number, color: string) => {
-        // Use 8x8 grid for patterns with 2x2 pixel size (16x16 total) - allows for more detail
-        const gridSize = 8;
-        const pixelSize = 2; // 2x2 pixel size for more detail
-
-        // Round coordinates to prevent sub-pixel rendering gaps
-        const roundedX = Math.round(x);
-        const roundedY = Math.round(y);
-
-        ctx.fillStyle = color;
-
-        // [ROCKET] OPTIMIZED pattern rendering using precalculated arrays
-        const patternMap: { [key: string]: string } = {
-          'zigzag': 'lightning',
-          'waves': 'waves',
-          'circle': 'circle',
-          'dot': 'dot',
-          'spiral': 'spiral',
-          'arrow_up': 'arrow_up',
-          'arrow_down': 'arrow_down',
-          'double_arrow': 'double_arrow',
-          'fence': 'stripes',
-          'plus': 'plus',
-          'cross': 'cross',
-          'stripes': 'stripes',
-          'diamond': 'diamond',
-          'star': 'star',
-          'gravity': 'gravity',
-          'target': 'target',
-          'sticky': 'sticky',
-          'bullets': 'bullets',
-          'expand': 'expand',
-          'swap': 'swap',
-          'wall': 'wall',
-          'clock': 'clock',
-          'portal': 'portal',
-          'mirror': 'mirror',
-          'quantum': 'quantum',
-          'vortex': 'vortex',
-          'lightning': 'lightning',
-          'fade': 'fade',
-          'mine': 'mine',
-          'shuffle': 'shuffle',
-          'detroit': 'detroit',
-          'pacman': 'pacman',
-          'banana': 'banana',
-          'bounce': 'bounce',
-          'wobble': 'wobble',
-          'magnet': 'magnet',
-          'balloon': 'balloon',
-          'shake': 'shake',
-          'confetti': 'confetti',
-          'hypno': 'hypno',
-          'conga': 'conga',
-          'bricks': 'bricks',
-          'maze': 'labyrinth'
-        };
-
-        const precalcPattern = PRECALC_PICKUP_PATTERNS[patternMap[pattern] as keyof typeof PRECALC_PICKUP_PATTERNS];
-        if (precalcPattern) {
-          // [ROCKET] INSTANT rendering using precalculated 2D boolean array (no nested calculations)
-          // Scale 4x4 pattern to 8x8 by doubling each pixel
-          for (let row = 0; row < 4; row++) {
-            for (let col = 0; col < 4; col++) {
-              if (precalcPattern[row][col]) {
-                // Draw 2x2 block for each original pixel (scaling from 4x4 to 8x8)
-                ctx.fillRect(roundedX + col * 2 * pixelSize, roundedY + row * 2 * pixelSize, pixelSize * 2, pixelSize * 2);
-              }
-            }
-          }
-          return; // Skip the old switch logic
-        }
-
-        // Fallback to old logic for unknown patterns
-        switch (pattern) {
-          case 'zigzag': // Speed up - lightning bolt
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                if ((row < 4 && col >= 6 && col <= 8) ||
-                    (row >= 4 && row < 8 && col >= 3 && col <= 5) ||
-                    (row >= 8 && col >= 6 && col <= 8)) {
-                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                }
-              }
-            }
-            break;
-
-          case 'waves': // Slow down - wavy lines
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                if (row === 3 || row === 6 || row === 9) {
-                  if (Math.sin(col * 0.8) > 0) {
-                    ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                  }
-                }
-              }
-            }
-            break;
-
-          case 'circle': // Big ball - circle
-            const centerX = gridSize / 2;
-            const centerY = gridSize / 2;
-            const radius = gridSize / 3;
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                const dist = Math.sqrt((col - centerX) ** 2 + (row - centerY) ** 2);
-                if (dist <= radius && dist >= radius - 1.5) {
-                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                }
-              }
-            }
-            break;
-
-          case 'dot': // Small ball - small dot
-            const dotSize = 3;
-            const startX = Math.floor((gridSize - dotSize) / 2);
-            const startY = Math.floor((gridSize - dotSize) / 2);
-            for (let row = 0; row < dotSize; row++) {
-              for (let col = 0; col < dotSize; col++) {
-                ctx.fillRect(x + (startX + col) * pixelSize, y + (startY + row) * pixelSize, pixelSize, pixelSize);
-              }
-            }
-            break;
-
-          case 'spiral': // Drunk ball - spiral
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                const angle = Math.atan2(row - gridSize/2, col - gridSize/2);
-                const dist = Math.sqrt((col - gridSize/2) ** 2 + (row - gridSize/2) ** 2);
-                if (Math.sin(angle * 3 + dist * 0.5) > 0.5) {
-                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                }
-              }
-            }
-            break;
-
-          case 'arrow_up': // Grow paddle - up arrow
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                if ((row >= 2 && row <= 6 && col >= 5 && col <= 7) || // Stem
-                    (row >= 0 && row <= 4 && Math.abs(col - 6) <= row)) { // Arrow head
-                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                }
-              }
-            }
-            break;
-
-          case 'arrow_down': // Shrink paddle - down arrow
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                if ((row >= 2 && row <= 8 && col >= 5 && col <= 7) || // Stem
-                    (row >= 6 && row <= 10 && Math.abs(col - 6) <= (10 - row))) { // Arrow head
-                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                }
-              }
-            }
-            break;
-
-          case 'arrows': // Reverse controls - left/right arrows
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                if ((row >= 4 && row <= 6 && col >= 1 && col <= 4) || // Left arrow
-                    (row >= 3 && row <= 7 && col === 1) ||
-                    (row >= 4 && row <= 6 && col >= 8 && col <= 11) || // Right arrow
-                    (row >= 3 && row <= 7 && col === 11)) {
-                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                }
-              }
-            }
-            break;
-
-          case 'ghost': // Invisible ball - dotted outline
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                if ((row + col) % 3 === 0 &&
-                    ((row === 2 || row === gridSize - 3) && col >= 2 && col <= gridSize - 3) ||
-                    ((col === 2 || col === gridSize - 3) && row >= 2 && row <= gridSize - 3)) {
-                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                }
-              }
-            }
-            break;
-
-          case 'plus': // Multi ball - plus sign
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                if ((row >= 4 && row <= 7 && col >= 1 && col <= 10) || // Horizontal
-                    (col >= 4 && col <= 7 && row >= 1 && row <= 10)) { // Vertical
-                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                }
-              }
-            }
-            break;
-
-          case 'cross': // Freeze - X pattern
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                if (Math.abs(row - col) <= 1 || Math.abs(row - (gridSize - col - 1)) <= 1) {
-                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                }
-              }
-            }
-            break;
-
-          case 'stripes': // Super speed - diagonal stripes
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                if ((row + col) % 3 === 0) {
-                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                }
-              }
-            }
-            break;
-
-          case 'diamond': // Coin shower - diamond shape
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                const centerX = gridSize / 2;
-                const centerY = gridSize / 2;
-                const distanceFromCenter = Math.abs(row - centerY) + Math.abs(col - centerX);
-                if (distanceFromCenter >= 3 && distanceFromCenter <= 4) {
-                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                }
-              }
-            }
-            break;
-
-          case 'star': // Teleport ball - star shape
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                const centerX = gridSize / 2;
-                const centerY = gridSize / 2;
-                const dx = col - centerX;
-                const dy = row - centerY;
-
-                // Create star shape with 5 points
-                if ((Math.abs(dx) <= 1 && Math.abs(dy) <= 4) || // Vertical line
-                    (Math.abs(dy) <= 1 && Math.abs(dx) <= 4) || // Horizontal line
-                    (Math.abs(dx - dy) <= 1 && Math.abs(dx) <= 3) || // Diagonal 1
-                    (Math.abs(dx + dy) <= 1 && Math.abs(dx) <= 3)) { // Diagonal 2
-                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                }
-              }
-            }
-            break;
-
-          case 'wind': // Wind - curved lines representing wind flow
-            for (let row = 0; row < gridSize; row++) {
-              for (let col = 0; col < gridSize; col++) {
-                // Create flowing wind lines
-                if ((row === 2 || row === 5 || row === 8) && col >= 1 && col <= 10) {
-                  // Wavy horizontal lines
-                  const wave = Math.sin(col * 0.8 + row * 0.5) * 1.5;
-                  const adjustedRow = row + Math.round(wave);
-                  if (adjustedRow >= 0 && adjustedRow < gridSize) {
-                    ctx.fillRect(x + col * pixelSize, y + adjustedRow * pixelSize, pixelSize, pixelSize);
-                  }
-                }
-                // Add small particles/dots to represent wind
-                if ((col === 2 || col === 5 || col === 8 || col === 11) &&
-                    (row === 3 || row === 6 || row === 9)) {
-                  ctx.fillRect(roundedX + col * pixelSize, roundedY + row * pixelSize, pixelSize, pixelSize);
-                }
-              }
-            }
-            break;
-        }
-      };
-
-      // Draw the pixelated pattern with music-reactive glow
-      // Map pickup type to pattern from PICKUP_TYPES
-      const pickupTypeData = PICKUP_TYPES.find(p => p.type === pickup.type);
-      const pattern = pickupTypeData?.pattern || 'circle'; // Default to circle if type not found
-
-      // Add music-reactive glow to pickups
-      ctx.shadowBlur = 3 + musicData.volume * 7; // Subtle glow 3-10px
-      ctx.shadowColor = currentColors.foreground;
-
-      drawPixelatedPattern(pattern, pickup.x, pickup.y, pickup.size, currentColors.foreground);
-
-      // Clear shadow
-      ctx.shadowBlur = 0;
-
-      ctx.restore();
-    });
-
-    // Draw coins (reuse 'now' from labyrinth coins above)
-    if (gameState.coins && gameState.coins.length > 0) {
-      console.log(`[COINS] Rendering ${gameState.coins.length} coins:`, gameState.coins.slice(0, 2));
-    }
-    (gameState.coins || []).forEach((coin: any) => {
-      const time = cachedTimeRef.current * 0.008;
-
-      // Check if coin should be visible yet (sequential spawn)
-      const timeSinceCreated = now - coin.createdAt;
-      const spawnDelay = coin.spawnDelay || 0;
-      if (timeSinceCreated < spawnDelay) {
-        return; // Don't render yet
-      }
-
-      // Play plopp sound once when coin becomes visible
-      if (!coinSoundsPlayedRef.current.has(coin.id) && timeSinceCreated >= spawnDelay && timeSinceCreated < spawnDelay + 50) {
-        coinSoundsPlayedRef.current.add(coin.id);
-        // Use simple beep for clean sound - no effects
-        const pitch = 950 + Math.random() * 100; // Random 950-1050Hz
-        playBeep(pitch, 0.04, 'normal');
-      }
-
-      ctx.save();
-
-      const coinCenterX = coin.x + coin.size / 2;
-      const coinCenterY = coin.y + coin.size / 2;
-
-      // Scale-in animation when spawning
-      const spawnDuration = 400; // 400ms spawn animation
-      const timeSinceSpawn = timeSinceCreated - spawnDelay;
-      let spawnScale = 1;
-      if (timeSinceSpawn < spawnDuration) {
-        const t = timeSinceSpawn / spawnDuration;
-        // Elastic bounce: overshoots then settles
-        const bounce = Math.pow(2, -10 * t) * Math.sin((t - 0.075) * (2 * Math.PI) / 0.3) + 1;
-        spawnScale = bounce;
-      }
-
-      if (coin.collected && coin.collectedAt) {
-        // Spin animation: 3 full rotations over 800ms with ease-out
-        const elapsed = now - coin.collectedAt;
-        const duration = 800; // 800ms total animation
-        const maxRotations = 3 * Math.PI * 2; // 3 full spins
-
-        if (elapsed < duration) {
-          // Ease-out cubic curve: 1 - (1-t)^3
-          const t = elapsed / duration;
-          const easeOut = 1 - Math.pow(1 - t, 3);
-          const rotation = easeOut * maxRotations;
-
-          // Calculate scale for 3D effect (cos gives width, simulating rotation around Y-axis)
-          const scaleX = Math.abs(Math.cos(rotation));
-
-          // Fade out during last 200ms
-          const fadeStart = duration - 200;
-          const alpha = elapsed > fadeStart ? 1 - ((elapsed - fadeStart) / 200) : 1;
-
-          ctx.globalAlpha = alpha;
-          ctx.translate(coinCenterX, coinCenterY);
-          ctx.scale(scaleX * spawnScale, 1 * spawnScale);
-          ctx.translate(-coinCenterX, -coinCenterY);
-
-          // Draw pixelated coin
-          const pixelSize = 4; // Match pong404 pixel size
-          const gridSize = Math.floor(coin.size / pixelSize);
-          ctx.fillStyle = '#FFD700'; // Always gold color for coins
-
-          for (let row = 0; row < gridSize; row++) {
-            for (let col = 0; col < gridSize; col++) {
-              const pixelX = coin.x + col * pixelSize;
-              const pixelY = coin.y + row * pixelSize;
-
-              const centerX = gridSize / 2;
-              const centerY = gridSize / 2;
-              const distance = Math.sqrt(Math.pow(col - centerX, 2) + Math.pow(row - centerY, 2));
-
-              // Outer circle (coin border)
-              if (distance <= gridSize * 0.45 && distance >= gridSize * 0.35) {
-                ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
-              }
-              // Inner pattern (only visible when facing forward)
-              else if (distance <= gridSize * 0.3 && scaleX > 0.3) {
-                const relX = col - centerX;
-                const relY = row - centerY;
-                if (Math.abs(relX) <= 1 || (Math.abs(relY) <= 1 && Math.abs(relX) <= 2)) {
-                  ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
-                }
-              }
-            }
-          }
-        }
-        // Don't render after animation completes
-      } else if (!coin.collected) {
-        // Normal coin rendering with bounce
-        const bounce = Math.sin(time + coin.x * 0.01) * 2;
-        const pulse = 0.9 + Math.sin(time * 2) * 0.1;
-
-        ctx.globalAlpha = pulse;
-
-        // Apply spawn scale
-        ctx.translate(coinCenterX, coinCenterY);
-        ctx.scale(spawnScale, spawnScale);
-        ctx.translate(-coinCenterX, -coinCenterY);
-
-        const pixelSize = 4; // Match pong404 pixel size
-        const gridSize = Math.floor(coin.size / pixelSize);
-        ctx.fillStyle = '#FFD700'; // Always gold color for coins
-
-        for (let row = 0; row < gridSize; row++) {
-          for (let col = 0; col < gridSize; col++) {
-            const pixelX = coin.x + col * pixelSize;
-            const pixelY = coin.y + row * pixelSize + bounce;
-
-            const centerX = gridSize / 2;
-            const centerY = gridSize / 2;
-            const distance = Math.sqrt(Math.pow(col - centerX, 2) + Math.pow(row - centerY, 2));
-
-            // Outer circle (coin border)
-            if (distance <= gridSize * 0.45 && distance >= gridSize * 0.35) {
-              ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
-            }
-            // Inner circle pattern (coin center with "$" pattern)
-            else if (distance <= gridSize * 0.3) {
-              const relX = col - centerX;
-              const relY = row - centerY;
-              if (Math.abs(relX) <= 1 || (Math.abs(relY) <= 1 && Math.abs(relX) <= 2)) {
-                ctx.fillRect(pixelX, pixelY, pixelSize, pixelSize);
-              }
-            }
-          }
-        }
-      }
-
-      ctx.restore();
-    });
-
-    // Draw pickup effect (explosion/sparkle when picked up)
-    if (gameState.pickupEffect.isActive) {
-      const elapsed = Date.now() - gameState.pickupEffect.startTime;
-      const progress = elapsed / 1000; // 1 second duration
-      const radius = Math.max(0, progress * (50 * scaleFactor)); // Expanding circle (prevent negative)
-      const alpha = Math.max(0, 1 - progress); // Fading out
-      const pickupCenter = 12 * scaleFactor;
-
-      ctx.globalAlpha = alpha;
-      ctx.strokeStyle = currentColors.foreground;
-      ctx.lineWidth = 3 * scaleFactor;
-
-      // Draw expanding circle
-      ctx.beginPath();
-      ctx.arc(gameState.pickupEffect.x + pickupCenter, gameState.pickupEffect.y + pickupCenter, radius, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Draw sparkle effect
-      const sparkleSize = 4 * scaleFactor;
-      for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2;
-        const sparkleX = gameState.pickupEffect.x + pickupCenter + Math.cos(angle) * radius * 0.7;
-        const sparkleY = gameState.pickupEffect.y + pickupCenter + Math.sin(angle) * radius * 0.7;
-        ctx.fillStyle = currentColors.foreground;
-        ctx.fillRect(sparkleX - (sparkleSize / 2), sparkleY - (sparkleSize / 2), sparkleSize, sparkleSize);
-      }
-
-      ctx.globalAlpha = 1;
-    }
-
-    // Draw scores (classic Pong font style) - using pixelated arcade font and dynamic color
-    const scoreFontSize = Math.round(32 * scaleFactor);
-    ctx.font = `bold ${scoreFontSize}px "Press Start 2P", monospace`; // Scaled font for 4 players
-    ctx.fillStyle = currentColors.foreground; // Use dynamic color for scores too
-    ctx.textAlign = 'center';
-
-    // 4-player score positions - 48px (scaled) from paddle edge towards center
-    const scoreOffset = 48 * scaleFactor;
-    const leftPaddleRight = gameState.paddles.left.x + gameState.paddles.left.width;
-    const leftScoreX = leftPaddleRight + scoreOffset; // Scaled offset from left paddle's right edge
-    const rightPaddleLeft = gameState.paddles.right.x;
-    const rightScoreX = rightPaddleLeft - scoreOffset; // Scaled offset from right paddle's left edge
-    const topPaddleBottom = gameState.paddles.top.y + gameState.paddles.top.height;
-    const topScoreY = topPaddleBottom + scoreOffset; // Scaled offset below top paddle
-    const bottomPaddleTop = gameState.paddles.bottom.y;
-    const bottomScoreY = bottomPaddleTop - scoreOffset; // Scaled offset above bottom paddle
-
-    // Display all 4 player scores with padding
-    const leftScore = gameState.score.left.toString().padStart(2, '0');
-    const rightScore = gameState.score.right.toString().padStart(2, '0');
-    const topScore = gameState.score.top.toString().padStart(2, '0');
-    const bottomScore = gameState.score.bottom.toString().padStart(2, '0');
-
-    // Left player score (left side, middle height)
-    ctx.textAlign = 'center';
-    ctx.shadowBlur = 2 * scaleFactor; // Scaled glow on scores
-    ctx.shadowColor = currentColors.foreground;
-    ctx.fillText(leftScore, leftScoreX, playFieldHeight / 2);
-
-    // Right player score (right side, middle height)
-    ctx.fillText(rightScore, rightScoreX, playFieldHeight / 2);
-
-    // Top player score (center, top)
-    ctx.fillText(topScore, playFieldWidth / 2, topScoreY);
-
-    // Bottom player score (center, bottom)
-    ctx.fillText(bottomScore, playFieldWidth / 2, bottomScoreY);
-    ctx.shadowBlur = 0;
-
-    // 📊 FPS Counter (top-right corner) - should show 60 FPS consistently
-    const fpsFontSize = Math.round(12 * scaleFactor);
-    ctx.font = `bold ${fpsFontSize}px "Press Start 2P", monospace`;
-    ctx.textAlign = 'right';
-    const fpsDisplay = fpsRef.current === 0 ? 60 : fpsRef.current; // Show 60 during startup
-
-    // Draw FPS counter (only if enabled with 'P' key)
-    if (showFPS) {
-      // Color code FPS - green for 60, yellow for 45-59, red for below 45
-      ctx.shadowBlur = 4 * scaleFactor; // Scaled glow
-      if (fpsDisplay >= 60) {
-        ctx.fillStyle = '#00ff00'; // Bright green for perfect 60 FPS
-        ctx.shadowColor = '#00ff00';
-      } else if (fpsDisplay >= 45) {
-        ctx.fillStyle = '#ffff00'; // Yellow for good FPS
-        ctx.shadowColor = '#ffff00';
-      } else {
-        ctx.fillStyle = '#ff0000'; // Red for poor FPS
-        ctx.shadowColor = '#ff0000';
-      }
-
-      ctx.fillText(`${fpsDisplay} FPS`, playFieldWidth - (20 * scaleFactor), 30 * scaleFactor);
-      ctx.shadowBlur = 0;
-    }
-
-    // Reset color back to foreground for other elements
-    ctx.fillStyle = currentColors.foreground;
-
-    // [TROPHY] WINNER ANNOUNCEMENT [TROPHY]
-    if (gameState.gameEnded && gameState.winner) {
-      // Animated winner display with pulsing effects
-      ctx.save();
-      ctx.translate(playFieldWidth / 2, playFieldHeight / 2);
-
-      // Smooth pulsing animation effect
-      const time = cachedTimeRef.current * 0.001;
-      const pulseScale = 1 + Math.sin(time * 4) * 0.05; // Faster pulse between 0.95 and 1.05
-
-      ctx.scale(pulseScale, pulseScale);
-
-      // Winner announcement - animated white
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowBlur = 8 * scaleFactor;
-      ctx.shadowColor = '#ffffff';
-      const winnerFontSize = Math.round(64 * scaleFactor);
-      ctx.font = `bold ${winnerFontSize}px "Press Start 2P", monospace`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-
-      const winnerText = `${gameState.winner.toUpperCase()} WINS!`;
-      ctx.fillText(winnerText, 0, -40 * scaleFactor);
-
-      // Victory subtitle - monochrome white, no outline
-      const subtitleFontSize = Math.round(32 * scaleFactor);
-      ctx.font = `bold ${subtitleFontSize}px "Press Start 2P", monospace`;
-      ctx.fillStyle = '#ffffff';
-      ctx.fillText('FIRST TO 11!', 0, 20 * scaleFactor);
-
-      // Victory score display - monochrome white, no outline
-      const scoreFinalFontSize = Math.round(24 * scaleFactor);
-      ctx.font = `bold ${scoreFinalFontSize}px "Press Start 2P", monospace`;
-      ctx.fillStyle = '#ffffff';
-      const finalScore = gameState.score[gameState.winner];
-      ctx.fillText(`FINAL SCORE: ${finalScore}`, 0, 60 * scaleFactor);
-
-      ctx.restore();
-
-
-      // Continue button prompt - monochrome
-      const continuePromptFontSize = Math.round(16 * scaleFactor);
-      ctx.font = `bold ${continuePromptFontSize}px "Press Start 2P", monospace`;
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowBlur = 8 * scaleFactor;
-      ctx.shadowColor = '#ffffff';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillText('PRESS SPACEBAR TO PLAY AGAIN', playFieldWidth / 2, playFieldHeight - (50 * scaleFactor));
-      ctx.shadowBlur = 0;
-    }
-
-    // Draw robot speech text (only visible during actual gameplay, not on connection/start screens)
-    if (robotText && gameState.isPlaying && !gameState.showStartScreen) {
-      const robotFontSize = Math.round(20 * scaleFactor);
-      ctx.font = `bold ${robotFontSize}px "Press Start 2P", monospace`;
-      ctx.fillStyle = currentColors.foreground;
-      ctx.shadowBlur = 4 * scaleFactor; // Scaled glow
-      ctx.shadowColor = currentColors.foreground;
-      ctx.textAlign = 'center';
-
-      // Wrap text to fit within playfield with margins
-      const lines = wrapText(ctx, robotText, playFieldWidth - (100 * scaleFactor)); // Scaled margin on each side
-      const lineHeight = 30 * scaleFactor; // Scaled space between lines
-      const startY = (150 * scaleFactor) - ((lines.length - 1) * lineHeight / 2); // Scaled center position
-
-      // Draw each line of wrapped text
-      lines.forEach((line, index) => {
-        ctx.fillText(line, playFieldWidth / 2, startY + (index * lineHeight));
-      });
-
-      ctx.shadowBlur = 0;
-    }
-
-    // Draw track name when switching music
-    if (showTrackName && (window as any).generativeMusic) {
-      const currentState = (window as any).generativeMusic.currentState;
-      const pieces = (window as any).generativeMusic.availablePieces;
-      const currentPiece = pieces.find((p: any) => p.id === currentState.currentPieceId);
-
-      if (currentPiece) {
-        ctx.save();
-        const trackNameSize = Math.round(24 * scaleFactor);
-        ctx.font = `bold ${trackNameSize}px "Press Start 2P", monospace`;
-        ctx.fillStyle = '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowBlur = 15 * scaleFactor;
-        ctx.shadowColor = '#00ffff';
-
-        // Fade effect based on time elapsed since showing
-        const elapsed = Date.now() - trackNameShowTimeRef.current;
-        const fadeProgress = Math.min(1, elapsed / 4000);
-        const alpha = fadeProgress > 0.8 ? (1 - (fadeProgress - 0.8) / 0.2) : 1;
-        ctx.globalAlpha = alpha;
-
-        const trackText = `♫ ${currentPiece.title.toUpperCase()} ♫`;
-        ctx.fillText(trackText, playFieldWidth / 2, 100 * scaleFactor);
-
-        ctx.shadowBlur = 0;
-        ctx.restore();
-      }
-    }
-
-    // Draw active effects status with live countdown and robot voice announcements
-    if (gameState.activeEffects.length > 0) {
-      const effectsSize = Math.round(20 * scaleFactor);
-      ctx.font = `bold ${effectsSize}px "Press Start 2P", monospace`;
-      ctx.fillStyle = currentColors.foreground;
-      ctx.shadowBlur = 8;
-      ctx.shadowColor = currentColors.foreground;
-      ctx.textAlign = 'center';
-
-      // Track countdown changes for robot voice announcements
-      const newCountdowns: {[effectType: string]: number} = {};
-
-      gameState.activeEffects.forEach((effect, index) => {
-        const remaining = Math.ceil((effect.duration - (Date.now() - effect.startTime)) / 1000);
-        if (remaining >= 0) {
-          const pickupData = PICKUP_TYPES.find(p => p.type === effect.type);
-          if (pickupData) {
-            const yPos = 150 + (index * 30);
-            ctx.fillText(`${pickupData.description} ${remaining}`, playFieldWidth / 2, yPos);
-
-            // Track this countdown
-            newCountdowns[effect.type] = remaining;
-
-            // Initialize announced countdown tracking for this effect type if needed
-            if (!announcedCountdowns[effect.type]) {
-              setAnnouncedCountdowns(prev => ({
-                ...prev,
-                [effect.type]: new Set<number>()
-              }));
-            }
-
-            // Check if countdown changed and announce it
-            const previousValue = previousCountdowns[effect.type];
-            // Use ref for immediate synchronous checking to prevent duplicates
-            const hasBeenAnnounced = announcedCountdownsRef.current[effect.type]?.has(remaining) || false;
-
-            if (remaining <= 5 && remaining >= 0 && !hasBeenAnnounced) {
-              // Check if enough time has passed since pickup announcement
-              const announcementTime = pickupAnnouncementTimes[effect.type];
-              const timeSinceAnnouncement = Date.now() - (announcementTime || 0);
-              const minimumDelay = 3500; // Wait 3.5 seconds after pickup announcement
-
-              if (!announcementTime || timeSinceAnnouncement >= minimumDelay) {
-                // Mark this number as announced IMMEDIATELY in ref to prevent duplicates
-                if (!announcedCountdownsRef.current[effect.type]) {
-                  announcedCountdownsRef.current[effect.type] = new Set();
-                }
-                announcedCountdownsRef.current[effect.type].add(remaining);
-
-                // Update state for UI consistency (async is fine for this)
-                setAnnouncedCountdowns(prev => ({
-                  ...prev,
-                  [effect.type]: new Set([...(prev[effect.type] || []), remaining])
-                }));
-
-                // Use staggered speech for countdown numbers to prevent voice conflicts
-                // Add unique delay based on effect type to prevent voice conflicts
-                const delayOffset = index * 800; // Stagger announcements by 800ms per effect
-                setTimeout(() => {
-                  // Use speakRobotic with retry logic for countdown numbers
-                  if (!isSpeakingRef.current) {
-                    speakRobotic(remaining.toString());
-                  } else {
-                    // If still speaking, retry after a short delay
-                    setTimeout(() => speakRobotic(remaining.toString()), 200);
-                  }
-                }, 50 + delayOffset);
-              } else {
-                // If we can't announce due to delay, schedule it for later
-                const remainingDelay = minimumDelay - timeSinceAnnouncement;
-                setTimeout(() => {
-                  // Double-check that this number wasn't already announced while we waited (use ref)
-                  if (!announcedCountdownsRef.current[effect.type]?.has(remaining)) {
-                    const currentRemaining = Math.ceil((effect.duration - (Date.now() - effect.startTime)) / 1000);
-                    if (currentRemaining === remaining && currentRemaining <= 5 && currentRemaining >= 0) {
-                      // Mark as announced IMMEDIATELY in ref
-                      if (!announcedCountdownsRef.current[effect.type]) {
-                        announcedCountdownsRef.current[effect.type] = new Set();
-                      }
-                      announcedCountdownsRef.current[effect.type].add(remaining);
-
-                      // Update state for UI consistency
-                      setAnnouncedCountdowns(prev => ({
-                        ...prev,
-                        [effect.type]: new Set([...(prev[effect.type] || []), remaining])
-                      }));
-                      // Use speakRobotic instead of forceSpeak to prevent overlapping
-                      if (!isSpeakingRef.current) {
-                        speakRobotic(remaining.toString());
-                      }
-                    }
-                  }
-                }, remainingDelay + 100);
-              }
-            }
-          }
-        }
-      });
-
-      // Update previous countdowns
-      setPreviousCountdowns(newCountdowns);
-      ctx.shadowBlur = 0;
-
-      // Clean up announced countdowns for effects that no longer exist
-      const activeEffectTypes = new Set(Object.keys(newCountdowns));
-
-      // Clean up ref synchronously
-      const cleanedRef: {[effectType: string]: Set<number>} = {};
-      for (const effectType of activeEffectTypes) {
-        cleanedRef[effectType] = announcedCountdownsRef.current[effectType] || new Set<number>();
-      }
-      announcedCountdownsRef.current = cleanedRef;
-
-      // Clean up state
-      setAnnouncedCountdowns(prev => {
-        const cleaned: {[effectType: string]: Set<number>} = {};
-        for (const effectType of activeEffectTypes) {
-          cleaned[effectType] = prev[effectType] || new Set<number>();
-        }
-        return cleaned;
-      });
-    }
-
-    // Add on-screen text overlays
-    const overlayTextSize = Math.round(16 * scaleFactor);
-    ctx.font = `bold ${overlayTextSize}px "Press Start 2P", monospace`;
-    ctx.fillStyle = currentColors.foreground;
-    ctx.globalAlpha = 1; // Full opacity for all text
-
-    if (gameState.gameMode === 'auto') {
-      // Show 404 text on left side and enjoy message on right side - vertically centered
-      const centerY = playFieldHeight / 2;
-      const leftX = playFieldWidth * 0.25; // Left quarter position
-      const rightX = playFieldWidth * 0.75; // Right quarter position
-
-      // Left side - 404 and PAGE NOT FOUND (centered vertically)
-      const auto404Size = Math.round(48 * scaleFactor);
-      ctx.font = `bold ${auto404Size}px "Press Start 2P", monospace`;
-      ctx.textAlign = 'center';
-      ctx.fillText('404', leftX, centerY - (20 * scaleFactor));
-
-      const autoPageSize = Math.round(16 * scaleFactor);
-      ctx.font = `bold ${autoPageSize}px "Press Start 2P", monospace`;
-      ctx.fillText('PAGE NOT FOUND', leftX, centerY + (20 * scaleFactor));
-
-      // Right side - Enjoy message (centered vertically)
-      const autoEnjoySize = Math.round(12 * scaleFactor);
-      ctx.font = `bold ${autoEnjoySize}px "Press Start 2P", monospace`;
-      // Break the text into multiple lines, centered around centerY
-      ctx.fillText('But hey,', rightX, centerY - (40 * scaleFactor));
-      ctx.fillText('enjoy some', rightX, centerY - (15 * scaleFactor));
-      ctx.fillText('classic Pong', rightX, centerY + (10 * scaleFactor));
-      ctx.fillText('while you\'re here!', rightX, centerY + (35 * scaleFactor));
-
-      // Spacebar instruction at bottom center with connection status
-      ctx.textAlign = 'center';
-      const autoSpacebarSize = Math.round(10 * scaleFactor);
-      ctx.font = `bold ${autoSpacebarSize}px "Press Start 2P", monospace`;
-
-      // Show connection status with visual indicators
-      if (connectionStatus === 'connecting' || connectionStatus === 'server_down' || connectionStatus === 'server_starting') {
-        // Blink every 500ms
-        const isVisible = Math.floor(Date.now() / 500) % 2 === 0;
-
-        if (connectionStatus === 'server_down') {
-          ctx.fillStyle = '#ff4444'; // Red for server down
-          ctx.fillText(`SERVER DOWN`, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
-        } else if (connectionStatus === 'server_starting') {
-          if (isVisible) {
-            ctx.fillStyle = '#ffaa00'; // Orange for server starting
-            ctx.fillText(`STARTING SERVER`, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
-          }
-        } else {
-          if (isVisible) {
-            ctx.fillStyle = currentColors.foreground; // Normal color for connecting
-            ctx.fillText(`CONNECTING`, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
-          }
-        }
-
-        ctx.fillStyle = currentColors.foreground; // Reset color for other text
-        ctx.fillText(connectionMessage || 'Connecting to multiplayer server...', playFieldWidth / 2, playFieldHeight - (140 * scaleFactor));
-        ctx.fillText('Press D for debug mode to see connection logs', playFieldWidth / 2, playFieldHeight - (120 * scaleFactor));
-        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
-      } else if (connectionStatus === 'warming') {
-        // Enhanced warming display with phase-specific feedback
-        const elapsed = connectionStartTime > 0 ? Math.floor((Date.now() - connectionStartTime) / 1000) : 0;
-        const estimatedTotal = 60; // 60 second estimate
-        const actualProgress = Math.min(elapsed / estimatedTotal, 0.95); // Cap at 95% until connected
-
-        // Phase-specific animations and emojis
-        let phaseEmoji = '[FIRE]';
-        let phaseColor = '#ff6600';
-        let phaseText = 'WARMING UP';
-
-        if (currentPhase === 'initializing') {
-          phaseEmoji = '[REFRESH]';
-          phaseColor = '#0080ff';
-          phaseText = 'INITIALIZING';
-        } else if (currentPhase === 'warming') {
-          const fireFrames = ['[FIRE]', '[RED]', '🟠', '🟡'];
-          phaseEmoji = fireFrames[Math.floor(Date.now() / 400) % fireFrames.length];
-          phaseColor = '#ff6600';
-          phaseText = 'WARMING UP';
-        } else if (currentPhase === 'booting') {
-          const bootFrames = ['[BOLT]', '🔌', '💻', '⚙️'];
-          phaseEmoji = bootFrames[Math.floor(Date.now() / 500) % bootFrames.length];
-          phaseColor = '#ffff00';
-          phaseText = 'BOOTING';
-        } else if (currentPhase === 'finalizing') {
-          const finalFrames = ['[ROCKET]', '✨', '⭐', '[TARGET]'];
-          phaseEmoji = finalFrames[Math.floor(Date.now() / 300) % finalFrames.length];
-          phaseColor = '#00ff80';
-          phaseText = 'FINALIZING';
-        }
-
-        ctx.fillText(`${phaseEmoji} SERVER ${phaseText} ${phaseEmoji}`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
-        ctx.fillText(connectionMessage, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
-
-        // Enhanced progress bar with time estimate
-        const progressWidth = 300 * scaleFactor;
-        const progressHeight = 8 * scaleFactor;
-        const progressX = canvasSize.width / 2 - progressWidth / 2;
-        const progressY = canvasSize.height - (145 * scaleFactor);
-        const progressBorder = 2 * scaleFactor;
-
-        // Background bar with border
-        ctx.fillStyle = '#222';
-        ctx.fillRect(progressX - progressBorder, progressY - progressBorder, progressWidth + (progressBorder * 2), progressHeight + (progressBorder * 2));
-        ctx.fillStyle = '#333';
-        ctx.fillRect(progressX, progressY, progressWidth, progressHeight);
-
-        // Progress fill with phase-specific color
-        ctx.fillStyle = phaseColor;
-        ctx.fillRect(progressX, progressY, progressWidth * actualProgress, progressHeight);
-
-        // Progress percentage and time info
-        ctx.fillStyle = currentColors.foreground;
-        const progressInfoSize = Math.round(8 * scaleFactor);
-        ctx.font = `bold ${progressInfoSize}px "Press Start 2P", monospace`;
-        const progressPercent = Math.floor(actualProgress * 100);
-        const timeRemaining = Math.max(0, estimatedTotal - elapsed);
-        ctx.fillText(`${progressPercent}% - ~${timeRemaining}s remaining`, playFieldWidth / 2, playFieldHeight - (130 * scaleFactor));
-
-        // Retry count display
-        if (retryCount > 0) {
-          ctx.fillText(`Retry attempt ${retryCount}/5`, playFieldWidth / 2, playFieldHeight - (115 * scaleFactor));
-        }
-
-        // Restore text color and font
-        const warmingHelpSize = Math.round(10 * scaleFactor);
-        ctx.font = `bold ${warmingHelpSize}px "Press Start 2P", monospace`;
-        ctx.fillStyle = currentColors.foreground;
-        ctx.fillText('Free servers take time to boot up - please be patient!', playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
-        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - (85 * scaleFactor));
-      } else if (connectionStatus === 'retrying') {
-        // Enhanced retry display with progress visualization
-        const dots = '.'.repeat((Math.floor(Date.now() / 300) % 4) + 1);
-        const retryFrames = ['[REFRESH]', '⏳', '🔁', '[BOLT]'];
-        const retryEmoji = retryFrames[Math.floor(Date.now() / 400) % retryFrames.length];
-
-        ctx.fillText(`${retryEmoji} RETRYING CONNECTION${dots}`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
-        ctx.fillText(connectionMessage || `Retry attempt ${retryCount}/5...`, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
-
-        // Retry attempt progress bar
-        const retryProgressWidth = 250 * scaleFactor;
-        const retryProgressHeight = 6 * scaleFactor;
-        const retryProgressX = canvasSize.width / 2 - retryProgressWidth / 2;
-        const retryProgressY = canvasSize.height - (145 * scaleFactor);
-
-        // Background
-        ctx.fillStyle = '#333';
-        ctx.fillRect(retryProgressX, retryProgressY, retryProgressWidth, retryProgressHeight);
-
-        // Progress based on retry count
-        const retryProgress = Math.min(retryCount / 5, 1);
-        const retryColor = retryProgress < 0.6 ? '#ffaa00' : retryProgress < 0.8 ? '#ff6600' : '#ff3300';
-        ctx.fillStyle = retryColor;
-        ctx.fillRect(retryProgressX, retryProgressY, retryProgressWidth * retryProgress, retryProgressHeight);
-
-        // Retry status text
-        ctx.fillStyle = currentColors.foreground;
-        const retryStatusSize = Math.round(8 * scaleFactor);
-        ctx.font = `bold ${retryStatusSize}px "Press Start 2P", monospace`;
-        ctx.fillText(`Attempt ${retryCount}/5 - ${Math.max(0, 5 - retryCount)} retries remaining`, playFieldWidth / 2, playFieldHeight - (130 * scaleFactor));
-
-        // Restore font and show additional info
-        const retryHelpSize = Math.round(10 * scaleFactor);
-        ctx.font = `bold ${retryHelpSize}px "Press Start 2P", monospace`;
-        ctx.fillText('Server may be sleeping - retrying automatically', playFieldWidth / 2, playFieldHeight - (115 * scaleFactor));
-        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
-      } else if (connectionStatus === 'error') {
-        ctx.fillStyle = '#ff0000'; // Red for error
-        ctx.fillText('[X] CONNECTION FAILED', playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
-        ctx.fillStyle = currentColors.foreground;
-        ctx.fillText(connectionMessage || 'Server may be sleeping or unreachable', playFieldWidth / 2, playFieldHeight - (140 * scaleFactor));
-        ctx.fillText(`Failed ${retryCount} time${retryCount !== 1 ? 's' : ''}`, playFieldWidth / 2, playFieldHeight - (120 * scaleFactor));
-        ctx.fillStyle = '#00ff00'; // Green for retry prompt
-        ctx.fillText('Press ANY KEY to retry connection', playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
-      } else {
-        ctx.fillText('Press ANY KEY to join online multiplayer', playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
-        ctx.fillText('Move your paddle: W/S keys OR hover mouse', playFieldWidth / 2, playFieldHeight - (140 * scaleFactor));
-        ctx.fillText('Press D for debug mode, C for CRT effect', playFieldWidth / 2, playFieldHeight - (120 * scaleFactor));
-        ctx.fillText(`CRT Effect: ${crtEffect ? 'ON' : 'OFF'}`, playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
-      }
-    } else if (gameState.gameMode === 'multiplayer') {
-      // Calculate fade out for ALL multiplayer info text
-      let infoTextAlpha = 1.0;
-      if (infoTextFadeStart) {
-        const elapsed = Date.now() - infoTextFadeStart;
-        if (elapsed > 5000) {
-          // Start fading after 5 seconds
-          const fadeTime = elapsed - 5000;
-          const fadeDuration = 2000; // 2 second fade
-          infoTextAlpha = Math.max(0, 1 - (fadeTime / fadeDuration));
-        }
-      }
-
-      // Only show info text if not completely faded
-      if (infoTextAlpha > 0) {
-        // Set white color with fade for ALL multiplayer text
-        ctx.fillStyle = `rgba(255, 255, 255, ${infoTextAlpha})`;
-
-        // Multiplayer mode display
-        ctx.textAlign = 'center';
-        const multiInfoSize = Math.round(12 * scaleFactor);
-        ctx.font = `bold ${multiInfoSize}px "Press Start 2P", monospace`;
-
-        // Show other fading info text (not connection status)
-        // Connection status is now shown below outside the fade zone
-
-        // Restore color
-        ctx.fillStyle = currentColors.foreground;
-      }
-
-      // Always show connection status (outside of fade zone)
-      ctx.textAlign = 'center';
-      ctx.fillStyle = currentColors.foreground;
-
-      if (connectionStatus === 'connecting' || connectionStatus === 'server_down' || connectionStatus === 'server_starting') {
-        const dots = '.'.repeat((Math.floor(Date.now() / 500) % 3) + 1);
-        const multiConnectSize = Math.round(12 * scaleFactor);
-        ctx.font = `bold ${multiConnectSize}px "Press Start 2P", monospace`;
-
-        if (connectionStatus === 'server_down') {
-          ctx.fillStyle = '#ff4444'; // Red for server down
-          ctx.fillText(`WEBSOCKET SERVER DOWN`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
-        } else if (connectionStatus === 'server_starting') {
-          ctx.fillStyle = '#ffaa00'; // Orange for server starting
-          ctx.fillText(`STARTING WEBSOCKET SERVER${dots}`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
-        } else {
-          ctx.fillStyle = currentColors.foreground; // Normal color for connecting
-          ctx.fillText(`CONNECTING TO MULTIPLAYER${dots}`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
-        }
-
-        ctx.fillStyle = currentColors.foreground; // Reset color for other text
-        const multiMsgSize = Math.round(10 * scaleFactor);
-        ctx.font = `bold ${multiMsgSize}px "Press Start 2P", monospace`;
-        ctx.fillText(connectionMessage || 'Establishing connection...', playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
-      } else if (connectionStatus === 'warming') {
-        const elapsed = connectionStartTime > 0 ? Math.floor((Date.now() - connectionStartTime) / 1000) : 0;
-        let phaseText = 'WARMING UP';
-
-        if (currentPhase === 'initializing') {
-          phaseText = 'INITIALIZING';
-        } else if (currentPhase === 'warming') {
-          phaseText = 'WARMING UP';
-        } else if (currentPhase === 'booting') {
-          phaseText = 'BOOTING';
-        } else if (currentPhase === 'finalizing') {
-          phaseText = 'FINALIZING';
-        }
-
-        const multiWarmSize = Math.round(12 * scaleFactor);
-        ctx.font = `bold ${multiWarmSize}px "Press Start 2P", monospace`;
-        ctx.fillText(`SERVER ${phaseText}`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
-        const multiWarmMsgSize = Math.round(10 * scaleFactor);
-        ctx.font = `bold ${multiWarmMsgSize}px "Press Start 2P", monospace`;
-        ctx.fillText(connectionMessage, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
-        ctx.fillText(`${elapsed}s elapsed - Please wait...`, playFieldWidth / 2, playFieldHeight - (145 * scaleFactor));
-      } else if (connectionStatus === 'retrying') {
-        const dots = '.'.repeat((Math.floor(Date.now() / 300) % 4) + 1);
-        const multiRetrySize = Math.round(12 * scaleFactor);
-        ctx.font = `bold ${multiRetrySize}px "Press Start 2P", monospace`;
-        ctx.fillText(`RETRYING CONNECTION${dots}`, playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
-        const multiRetryMsgSize = Math.round(10 * scaleFactor);
-        ctx.font = `bold ${multiRetryMsgSize}px "Press Start 2P", monospace`;
-        ctx.fillText(connectionMessage || `Attempt ${retryCount}/5...`, playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
-      } else if (connectionStatus === 'error') {
-        const multiErrorSize = Math.round(12 * scaleFactor);
-        ctx.font = `bold ${multiErrorSize}px "Press Start 2P", monospace`;
-        ctx.fillText('[X] CONNECTION FAILED', playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
-        const multiErrorMsgSize = Math.round(10 * scaleFactor);
-        ctx.font = `bold ${multiErrorMsgSize}px "Press Start 2P", monospace`;
-        ctx.fillText('Press ANY KEY to retry', playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
-      }
-
-      // Show spectator status when connected (player side text removed)
-      if (connectionStatus === 'connected' || multiplayerState.isConnected) {
-        const currentMultiplayerState = latestMultiplayerStateRef.current;
-
-        // Only show spectator status, not player paddle position
-        if (currentMultiplayerState.playerSide === 'spectator') {
-          ctx.fillStyle = currentColors.foreground;
-          ctx.textAlign = 'center';
-          const spectatorSize = Math.round(12 * scaleFactor);
-          ctx.font = `bold ${spectatorSize}px "Press Start 2P", monospace`;
-          ctx.fillText('MULTIPLAYER MODE', playFieldWidth / 2, playFieldHeight - (180 * scaleFactor));
-          ctx.fillText('SPECTATING', playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
-        }
-      }
-
-    }
-
-    // CRT shader completely disabled
-
-    // Debug collision zones - always visible - DISABLED
-    if (false) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.globalAlpha = 1.0; // Make fully opaque
-      ctx.lineWidth = 2;
-
-      // Debug mode indicator
-      ctx.fillStyle = 'rgba(255, 255, 0, 1.0)';
-      const debugFontSize = Math.round(16 * scaleFactor);
-      ctx.font = `${debugFontSize}px monospace`;
-      ctx.textAlign = 'left';
-      ctx.fillText('DEBUG MODE: Collision Zones Visible', 10 * scaleFactor, 30 * scaleFactor);
-
-      const COLLISION_BUFFER = 2;
-      const BOUNDARY_SPACING = BORDER_THICKNESS * 2;
-
-      // Paddle collision zones with different colors
-      const paddleZones = [
-        {
-          x: gameState.paddles.left.x - COLLISION_BUFFER,
-          y: gameState.paddles.left.y - COLLISION_BUFFER,
-          width: gameState.paddles.left.width + (COLLISION_BUFFER * 2),
-          height: gameState.paddles.left.height + (COLLISION_BUFFER * 2),
-          color: 'rgba(255, 0, 0, 0.7)',
-          label: 'LEFT'
-        },
-        {
-          x: gameState.paddles.right.x - COLLISION_BUFFER,
-          y: gameState.paddles.right.y - COLLISION_BUFFER,
-          width: gameState.paddles.right.width + (COLLISION_BUFFER * 2),
-          height: gameState.paddles.right.height + (COLLISION_BUFFER * 2),
-          color: 'rgba(0, 255, 0, 0.7)',
-          label: 'RIGHT'
-        }
-      ];
-
-      // Add top/bottom paddles if they exist (with reduced collision buffer for better gameplay)
-      const HORIZONTAL_COLLISION_BUFFER = 1; // Reduced from 2 to make horizontal paddles less sticky
-
-      if (gameState.paddles.top) {
-        paddleZones.push({
-          x: gameState.paddles.top.x - HORIZONTAL_COLLISION_BUFFER,
-          y: gameState.paddles.top.y - HORIZONTAL_COLLISION_BUFFER,
-          width: gameState.paddles.top.width + (HORIZONTAL_COLLISION_BUFFER * 2),
-          height: gameState.paddles.top.height + (HORIZONTAL_COLLISION_BUFFER * 2),
-          color: 'rgba(0, 0, 255, 0.7)',
-          label: 'TOP'
-        });
-      }
-
-      if (gameState.paddles.bottom) {
-        paddleZones.push({
-          x: gameState.paddles.bottom.x - HORIZONTAL_COLLISION_BUFFER,
-          y: gameState.paddles.bottom.y - HORIZONTAL_COLLISION_BUFFER,
-          width: gameState.paddles.bottom.width + (HORIZONTAL_COLLISION_BUFFER * 2),
-          height: gameState.paddles.bottom.height + (HORIZONTAL_COLLISION_BUFFER * 2),
-          color: 'rgba(255, 255, 0, 0.7)',
-          label: 'BOTTOM'
-        });
-      }
-
-      // Draw paddle collision zones
-      paddleZones.forEach(zone => {
-        ctx.fillStyle = zone.color;
-        ctx.strokeStyle = zone.color;
-        ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
-        ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
-
-        // Label
-        ctx.fillStyle = 'white';
-        ctx.font = '10px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(zone.label, zone.x + zone.width/2, zone.y + zone.height/2 + 3);
-      });
-
-      // Boundary zones for scoring detection
-      const boundaryZones = [
-        {
-          x: -50, y: 0, width: BOUNDARY_SPACING + 50, height: canvasSize.height,
-          color: 'rgba(255, 0, 255, 0.5)', label: 'LEFT BOUNDARY'
-        },
-        {
-          x: canvasSize.width - BOUNDARY_SPACING, y: 0, width: BOUNDARY_SPACING + 50, height: canvasSize.height,
-          color: 'rgba(255, 0, 255, 0.5)', label: 'RIGHT BOUNDARY'
-        },
-        {
-          x: 0, y: -50, width: canvasSize.width, height: BOUNDARY_SPACING + 50,
-          color: 'rgba(0, 255, 255, 0.5)', label: 'TOP BOUNDARY'
-        },
-        {
-          x: 0, y: canvasSize.height - BOUNDARY_SPACING, width: canvasSize.width, height: BOUNDARY_SPACING + 50,
-          color: 'rgba(0, 255, 255, 0.5)', label: 'BOTTOM BOUNDARY'
-        }
-      ];
-
-      // Draw boundary zones
-      boundaryZones.forEach(zone => {
-        ctx.fillStyle = zone.color;
-        ctx.strokeStyle = zone.color;
-        ctx.fillRect(zone.x, zone.y, zone.width, zone.height);
-        ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
-
-        // Label
-        ctx.fillStyle = 'white';
-        ctx.font = '10px monospace';
-        ctx.textAlign = 'center';
-        if (zone.label.includes('LEFT') || zone.label.includes('RIGHT')) {
-          ctx.fillText(zone.label, zone.x + zone.width/2, playFieldHeight/2);
-        } else {
-          ctx.fillText(zone.label, playFieldWidth/2, zone.y + zone.height/2);
-        }
-      });
-
-      // LEGACY COLLISION ZONES - 48px zones where user reports bouncing
-      const legacyZones = [
-        {
-          x: 0, y: 0, width: canvasSize.width, height: 48,
-          color: 'rgba(255, 0, 0, 0.9)', label: 'LEGACY 48px TOP'
-        },
-        {
-          x: 0, y: canvasSize.height - 48, width: canvasSize.width, height: 48,
-          color: 'rgba(255, 0, 0, 0.9)', label: 'LEGACY 48px BOTTOM'
-        },
-        {
-          x: 0, y: 0, width: 48, height: canvasSize.height,
-          color: 'rgba(255, 0, 0, 0.9)', label: 'LEGACY 48px LEFT'
-        },
-        {
-          x: canvasSize.width - 48, y: 0, width: 48, height: canvasSize.height,
-          color: 'rgba(255, 0, 0, 0.9)', label: 'LEGACY 48px RIGHT'
-        }
-      ];
-
-      // Draw legacy zones in bright red to highlight them
-      legacyZones.forEach(zone => {
-        ctx.strokeStyle = zone.color;
-        ctx.lineWidth = 3;
-        ctx.setLineDash([10, 5]); // Dashed line to distinguish from other zones
-        ctx.strokeRect(zone.x, zone.y, zone.width, zone.height);
-
-        // Label in bright white
-        ctx.fillStyle = 'white';
-        ctx.font = 'bold 12px monospace';
-        ctx.textAlign = 'center';
-        ctx.shadowColor = 'black';
-        ctx.shadowBlur = 3;
-        if (zone.label.includes('LEFT') || zone.label.includes('RIGHT')) {
-          ctx.fillText(zone.label, zone.x + zone.width/2, playFieldHeight/2 + 20);
-        } else {
-          ctx.fillText(zone.label, playFieldWidth/2, zone.y + zone.height/2 + 10);
-        }
-        ctx.shadowBlur = 0; // Reset shadow
-        ctx.setLineDash([]); // Reset line dash
-      });
-
-      // Ball trajectory prediction
-      if (!gameState.isPaused && gameState.ball.dx && gameState.ball.dy) {
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.setLineDash([5, 5]);
-        ctx.lineWidth = 2;
-
-        const ballCenterX = gameState.ball.x + gameState.ball.size / 2;
-        const ballCenterY = gameState.ball.y + gameState.ball.size / 2;
-        const trajectoryLength = 100; // How far to project
-
-        ctx.beginPath();
-        ctx.moveTo(ballCenterX, ballCenterY);
-        ctx.lineTo(
-          ballCenterX + (gameState.ball.dx * trajectoryLength / Math.sqrt(gameState.ball.dx * gameState.ball.dx + gameState.ball.dy * gameState.ball.dy)),
-          ballCenterY + (gameState.ball.dy * trajectoryLength / Math.sqrt(gameState.ball.dx * gameState.ball.dx + gameState.ball.dy * gameState.ball.dy))
-        );
-        ctx.stroke();
-        ctx.setLineDash([]); // Reset line dash
-      }
-
-      ctx.restore();
-    }
-
-    // Draw playfield border (while still in translated/scaled context)
-    const glowIntensity = musicDataRef.current?.volume || 0;
-    const mainGlowSize = 15 + glowIntensity * 25;
-    ctx.strokeStyle = currentColors.foreground;
-    ctx.lineWidth = BORDER_THICKNESS;
-    ctx.shadowBlur = mainGlowSize;
-    ctx.shadowColor = currentColors.foreground;
-    ctx.strokeRect(BORDER_THICKNESS/2, BORDER_THICKNESS/2, playFieldWidth - BORDER_THICKNESS, playFieldHeight - BORDER_THICKNESS);
-    ctx.shadowBlur = 0;
-
-    // 📐 Restore canvas state after dynamic playfield scaling (always restore since we always save)
-    ctx.restore();
-
-  }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, crtEffect, applyCRTEffect, showAudioPrompt]);
+    if (!threeContextRef.current || !gameObjectsRef.current) return;
+
+    // Playfield constants (800x800 coordinate space)
+    const PLAYFIELD_WIDTH = 800;
+    const PLAYFIELD_HEIGHT = 800;
+
+    // 🎮 Three.js WebGL Rendering
+    // Update ball position
+    gameObjectsRef.current.updateBall(
+      gameState.ball.x,
+      gameState.ball.y,
+      gameState.ball.size
+    );
+
+    // Update all paddles
+    // Left paddle
+    const leftX = PADDLE_GAP;
+    const leftY = gameState.paddles.left.y;
+    gameObjectsRef.current.updatePaddle(
+      gameObjectsRef.current.paddles.left,
+      leftX,
+      leftY,
+      gameState.paddles.left.width,
+      gameState.paddles.left.height
+    );
+
+    // Right paddle
+    const rightX = PLAYFIELD_WIDTH - PADDLE_GAP - gameState.paddles.right.width;
+    const rightY = gameState.paddles.right.y;
+    gameObjectsRef.current.updatePaddle(
+      gameObjectsRef.current.paddles.right,
+      rightX,
+      rightY,
+      gameState.paddles.right.width,
+      gameState.paddles.right.height
+    );
+
+    // Top paddle
+    const topX = gameState.paddles.top.x;
+    const topY = PADDLE_GAP;
+    gameObjectsRef.current.updatePaddle(
+      gameObjectsRef.current.paddles.top,
+      topX,
+      topY,
+      gameState.paddles.top.width,
+      gameState.paddles.top.height
+    );
+
+    // Bottom paddle
+    const bottomX = gameState.paddles.bottom.x;
+    const bottomY = PLAYFIELD_HEIGHT - PADDLE_GAP - gameState.paddles.bottom.height;
+    gameObjectsRef.current.updatePaddle(
+      gameObjectsRef.current.paddles.bottom,
+      bottomX,
+      bottomY,
+      gameState.paddles.bottom.width,
+      gameState.paddles.bottom.height
+    );
+
+    // Update trails (must be called before rendering)
+    const deltaTime = 1 / 60; // Assuming 60 FPS, can be more precise with timing
+    gameObjectsRef.current.updateTrails(deltaTime);
+
+    // Render with post-processing (CRT effects, bloom, optional motion blur)
+    // NOTE: Motion blur is integrated as a shader pass but disabled by default
+    // Use TrailRenderer (instanced particles) for retro-style trails instead
+    threeContextRef.current.render();
+  }, [gameState]); // WebGL rendering only needs game state
 
   // Update function refs when functions change (prevents game loop restart)
   useEffect(() => {
@@ -9392,218 +7041,38 @@ const Pong404: React.FC = () => {
     };
   }, []); // Empty deps - game loop should run continuously without restarts
 
+  // Initialize Three.js rendering system
+  useEffect(() => {
+    if (!canvasRef.current) return;
+
+    console.log('[Three.js] Initializing WebGL renderer...');
+    const threeContext = new ThreeContext(canvasRef.current);
+    threeContextRef.current = threeContext;
+
+    const gameObjects = new GameObjects(threeContext.scene);
+    gameObjectsRef.current = gameObjects;
+
+    // Create pickup atlas from patterns
+    const pickupAtlas = new PickupAtlas(PRECALC_PICKUP_PATTERNS);
+    gameObjects.setPickupAtlas(pickupAtlas);
+
+    console.log('[Three.js] Scene initialized successfully');
+    console.log('[Three.js] Motion blur available via PostProcessor (press M to toggle)');
+
+    return () => {
+      if (gameObjectsRef.current) {
+        gameObjectsRef.current.dispose();
+        gameObjectsRef.current = null;
+      }
+      if (threeContextRef.current) {
+        threeContextRef.current.dispose();
+        threeContextRef.current = null;
+      }
+    };
+  }, []); // Initialize once on mount
 
   // Prevent React strict mode from causing duplicate WebSocket connections
   const hasInitialized = useRef(false);
-
-  // Initialize PixiJS for CRT shader effect (only when CRT is enabled)
-  useEffect(() => {
-    if (!crtEffect) return; // Skip initialization if CRT is disabled
-    if (!pixiContainerRef.current || !canvasRef.current) return;
-
-    let app: Application | null = null;
-
-    (async () => {
-      try {
-        app = new Application();
-
-        // Create PixiJS canvas with explicit resolution to avoid Retina scaling
-        await app.init({
-          width: canvasSize.width,
-          height: canvasSize.height,
-          backgroundAlpha: 0,
-          antialias: false,
-          resolution: 1, // Force 1:1 pixel mapping, ignore devicePixelRatio
-        });
-
-        if (!pixiContainerRef.current) {
-          console.warn('[PixiJS] Container ref no longer available after init');
-          return;
-        }
-        if (!app || !app.stage) {
-          console.error('[PixiJS] Stage is null - initialization failed');
-          return;
-        }
-      } catch (error) {
-        console.error('[PixiJS] Initialization error:', error);
-        return;
-      }
-
-      pixiContainerRef.current.appendChild(app.canvas);
-      pixiAppRef.current = app;
-
-      // Style the PixiJS canvas - exact dimensions to avoid scaling
-      app.canvas.style.position = 'absolute';
-      app.canvas.style.top = '0';
-      app.canvas.style.left = '0';
-      app.canvas.style.width = `${canvasSize.width}px`;
-      app.canvas.style.height = `${canvasSize.height}px`;
-      app.canvas.style.display = 'block';
-      // Set cursor style on PixiJS canvas to match game state
-      app.canvas.style.cursor = cursorHidden ? 'none' : 'default';
-
-      // Create sprite that we'll update each frame
-      if (!canvasRef.current) {
-        console.error('Canvas ref is null');
-        return;
-      }
-      // Force texture to exact canvas dimensions
-      // Use linear for smooth blur sampling (blur will average big pixels smoothly)
-      let texture = Texture.from(canvasRef.current, {
-        scaleMode: 'linear',
-        resolution: 1
-      });
-
-      // Override texture frame and source resolution to ensure exact 1:1 mapping
-      texture.frame.width = canvasRef.current.width;
-      texture.frame.height = canvasRef.current.height;
-      if (texture.source) {
-        texture.source.resolution = 1; // Force source resolution to 1
-        // Set texture wrapping to CLAMP to prevent magenta artifacts in corners
-        texture.source.style.addressMode = 'clamp-to-edge';
-      }
-      texture.updateUvs();
-
-      // Single sprite with CRT effects and curved reflections
-      const playfieldSprite = new Sprite(texture);
-      playfieldSprite.width = canvasRef.current.width;
-      playfieldSprite.height = canvasRef.current.height;
-      playfieldSprite.x = 0;
-      playfieldSprite.y = 0;
-
-      const filter = new CRTFilter({
-        curvature: 12.0,
-        scanlineIntensity: 0.1,
-        vignetteIntensity: 0.15,
-        noiseIntensity: 0.05,
-        brightness: 1.25,
-        chromaticAberration: 0.004,
-        bezelSize: 0.0625,
-        reflectionOpacity: 0.8,  // Enable reflections on curved bezel
-        borderNormalized: 0,  // No border - reflections start at playfield edge
-        reflectionWidth: 80 / canvasSize.width,
-      });
-      playfieldSprite.filters = [filter];
-      app.stage.addChild(playfieldSprite);
-
-      crtFilterRef.current = filter;
-
-      // console.log('[CRT] Filter created and applied:', {
-      //   hasCrtFilter: !!filter,
-      //   filterApplied: sprite.filters.length > 0,
-      //   filterSettings: {
-      //     curvature: 6.0,
-      //     scanlineIntensity: 0.15,
-      //     vignetteIntensity: 0.3
-      //   }
-      // });
-
-      // Don't recreate texture - just keep one and it should update automatically
-      // PixiJS will detect the canvas has changed and update the texture
-      let frameCount = 0;
-      let lastLogTime = 0;
-      let loggedReflectionParams = false;
-      app.ticker.add(() => {
-        // Safety check: ensure app and stage still exist (prevents errors during cleanup)
-        if (!app || !app.stage) {
-          return;
-        }
-
-        frameCount++;
-
-        // Debug log every 120 frames (every 2 seconds at 60fps)
-        // const now = Date.now();
-        // if (now - lastLogTime > 2000) {
-        //   console.log('[CRT] Render frame:', {
-        //     frame: frameCount,
-        //     hasTexture: !!sprite.texture,
-        //     hasFilter: !!sprite.filters && sprite.filters.length > 0,
-        //     filterCount: sprite.filters?.length || 0,
-        //     filterTime: (filter.uniforms as any)?.uTime
-        //   });
-        //   lastLogTime = now;
-        // }
-
-        // PixiJS v8: Access uniforms via filter.resources.crtUniforms.uniforms (nested!)
-        if (filter && filter.resources && filter.resources.crtUniforms) {
-          const uniformGroup = filter.resources.crtUniforms;
-          const uniforms = uniformGroup.uniforms; // The actual uniforms are nested inside!
-
-          // Update uniforms directly
-          if (uniforms.uTime !== undefined) uniforms.uTime = Date.now() * 0.001;
-          if (uniforms.uResolutionX !== undefined) uniforms.uResolutionX = canvasSize.width;
-          if (uniforms.uResolutionY !== undefined) uniforms.uResolutionY = canvasSize.height;
-          if (uniforms.uBorderNormalized !== undefined) uniforms.uBorderNormalized = 0;  // No border
-
-          // Update CRT filter with music analysis data for RGB bleed effect
-          const musicData = (window as any).generativeMusic?.getAnalysisData?.() || { volume: 0, disharmonic: 0, beat: 0 };
-          if (uniforms.uDisharmonic !== undefined) {
-            uniforms.uDisharmonic = musicData.disharmonic;
-          }
-          // Make reflections pulse with music
-          if (uniforms.uReflectionOpacity !== undefined) {
-            uniforms.uReflectionOpacity = 1.3 + musicData.disharmonic * 0.5; // 1.3 to 1.8 based on music
-          }
-
-          // Update reflection adjustment parameters (use ref for latest values, apply to all sides)
-          const params = reflectionParamsRef.current;
-          if (uniforms.uTopOffset !== undefined) {
-            uniforms.uTopOffset = params.offset;
-            uniforms.uTopDepth = params.depth;
-            uniforms.uRightOffset = params.offset;
-            uniforms.uRightDepth = params.depth;
-            uniforms.uBottomOffset = params.offset;
-            uniforms.uBottomDepth = params.depth;
-            uniforms.uLeftOffset = params.offset;
-            uniforms.uLeftDepth = params.depth;
-
-            // Log reflection params once
-            if (!loggedReflectionParams) {
-              console.log('🔧 Reflection uniform values (all sides):', {
-                offset: uniforms.uTopOffset,
-                depth: uniforms.uTopDepth
-              });
-              loggedReflectionParams = true;
-            }
-          }
-        }
-
-        // Force texture update from canvas source every frame
-        // In PixiJS v8, we need to force update to capture canvas changes
-        if (texture.source) {
-          texture.source.update();
-        }
-      });
-
-      // console.log('[CRT] PixiJS initialized with CRT filter:', {
-      //   filterEnabled: crtEffect,
-      //   canvasSize: { width: canvasSize.width, height: canvasSize.height },
-      //   hasSprite: !!sprite,
-      //   hasFilter: !!filter
-      // });
-    })();
-
-    return () => {
-      if (app) {
-        try {
-          app.destroy(true);
-        } catch (e) {
-          // Ignore errors during cleanup
-        }
-      }
-    };
-  }, [crtEffect, canvasSize.width, canvasSize.height]);
-
-  // Toggle CRT filter on/off
-  useEffect(() => {
-    if (pixiAppRef.current && pixiAppRef.current.stage && crtFilterRef.current && pixiAppRef.current.stage.children.length > 0) {
-      const sprite = pixiAppRef.current.stage.children[0] as Sprite;
-      if (sprite) {
-        sprite.filters = crtEffect ? [crtFilterRef.current] : [];
-        // console.log('[CRT] Filter toggled:', crtEffect ? 'ON' : 'OFF');
-      }
-    }
-  }, [crtEffect]);
 
   // Listen for localStorage events from other tabs
   useEffect(() => {
@@ -9666,17 +7135,6 @@ const Pong404: React.FC = () => {
     document.addEventListener('click', handleGlobalClick);
     return () => document.removeEventListener('click', handleGlobalClick);
   }, []);
-
-  // Update PixiJS canvas cursor when cursorHidden changes
-  useEffect(() => {
-    try {
-      if (pixiAppRef.current?.canvas?.style) {
-        pixiAppRef.current.canvas.style.cursor = cursorHidden ? 'none' : 'default';
-      }
-    } catch (e) {
-      // Ignore canvas access errors during hot reload
-    }
-  }, [cursorHidden]);
 
   // Track if we just dismissed audio prompt to prevent double-trigger
   const justDismissedAudioRef = useRef<number>(0);
@@ -9990,35 +7448,13 @@ const Pong404: React.FC = () => {
         overflow: 'hidden' // Prevent box-shadows from causing scrolling
       }}
     >
-      {/* Outer frame wrapper for rounded corners */}
-      <div style={{
-        padding: '32px',
-        margin: 'auto',
-        background: 'linear-gradient(135deg, #444 0%, #2a2a2a 25%, #222 50%, #1a1a1a 75%, #1a1a1a 100%)',
-        borderRadius: '32px',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.8)',
-        width: 'fit-content',
-      }}>
-      {/* Container for game - match canvas size exactly */}
-      <div style={{
-        position: 'relative',
-        width: `${canvasSize.width}px`,
-        height: `${canvasSize.height}px`,
-        borderRadius: '8px',
-        overflow: 'hidden',
-      }}>
+      {/* Canvas container - full screen */}
       <div style={{
         position: 'relative',
         width: `${canvasSize.width}px`,
         height: `${canvasSize.height}px`,
       }}>
-        {/* Shared container for canvas and PIXI to ensure perfect alignment */}
-        <div style={{
-          position: 'relative',
-          width: `${canvasSize.width}px`,
-          height: `${canvasSize.height}px`,
-        }}>
-        {/* Canvas for game rendering - hidden when CRT is active (PixiJS shows it instead) */}
+        {/* Canvas for game rendering */}
         <canvas
           ref={canvasRef}
           width={canvasSize.width}
@@ -10034,12 +7470,12 @@ const Pong404: React.FC = () => {
             outline: 'none',
             imageRendering: 'auto',
             cursor: cursorHidden ? 'none' : 'default',
+            zIndex: 10,
             // Disable text smoothing and antialiasing for pixelated text
             fontSmooth: 'never',
             WebkitFontSmoothing: 'none',
             MozOsxFontSmoothing: 'unset',
             textRendering: 'geometricPrecision',
-            visibility: crtEffect ? 'hidden' : 'visible', // Hide canvas when CRT is active
           } as React.CSSProperties}
           tabIndex={0}
           onClick={async () => {
@@ -10297,23 +7733,6 @@ const Pong404: React.FC = () => {
         }}
       />
 
-      {/* PixiJS WebGL container for CRT shader post-processing - visible when CRT is ON */}
-      <div
-        ref={pixiContainerRef}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: `${canvasSize.width}px`,
-          height: `${canvasSize.height}px`,
-          cursor: cursorHidden ? 'none' : 'default',
-          imageRendering: 'pixelated',
-          pointerEvents: 'none', // Let events pass through to canvas
-          zIndex: 10, // Above canvas
-          visibility: crtEffect ? 'visible' : 'hidden', // Only show when CRT is active
-        }}
-      />
-
       {/* Inner border glow overlay - visible inside game area */}
       <div style={{
         position: 'absolute',
@@ -10324,9 +7743,6 @@ const Pong404: React.FC = () => {
         pointerEvents: 'none',
         zIndex: 15, // Above everything to be visible
       }} />
-      </div>
-      </div>
-      </div>
 
       {/* Spectator Mode UI Overlay */}
       {isSpectatorMode && (
