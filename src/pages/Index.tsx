@@ -368,23 +368,30 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                   >
                       <CardHeader className="px-3 py-2 pb-4">
                         {/* Game logo inside card header */}
-                        <div className="flex justify-center">
+                        <div className="flex flex-col items-center space-y-2">
                           {logoUrl ? (
-                            storageRef && !isPublicObject ? (
-                              <StorageImage
-                                bucket={storageRef.bucket}
-                                path={storageRef.path}
-                                alt={game.name}
-                                className="h-20 md:h-24 w-auto object-contain max-w-full"
-                                expiresIn={300}
-                              />
-                            ) : (
-                              <img
-                                src={logoUrl}
-                                alt={game.name}
-                                className="h-20 md:h-24 w-auto object-contain max-w-full"
-                              />
-                            )
+                            <>
+                              <div className="flex justify-center">
+                                {storageRef && !isPublicObject ? (
+                                  <StorageImage
+                                    bucket={storageRef.bucket}
+                                    path={storageRef.path}
+                                    alt={game.name}
+                                    className="h-20 md:h-24 w-auto object-contain max-w-full"
+                                    expiresIn={300}
+                                  />
+                                ) : (
+                                  <img
+                                    src={logoUrl}
+                                    alt={game.name}
+                                    className="h-20 md:h-24 w-auto object-contain max-w-full"
+                                  />
+                                )}
+                              </div>
+                              <div className="text-center">
+                                <span className="text-white font-semibold text-sm md:text-base leading-tight">{game.name}</span>
+                              </div>
+                            </>
                           ) : (
                             <div className="h-20 md:h-24 flex items-center justify-center bg-black/30 rounded-lg px-4 min-w-[180px]">
                               <span className="text-white font-bold text-center text-base">{game.name}</span>
