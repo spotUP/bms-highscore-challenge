@@ -98,6 +98,59 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
   });
   const logoSuggestionsRef = useRef<GameLogoSuggestionsRef>(null);
 
+  // Game search state for tournament creation
+  const [gameSearchSuggestions, setGameSearchSuggestions] = useState<string[]>([]);
+  const [gameSearchShowSuggestions, setGameSearchShowSuggestions] = useState(false);
+  const [gameSearchSuggestionLoading, setGameSearchSuggestionLoading] = useState(false);
+  const [gameSearchLoading, setGameSearchLoading] = useState(false);
+
+  // Game search handlers for tournament creation (working implementation)
+  const handleGameSearchChange = (value: string) => {
+    setNewGame(prev => ({ ...prev, name: value }));
+
+    // Debounce suggestions
+    if (value.length >= 2) {
+      setGameSearchSuggestionLoading(true);
+      const timeoutId = setTimeout(async () => {
+        try {
+          const { data: suggestions, error } = await supabase
+            .from('games_database')
+            .select('name')
+            .ilike('name', `%${value}%`)
+            .limit(6)
+            .order('name');
+
+          if (error) throw error;
+
+          const suggestionNames = suggestions
+            ?.map(game => game.name)
+            .filter((name, index, arr) => arr.indexOf(name) === index) || [];
+
+          setGameSearchSuggestions(suggestionNames);
+          setGameSearchShowSuggestions(suggestionNames.length > 0);
+        } catch (error) {
+          console.error('Error fetching game suggestions:', error);
+          setGameSearchSuggestions([]);
+          setGameSearchShowSuggestions(false);
+        } finally {
+          setGameSearchSuggestionLoading(false);
+        }
+      }, 300);
+
+      return () => clearTimeout(timeoutId);
+    } else {
+      setGameSearchSuggestions([]);
+      setGameSearchShowSuggestions(false);
+    }
+  };
+
+  const handleGameSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      // Could add submit logic here if needed
+      console.log('Game search submitted:', newGame.name);
+    }
+  };
+
   const generateSlug = (name: string) => {
     return name
       .toLowerCase()
@@ -480,14 +533,61 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
 
               <div>
                 <Label htmlFor="game-name" className="text-white">Game Name *</Label>
-                <AdvancedSearchField
-                  value={newGame.name}
-                  onChange={(value) => setNewGame(prev => ({ ...prev, name: value }))}
-                  placeholder="Enter game name (logos search automatically as you type)"
-                  enableSuggestions={true}
-                  searchHint="💡 Tip: Try 'Street Fighter', 'Pac-Man', 'Metal Slug', or use abbreviations like 'SF'"
-                  className="bg-black/50 border-white/20 text-white"
-                />
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="game-name"
+                    placeholder="Enter game name (logos search automatically as you type)"
+                    value={newGame.name}
+                    onChange={(e) => handleGameSearchChange(e.target.value)}
+                    onKeyPress={handleGameSearchKeyPress}
+                    onFocus={() => newGame.name.length >= 2 && gameSearchSuggestions.length > 0 && setGameSearchShowSuggestions(true)}
+                    onBlur={() => setTimeout(() => setGameSearchShowSuggestions(false), 200)}
+                    className={`pl-10 bg-black/50 border-white/20 text-white ${gameSearchLoading ? 'pr-16' : 'pr-10'}`}
+                    disabled={gameSearchLoading}
+                  />
+                  {newGame.name && !gameSearchLoading && (
+                    <button
+                      onClick={() => {
+                        setNewGame(prev => ({ ...prev, name: '' }));
+                        setGameSearchSuggestions([]);
+                        setGameSearchShowSuggestions(false);
+                      }}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 w-4 h-4 flex items-center justify-center"
+                      title="Clear search"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  {(gameSearchLoading || gameSearchSuggestionLoading) && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+                    </div>
+                  )}
+
+                  {/* Search Suggestions Dropdown */}
+                  <AutocompleteDropdown
+                    suggestions={gameSearchSuggestions}
+                    isOpen={gameSearchShowSuggestions}
+                    onSelect={(suggestion) => {
+                      setNewGame(prev => ({ ...prev, name: suggestion }));
+                      setGameSearchShowSuggestions(false);
+                    }}
+                    loading={gameSearchSuggestionLoading}
+                  />
+                </div>
+                {newGame.name && (
+                  <div className="text-xs text-blue-600 mt-1">
+                    Searching for: "{newGame.name}"
+                  </div>
+                )}
+
+                {/* General search tips */}
+                {!newGame.name && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    💡 Tip: Try "mario", "sonic", "zelda", or use abbreviations like "sf" for Street Fighter
+                  </div>
+                )}
               </div>
 
 
@@ -1237,6 +1337,12 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
 
   // Game search state (now handled by AdvancedSearchField)
   const [gameSearchValue, setGameSearchValue] = useState('');
+
+  // Game search state for tournament creation
+  const [gameSearchSuggestions, setGameSearchSuggestions] = useState<string[]>([]);
+  const [gameSearchShowSuggestions, setGameSearchShowSuggestions] = useState(false);
+  const [gameSearchSuggestionLoading, setGameSearchSuggestionLoading] = useState(false);
+  const [gameSearchLoading, setGameSearchLoading] = useState(false);
   const [tournamentFormData, setTournamentFormData] = useState({
     name: "",
     slug: "",
@@ -1479,6 +1585,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     // Optional: Could trigger additional actions on search submit
     console.log('Game search submitted:', value);
   };
+
 
 
   // Save game (create or update)
