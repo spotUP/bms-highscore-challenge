@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { QrCode } from 'lucide-react';
 import { usePerformanceMode } from '@/hooks/usePerformanceMode';
+import { useTournament } from '@/contexts/TournamentContext';
 
 interface QRCodeDisplayProps {
   gameId: string;
@@ -13,6 +14,7 @@ const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
   const performanceCanvasRef = useRef<HTMLCanvasElement>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const { isPerformanceMode, isRaspberryPi, isLowEnd } = usePerformanceMode();
+  const { currentTournament } = useTournament();
 
   // Check if we should use simplified QR code
   const useSimpleQR = isPerformanceMode || isRaspberryPi || isLowEnd;
@@ -24,7 +26,11 @@ const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
       // Prefer an explicitly configured public site URL to avoid QR codes pointing at preview domains
       const envSiteUrl = (import.meta.env as any).VITE_PUBLIC_SITE_URL || (import.meta.env as any).VITE_SITE_URL;
       const base = (envSiteUrl && typeof envSiteUrl === 'string' ? envSiteUrl : window.location.origin).replace(/\/$/, '');
-      const url = `${base}/mobile-entry?game=${gameId}`;
+
+      // Use tournament-scoped URL if there's a current tournament
+      const url = currentTournament
+        ? `${base}/t/${currentTournament.slug}/mobile-entry?game=${gameId}`
+        : `${base}/mobile-entry?game=${gameId}`;
 
       // For performance mode, use solid colors for better readability
       const colors = useSimpleQR
@@ -47,7 +53,7 @@ const QRCodeDisplay = ({ gameId, gameName }: QRCodeDisplayProps) => {
         }
       });
     }
-  }, [gameId, useSimpleQR]);
+  }, [gameId, useSimpleQR, currentTournament]);
 
   // Performance mode: Simple, readable QR code
   if (useSimpleQR) {
