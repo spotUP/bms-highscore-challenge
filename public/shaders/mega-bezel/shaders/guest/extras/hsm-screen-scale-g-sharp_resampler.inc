@@ -38,7 +38,7 @@ layout(push_constant) uniform Push
 #pragma parameter HSM_GSHARP_SCREEN_SCALE_EMPTY_LINE		" " 0 0 0.001 0.001
 #pragma parameter GSHARP_SCREEN_SCALE_TITLE 	"[ --- SCREEN SCALE G-SHARP RESAMPLER by Guest.r --- ]:"  0 0 0.01 0.01
 
-#pragma parameter HSM_SCREEN_SCALE_GSHARP_MODE 	"          G-SHARP MODE: OFF | SHARP | EDITABLE" 	  1 0 2 1
+#pragma parameter HSM_SCREEN_SCALE_GSHARP_MODE 	"          G-SHARP MODE: OFF | SHARP | EDITABLE" 	  0 0 2 1
 #define HSM_SCREEN_SCALE_GSHARP_MODE params.HSM_SCREEN_SCALE_GSHARP_MODE
 
 // Default was 1.2, now set to 2.3 to match smoothing in Hyllian b-spline
@@ -72,15 +72,21 @@ void main()
 #pragma stage fragment
 layout(location = 0) in vec2 vTexCoord;
 layout(location = 0) out vec4 FragColor;
-layout(set = 0, binding = 2) uniform sampler2D Source;
-layout(set = 0, binding = 3) uniform sampler2D InfoCachePass;
+uniform sampler2D Source;
+uniform sampler2D InfoCachePass;
+uniform sampler2D Original;
 // layout(set = 0, binding = 4) uniform sampler2D AvgLumPass;
+
 
 // HSM Removed
 // #define COMPAT_TEXTURE(c,d) texture(c,d)
 
 // HSM Added
+#ifdef IS_POTATO_PRESET
+#define COMPAT_TEXTURE(c,d) texture(c,d)
+#else
 #define COMPAT_TEXTURE(c,d) HSM_GetCroppedTexSample(c,d)
+#endif
 // End Addition
 
 #define SourceSize params.SourceSize
@@ -95,48 +101,45 @@ float gaussian(float x, float y)
 
 void main()
 {
-    // HSM Added
-	// vec2 viewportCoordTransformed = HSM_GetViewportCoordWithZoomAndPan(vTexCoord);
-	HSM_UpdateGlobalScreenValuesFromCache(InfoCachePass, vTexCoord);
+	// Always render bezel for proper Mega Bezel effects
+	#ifndef IS_NO_REFLECT_PRESET
+		// Have to get the scale of the coordinates so we can figure out the size of the onscreen rectangle of the area
+		HSM_GetBezelCoords(TUBE_DIFFUSE_COORD,
+							TUBE_DIFFUSE_SCALE,
+							TUBE_SCALE,
+							SCREEN_ASPECT,
+							false,
+							BEZEL_OUTSIDE_SCALE,
+							BEZEL_OUTSIDE_COORD,
+							BEZEL_OUTSIDE_CURVED_COORD,
+							FRAME_OUTSIDE_CURVED_COORD);
+		vec2 cache_bounds_coord = (BEZEL_OUTSIDE_COORD - 0.5) * 0.9 + 0.5;
 
-	vec2 cache_bounds_coord = SCREEN_COORD;
-
-// If it's the potato preset render the whole frame
-#ifndef IS_POTATO_PRESET
-#ifndef IS_NO_REFLECT_PRESET
-	// Have to get the scale of the coordinates so we can figure out the size of the onscreen rectangle of the area 
-	HSM_GetBezelCoords(TUBE_DIFFUSE_COORD, 
-						TUBE_DIFFUSE_SCALE, 
-						TUBE_SCALE, 
-						SCREEN_ASPECT, 
-						false,
-						BEZEL_OUTSIDE_SCALE,
-						BEZEL_OUTSIDE_COORD, 
-						BEZEL_OUTSIDE_CURVED_COORD, 
-						FRAME_OUTSIDE_CURVED_COORD);
-	cache_bounds_coord = (BEZEL_OUTSIDE_COORD - 0.5) * 0.9 + 0.5;
-#endif
-#endif
-
-	if (HHLP_IsOutsideCoordSpace(cache_bounds_coord))
-	{
-		FragColor = vec4(0);
-		return;
-	}
+		if (HHLP_IsOutsideCoordSpace(cache_bounds_coord))
+		{
+			FragColor = vec4(0);
+			return;
+		}
+	#endif
 
 	// HSM Added
 	float raster_bloom_avg_lum = 0.5; //texture(AvgLumPass, vec2(0.5,0.5)).a;
 	vec2 screen_curved_coord = vec2(0.5);
 
+#ifdef IS_POTATO_PRESET
+	// For potato preset, use simple coordinates
+	vec2 curved_coord = vTexCoord;
+#else
 	vec2 screen_curved_coord_with_overscan_and_mirror = HSM_GetCrtShaderFinalCoord(SCREEN_COORD,
 		SCREEN_SCALE,
 		raster_bloom_avg_lum,
 		screen_curved_coord);
 
 	vec2 curved_coord = screen_curved_coord_with_overscan_and_mirror;
+#endif
 
-    // End Addition
-	
+	// End Addition
+
 	if (HSM_SCREEN_SCALE_GSHARP_MODE == 0)
 	{
 		FragColor = texture(Source, curved_coord);
@@ -146,7 +149,7 @@ void main()
 	vec2 f = fract(SourceSize.xy * curved_coord.xy);
 	f = 0.5 - f;
 	vec2 tex = floor(SourceSize.xy * curved_coord)*SourceSize.zw + 0.5*SourceSize.zw;
-	vec2 dx  = vec2(SourceSize.z, 0.0);	
+	vec2 dx  = vec2(SourceSize.z, 0.0);
 	vec2 dy  = vec2(0.0, SourceSize.w);
 
 	vec3 colorx = 0.0.xxx;
@@ -171,28 +174,34 @@ void main()
 	do
 	{
 		x = -LOOPSIZE;
-	
+
 		do
 		{
 			pixel  = COMPAT_TEXTURE(Source, tex + x*dx + y*dy).rgb;
-			
-			wx = gaussian(x+f.x, y+f.y) - sharp; 
+
+			wx = gaussian(x+f.x, y+f.y) - sharp;
 			fpx = (sqrt(dot(vec2(x+f.x,y+f.y),vec2(x+f.x,y+f.y)))-FPR)/FPR;
 			if (((x*x) + (y*y)) < 1.25*FPR) { xcmax = max(xcmax, pixel); xcmin = min(xcmin, pixel); }
 			if (wx < 0.0) wx = clamp(wx, mix(-maxsharp, 0.0, pow(abs(fpx), HSM_SCREEN_SCALE_SHAR)), 0.0);
 			colorx = colorx + wx * pixel;
 			wsumx  = wsumx + wx;
 			x = x + 1.0;
-			
+
 		} while (x <= LOOPSIZE);
-		
+
 		y = y + 1.0;
-		
+
 	} while (y <= LOOPSIZE);
 
 	vec3 color = colorx/wsumx;
-	
+
 	color = mix(clamp(color, 0.0, 1.0), clamp(color, xcmin, xcmax), HSM_SCREEN_SCALE_HAR);
-	
+
+	// Add scanlines for potato preset
+#ifdef IS_POTATO_PRESET
+	float scanline = sin(vTexCoord.y * 400.0) * 0.05 + 0.95;
+	color *= scanline;
+#endif
+
 	FragColor = vec4(color, 1.0);
 }

@@ -25,7 +25,7 @@
 #include "helper-functions.inc"
 #include "base-functions.inc"
 
-#ifndef IS_POTATO_PRESET
+#if 0
 #include "royale-geometry-functions.inc"
 #endif
 
@@ -309,18 +309,18 @@ vec2 HSM_GetCurvatureValues(float screen_aspect)
 // CRT Geom Curvature
 #define FIX(c) max(abs(c), 1e-5)
 
-float intersect(vec2 in_coord , vec2 sinangle, vec2 cosangle, float in_radius, vec2 in_distance)
+vec2 intersect(vec2 in_coord , vec2 sinangle, vec2 cosangle, float in_radius, vec2 in_distance)
 {
   float A = dot(in_coord, in_coord) + in_distance.x * in_distance.x;
   float B = 2.0 * (in_radius * (dot(in_coord, sinangle) - in_distance.x * cosangle.x * cosangle.y) - in_distance.x * in_distance.x);
   float C = in_distance.x * in_distance.x + 2.0 * in_radius * in_distance.x * cosangle.x * cosangle.y;
-  return (-B-sqrt(B * B - 4.0 * A * C)) / (2.0 * A);
+  return vec2((-B-sqrt(B * B - 4.0 * A * C)) / (2.0 * A));
 }
 
 vec2 bkwtrans(vec2 in_coord, vec2 sinangle, vec2 cosangle, float in_radius, vec2 in_distance)
 {
-  float c = intersect(in_coord, sinangle, cosangle, in_radius, in_distance);
-  vec2 pt = vec2(c) * in_coord;
+  vec2 c = intersect(in_coord, sinangle, cosangle, in_radius, in_distance);
+  vec2 pt = c * in_coord;
   pt -= vec2(-in_radius) * sinangle;
   pt /= vec2(in_radius);
   vec2 tang = sinangle / cosangle;
@@ -340,7 +340,7 @@ vec2 fwtrans(vec2 uv, vec2 sinangle, vec2 cosangle, float in_radius, vec2 in_dis
   uv *= sin(r/in_radius)/r;
   float x = 1.0-cos(r/in_radius);
   float D = in_distance.x/in_radius + x*cosangle.x*cosangle.y+dot(uv,sinangle);
-  return in_distance*(uv*cosangle-x*sinangle)/D;
+  return in_distance.x*(uv*cosangle-x*sinangle)/D;
 }
 
 vec3 maxscale(vec2 sinangle, vec2 cosangle, float in_radius, vec2 in_distance, float in_aspect)
@@ -350,10 +350,10 @@ vec3 maxscale(vec2 sinangle, vec2 cosangle, float in_radius, vec2 in_distance, f
   vec2 a = vec2(0.5,0.5)*aspect_vec2.xy;
 
   vec2 lo = vec2(	fwtrans(vec2(-a.x,c.y), sinangle, cosangle, in_radius, in_distance).x,
-		 			fwtrans(vec2(c.x,-a.y), sinangle, cosangle, in_radius, in_distance).y)/aspect_vec2.xy;
+  		 			fwtrans(vec2(c.x,-a.y), sinangle, cosangle, in_radius, in_distance).y)/aspect_vec2.xy;
 
   vec2 hi = vec2(	fwtrans(vec2(+a.x,c.y), sinangle, cosangle, in_radius, in_distance).x,
-		 			fwtrans(vec2(c.x,+a.y), sinangle, cosangle, in_radius, in_distance).y)/aspect_vec2.xy;
+  		 			fwtrans(vec2(c.x,+a.y), sinangle, cosangle, in_radius, in_distance).y)/aspect_vec2.xy;
 
   return vec3((hi+lo)*aspect_vec2.xy*0.5,max(hi.x-lo.x,hi.y-lo.y));
 }
@@ -365,23 +365,22 @@ vec2 transform(vec2 coord, vec3 stretch, vec2 sinangle, vec2 cosangle, float in_
 }
 
 // TODO need to rescale so the screen does not shrink
-vec2 HSM_GetGeomCurvedCoord(vec2 in_coord, float tilt_x, float tilt_y, float in_radius, float in_distance, float in_aspect)
+vec2 HSM_GetGeomCurvedCoord(vec2 in_coord, float tilt_x, float tilt_y, float in_radius, vec2 in_distance, float in_aspect)
 {
 	//default radius = 3.5
     //default distance = 2
-	in_distance *= 1.4;
-	vec2 in_distance_vec = vec2(in_distance);
+	in_distance *= vec2(1.4);
 	vec2 ang = vec2(tilt_x, tilt_y);
 	vec2 v_sinangle = sin(ang);
 	vec2 v_cosangle = cos(ang);
-	vec3 v_stretch = maxscale(v_sinangle, v_cosangle, in_radius, in_distance_vec, in_aspect);
+	vec3 v_stretch = maxscale(v_sinangle, v_cosangle, in_radius, in_distance, in_aspect);
 	vec2 aspect_vec2 = vec2(1, 1/in_aspect);
-	vec2 curved_coord = transform(in_coord, v_stretch, v_sinangle, v_cosangle, in_radius, in_distance_vec, aspect_vec2);
+	vec2 curved_coord = transform(in_coord, v_stretch, v_sinangle, v_cosangle, in_radius, in_distance, aspect_vec2);
 
 	return curved_coord;
 }
 
-vec2 HSM_GetGeomCurvedCoordRetainWidth(vec2 in_coord, float tilt_x, float tilt_y, float in_radius, float in_distance, float in_aspect)
+vec2 HSM_GetGeomCurvedCoordRetainWidth(vec2 in_coord, float tilt_x, float tilt_y, float in_radius, vec2 in_distance, float in_aspect)
 {
 	vec2 ctr_curved_coord =  HSM_GetGeomCurvedCoord(in_coord, tilt_x, tilt_y, in_radius, in_distance, in_aspect) - 0.5;
 	vec2 right_edge_curved_ctr_coord = HSM_GetGeomCurvedCoord(vec2(1, 0.5), tilt_x, tilt_y, in_radius, in_distance, in_aspect) - 0.5;
@@ -464,41 +463,6 @@ vec2 HSM_GetCurvedCoord(vec2 in_coord, float curvature_multiplier, float screen_
 
 	vec2 curved_coord = vec2(0);
 
-#ifndef IS_POTATO_PRESET
-	if (HSM_CURVATURE_MODE > CURVATURE_MODE_2D_CYLINDER)
-	{
-		if (HSM_USE_GEOM > 0.5)
-			curved_coord = HSM_GetGeomCurvedCoordRetainWidth(in_coord, HSM_CURVATURE_3D_TILT_ANGLE_X, HSM_CURVATURE_3D_TILT_ANGLE_Y, HSM_CURVATURE_3D_RADIUS, HSM_CURVATURE_3D_VIEW_DIST, screen_aspect);
-		else
-		{
-			float geom_radius_with_mult = HSM_CURVATURE_3D_RADIUS;
-			// Adjust curvature so 3D mode 1 looks similar to 3D mode 2
-			if (HSM_CURVATURE_MODE == CURVATURE_MODE_3D_1) geom_radius_with_mult -= 0.40;
-			if (HSM_CURVATURE_MODE == CURVATURE_MODE_3D_CYLINDER) geom_radius_with_mult -= 1;
-			geom_radius_with_mult *= (1 / (curvature_multiplier + epsilon));
-			mat2x2 pixel_to_video_uv;
-
-			float geom_mode = HSM_CURVATURE_MODE - 2;
-
-			curved_coord = HRG_GetGeomCurvedCoord(	adjusted_coord, 
-													geom_mode, 
-													geom_radius_with_mult,
-													HSM_CURVATURE_3D_VIEW_DIST,
-													tilt_angle_x,
-													tilt_angle_y,
-													screen_aspect,
-													pin_inner_edge,
-													global.SourceSize.xy,
-													global.OutputSize.xy,
-													pixel_to_video_uv);
-		}
-	}
-	else
-	{
-		vec2 curvature_values = curvature_multiplier * HSM_GetCurvatureValues(screen_aspect);
-		curved_coord = HSM_Get2DCurvedCoord(adjusted_coord, curvature_values);
-	}
-#endif
 
 #ifdef IS_POTATO_PRESET
 	vec2 curvature_values = curvature_multiplier * HSM_GetCurvatureValues(screen_aspect);

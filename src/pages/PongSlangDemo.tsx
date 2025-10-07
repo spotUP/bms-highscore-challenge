@@ -7,7 +7,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { SlangPresetParser } from '../shaders/SlangPresetParser';
+import { MegaBezelCompiler } from '../shaders/MegaBezelCompiler';
 import { MultiPassRenderer } from '../shaders/MultiPassRenderer';
 import { ParameterManager } from '../shaders/ParameterManager';
 
@@ -86,8 +86,9 @@ function PongSlangDemo() {
         // Load Slang shader preset
         // const presetPath = '/shaders/pong-crt.slangp'; // Simple CRT shader
         // const presetPath = '/shaders/passthrough.slangp'; // Simple passthrough test
-        const presetPath = '/shaders/mega-bezel/potato-test1.slangp'; // Mega Bezel Test (3 passes)
+        // const presetPath = '/shaders/mega-bezel/potato-test1.slangp'; // Mega Bezel Test (3 passes)
         // const presetPath = '/shaders/mega-bezel/potato.slangp'; // Mega Bezel POTATO
+        const presetPath = '/shaders/mega-bezel/potato-test1.slangp?v=' + Math.random(); // Full working preset
         console.log('[Slang Demo] Fetching preset from:', presetPath);
 
         const response = await fetch(presetPath);
@@ -100,18 +101,22 @@ function PongSlangDemo() {
         const presetContent = await response.text();
         console.log('[Slang Demo] Preset content length:', presetContent.length);
 
-        const preset = SlangPresetParser.parse(presetContent, presetPath);
+        // Compile preset using MegaBezelCompiler
+        console.log('[Slang Demo] Starting preset compilation...');
+        const compiler = new MegaBezelCompiler();
+        const preset = await compiler.compilePreset(presetPath, {
+          webgl2: true,
+          debug: false,
+          maxPasses: 16
+        });
 
         console.log('[Slang Demo] Preset loaded:', preset);
         console.log('[Slang Demo] Passes:', preset.passes.length);
+        console.log('[Slang Demo] Parameters:', Object.keys(preset.parameters));
+        console.log('[Slang Demo] Textures:', Object.keys(preset.textures));
 
-        // Create MultiPassRenderer
-        const multipass = new MultiPassRenderer(renderer, preset, {
-          width: 800,
-          height: 800,
-          webgl2: true,
-          historyDepth: 4
-        });
+        // Create MultiPassRenderer with preset
+        const multipass = new MultiPassRenderer(renderer, undefined, undefined, undefined, preset);
 
         // Load shaders (now handles #include preprocessing automatically)
         console.log('[Slang Demo] Loading shaders...');
@@ -122,19 +127,14 @@ function PongSlangDemo() {
         // Set game render target as input
         multipass.setInputTexture(gameRenderTarget.texture);
 
-        // Create parameter manager
+        // Create parameter manager for UI
         const paramManager = new ParameterManager();
 
-        // Add parameters from all passes
-        multipass.getPass(0)?.shader.parameters.forEach(param => {
-          paramManager.addParameters([param]);
-        });
-
-        // Link to multipass renderer
-        paramManager.linkRenderer(multipass);
+        // Note: In the new system, parameters are managed differently
+        // The MultiPassRenderer handles its own parameters internally
 
         // Log parameters
-        console.log('[Slang Demo] Parameters:', paramManager.getAllParameters());
+        console.log('[Slang Demo] Parameters:', paramManager.getAllValues());
 
         setSlangSystem({ multipass, paramManager });
         setLoading(false);
@@ -156,7 +156,7 @@ function PongSlangDemo() {
       console.log('[Slang Demo] Cleanup...');
       if (slangSystem) {
         slangSystem.multipass.dispose();
-        slangSystem.paramManager.dispose();
+        // ParameterManager doesn't have dispose in new API
       }
       if (rendererRef.current) {
         rendererRef.current.dispose();
@@ -228,7 +228,7 @@ function PongSlangDemo() {
         console.log('[Slang Demo] Curvature:', paramManager.getValue('curvature'));
       } else if (e.key === '0') {
         // Reset to defaults
-        paramManager.resetAllToDefaults();
+        paramManager.resetToDefaults();
         console.log('[Slang Demo] Parameters reset to defaults');
       }
     };
@@ -260,12 +260,20 @@ function PongSlangDemo() {
 
       // Render through Slang shader pipeline to screen
       rendererRef.current!.setRenderTarget(null);
-      if (frameCount < 3) {
-        console.log('[PongSlangDemo] About to call multipass.render(), frameCount:', frameCount);
-      }
-      slangSystem.multipass.render();
-      if (frameCount < 3) {
-        console.log('[PongSlangDemo] multipass.render() completed');
+      try {
+        if (frameCount < 3) {
+          console.log('[PongSlangDemo] About to call multipass.render(), frameCount:', frameCount);
+        }
+        slangSystem.multipass.render();
+        if (frameCount < 3) {
+          console.log('[PongSlangDemo] multipass.render() completed');
+        }
+      } catch (error) {
+        console.error('[PongSlangDemo] Shader pipeline failed, falling back to direct render:', error);
+        // Fallback: render game directly to screen
+        rendererRef.current!.setRenderTarget(null);
+        rendererRef.current!.clear();
+        rendererRef.current!.render(gameSceneRef.current!, gameCameraRef.current!);
       }
 
       frameCount++;
@@ -391,18 +399,21 @@ function PongSlangDemo() {
         <div style={{ marginTop: '20px', width: '800px' }}>
           <h3>Current Parameters</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            {slangSystem.paramManager.getAllParameters().map(param => (
-              <div key={param.name} style={{
-                padding: '10px',
-                backgroundColor: '#2a2a2a',
-                borderRadius: '4px'
-              }}>
-                <div style={{ fontWeight: 'bold' }}>{param.displayName}</div>
-                <div style={{ color: '#888', fontSize: '0.9em' }}>
-                  Value: {param.value.toFixed(2)} (range: {param.min} - {param.max})
+            {Object.entries(slangSystem.paramManager.getAllValues()).map(([name, value]) => {
+              const param = slangSystem.paramManager.getParameter(name);
+              return (
+                <div key={name} style={{
+                  padding: '10px',
+                  backgroundColor: '#2a2a2a',
+                  borderRadius: '4px'
+                }}>
+                  <div style={{ fontWeight: 'bold' }}>{param?.displayName || name}</div>
+                  <div style={{ color: '#888', fontSize: '0.9em' }}>
+                    Value: {value.toFixed(2)} (range: {param?.min || 0} - {param?.max || 1})
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

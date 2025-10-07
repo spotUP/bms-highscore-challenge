@@ -22,8 +22,71 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 */
 
-#include "common/globals-and-potato-params.inc"
-#include "common/common-functions.inc"
+// Included from: common/globals-and-potato-params.inc
+#define IS_POTATO_PRESET
+
+// Included from: globals.inc
+/*
+    Mega Bezel - Creates a graphic treatment for the game play area to give a retro feel
+    Copyright (C) 2019-2022 HyperspaceMadness - HyperspaceMadness@outlook.com
+
+    Incorporates much great feedback from the libretro forum, and thanks 
+    to Hunterk who helped me get started
+
+    See more at the libretro forum
+    https://forums.libretro.com/t/hsm-mega-bezel-reflection-shader-feedback-and-updates
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see [http://www.gnu.org/licenses/].
+*/
+
+layout(std140, set = 0, binding = 0) uniform UBO
+{
+	mat4 MVP;
+    vec4 SourceSize;
+	vec4 OriginalSize;
+	vec4 OriginalFeedbackSize;
+	vec4 OutputSize;
+	vec4 FinalViewportSize;
+	vec4 DerezedPassSize;
+	int FrameDirection;
+	uint FrameCount;
+
+	float HSM_RESOLUTION_DEBUG_ON;
+	float HSM_SINDEN_BORDER_ON;
+	float HSM_SINDEN_BORDER_OPACITY;
+float HSM_SINDEN_BORDER_BRIGHTNESS;
+float HSM_SINDEN_AMBIENT_LIGHTING;
+	float HSM_SINDEN_BORDER_THICKNESS;
+float HSM_SINDEN_BORDER_EMPTY_TUBE_COMPENSATION;
+	float HSM_CACHE_GRAPHICS_ON;
+	float HSM_CACHE_UPDATE_INDICATOR_MODE;
+
+	// Graphics Brightness
+	float HSM_GLOBAL_GRAPHICS_BRIGHTNESS;
+	float HSM_STATIC_LAYERS_GAMMA;
+
+	// Night Lighting
+	float HSM_AMBIENT_LIGHTING_OPACITY;
+	float HSM_AMBIENT1_OPACITY;
+	float HSM_AMBIENT2_OPACITY;
+	float HSM_AMBIENT_LIGHTING_SWAP_IMAGE_MODE;
+
+	float HSM_AMBIENT1_HUE;
+	float HSM_AMBIENT1_SATURATION;
+	float HSM_AMBIENT1_VALUE;
+	float HSM_AMB
+
 #pragma stage vertex
 
 layout(location = 0) in vec4 Position;
@@ -143,20 +206,22 @@ vec4 HSM_GetPostCrtPreppedColorPotato(vec4 in_color_linear, vec2 VIEWPORT_COORD,
 	return out_color;
 }
 
+// Removed the if (HHLP_IsOutsideCoordSpace(SCREEN_COORD)) block to prevent zeroing out the color in potato mode
 void main()
 {
 	vec2 viewportCoordTransformed = HSM_GetViewportCoordWithZoomAndPan(vTexCoord);
 	HSM_UpdateGlobalScreenValuesFromCache(InfoCachePass, vTexCoord);
-
-	if (HHLP_IsOutsideCoordSpace(SCREEN_COORD))
-	{
-		vec4 feedback_color_test = texture(PassFeedback, vec2(0,0));
-		if (HSM_CACHE_GRAPHICS_ON > 0.5 && feedback_color_test.a < 0 && !CACHE_INFO_CHANGED)
-		{
-			FragColor = texture(PassFeedback, UNFLIPPED_VIEWPORT_COORD);
-			return;
-		}
-	}
+	
+	// Commented out to avoid black output in potato mode
+	// if (HHLP_IsOutsideCoordSpace(SCREEN_COORD))
+	// {
+	// 	vec4 feedback_color_test = texture(PassFeedback, vec2(0,0));
+	// 	if (HSM_CACHE_GRAPHICS_ON > 0.5 && feedback_color_test.a < 0 && !CACHE_INFO_CHANGED)
+	// 	{
+	// 		FragColor = texture(PassFeedback, UNFLIPPED_VIEWPORT_COORD);
+	// 		return;
+	// 	}
+	// }
 
 	FragColor = texture(Source, UNFLIPPED_VIEWPORT_COORD);
 

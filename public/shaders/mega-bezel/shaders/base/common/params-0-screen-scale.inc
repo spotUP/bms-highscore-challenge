@@ -397,7 +397,7 @@ float HSM_SCANLINE_DIRECTION = global.HSM_SCANLINE_DIRECTION;
 #pragma parameter HSM_FAKE_SCANLINE_MODE 							"          Show Fake Scanlines - OFF | ON | USE TRIGGER RES" 2 0 2 1
 #define HSM_FAKE_SCANLINE_MODE global.HSM_FAKE_SCANLINE_MODE
 
-#pragma parameter HSM_FAKE_SCANLINE_OPACITY 						"          Opacity - Def 70" 0 0 100 5
+#pragma parameter HSM_FAKE_SCANLINE_OPACITY 						"          Opacity - Def 70" 30 0 100 5
 #define HSM_FAKE_SCANLINE_OPACITY global.HSM_FAKE_SCANLINE_OPACITY / 100
 
 #pragma parameter HSM_FAKE_SCANLINE_RES_MODE						"          Scan Resolution Mode: AUTO (CORE RES) : EXPLICIT" 1 0 1 1

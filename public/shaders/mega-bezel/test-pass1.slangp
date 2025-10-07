@@ -1,0 +1,26 @@
+# Mega Bezel POTATO Test - Pass 0 only (ColorCorrectPass)
+shaders = 1
+
+shader0 = shaders/dogway/hsm-grade.slang
+filter_linear0 = false
+scale_type0 = source
+scale0 = 1.0
+alias0 = "ColorCorrectPass"
+
+textures = "SamplerLUT1;SamplerLUT2;SamplerLUT3;SamplerLUT4;ScreenPlacementImage;BackgroundImage;BackgroundVertImage"
+SamplerLUT1 = shaders/guest/lut/trinitron-lut.png
+SamplerLUT1_linear = true
+SamplerLUT2 = shaders/guest/lut/inv-trinitron-lut.png
+SamplerLUT2_linear = true
+SamplerLUT3 = shaders/guest/lut/nec-lut.png
+SamplerLUT3_linear = true
+SamplerLUT4 = shaders/guest/lut/ntsc-lut.png
+SamplerLUT4_linear = true
+ScreenPlacementImage = shaders/textures/Placeholder_Transparent_16x16.png
+ScreenPlacementImage_linear = false
+BackgroundImage = shaders/textures/Baked_Frame_Carbonfiber_Background.png
+BackgroundImage_linear = true
+BackgroundImage_mipmap = 1
+BackgroundVertImage = shaders/textures/Baked_Frame_Carbonfiber_Background_Vert.png
+BackgroundVertImage_linear = true
+BackgroundVertImage_mipmap = 1

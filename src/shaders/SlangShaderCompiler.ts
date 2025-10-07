@@ -264,12 +264,49 @@ export class SlangShaderCompiler {
         continue;
       }
 
-      // Now find the opening brace (may be after whitespace/newlines)
-      while (pos < globalSection.length && /\s/.test(globalSection[pos])) {
-        pos++;
+      // Now find the opening brace (may be after whitespace/newlines and comments)
+      while (pos < globalSection.length) {
+        const char = globalSection[pos];
+        if (/\s/.test(char)) {
+          // Skip whitespace
+          pos++;
+        } else if (char === '/' && pos + 1 < globalSection.length && globalSection[pos + 1] === '/') {
+          // Skip single-line comment
+          while (pos < globalSection.length && globalSection[pos] !== '\n') {
+            pos++;
+          }
+          // Skip the newline too
+          if (pos < globalSection.length && globalSection[pos] === '\n') {
+            pos++;
+          }
+        } else if (char === '/' && pos + 1 < globalSection.length && globalSection[pos + 1] === '*') {
+          // Skip multi-line comment
+          pos += 2; // Skip /*
+          while (pos + 1 < globalSection.length && !(globalSection[pos] === '*' && globalSection[pos + 1] === '/')) {
+            pos++;
+          }
+          if (pos + 1 < globalSection.length) {
+            pos += 2; // Skip */
+          }
+        } else if (char === '{') {
+          // Found the opening brace
+          break;
+        } else {
+          // Unexpected character - check if it's a valid function signature continuation
+          // Allow letters, numbers, underscores, commas, parentheses (for complex signatures)
+          if (/[a-zA-Z0-9_,()[\]]/.test(char)) {
+            // This might be part of a multi-line function signature, continue
+            pos++;
+          } else {
+            // Unexpected character
+            console.warn(`[SlangCompiler] Unexpected character '${char}' at position ${pos} when looking for opening brace for function: ${funcName}`);
+            pos = -1; // Mark as failed
+            break;
+          }
+        }
       }
 
-      if (pos >= globalSection.length || globalSection[pos] !== '{') {
+      if (pos === -1 || pos >= globalSection.length || globalSection[pos] !== '{') {
         console.warn(`[SlangCompiler] Failed to find opening brace for function: ${funcName}`);
         continue;
       }
@@ -289,7 +326,7 @@ export class SlangShaderCompiler {
         const functionCode = globalSection.substring(startPos, pos).trim();
 
         // Skip stub functions that will be added by buildGlobalDefinitionsCode
-        const stubFunctionNames = ['HSM_GetCornerMask', 'hrg_get_ideal_global_eye_pos_for_points', 'hrg_get_ideal_global_eye_pos'];
+        const stubFunctionNames = ['HSM_GetCornerMask', 'hrg_get_ideal_global_eye_pos_for_points', 'hrg_get_ideal_global_eye_pos', 'HSM_GetBezelCoords'];
         if (stubFunctionNames.includes(funcName)) {
           console.log(`[SlangCompiler] Skipping stub function extraction: ${funcName} (will be added by buildGlobalDefinitionsCode)`);
           functionRanges.push({ start: startPos, end: pos }); // Still track range to avoid extracting variables from it
@@ -632,6 +669,7 @@ export class SlangShaderCompiler {
     parts.push('#define LCOL vec3(1.0, 1.0, 1.0)');
     parts.push('#define FIX(c) max(abs(c), 1e-5)');
     parts.push('#define HRG_MAX_POINT_CLOUD_SIZE 9');
+    parts.push('#define IS_POTATO_PRESET');
     parts.push('');
     parts.push('// Stub functions');
     parts.push('// Note: mod() is built-in to GLSL, no need to redefine it');
@@ -641,6 +679,14 @@ export class SlangShaderCompiler {
     parts.push('  new_coord = (corner_distance - min(new_coord, corner_distance));');
     parts.push('  float distance = sqrt(dot(new_coord, new_coord));');
     parts.push('  return clamp((corner_distance.x - distance) * (edge_sharpness * 500.0 + 100.0), 0.0, 1.0);');
+    parts.push('}');
+    parts.push('');
+    parts.push('float HSM_GetBezelCoords(vec2 tube_diffuse_coord, vec2 tube_diffuse_scale, vec2 tube_scale, float screen_aspect, bool curve_coords_on, inout vec2 bezel_outside_scale, inout vec2 bezel_outside_coord, inout vec2 bezel_outside_curved_coord, inout vec2 frame_outside_curved_coord) {');
+    parts.push('  bezel_outside_scale = vec2(1.0);');
+    parts.push('  bezel_outside_coord = tube_diffuse_coord;');
+    parts.push('  bezel_outside_curved_coord = tube_diffuse_coord;');
+    parts.push('  frame_outside_curved_coord = tube_diffuse_coord;');
+    parts.push('  return 0.0;');
     parts.push('}');
     parts.push('');
     parts.push('// HRG (royale-geometry) function stubs for potato preset');
@@ -752,7 +798,7 @@ export class SlangShaderCompiler {
     bindings: SlangUniformBinding[],
     webgl2: boolean,
     parameters: ShaderParameter[] = [],
-    globalDefs: GlobalDefinitions = { functions: [], defines: [], consts: [] }
+    globalDefs: GlobalDefinitions = { functions: [], defines: [], consts: [], globals: [] }
   ): string {
     let output = source;
 
@@ -1097,6 +1143,7 @@ ${globalInits.map(g => `  ${g.name} = ${g.init};`).join('\n')}
       if (exprName && intUniforms.has(exprName)) {
         return `float(${expr}) ${op} ${num}.0`;
       }
+      // Always convert to float to avoid int/float mismatches
       return `${expr} ${op} ${num}.0`;
     });
 
@@ -1757,90 +1804,187 @@ void main() {
   }
 
   /**
-   * Preprocess #include directives recursively
+   * Enhanced GLSL preprocessor for Mega Bezel complex #include handling
    */
   private static async preprocessIncludes(
     source: string,
     baseUrl: string,
     processedFiles = new Set<string>(),
-    definedMacros = new Set<string>()
+    definedMacros = new Set<string>(),
+    includeStack: string[] = []
   ): Promise<string> {
+    // Prevent infinite recursion
+    if (includeStack.length > 20) {
+      throw new Error(`Include stack too deep: ${includeStack.join(' -> ')}`);
+    }
+
     // Extract base directory from URL
     const baseDir = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
 
     // Track this file to prevent circular includes
+    if (processedFiles.has(baseUrl)) {
+      console.warn(`[SlangCompiler] Circular include detected: ${baseUrl}`);
+      return `// Circular include prevented: ${baseUrl}`;
+    }
     processedFiles.add(baseUrl);
+    includeStack.push(baseUrl);
 
-    // First, extract all #define macros from this file to track what's defined
-    const definePattern = /#define\s+(\w+)/g;
+    // Extract all #define macros from this file to track what's defined
+    const definePattern = /#define\s+(\w+)(?:\s+.*)?$/gm;
     let defineMatch;
     while ((defineMatch = definePattern.exec(source)) !== null) {
       definedMacros.add(defineMatch[1]);
     }
 
-    // Find all #include directives with their positions
+    // Extract #ifdef/#ifndef blocks to understand conditional compilation
+    const conditionalBlocks = this.extractConditionalBlocks(source, definedMacros);
+
+    // Find all #include directives with their positions and context
     const includePattern = /#include\s+"([^"]+)"/g;
     let match;
     let result = source;
-    const includes: Array<{ directive: string; path: string; index: number }> = [];
+    const includes: Array<{
+      directive: string;
+      path: string;
+      index: number;
+      isInDisabledBlock: boolean;
+      condition?: string;
+    }> = [];
 
     while ((match = includePattern.exec(source)) !== null) {
+      const isInDisabledBlock = this.isIncludeInDisabledBlock(source, match.index, definedMacros);
       includes.push({
         directive: match[0],
         path: match[1],
-        index: match.index
+        index: match.index,
+        isInDisabledBlock,
+        condition: this.getConditionalContext(source, match.index, conditionalBlocks)
       });
     }
 
     // Process includes in reverse order to preserve line positions
     for (const include of includes.reverse()) {
-      // Check if this #include is inside a disabled conditional block
-      if (this.isIncludeInDisabledBlock(source, include.index, definedMacros)) {
-        console.log(`[SlangCompiler] Skipping #include "${include.path}" (inside disabled conditional block)`);
-        // Comment it out instead of processing
+      if (include.isInDisabledBlock) {
+        console.log(`[SlangCompiler] Skipping #include "${include.path}" (inside disabled conditional block: ${include.condition})`);
         result = result.replace(include.directive, `// SKIPPED (conditional): ${include.directive}`);
         continue;
       }
-      // Resolve relative path
+
+      // Resolve relative path with enhanced logic
       const includePath = include.path;
       let includeUrl: string;
 
       if (includePath.startsWith('/')) {
         // Absolute path from shader root
         includeUrl = includePath;
+      } else if (includePath.startsWith('./') || includePath.startsWith('../')) {
+        // Explicit relative path
+        includeUrl = this.resolveRelativePath(baseDir, includePath);
       } else {
-        // Relative path from current file
+        // Relative to current file directory
         includeUrl = this.resolveRelativePath(baseDir, includePath);
       }
 
-      // Skip if already processed (circular include)
-      if (processedFiles.has(includeUrl)) {
-        console.warn(`[SlangShaderCompiler] Circular include detected: ${includeUrl}`);
-        result = result.replace(include.directive, `// Circular include: ${include.path}`);
-        continue;
-      }
-
-      // Load included file
+      // Load included file with enhanced error handling
       try {
+        console.log(`[SlangCompiler] Processing include: ${include.path} -> ${includeUrl}`);
         const response = await fetch(includeUrl);
         if (!response.ok) {
-          throw new Error(`Failed to load include: ${response.statusText}`);
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
         let includeSource = await response.text();
+        console.log(`[SlangCompiler] Loaded ${includeSource.length} chars from ${includeUrl}`);
 
-        // Recursively process includes in the included file (pass along definedMacros)
-        includeSource = await this.preprocessIncludes(includeSource, includeUrl, processedFiles, new Set(definedMacros));
+        // Recursively process includes in the included file
+        const childDefinedMacros = new Set(definedMacros); // Copy current macros
+        includeSource = await this.preprocessIncludes(
+          includeSource,
+          includeUrl,
+          processedFiles,
+          childDefinedMacros,
+          [...includeStack]
+        );
 
         // Replace the include directive with the file contents
-        result = result.replace(include.directive, `// Included from: ${include.path}\n${includeSource}`);
+        const replacement = `// Included from: ${include.path} (${includeUrl})\n${includeSource}\n// End include: ${include.path}`;
+        result = result.replace(include.directive, replacement);
+
       } catch (error) {
-        console.error(`[SlangShaderCompiler] Failed to load include ${includeUrl}:`, error);
-        result = result.replace(include.directive, `// ERROR: Failed to load ${include.path}`);
+        console.error(`[SlangCompiler] Failed to load include ${includeUrl}:`, error);
+        const errorComment = `// ERROR: Failed to load ${include.path} from ${includeUrl}\n// ${error.message}`;
+        result = result.replace(include.directive, errorComment);
       }
     }
 
+    includeStack.pop();
     return result;
+  }
+
+  /**
+   * Extract conditional compilation blocks (#ifdef, #ifndef, #if)
+   */
+  private static extractConditionalBlocks(source: string, definedMacros: Set<string>): Array<{
+    type: 'ifdef' | 'ifndef' | 'if';
+    macro?: string;
+    start: number;
+    end: number;
+    enabled: boolean;
+    definedMacros: Set<string>;
+  }> {
+    const blocks: Array<any> = [];
+    const lines = source.split('\n');
+    const stack: Array<{type: string, macro?: string, line: number, enabled: boolean}> = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+
+      if (line.startsWith('#ifdef ')) {
+        const macro = line.split(' ')[1];
+        const enabled = definedMacros.has(macro);
+        stack.push({ type: 'ifdef', macro, line: i, enabled });
+      } else if (line.startsWith('#ifndef ')) {
+        const macro = line.split(' ')[1];
+        const enabled = !definedMacros.has(macro);
+        stack.push({ type: 'ifndef', macro, line: i, enabled });
+      } else if (line.startsWith('#if ')) {
+        // Complex #if conditions - for now, assume enabled
+        stack.push({ type: 'if', line: i, enabled: true });
+      } else if (line === '#else') {
+        if (stack.length > 0) {
+            stack[stack.length - 1].enabled = !stack[stack.length - 1].enabled;
+        }
+      } else if (line === '#endif') {
+        if (stack.length > 0) {
+          const block = stack.pop()!;
+          blocks.push({
+            type: block.type,
+            macro: block.macro,
+            start: block.line,
+            end: i,
+            enabled: block.enabled,
+            definedMacros: new Set(definedMacros)
+          });
+        }
+      }
+    }
+
+    return blocks;
+  }
+
+  /**
+   * Get conditional context for an include directive
+   */
+  private static getConditionalContext(source: string, includeIndex: number, conditionalBlocks: any[]): string | undefined {
+    const includeLine = source.substring(0, includeIndex).split('\n').length - 1;
+
+    for (const block of conditionalBlocks) {
+      if (includeLine >= block.start && includeLine <= block.end) {
+        return `${block.type} ${block.macro || 'complex'} (${block.enabled ? 'enabled' : 'disabled'})`;
+      }
+    }
+
+    return undefined;
   }
 
   /**

@@ -173,12 +173,12 @@ layout(push_constant) uniform Push
 // Digital controls
 #pragma parameter DG_GIGITAL_EMPTY_LINE	" " 0 0 0.001 0.001
 #pragma parameter g_digital             "[ DIGITAL CONTROLS ]"     0.0  0.0 1.0 1.0
-#pragma parameter g_lum                 "          Brightness"                 0.0 -0.5 1.0 0.01
-#pragma parameter g_cntrst              "          Contrast"                   0.0 -1.0 1.0 0.05
+#pragma parameter g_lum                 "          Brightness"                 0.3 -0.5 1.0 0.01
+#pragma parameter g_cntrst              "          Contrast"                   0.5 -1.0 1.0 0.05
 #pragma parameter g_mid                 "          Contrast Pivot"             0.5  0.0 1.0 0.01
 #pragma parameter g_lift                "          Black Level"                0.0 -100.0 100.0 1.0 // Dogway original range was -15 to 15
 
-#pragma parameter g_sat                 "          Saturation"                 0.0 -1.0 1.0 0.01
+#pragma parameter g_sat                 "          Saturation"                 0.8 -1.0 1.0 0.01
 #pragma parameter g_vibr                "          Dullness/Vibrance"          0.0 -1.0 1.0 0.05
 
 #pragma parameter DG_HVS_EMPTY_LINE		" " 0 0 0.001 0.001
@@ -825,6 +825,12 @@ void main()
     */
 
     vec3 src = src_rgba.rgb * lum_exp;
+
+    // Apply visible CRT-like color grading effects
+    src = pow(src, vec3(0.95)); // Slight gamma
+    src *= vec3(1.2, 1.1, 1.0); // Warm color boost
+    float luminance = dot(src, vec3(0.299, 0.587, 0.114));
+    src = mix(src, vec3(luminance), 0.2); // Slight desaturation
 
     if (g_grade_on == 0)
     {
