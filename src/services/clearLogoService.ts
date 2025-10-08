@@ -22,51 +22,19 @@ class ClearLogoService {
       return {};
     }
 
-    console.log(`🔍 Searching Cloudflare R2 for Clear Logos: ${gameNames.join(', ')}`);
+    console.log(`🔍 Generating S3 URLs for Clear Logos: ${gameNames.join(', ')}`);
 
-    try {
-      // Check if R2 credentials are configured
-      if (!this.isR2Configured()) {
-        console.log(`⚠️ Cloudflare R2 credentials not configured`);
-        console.log(`💡 To enable Clear Logos:`);
-        console.log(`   1. Create Cloudflare R2 bucket`);
-        console.log(`   2. Upload Clear Logo files`);
-        console.log(`   3. Set R2 environment variables`);
-        return {};
-      }
+    const logoMap: Record<string, string> = {};
 
-      // TODO: Implement R2 file fetching
-      const logoMap: Record<string, string> = {};
+    // Generate S3 URLs for all requested games
+    gameNames.forEach(gameName => {
+      const logoUrl = this.getR2LogoUrl(gameName);
+      logoMap[gameName] = logoUrl;
+      console.log(`✅ Generated Clear Logo URL for: ${gameName} -> ${logoUrl}`);
+    });
 
-      for (const gameName of gameNames) {
-        try {
-          // Generate R2 URL for this game's logo
-          const logoUrl = this.getR2LogoUrl(gameName);
-
-          // Fetch the logo from R2
-          const response = await fetch(logoUrl);
-          if (response.ok) {
-            const blob = await response.blob();
-            const base64 = await this.blobToBase64(blob);
-            const dataUrl = `data:image/webp;base64,${base64}`;
-
-            logoMap[gameName] = dataUrl;
-            console.log(`✅ Found Clear Logo for: ${gameName}`);
-          } else {
-            console.log(`❌ No Clear Logo found for: ${gameName} (${response.status})`);
-          }
-        } catch (error) {
-          console.warn(`❌ Error fetching logo for ${gameName}:`, error);
-        }
-      }
-
-      console.log(`🎯 Found ${Object.keys(logoMap).length} Clear Logos out of ${gameNames.length} requested`);
-      return logoMap;
-
-    } catch (error) {
-      console.error('❌ Error fetching Clear Logos from Cloudflare R2:', error);
-      return {};
-    }
+    console.log(`🎯 Generated ${Object.keys(logoMap).length} Clear Logo URLs out of ${gameNames.length} requested`);
+    return logoMap;
   }
 
   private isR2Configured(): boolean {
@@ -82,17 +50,8 @@ class ClearLogoService {
       .replace(/\s+/g, '-') // Replace spaces with dashes
       .toLowerCase();
 
-    // Use environment-appropriate proxy URL
-    const isProduction = import.meta.env.PROD;
-    const isDevelopment = import.meta.env.DEV;
-
-    if (isDevelopment) {
-      // Local development: use Express proxy server
-      return `http://localhost:3001/clear-logos/${safeFileName}.webp`;
-    } else {
-      // Production: use Vercel API route (will be deployed domain)
-      return `/api/clear-logos/${safeFileName}.webp`;
-    }
+    // Use API route for both development and production
+    return `/api/clear-logos/${safeFileName}.webp`;
   }
 
   private async blobToBase64(blob: Blob): Promise<string> {

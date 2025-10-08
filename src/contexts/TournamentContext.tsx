@@ -204,17 +204,37 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setUserTournaments(tournaments);
 
       // Selection priority:
-      // 1) Previously stored selection
-      // 2) Tournament flagged is_active (if schema provides it)
-      // 3) Most recently updated tournament
-      // 4) First available
+      // 1) User's saved preference from profiles
+      // 2) Previously stored selection (localStorage fallback)
+      // 3) Tournament flagged is_active (if schema provides it)
+      // 4) Most recently updated tournament
+      // 5) First available
       let selectedTournament: any = null;
 
-      const storedTournamentId = localStorage.getItem('currentTournamentId');
-      dlog('Stored tournament ID:', storedTournamentId);
-      if (storedTournamentId) {
-        selectedTournament = tournaments.find(t => t.id === storedTournamentId) || null;
-        dlog('Found stored tournament:', selectedTournament);
+      // First try to load from user's profile
+      try {
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('selected_tournament_id')
+          .eq('id', user.id)
+          .single();
+
+        if (!profileError && profile?.selected_tournament_id) {
+          selectedTournament = tournaments.find(t => t.id === profile.selected_tournament_id) || null;
+          dlog('Found saved tournament from profile:', selectedTournament);
+        }
+      } catch (error) {
+        dlog('Error loading tournament preference from profile:', error);
+      }
+
+      // Fallback to localStorage if no profile preference
+      if (!selectedTournament) {
+        const storedTournamentId = localStorage.getItem('currentTournamentId');
+        dlog('No profile preference, checking localStorage:', storedTournamentId);
+        if (storedTournamentId) {
+          selectedTournament = tournaments.find(t => t.id === storedTournamentId) || null;
+          dlog('Found stored tournament from localStorage:', selectedTournament);
+        }
       }
 
       if (!selectedTournament) {
@@ -273,6 +293,22 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
             setUserTournaments([defaultTournament]);
             setCurrentTournament(defaultTournament);
             setCurrentUserRole(null); // No membership role in default tournament
+
+            // Save default tournament to user's profile
+            try {
+              await supabase
+                .from('profiles')
+                .upsert({
+                  id: user.id,
+                  selected_tournament_id: defaultTournament.id
+                }, {
+                  onConflict: 'id'
+                });
+              dlog('Saved default tournament to profile:', defaultTournament.id);
+            } catch (error) {
+              dlog('Error saving default tournament preference to profile:', error);
+            }
+
             localStorage.setItem('currentTournamentId', defaultTournament.id);
           } else {
             dlog('No default tournament found for new user');
@@ -321,6 +357,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         setCurrentTournament(tournament);
         setCurrentUserRole(null);
         localStorage.setItem('currentTournamentId', tournament.id);
+        // Anonymous users don't save to Supabase, only localStorage
         return;
       }
 
@@ -361,6 +398,24 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         dlog('Setting public tournament:', tournament.name, 'with role:', membership?.role || 'public_viewer');
         setCurrentTournament(tournament);
         setCurrentUserRole(membership?.role || null);
+
+        // Save selected tournament to user's profile if authenticated
+        if (user) {
+          try {
+            await supabase
+              .from('profiles')
+              .upsert({
+                id: user.id,
+                selected_tournament_id: tournament.id
+              }, {
+                onConflict: 'id'
+              });
+            dlog('Saved selected tournament to profile:', tournament.id);
+          } catch (error) {
+            dlog('Error saving tournament preference to profile:', error);
+          }
+        }
+
         localStorage.setItem('currentTournamentId', tournament.id);
         return;
       }
@@ -379,6 +434,22 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       dlog('Setting private tournament:', tournament.name, 'with role:', membership.role);
       setCurrentTournament(tournament);
       setCurrentUserRole(membership.role);
+
+      // Save selected tournament to user's profile
+      try {
+        await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            selected_tournament_id: tournament.id
+          }, {
+            onConflict: 'id'
+          });
+        dlog('Saved selected tournament to profile:', tournament.id);
+      } catch (error) {
+        dlog('Error saving tournament preference to profile:', error);
+      }
+
       localStorage.setItem('currentTournamentId', tournament.id);
       
       toast({

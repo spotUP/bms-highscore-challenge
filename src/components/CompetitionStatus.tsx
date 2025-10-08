@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCompetitionStatus } from '@/hooks/useCompetitionStatus';
 import { useSystemHealth } from '@/hooks/useSystemHealth';
 import { useTournament } from '@/contexts/TournamentContext';
@@ -29,57 +29,6 @@ const CompetitionStatus: React.FC = () => {
     is_active: true,
     scores_locked: false
   });
-
-  // Always render the full container to prevent layout shifts
-  if (loading) {
-    return (
-      <div className="status-bar-stable">
-        <div className="flex flex-wrap items-center gap-4 text-sm">
-          <div className="flex items-center gap-2 text-gray-400">
-            <div className="w-4 h-4 bg-gray-400/30 rounded animate-pulse"></div>
-            <span className="animate-pulse">Loading competition status...</span>
-          </div>
-          <div className="ml-auto flex items-center gap-3">
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-gray-400 bg-gray-500/20 border border-gray-500/30">
-              <div className="w-3 h-3 bg-gray-400/30 rounded animate-pulse"></div>
-              <span className="animate-pulse">System...</span>
-            </div>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-gray-400 bg-gray-500/20 border border-gray-500/30">
-              <div className="w-3 h-3 bg-gray-400/30 rounded animate-pulse"></div>
-              <span className="animate-pulse">Loading...</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="status-bar-stable">
-        <div className="flex flex-wrap items-center gap-4 text-sm">
-          <div className="text-red-400 flex items-center gap-2">
-            <Trophy className="w-4 h-4" />
-            <span>{error}</span>
-          </div>
-          <div className="ml-auto flex items-center gap-3">
-            <button
-              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getHealthColor(healthStatus.overall)} cursor-pointer hover:scale-105 transition-transform duration-200`}
-              title={`System Health: ${healthStatus.message}\nLast checked: ${new Date(healthStatus.lastChecked).toLocaleTimeString()}\n\nClick for detailed overview`}
-              onClick={() => setIsSystemModalOpen(true)}
-            >
-              {getHealthIcon(healthStatus.overall)}
-              <span>System {healthStatus.overall === 'healthy' ? 'OK' : healthStatus.overall}</span>
-            </button>
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-red-300 bg-red-500/20 border border-red-500/30">
-              <Lock className="w-3 h-3" />
-              <span>Error</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -167,6 +116,71 @@ const CompetitionStatus: React.FC = () => {
     setIsTournamentEditOpen(true);
   };
 
+  // Listen for tournament edit events from TopNav
+  useEffect(() => {
+    const handleOpenEdit = () => {
+      openEditTournamentDialog();
+    };
+
+    document.addEventListener('openTournamentEdit', handleOpenEdit);
+
+    return () => {
+      document.removeEventListener('openTournamentEdit', handleOpenEdit);
+    };
+  }, []);
+
+  // Always render the full container to prevent layout shifts
+  if (loading) {
+    return (
+      <div className="status-bar-stable">
+        <div className="flex flex-wrap items-center gap-4 text-sm">
+          <div className="flex items-center gap-2 text-gray-400">
+            <div className="w-4 h-4 bg-gray-400/30 rounded animate-pulse"></div>
+            <span className="animate-pulse">Loading competition status...</span>
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-gray-400 bg-gray-500/20 border border-gray-500/30">
+              <div className="w-3 h-3 bg-gray-400/30 rounded animate-pulse"></div>
+              <span className="animate-pulse">System...</span>
+            </div>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-gray-400 bg-gray-500/20 border border-gray-500/30">
+              <div className="w-3 h-3 bg-gray-400/30 rounded animate-pulse"></div>
+              <span className="animate-pulse">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="status-bar-stable">
+        <div className="flex flex-wrap items-center gap-4 text-sm">
+          <div className="text-red-400 flex items-center gap-2">
+            <Trophy className="w-4 h-4" />
+            <span>{error}</span>
+          </div>
+          <div className="ml-auto flex items-center gap-3">
+            <button
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getHealthColor(healthStatus.overall)} cursor-pointer hover:scale-105 transition-transform duration-200`}
+              title={`System Health: ${healthStatus.message}\nLast checked: ${new Date(healthStatus.lastChecked).toLocaleTimeString()}\n\nClick for detailed overview`}
+              onClick={() => setIsSystemModalOpen(true)}
+            >
+              {getHealthIcon(healthStatus.overall)}
+              <span>System {healthStatus.overall === 'healthy' ? 'OK' : healthStatus.overall}</span>
+            </button>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium text-red-300 bg-red-500/20 border border-red-500/30">
+              <Lock className="w-3 h-3" />
+              <span>Error</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+
   // Handle tournament edit form submission
   const handleEditTournament = async () => {
     if (!currentTournament) return;
@@ -196,14 +210,6 @@ const CompetitionStatus: React.FC = () => {
       <div className="flex flex-wrap items-center gap-4 text-sm">
         {competition ? (
           <>
-            {/* Competition Status */}
-            <div className={`flex items-center gap-2 ${getStatusColor(competition.status)}`}>
-              {getStatusIcon(competition.status)}
-              <span className="font-semibold capitalize">{competition.status} Competition</span>
-              <span className="text-gray-400 mx-1">•</span>
-              <span className="text-white font-medium">{competition.name}</span>
-            </div>
-
             {/* Competition Timing */}
             <div className="flex items-center gap-2 text-gray-300">
               <Clock className="w-4 h-4" />
@@ -216,12 +222,7 @@ const CompetitionStatus: React.FC = () => {
               )}
             </div>
           </>
-        ) : (
-          <div className="flex items-center gap-2 text-gray-400">
-            <Trophy className="w-4 h-4" />
-            <span>No active competition</span>
-          </div>
-        )}
+        ) : null}
 
         {/* System Health and Score Lock Status */}
         <div className="ml-auto flex items-center gap-3">

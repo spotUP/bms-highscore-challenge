@@ -10,12 +10,13 @@ import * as THREE from 'three';
 import { MegaBezelCompiler } from '../shaders/MegaBezelCompiler';
 import { MultiPassRenderer } from '../shaders/MultiPassRenderer';
 import { ParameterManager } from '../shaders/ParameterManager';
+import { MegaBezelPresetLoader } from '../shaders/MegaBezelPresetLoader';
 
 function PongSlangDemo() {
   console.log('[Slang Demo] Component mounting...');
 
   const [slangSystem, setSlangSystem] = useState<{
-    multipass: MultiPassRenderer;
+    megaBezel: MegaBezelPresetLoader;
     paramManager: ParameterManager;
   } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -87,8 +88,8 @@ function PongSlangDemo() {
         // const presetPath = '/shaders/pong-crt.slangp'; // Simple CRT shader
         // const presetPath = '/shaders/passthrough.slangp'; // Simple passthrough test
         // const presetPath = '/shaders/mega-bezel/potato-test1.slangp'; // Mega Bezel Test (3 passes)
-        // const presetPath = '/shaders/mega-bezel/potato.slangp'; // Mega Bezel POTATO
-        const presetPath = '/shaders/mega-bezel/potato-test1.slangp?v=' + Math.random(); // Full working preset
+        // const presetPath = '/shaders/mega-bezel/potato.slangp?v=' + Math.random(); // Mega Bezel POTATO with bezel graphics
+        const presetPath = '/shaders/mega-bezel/test-remove-last.slangp?v=' + Math.random(); // Test preset
         console.log('[Slang Demo] Fetching preset from:', presetPath);
 
         const response = await fetch(presetPath);
@@ -115,28 +116,83 @@ function PongSlangDemo() {
         console.log('[Slang Demo] Parameters:', Object.keys(preset.parameters));
         console.log('[Slang Demo] Textures:', Object.keys(preset.textures));
 
-        // Create MultiPassRenderer with preset
-        const multipass = new MultiPassRenderer(renderer, undefined, undefined, undefined, preset);
+        // Create MegaBezelPresetLoader with renderer
+        const megaBezel = new MegaBezelPresetLoader(renderer, {
+          webgl2: true,
+          debug: true,
+          maxPasses: 16,
+          viewportWidth: 800,
+          viewportHeight: 800
+        });
 
-        // Load shaders (now handles #include preprocessing automatically)
-        console.log('[Slang Demo] Loading shaders...');
-        await multipass.loadShaders();
+        // Load the preset using MegaBezelPresetLoader
+        console.log('[Slang Demo] Loading preset with MegaBezelPresetLoader...');
+        const loadResult = await megaBezel.loadPreset(presetPath);
 
-        console.log('[Slang Demo] All shaders loaded successfully');
+        if (!loadResult.success) {
+          throw new Error(`Failed to load preset: ${loadResult.error}`);
+        }
 
-        // Set game render target as input
-        multipass.setInputTexture(gameRenderTarget.texture);
+        console.log('[Slang Demo] Preset loaded successfully with MegaBezelPresetLoader');
 
-        // Create parameter manager for UI
+        // Create parameter manager for UI (separate from the internal one)
         const paramManager = new ParameterManager();
 
-        // Note: In the new system, parameters are managed differently
-        // The MultiPassRenderer handles its own parameters internally
+        // Set default values for Mega Bezel uniforms
+        paramManager.setValue('HSM_BZL_INNER_CORNER_RADIUS_SCALE', 1.0);
+        paramManager.setValue('HSM_GLOBAL_CORNER_RADIUS', 0.05);
+        paramManager.setValue('HSM_MONOCHROME_MODE', 0.0);
+        paramManager.setValue('HSM_POST_CRT_BRIGHTNESS', 1.0);
+        paramManager.setValue('HSM_TUBE_BLACK_EDGE_CORNER_RADIUS_SCALE', 1.0);
+        paramManager.setValue('SCREEN_ASPECT', 1.0);
+        paramManager.setValue('SCREEN_COORD', 0.5);
+        paramManager.setValue('HSM_CRT_CURVATURE_SCALE', 0.0);
+        paramManager.setValue('DEFAULT_SRGB_GAMMA', 2.4);
+        paramManager.setValue('HSM_BG_OPACITY', 1.0);
+        paramManager.setValue('HSM_POTATO_COLORIZE_BRIGHTNESS', 1.0);
+        paramManager.setValue('HSM_BG_BRIGHTNESS', 1.0);
+
+        // Set default reflection parameters
+        paramManager.setValue('HSM_REFLECT_GLOBAL_AMOUNT', 0.4);
+        paramManager.setValue('HSM_REFLECT_DIRECT_AMOUNT', 1.5);
+        paramManager.setValue('HSM_REFLECT_DIFFUSED_AMOUNT', 0.5);
+        paramManager.setValue('HSM_REFLECT_FULLSCREEN_GLOW', 0.75);
+        paramManager.setValue('HSM_REFLECT_GLOBAL_GAMMA_ADJUST', 1.2);
+        paramManager.setValue('HSM_REFLECT_BLUR_NUM_SAMPLES', 12);
+        paramManager.setValue('HSM_REFLECT_BLUR_MIN', 0.0);
+        paramManager.setValue('HSM_REFLECT_BLUR_MAX', 0.95);
+        paramManager.setValue('HSM_REFLECT_BLUR_FALLOFF_DISTANCE', 1.0);
+        paramManager.setValue('HSM_REFLECT_FADE_AMOUNT', 1.0);
+        paramManager.setValue('HSM_REFLECT_RADIAL_FADE_WIDTH', 1.0);
+        paramManager.setValue('HSM_REFLECT_RADIAL_FADE_HEIGHT', 1.0);
+        paramManager.setValue('HSM_REFLECT_NOISE_AMOUNT', 0.5);
+        paramManager.setValue('HSM_REFLECT_NOISE_SAMPLES', 1);
+        paramManager.setValue('HSM_REFLECT_BEZEL_INNER_EDGE_AMOUNT', 130);
+        paramManager.setValue('HSM_REFLECT_FRAME_INNER_EDGE_AMOUNT', 50);
+        paramManager.setValue('HSM_REFLECT_SHOW_TUBE_FX_AMOUNT', 100);
+
+        // Set default reflection mask parameters
+        paramManager.setValue('HSM_REFLECT_MASK_IMAGE_AMOUNT', 0.0);
+        paramManager.setValue('HSM_REFLECT_MASK_BRIGHTNESS', 1.0);
+        paramManager.setValue('HSM_REFLECT_MASK_BLACK_LEVEL', 1.0);
+        paramManager.setValue('HSM_REFLECT_MASK_MIPMAPPING_BLEND_BIAS', 0.0);
+
+        // Set default corner crease parameters
+        paramManager.setValue('HSM_REFLECT_CORNER_FADE', 0.1);
+        paramManager.setValue('HSM_REFLECT_CORNER_FADE_DISTANCE', 1.0);
+        paramManager.setValue('HSM_REFLECT_CORNER_INNER_SPREAD', 5.0);
+        paramManager.setValue('HSM_REFLECT_CORNER_OUTER_SPREAD', 1.6);
+        paramManager.setValue('HSM_REFLECT_CORNER_ROTATION_OFFSET_TOP', 0.0);
+        paramManager.setValue('HSM_REFLECT_CORNER_ROTATION_OFFSET_BOTTOM', 0.0);
+        paramManager.setValue('HSM_REFLECT_CORNER_SPREAD_FALLOFF', 1.0);
+
+        // Update Mega Bezel loader with parameter values
+        megaBezel.updateParameters(paramManager.getAllValues());
 
         // Log parameters
         console.log('[Slang Demo] Parameters:', paramManager.getAllValues());
 
-        setSlangSystem({ multipass, paramManager });
+        setSlangSystem({ megaBezel, paramManager });
         setLoading(false);
 
         console.log('[Slang Demo] Slang shader system initialized successfully');
@@ -155,7 +211,7 @@ function PongSlangDemo() {
     return () => {
       console.log('[Slang Demo] Cleanup...');
       if (slangSystem) {
-        slangSystem.multipass.dispose();
+        slangSystem.megaBezel.dispose();
         // ParameterManager doesn't have dispose in new API
       }
       if (rendererRef.current) {
@@ -204,31 +260,47 @@ function PongSlangDemo() {
     if (!slangSystem) return;
 
     const handleKey = (e: KeyboardEvent) => {
-      const { paramManager } = slangSystem;
+      const { megaBezel, paramManager } = slangSystem;
 
       if (e.key === '1') {
-        // Decrease scanline intensity
-        const current = paramManager.getValue('scanlineIntensity') || 0.25;
-        paramManager.setValue('scanlineIntensity', current - 0.05);
-        console.log('[Slang Demo] Scanline intensity:', paramManager.getValue('scanlineIntensity'));
+        // Decrease reflection strength
+        const current = paramManager.getValue('HSM_BEZEL_REFLECTION_STRENGTH') || 0.3;
+        const newValue = Math.max(0, current - 0.05);
+        megaBezel.updateParameter('HSM_BEZEL_REFLECTION_STRENGTH', newValue);
+        console.log('[Slang Demo] Reflection strength:', newValue);
       } else if (e.key === '2') {
-        // Increase scanline intensity
-        const current = paramManager.getValue('scanlineIntensity') || 0.25;
-        paramManager.setValue('scanlineIntensity', current + 0.05);
-        console.log('[Slang Demo] Scanline intensity:', paramManager.getValue('scanlineIntensity'));
+        // Increase reflection strength
+        const current = paramManager.getValue('HSM_BEZEL_REFLECTION_STRENGTH') || 0.3;
+        const newValue = Math.min(1.0, current + 0.05);
+        megaBezel.updateParameter('HSM_BEZEL_REFLECTION_STRENGTH', newValue);
+        console.log('[Slang Demo] Reflection strength:', newValue);
       } else if (e.key === '3') {
-        // Decrease curvature
-        const current = paramManager.getValue('curvature') || 0.05;
-        paramManager.setValue('curvature', current - 0.01);
-        console.log('[Slang Demo] Curvature:', paramManager.getValue('curvature'));
+        // Decrease reflection roughness
+        const current = paramManager.getValue('HSM_BEZEL_REFLECTION_ROUGHNESS') || 0.3;
+        const newValue = Math.max(0, current - 0.05);
+        megaBezel.updateParameter('HSM_BEZEL_REFLECTION_ROUGHNESS', newValue);
+        console.log('[Slang Demo] Reflection roughness:', newValue);
       } else if (e.key === '4') {
-        // Increase curvature
-        const current = paramManager.getValue('curvature') || 0.05;
-        paramManager.setValue('curvature', current + 0.01);
-        console.log('[Slang Demo] Curvature:', paramManager.getValue('curvature'));
+        // Increase reflection roughness
+        const current = paramManager.getValue('HSM_BEZEL_REFLECTION_ROUGHNESS') || 0.3;
+        const newValue = Math.min(1.0, current + 0.05);
+        megaBezel.updateParameter('HSM_BEZEL_REFLECTION_ROUGHNESS', newValue);
+        console.log('[Slang Demo] Reflection roughness:', newValue);
+      } else if (e.key === '5') {
+        // Decrease bezel brightness
+        const current = paramManager.getValue('HSM_BZL_BRIGHTNESS') || 0.5;
+        const newValue = Math.max(0, current - 0.05);
+        megaBezel.updateParameter('HSM_BZL_BRIGHTNESS', newValue);
+        console.log('[Slang Demo] Bezel brightness:', newValue);
+      } else if (e.key === '6') {
+        // Increase bezel brightness
+        const current = paramManager.getValue('HSM_BZL_BRIGHTNESS') || 0.5;
+        const newValue = Math.min(1.0, current + 0.05);
+        megaBezel.updateParameter('HSM_BZL_BRIGHTNESS', newValue);
+        console.log('[Slang Demo] Bezel brightness:', newValue);
       } else if (e.key === '0') {
         // Reset to defaults
-        paramManager.resetToDefaults();
+        megaBezel.resetParameters();
         console.log('[Slang Demo] Parameters reset to defaults');
       }
     };
@@ -255,21 +327,12 @@ function PongSlangDemo() {
       rendererRef.current!.clear(); // Manually clear the render target
       rendererRef.current!.render(gameSceneRef.current!, gameCameraRef.current!);
 
-      // Update the input texture (this is critical!)
-      slangSystem.multipass.setInputTexture(gameRenderTargetRef.current!.texture);
-
-      // Render through Slang shader pipeline to screen
+      // Render through Mega Bezel shader pipeline to screen
       rendererRef.current!.setRenderTarget(null);
       try {
-        if (frameCount < 3) {
-          console.log('[PongSlangDemo] About to call multipass.render(), frameCount:', frameCount);
-        }
-        slangSystem.multipass.render();
-        if (frameCount < 3) {
-          console.log('[PongSlangDemo] multipass.render() completed');
-        }
+        slangSystem.megaBezel.render(gameRenderTargetRef.current!.texture);
       } catch (error) {
-        console.error('[PongSlangDemo] Shader pipeline failed, falling back to direct render:', error);
+        console.error('❌ Mega Bezel pipeline failed, falling back to direct render:', error);
         // Fallback: render game directly to screen
         rendererRef.current!.setRenderTarget(null);
         rendererRef.current!.clear();
@@ -341,12 +404,13 @@ function PongSlangDemo() {
       minHeight: '100vh',
       color: 'white'
     }}>
-      <h1>Pong + Slang Shader System Demo</h1>
+      <h1>Pong + Mega Bezel Reflections Demo</h1>
 
       <div style={{ marginBottom: '20px', textAlign: 'center' }}>
         <h3>Keyboard Controls</h3>
-        <p>1 / 2 - Decrease / Increase Scanline Intensity</p>
-        <p>3 / 4 - Decrease / Increase Curvature</p>
+        <p>1 / 2 - Decrease / Increase Reflection Strength</p>
+        <p>3 / 4 - Decrease / Increase Reflection Roughness</p>
+        <p>5 / 6 - Decrease / Increase Bezel Brightness</p>
         <p>0 - Reset to Defaults</p>
       </div>
 

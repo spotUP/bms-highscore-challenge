@@ -1,5 +1,24 @@
+// @ts-ignore
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+// @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.55.0';
+
+// Declare Deno global for TypeScript
+declare const Deno: any;
+
+interface Score {
+  score: number;
+}
+
+interface WebhookConfig {
+  id: string;
+  user_id: string;
+  platform: string;
+  webhook_url: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -59,7 +78,7 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const webhookData: ScoreWebhookRequest = await req.json();
+    const webhookData = await req.json() as ScoreWebhookRequest;
     
     console.log("Processing webhook data:", webhookData);
 
@@ -87,8 +106,9 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error(`Failed to fetch scores for ranking: ${scoresError.message}`);
     }
 
+    const scores: Score[] = scoresData || [];
     // Calculate position (1-based index) - count how many scores are higher than this one
-    const position = (scoresData?.filter(score => score.score > webhookData.score).length || 0) + 1;
+    const position = (scores.filter((score: Score) => score.score > webhookData.score).length || 0) + 1;
 
     // Use a simple, reliable placeholder image that Teams can display
     let gameLogoUrl = "https://cdn-icons-png.flaticon.com/512/1574/1574337.png"; // Trophy icon
@@ -107,6 +127,23 @@ const handler = async (req: Request): Promise<Response> => {
     console.log("Game logo URL:", gameLogoUrl);
     console.log("Game data:", JSON.stringify(gameData, null, 2));
 
+    // Get Clear Logo URL for the game
+    let clearLogoUrl = null;
+    try {
+      // Try to get the Clear Logo using the same logic as the frontend
+      if (gameData.name) {
+        const safeFileName = gameData.name.replace(/[^a-zA-Z0-9\-_\s]/g, '').replace(/\s+/g, '-').toLowerCase();
+        clearLogoUrl = `http://localhost:3001/clear-logos/${safeFileName}.webp`;
+
+        // For production, use the API route
+        if (!supabaseUrl.includes('localhost')) {
+          clearLogoUrl = `${supabaseUrl.replace('/functions/v1', '')}/api/clear-logos/${safeFileName}.webp`;
+        }
+      }
+    } catch (error) {
+      console.warn("Could not generate Clear Logo URL:", error);
+    }
+
     // Create the Teams message with attachments array (Power Automate format)
     const teamsMessage = {
       "attachments": [
@@ -116,6 +153,14 @@ const handler = async (req: Request): Promise<Response> => {
             "type": "AdaptiveCard",
             "version": "1.5",
             "body": [
+              // Add Clear Logo at the top if available
+              ...(clearLogoUrl ? [{
+                "type": "Image",
+                "url": clearLogoUrl,
+                "size": "Medium",
+                "horizontalAlignment": "Center",
+                "spacing": "Small"
+              }] : []),
               {
                 "type": "TextBlock",
                 "text": "NEW HIGHSCORE ALERT!",
@@ -179,8 +224,8 @@ const handler = async (req: Request): Promise<Response> => {
       await sendToWebhook(fallbackUrl, teamsMessage, "fallback");
     } else if (!webhookConfigs || webhookConfigs.length === 0) {
       console.log("No enabled Teams webhooks found");
-      return new Response(JSON.stringify({ 
-        success: true, 
+      return new Response(JSON.stringify({
+        success: true,
         message: "No enabled Teams webhooks configured",
         position: position,
         gameLogoUrl: gameLogoUrl
@@ -192,16 +237,17 @@ const handler = async (req: Request): Promise<Response> => {
         },
       });
     } else {
+      const configs: WebhookConfig[] = webhookConfigs;
       // Send to all enabled webhook URLs
-      console.log(`Found ${webhookConfigs.length} enabled Teams webhook(s)`);
-      
-      const webhookPromises = webhookConfigs.map(async (config, index) => {
+      console.log(`Found ${configs.length} enabled Teams webhook(s)`);
+
+      const webhookPromises = configs.map(async (config: WebhookConfig, index: number) => {
         return sendToWebhook(config.webhook_url, teamsMessage, `user-${index + 1}`);
       });
 
       const results = await Promise.allSettled(webhookPromises);
-      const successCount = results.filter(r => r.status === 'fulfilled').length;
-      const failureCount = results.filter(r => r.status === 'rejected').length;
+      const successCount = results.filter((r: PromiseSettledResult<any>) => r.status === 'fulfilled').length;
+      const failureCount = results.filter((r: PromiseSettledResult<any>) => r.status === 'rejected').length;
 
       console.log(`Webhook results: ${successCount} succeeded, ${failureCount} failed`);
     }

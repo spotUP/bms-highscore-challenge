@@ -72,7 +72,12 @@ export class MegaBezelPresetLoader {
     this.webglRenderer = webglRenderer;
 
     // Initialize multi-pass renderer
-    this.multiPassRenderer = new MultiPassRenderer(webglRenderer);
+    this.multiPassRenderer = new MultiPassRenderer(
+      webglRenderer,
+      this.parameterManager,
+      this.coordinateSystem,
+      this.bezelGraphics
+    );
 
     // Initialize bezel composition renderer
     this.bezelCompositionRenderer = new BezelCompositionRenderer(
@@ -115,7 +120,7 @@ export class MegaBezelPresetLoader {
       this
     );
 
-    console.log('[MegaBezelLoader] Initialized with options:', opts);
+    // Mega Bezel loader initialized
   }
 
   /**
@@ -123,8 +128,6 @@ export class MegaBezelPresetLoader {
    */
   async loadPreset(presetPath: string): Promise<PresetLoadResult> {
     try {
-      console.log(`[MegaBezelLoader] Loading preset: ${presetPath}`);
-
       // Compile preset
       const preset = await this.compiler.compilePreset(presetPath, {
         webgl2: true,
@@ -145,8 +148,6 @@ export class MegaBezelPresetLoader {
 
       // Get compilation stats
       const stats = this.compiler.getCompilationStats(preset);
-
-      console.log(`[MegaBezelLoader] Preset loaded successfully: ${preset.name}`);
 
       return {
         success: true,
@@ -200,13 +201,19 @@ export class MegaBezelPresetLoader {
     // Step 2: Calculate ambient lighting based on screen content
     this.ambientLightingRenderer!.render(processedTexture);
 
-    // Step 3: Calculate specular reflections
-    this.specularReflectionsRenderer!.renderAllReflections();
+    // Step 3: Set up reflection textures and calculate specular reflections
+    const reflectionMaskTexture = this.bezelGraphics.getReflectionMaskTexture();
+    if (reflectionMaskTexture) {
+      this.specularReflectionsRenderer!.setReflectionMask(reflectionMaskTexture);
+    }
+
+    const reflectionResults = this.specularReflectionsRenderer!.renderAllReflections(processedTexture);
 
     // Step 4: Composite with bezel graphics, lighting, and reflections
     const lightingTexture = this.ambientLightingRenderer!.getLightingTexture();
     const specularTexture = this.specularReflectionsRenderer!.getSpecularTexture();
     const reflectionTexture = this.specularReflectionsRenderer!.getReflectionTexture();
+
     this.bezelCompositionRenderer.render(processedTexture, outputTarget, lightingTexture, specularTexture, reflectionTexture);
 
     // Step 5: Apply temporal effects (motion blur, TAA, frame history)
@@ -228,20 +235,75 @@ export class MegaBezelPresetLoader {
   updateParameter(name: string, value: number): boolean {
     const success = this.parameterManager.setValue(name, value);
 
-    if (success && this.multiPassRenderer) {
+    if (success) {
       // Update renderer with new parameters
-      this.multiPassRenderer.updateParameters({ [name]: value });
+      if (this.multiPassRenderer) {
+        this.multiPassRenderer.updateParameters({ [name]: value });
+      }
+
+      // Update Mega Bezel uniforms in shader materials
+      this.updateMegaBezelUniforms(name, value);
     }
 
     return success;
   }
 
   /**
+   * Update Mega Bezel uniforms in all shader materials
+   */
+  private updateMegaBezelUniforms(name: string, value: number): void {
+    if (!this.currentPreset) return;
+
+    // Update uniforms in all passes
+    this.currentPreset.passes.forEach(pass => {
+      if (pass.uniforms[name] !== undefined) {
+        pass.uniforms[name].value = value;
+      }
+    });
+
+    // Update specific Mega Bezel uniforms that might have different names
+    const uniformMappings: Record<string, string[]> = {
+      'HSM_BZL_INNER_CORNER_RADIUS_SCALE': ['HSM_BZL_INNER_CORNER_RADIUS_SCALE'],
+      'HSM_GLOBAL_CORNER_RADIUS': ['HSM_GLOBAL_CORNER_RADIUS'],
+      'HSM_MONOCHROME_MODE': ['HSM_MONOCHROME_MODE'],
+      'HSM_POST_CRT_BRIGHTNESS': ['HSM_POST_CRT_BRIGHTNESS'],
+      'HSM_TUBE_BLACK_EDGE_CORNER_RADIUS_SCALE': ['HSM_TUBE_BLACK_EDGE_CORNER_RADIUS_SCALE'],
+      'SCREEN_ASPECT': ['SCREEN_ASPECT'],
+      'SCREEN_COORD': ['SCREEN_COORD'],
+      'HSM_CRT_CURVATURE_SCALE': ['HSM_CRT_CURVATURE_SCALE'],
+      'DEFAULT_SRGB_GAMMA': ['DEFAULT_SRGB_GAMMA'],
+      'HSM_BG_OPACITY': ['HSM_BG_OPACITY'],
+      'HSM_POTATO_COLORIZE_BRIGHTNESS': ['HSM_POTATO_COLORIZE_BRIGHTNESS'],
+      'HSM_BG_BRIGHTNESS': ['HSM_BG_BRIGHTNESS']
+    };
+
+    const mappedNames = uniformMappings[name] || [name];
+    mappedNames.forEach(mappedName => {
+      this.currentPreset!.passes.forEach(pass => {
+        if (pass.uniforms[mappedName] !== undefined) {
+          pass.uniforms[mappedName].value = value;
+        }
+      });
+    });
+  }
+
+  /**
    * Update multiple parameters
    */
   updateParameters(parameters: Record<string, number>): void {
+    // First update all parameter manager values
     Object.entries(parameters).forEach(([name, value]) => {
-      this.updateParameter(name, value);
+      this.parameterManager.setValue(name, value);
+    });
+
+    // Update renderer with new parameters
+    if (this.multiPassRenderer) {
+      this.multiPassRenderer.updateParameters(parameters);
+    }
+
+    // Update Mega Bezel uniforms in shader materials
+    Object.entries(parameters).forEach(([name, value]) => {
+      this.updateMegaBezelUniforms(name, value);
     });
   }
 
@@ -377,20 +439,12 @@ export class MegaBezelPresetLoader {
       this.temporalEffectsRenderer.dispose();
     }
 
-    // Performance manager doesn't need disposal but we can log final stats
-    if (this.performanceManager) {
-      const finalMetrics = this.performanceManager.getPerformanceMetrics();
-      console.log('[MegaBezelLoader] Final performance metrics:', finalMetrics);
-    }
-
     if (this.uiManager) {
       this.uiManager.dispose();
     }
 
     this.bezelGraphics.dispose();
     this.currentPreset = null;
-
-    console.log('[MegaBezelLoader] Disposed');
   }
 
   /**

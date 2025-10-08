@@ -19,14 +19,13 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { deleteScoreWithAchievementCleanup } from "@/utils/achievementUtils";
+import { deleteScoreWithAchievementCleanup, recalculatePlayerAchievements } from "@/utils/achievementUtils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Pencil, Trash2, Plus, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy, Zap, RotateCcw, Maximize, Palette, Search } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { isPlaceholderLogo, formatScore } from "@/lib/utils";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
 import GameLogoSuggestions, { GameLogoSuggestionsRef } from "@/components/GameLogoSuggestions";
-import { AutocompleteDropdown } from "@/components/ui/autocomplete-dropdown";
 import { AdvancedSearchField } from "@/components/ui/advanced-search-field";
 import { clearLogoService } from "@/services/clearLogoService";
 import WebhookConfig from "@/components/WebhookConfig";
@@ -46,6 +45,7 @@ import { useTournament } from "@/contexts/TournamentContext";
 import { usePerformanceMode } from "@/hooks/usePerformanceMode";
 import { useFullscreenContext } from "@/contexts/FullscreenContext";
 import { TournamentStatsModal } from "@/components/TournamentStatsModal";
+import TournamentRulesEditor from "@/components/TournamentRulesEditor";
 
 interface AdminProps {
   isExiting?: boolean;
@@ -71,6 +71,138 @@ interface CreateTournamentFormProps {
     logo_url?: string;
   }>;
 }
+
+const AddGameModal = ({ isOpen, onClose, onGameAdded }: { isOpen: boolean; onClose: () => void; onGameAdded: () => void }) => {
+  const { currentTournament } = useTournament();
+  const { toast } = useToast();
+  const [newGame, setNewGame] = useState({
+    name: '',
+    logo_url: ''
+  });
+  const logoSuggestionsRef = useRef<GameLogoSuggestionsRef>(null);
+
+  // Handle search submission (Enter key)
+  const handleGameSearchSubmit = (value: string) => {
+    if (logoSuggestionsRef.current && value.trim()) {
+      logoSuggestionsRef.current.searchForLogos();
+    }
+  };
+
+  const addGameToTournament = async () => {
+    if (!newGame.name.trim()) {
+      toast({
+        title: "Error",
+        description: "Game name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!currentTournament) {
+      toast({
+        title: "Error",
+        description: "No active tournament selected",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Try to get clear logo if no logo is provided
+      let logoUrl = newGame.logo_url || null;
+      if (!logoUrl) {
+        try {
+          const clearLogos = await clearLogoService.getClearLogosForGames([newGame.name]);
+          logoUrl = clearLogos[newGame.name] || null;
+        } catch (error) {
+          console.warn('Failed to fetch clear logo for', newGame.name, error);
+        }
+      }
+
+      const { error } = await supabase
+        .from('games')
+        .insert({
+          name: newGame.name,
+          logo_url: logoUrl,
+          tournament_id: currentTournament.id,
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Game added successfully"
+      });
+
+      // Reset form
+      setNewGame({
+        name: '',
+        logo_url: ''
+      });
+
+      // Close modal and refresh
+      onClose();
+      onGameAdded();
+    } catch (error) {
+      console.error('Error adding game:', error);
+      toast({
+        title: "Error",
+        description: "Failed to add game",
+        variant: "destructive"
+      });
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add Game to Tournament</DialogTitle>
+          <DialogDescription>
+            Add a new game to "{currentTournament?.name}"
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Add New Game Section */}
+          <div className="border rounded-lg p-4 space-y-4">
+            <h4 className="font-semibold text-white">Game Details</h4>
+
+            <AdvancedSearchField
+              value={newGame.name}
+              onChange={(value) => setNewGame(prev => ({ ...prev, name: value }))}
+              onSubmit={handleGameSearchSubmit}
+              label="Game Name *"
+              placeholder="Enter game name and press Enter to search for logos"
+              className="[&_input]:bg-black/50 [&_input]:border-cyan-400/20 [&_input]:text-white"
+              enableSuggestions={true}
+              enableRealTimeSearch={false}
+              searchHint="💡 Tip: Try 'mario', 'sonic', 'zelda', or use abbreviations like 'sf' for Street Fighter"
+              activeSearchText={newGame.name ? `Searching for: "${newGame.name}"` : undefined}
+            />
+
+            <GameLogoSuggestions
+              ref={logoSuggestionsRef}
+              gameName={newGame.name}
+              selectedImageUrl={newGame.logo_url}
+              onSelectImage={(url) => setNewGame(prev => ({ ...prev, logo_url: url }))}
+            />
+
+            <Button
+              onClick={addGameToTournament}
+              disabled={!newGame.name.trim()}
+              className="w-full"
+              variant="outline"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Game to Tournament
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
 
 const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTournamentFormProps) => {
   const { createTournament } = useTournament();
@@ -98,58 +230,19 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
   });
   const logoSuggestionsRef = useRef<GameLogoSuggestionsRef>(null);
 
+  // Handle search submission (Enter key)
+  const handleGameSearchSubmit = (value: string) => {
+    if (logoSuggestionsRef.current && value.trim()) {
+      logoSuggestionsRef.current.searchForLogos();
+    }
+  };
+
   // Game search state for tournament creation
   const [gameSearchSuggestions, setGameSearchSuggestions] = useState<string[]>([]);
   const [gameSearchShowSuggestions, setGameSearchShowSuggestions] = useState(false);
   const [gameSearchSuggestionLoading, setGameSearchSuggestionLoading] = useState(false);
   const [gameSearchLoading, setGameSearchLoading] = useState(false);
 
-  // Game search handlers for tournament creation (working implementation)
-  const handleGameSearchChange = (value: string) => {
-    setNewGame(prev => ({ ...prev, name: value }));
-
-    // Debounce suggestions
-    if (value.length >= 2) {
-      setGameSearchSuggestionLoading(true);
-      const timeoutId = setTimeout(async () => {
-        try {
-          const { data: suggestions, error } = await supabase
-            .from('games_database')
-            .select('name')
-            .ilike('name', `%${value}%`)
-            .limit(6)
-            .order('name');
-
-          if (error) throw error;
-
-          const suggestionNames = suggestions
-            ?.map(game => game.name)
-            .filter((name, index, arr) => arr.indexOf(name) === index) || [];
-
-          setGameSearchSuggestions(suggestionNames);
-          setGameSearchShowSuggestions(suggestionNames.length > 0);
-        } catch (error) {
-          console.error('Error fetching game suggestions:', error);
-          setGameSearchSuggestions([]);
-          setGameSearchShowSuggestions(false);
-        } finally {
-          setGameSearchSuggestionLoading(false);
-        }
-      }, 300);
-
-      return () => clearTimeout(timeoutId);
-    } else {
-      setGameSearchSuggestions([]);
-      setGameSearchShowSuggestions(false);
-    }
-  };
-
-  const handleGameSearchKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      // Could add submit logic here if needed
-      console.log('Game search submitted:', newGame.name);
-    }
-  };
 
   const generateSlug = (name: string) => {
     return name
@@ -420,9 +513,9 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
             <div className="relative">
               <DatePicker
                 selected={createForm.start_time ? new Date(createForm.start_time) : null}
-                onChange={(date) => setCreateForm(prev => ({
+                onChange={(date: any) => setCreateForm(prev => ({
                   ...prev,
-                  start_time: date ? date.toISOString().slice(0, 16) : ''
+                  start_time: Array.isArray(date) ? (date[0]?.toISOString().slice(0, 16) || '') : (date?.toISOString().slice(0, 16) || '')
                 }))}
                 showTimeSelect
                 dateFormat="yyyy-MM-dd h:mm aa"
@@ -470,9 +563,9 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
             <div className="relative">
               <DatePicker
                 selected={createForm.end_time ? new Date(createForm.end_time) : null}
-                onChange={(date) => setCreateForm(prev => ({
+                onChange={(date: any) => setCreateForm(prev => ({
                   ...prev,
-                  end_time: date ? date.toISOString().slice(0, 16) : ''
+                  end_time: Array.isArray(date) ? (date[0]?.toISOString().slice(0, 16) || '') : (date?.toISOString().slice(0, 16) || '')
                 }))}
                 showTimeSelect
                 dateFormat="yyyy-MM-dd h:mm aa"
@@ -531,64 +624,18 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
             <div className="border rounded-lg p-4 space-y-4">
               <h4 className="font-semibold text-white">Add Game</h4>
 
-              <div>
-                <Label htmlFor="game-name" className="text-white">Game Name *</Label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="game-name"
-                    placeholder="Enter game name (logos search automatically as you type)"
-                    value={newGame.name}
-                    onChange={(e) => handleGameSearchChange(e.target.value)}
-                    onKeyPress={handleGameSearchKeyPress}
-                    onFocus={() => newGame.name.length >= 2 && gameSearchSuggestions.length > 0 && setGameSearchShowSuggestions(true)}
-                    onBlur={() => setTimeout(() => setGameSearchShowSuggestions(false), 200)}
-                    className={`pl-10 bg-black/50 border-white/20 text-white ${gameSearchLoading ? 'pr-16' : 'pr-10'}`}
-                    disabled={gameSearchLoading}
-                  />
-                  {newGame.name && !gameSearchLoading && (
-                    <button
-                      onClick={() => {
-                        setNewGame(prev => ({ ...prev, name: '' }));
-                        setGameSearchSuggestions([]);
-                        setGameSearchShowSuggestions(false);
-                      }}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 w-4 h-4 flex items-center justify-center"
-                      title="Clear search"
-                    >
-                      ✕
-                    </button>
-                  )}
-                  {(gameSearchLoading || gameSearchSuggestionLoading) && (
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                      <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
-                    </div>
-                  )}
-
-                  {/* Search Suggestions Dropdown */}
-                  <AutocompleteDropdown
-                    suggestions={gameSearchSuggestions}
-                    isOpen={gameSearchShowSuggestions}
-                    onSelect={(suggestion) => {
-                      setNewGame(prev => ({ ...prev, name: suggestion }));
-                      setGameSearchShowSuggestions(false);
-                    }}
-                    loading={gameSearchSuggestionLoading}
-                  />
-                </div>
-                {newGame.name && (
-                  <div className="text-xs text-blue-600 mt-1">
-                    Searching for: "{newGame.name}"
-                  </div>
-                )}
-
-                {/* General search tips */}
-                {!newGame.name && (
-                  <div className="text-xs text-gray-500 mt-1">
-                    💡 Tip: Try "mario", "sonic", "zelda", or use abbreviations like "sf" for Street Fighter
-                  </div>
-                )}
-              </div>
+              <AdvancedSearchField
+                value={newGame.name}
+                onChange={(value) => setNewGame(prev => ({ ...prev, name: value }))}
+                onSubmit={handleGameSearchSubmit}
+                label="Game Name *"
+                placeholder="Enter game name and press Enter to search for logos"
+                className="[&_input]:bg-black/50 [&_input]:border-cyan-400/20 [&_input]:text-white"
+                enableSuggestions={true}
+                enableRealTimeSearch={false}
+                searchHint="💡 Tip: Try 'mario', 'sonic', 'zelda', or use abbreviations like 'sf' for Street Fighter"
+                activeSearchText={newGame.name ? `Searching for: "${newGame.name}"` : undefined}
+              />
 
 
 
@@ -1224,11 +1271,11 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
               <h3 className="text-lg font-semibold">Suggested Games:</h3>
               <div className="space-y-6">
                 {games.map((game, index) => (
-                  <Card key={index} className="bg-black/30 border-white/20 mb-4">
+                  <Card key={index} className="bg-black/30 border-cyan-400/20 mb-4">
                     <CardContent className="p-4">
                       <div className="space-y-3">
                         {/* Game Name Header */}
-                        <div className="border-b border-white/20 pb-2 mb-3">
+                        <div className="border-b border-cyan-400/20 pb-2 mb-3">
                           <h3 className="text-lg font-bold text-arcade-neonCyan">{game.name}</h3>
                           <div className="text-xs text-gray-400">
                             {game.year} • {game.manufacturer} • {game.category}
@@ -1248,7 +1295,7 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
 
                         {/* Clear Logo Preview */}
                         {clearLogos[game.name] && (
-                          <div className="border-t border-white/10 pt-3">
+                          <div className="border-t border-cyan-400/10 pt-3">
                             <div className="text-sm font-medium text-white mb-2">
                               Clear Logo Available:
                               <span className="ml-2 text-xs text-green-400">✓ Auto-selected from S3</span>
@@ -1268,7 +1315,7 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
 
                         {/* Logo suggestions for this game - only show if no clear logo */}
                         {!clearLogos[game.name] && (
-                          <div className="border-t border-white/10 pt-3">
+                          <div className="border-t border-cyan-400/10 pt-3">
                             <div className="text-sm font-medium text-white mb-2">
                               Available Logos:
                               {selectedLogos[index] && (
@@ -1308,6 +1355,73 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
   const { enableAnimations } = usePerformanceMode();
   const { fullscreenEnabled, toggleFullscreenPreference, loading: fullscreenLoading } = useFullscreenContext();
   const navigate = useNavigate();
+  const [achievementRefreshTrigger, setAchievementRefreshTrigger] = useState(0);
+
+  // Function to trigger webhooks for score submissions
+  const triggerWebhook = async (eventType: string, payload: any) => {
+    try {
+      // Call the webhook edge function
+      const { error } = await supabase.functions.invoke('webhook-trigger', {
+        body: {
+          event_type: eventType,
+          ...payload
+        }
+      });
+
+      if (error) {
+        console.warn('Webhook trigger failed:', error);
+        // Don't throw - webhooks are not critical
+      }
+    } catch (error) {
+      console.warn('Webhook trigger error:', error);
+    }
+  };
+
+  // Listen for achievement updates from score modifications
+  useEffect(() => {
+    const handleAchievementsUpdated = () => {
+      console.log('Achievements updated event received in Admin, incrementing refresh trigger');
+      setAchievementRefreshTrigger(prev => prev + 1);
+    };
+
+    // Listen for local events
+    window.addEventListener('achievementsUpdated', handleAchievementsUpdated);
+
+    // Listen for cross-tab broadcasts
+    let broadcastChannel: BroadcastChannel | null = null;
+    try {
+      broadcastChannel = new BroadcastChannel('achievement-updates');
+      broadcastChannel.onmessage = (event) => {
+        console.log('Broadcast achievement update received in Admin:', event.data);
+        setAchievementRefreshTrigger(prev => prev + 1);
+      };
+    } catch (error) {
+      console.warn('BroadcastChannel not supported in Admin');
+    }
+
+    // Listen for localStorage fallback
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'achievementUpdate' && event.newValue) {
+        try {
+          const data = JSON.parse(event.newValue);
+          console.log('localStorage achievement update received in Admin:', data);
+          setAchievementRefreshTrigger(prev => prev + 1);
+        } catch (error) {
+          console.warn('Failed to parse achievement update from localStorage');
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener('achievementsUpdated', handleAchievementsUpdated);
+      window.removeEventListener('storage', handleStorage);
+      if (broadcastChannel) {
+        broadcastChannel.close();
+      }
+    };
+  }, []);
+
   const { toast } = useToast();
   const [games, setGames] = useState<Game[]>([]);
   const [gameScores, setGameScores] = useState<Record<string, any[]>>({});
@@ -1315,10 +1429,9 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
   const [initialLoaded, setInitialLoaded] = useState(false);
   const [hasAnimated, setHasAnimated] = useState(false);
   const [showContent, setShowContent] = useState(false);
-  const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [editingScore, setEditingScore] = useState<any | null>(null);
   const [editingTournament, setEditingTournament] = useState<any | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isAddGameModalOpen, setIsAddGameModalOpen] = useState(false);
   const [isScoreDialogOpen, setIsScoreDialogOpen] = useState(false);
   const [isTournamentEditOpen, setIsTournamentEditOpen] = useState(false);
   const [isCreateTournamentOpen, setIsCreateTournamentOpen] = useState(false);
@@ -1335,14 +1448,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     tournament_id: currentTournament?.id || ""
   });
 
-  // Game search state (now handled by AdvancedSearchField)
-  const [gameSearchValue, setGameSearchValue] = useState('');
-
-  // Game search state for tournament creation
-  const [gameSearchSuggestions, setGameSearchSuggestions] = useState<string[]>([]);
-  const [gameSearchShowSuggestions, setGameSearchShowSuggestions] = useState(false);
-  const [gameSearchSuggestionLoading, setGameSearchSuggestionLoading] = useState(false);
-  const [gameSearchLoading, setGameSearchLoading] = useState(false);
   const [tournamentFormData, setTournamentFormData] = useState({
     name: "",
     slug: "",
@@ -1353,11 +1458,9 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     is_active: true,
     scores_locked: false
   });
-  const gameLogoSuggestionsRef = useRef<GameLogoSuggestionsRef>(null);
   const [isResetting, setIsResetting] = useState(false);
   const [tournamentSort, setTournamentSort] = useState<Record<string, { key: 'name' | 'created_at'; dir: 'asc' | 'desc' }>>({});
   const [tournamentExpanded, setTournamentExpanded] = useState<Record<string, boolean>>({});
-  const [tournamentFilters, setTournamentFilters] = useState<Record<string, string>>({});
   // Persisted active tab
   const [activeTab, setActiveTab] = useState<string>('create-tournament');
   const [tabTransitioning, setTabTransitioning] = useState(false);
@@ -1398,11 +1501,9 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     try {
       const s = localStorage.getItem('admin_tournament_sort');
       const e = localStorage.getItem('admin_tournament_expanded');
-      const f = localStorage.getItem('admin_tournament_filters');
       const tab = localStorage.getItem('admin_active_tab');
       if (s) setTournamentSort(JSON.parse(s));
       if (e) setTournamentExpanded(JSON.parse(e));
-      if (f) setTournamentFilters(JSON.parse(f));
       if (tab) setActiveTab(tab);
     } catch {}
   }, []);
@@ -1414,9 +1515,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
   useEffect(() => {
     try { localStorage.setItem('admin_tournament_expanded', JSON.stringify(tournamentExpanded)); } catch {}
   }, [tournamentExpanded]);
-  useEffect(() => {
-    try { localStorage.setItem('admin_tournament_filters', JSON.stringify(tournamentFilters)); } catch {}
-  }, [tournamentFilters]);
 
   // Persist active tab
   useEffect(() => {
@@ -1516,13 +1614,13 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
 
   // Update form default tournament when current tournament changes
   useEffect(() => {
-    if (currentTournament && !editingGame) {
+    if (currentTournament) {
       setFormData(prev => ({
         ...prev,
         tournament_id: currentTournament.id
       }));
     }
-  }, [currentTournament, editingGame]);
+  }, [currentTournament]);
 
   // Simple animation trigger on mount
   useEffect(() => {
@@ -1548,39 +1646,22 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       logo_url: "",
       tournament_id: currentTournament?.id || ""
     });
-    setEditingGame(null);
-    setGameSearchValue('');
   };
 
-  // Quick add game for a specific tournament (preselects tournament and opens dialog)
+  // Quick add game for a specific tournament (opens the new modal)
   const handleAddGameForTournament = (tournamentId: string) => {
-    setEditingGame(null);
-    setFormData({
-      name: "",
-      logo_url: "",
-      tournament_id: tournamentId,
-    });
-    setIsDialogOpen(true);
+    // Switch to the tournament if it's not current
+    if (currentTournament?.id !== tournamentId) {
+      const tournament = userTournaments.find(t => t.id === tournamentId);
+      if (tournament) {
+        switchTournament(tournament);
+      }
+    }
+    setIsAddGameModalOpen(true);
   };
 
-  // Open dialog for editing
-  const openEditDialog = (game: Game) => {
-    setEditingGame(game);
-    setFormData({
-      name: game.name,
-      logo_url: game.logo_url || "",
-      tournament_id: game.tournament_id
-    });
-    setIsDialogOpen(true);
-  };
 
   // Search enhancement functions
-  // Game search handlers for AdvancedSearchField
-  const handleGameSearchChange = (value: string) => {
-    setGameSearchValue(value);
-    setFormData(prev => ({ ...prev, name: value }));
-  };
-
   const handleGameSearchSubmit = (value: string) => {
     // Optional: Could trigger additional actions on search submit
     console.log('Game search submitted:', value);
@@ -1588,86 +1669,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
 
 
 
-  // Save game (create or update)
-  const saveGame = async () => {
-    if (!formData.name.trim()) {
-      toast({
-        title: "Error",
-        description: "Game name is required",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      if (editingGame) {
-        // Update existing game
-        // Try to get clear logo if no logo is provided
-        let logoUrl = formData.logo_url || null;
-        if (!logoUrl) {
-          try {
-            const clearLogos = await clearLogoService.getClearLogosForGames([formData.name]);
-            logoUrl = clearLogos[formData.name] || null;
-          } catch (error) {
-            console.warn('Failed to fetch clear logo for', formData.name, error);
-          }
-        }
-
-        const { error } = await supabase
-          .from('games')
-          .update({
-            name: formData.name,
-            logo_url: logoUrl
-          })
-          .eq('id', editingGame.id);
-
-        if (error) throw error;
-        
-        toast({
-          title: "Success",
-          description: "Game updated successfully"
-        });
-      } else {
-        // Create new game
-        // Try to get clear logo if no logo is provided
-        let logoUrl = formData.logo_url || null;
-        if (!logoUrl) {
-          try {
-            const clearLogos = await clearLogoService.getClearLogosForGames([formData.name]);
-            logoUrl = clearLogos[formData.name] || null;
-          } catch (error) {
-            console.warn('Failed to fetch clear logo for', formData.name, error);
-          }
-        }
-
-        const { error } = await supabase
-          .from('games')
-          .insert({
-            name: formData.name,
-            logo_url: logoUrl,
-            tournament_id: formData.tournament_id
-          });
-
-        if (error) throw error;
-        
-        toast({
-          title: "Success",
-          description: "Game created successfully"
-        });
-      }
-
-      setIsDialogOpen(false);
-      resetForm();
-      loadGames();
-    } catch (error) {
-      console.error('Error saving game:', error);
-      toast({
-        title: "Error",
-        description: "Failed to save game",
-        variant: "destructive"
-      });
-    }
-  };
 
   // Delete game
   const handleDeleteGame = (id: string) => {
@@ -1771,6 +1772,18 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
         toast({ title: "Success", description: "Score added successfully" });
       }
 
+      // Get game name for webhook
+      const game = games.find(g => g.id === (editingScore ? editingScore.game_id : newScoreGameId));
+      const gameName = game?.name || 'Unknown Game';
+
+      // Trigger webhook for score submission
+      await triggerWebhook('score_submitted', {
+        player_name: pname.toUpperCase(),
+        score: scoreValue,
+        game_name: gameName,
+        timestamp: new Date().toISOString()
+      });
+
       setIsScoreDialogOpen(false);
       resetScoreForm();
       setNewScoreGameId(null);
@@ -1833,7 +1846,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     }
   };
 
-  const updateScoreInline = async (scoreId: string) => {
+  const updateScoreInline = async (scoreId: string, tournamentId: string | null) => {
     const edit = inlineScoreEdits[scoreId];
     if (!edit) return;
     const pname = (edit.player_name || '').trim();
@@ -1851,6 +1864,29 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       toast({ title: 'Saved', description: 'Score updated' });
       setInlineScoreEdits(prev => { const c = { ...prev }; delete c[scoreId]; return c; });
       loadGames();
+
+      // Get game name for webhook (find the score to get game_id)
+      const score = Object.values(gameScores).flat().find(s => s.id === scoreId);
+      const game = score ? games.find(g => g.id === score.game_id) : null;
+      const gameName = game?.name || 'Unknown Game';
+
+      // Trigger webhook for score submission
+      await triggerWebhook('score_submitted', {
+        player_name: pname.toUpperCase(),
+        score: Number(sval),
+        game_name: gameName,
+        timestamp: new Date().toISOString()
+      });
+
+      // Recalculate achievements for the player
+      if (tournamentId) {
+        try {
+          await recalculatePlayerAchievements(pname.toUpperCase(), tournamentId);
+        } catch (achievementError) {
+          console.error('Error recalculating achievements:', achievementError);
+          // Don't show error to user, as the score update succeeded
+        }
+      }
     } catch (err: any) {
       const msg = err?.message || 'Failed to update score';
       toast({ title: 'Error', description: msg, variant: 'destructive', action: (<ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>) });
@@ -1871,6 +1907,28 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       if (error) throw error;
       toast({ title: 'Added', description: 'Score added' });
       loadGames();
+
+      // Get game name for webhook
+      const game = games.find(g => g.id === gameId);
+      const gameName = game?.name || 'Unknown Game';
+
+      // Trigger webhook for score submission
+      await triggerWebhook('score_submitted', {
+        player_name: pname.toUpperCase(),
+        score: scoreVal,
+        game_name: gameName,
+        timestamp: new Date().toISOString()
+      });
+
+      // Recalculate achievements for the player
+      if (tournamentId) {
+        try {
+          await recalculatePlayerAchievements(pname.toUpperCase(), tournamentId);
+        } catch (achievementError) {
+          console.error('Error recalculating achievements:', achievementError);
+          // Don't show error to user, as the score addition succeeded
+        }
+      }
     } catch (err: any) {
       const msg = err?.message || 'Failed to add score';
       toast({ title: 'Error', description: msg, variant: 'destructive', action: (<ToastAction altText="Copy error" onClick={() => navigator.clipboard.writeText(msg)}>Copy</ToastAction>) });
@@ -1975,6 +2033,13 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     tournamentName: string;
   }>({ isOpen: false, tournamentId: '', tournamentName: '' });
 
+  // Rules editor state
+  const [rulesEditor, setRulesEditor] = useState<{
+    isOpen: boolean;
+    tournamentId: string;
+    tournamentName: string;
+  }>({ isOpen: false, tournamentId: '', tournamentName: '' });
+
   // Handle showing the stats storage prompt before deletion
   const handleTournamentDeletionFlow = (tournamentId: string, tournamentName: string) => {
     setStatsModal({ isOpen: true, tournamentId, tournamentName });
@@ -2009,6 +2074,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     const formData = {
       name: tournament.name || "",
       slug: tournament.slug || "",
+      description: tournament.description || "",
       is_public: tournament.is_public || false,
       start_time: formatDateTimeForInput(tournament.start_time),
       end_time: formatDateTimeForInput(tournament.end_time),
@@ -2181,8 +2247,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
 
               <TabsContent value="tournaments" className={`mt-6 ${enableAnimations ? (competitionSubTabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}>
                 <div className="space-y-6">
-                  <CompetitionManager />
-
                 <Card className={getCardStyle('primary')}>
                   <CardHeader>
                     <div className="flex items-center justify-between gap-4 w-full">
@@ -2211,7 +2275,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                   <Accordion type="single" defaultValue={currentTournament?.id} collapsible className="w-full">
                     {userTournaments.map((tournament) => (
                       <AccordionItem key={tournament.id} value={tournament.id} className="border-white/10">
-                        <AccordionTrigger className="p-4 bg-black/30 rounded-t-lg border border-white/10 border-b-0 hover:bg-black/40 data-[state=open]:rounded-b-none">
+                        <AccordionTrigger className="p-4 bg-black/30 rounded-t-lg border border-cyan-400/10 border-b-0 hover:bg-black/40 data-[state=open]:rounded-b-none">
                           <div className="flex items-center gap-2 flex-wrap w-full text-left">
                             <h4 className="font-semibold text-white">{tournament.name}</h4>
                             {tournament.id === currentTournament?.id && (<span className="px-2 py-1 text-xs bg-arcade-neonCyan text-black rounded">Current</span>)}
@@ -2220,7 +2284,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                           </div>
                         </AccordionTrigger>
                         <AccordionContent className="p-0 max-h-[500px] overflow-y-auto">
-                          <div className="p-4 bg-black/30 rounded-b-lg border border-white/10 border-t-0">
+                          <div className="p-4 bg-black/30 rounded-b-lg border border-cyan-400/10 border-t-0">
                             <div className="flex items-start justify-between gap-4 mb-3">
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm text-gray-400 mb-1 truncate">Slug: /t/{tournament.slug}</p>
@@ -2245,6 +2309,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                 </div>
                               </DialogContent>
                             </Dialog>
+                            <Button size="sm" variant="outline" onClick={() => setRulesEditor({ isOpen: true, tournamentId: tournament.id, tournamentName: tournament.name })} title="Edit Rules"><Trophy className="w-4 h-4" /></Button>
                             <Button size="sm" variant="outline" onClick={() => openEditTournamentDialog(tournament)}><Pencil className="w-4 h-4" /></Button>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
@@ -2258,27 +2323,19 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                           </div>
                         </div>
                         {/* Full-width games block below header row */}
-                        <div className="mt-3 pt-3 border-t border-white/10">
-                          <div className="flex items-center justify-between mb-2">
-                            <h5 className="text-sm font-semibold text-white">Games ({games.filter(g => g.tournament_id === tournament.id).length})</h5>
-                            <div className="flex items-center gap-2">
-                              <AdvancedSearchField
-                                value={tournamentFilters[tournament.id] || ''}
-                                onChange={(value) => setTournamentFilters(prev => ({ ...prev, [tournament.id]: value }))}
-                                placeholder="Search games..."
-                                enableSuggestions={false}
-                                enableRealTimeSearch={true}
-                                className="h-7 w-40 bg-black/50 border-white/20 text-white text-xs"
-                              />
-                              <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handleAddGameForTournament(tournament.id)}><Plus className="w-3 h-3 mr-1" /> Add Game</Button>
-                            </div>
+                        <div className="mt-3 pt-3 border-t border-cyan-400/10">
+                        <div className="flex items-center justify-between mb-2">
+                          <h5 className="text-sm font-semibold text-white">Games ({games.filter(g => g.tournament_id === tournament.id).length})</h5>
+                          <div className="flex items-center gap-2">
+                            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => handleAddGameForTournament(tournament.id)}><Plus className="w-3 h-3 mr-1" /> Add Game</Button>
                           </div>
+                        </div>
                           {/* Bulk actions removed */}
 
                           <div className="overflow-x-auto max-h-96 overflow-y-auto">
                             <Table className="w-full table-fixed">
                               <TableHeader>
-                                <TableRow className="border-white/10 sticky top-0 bg-gray-900 z-10">
+                                <TableRow className="border-cyan-400/10 sticky top-0 bg-gray-900 z-10">
                                   <TableHead className="text-white text-xs w-[24%] cursor-pointer select-none" onClick={() => {
                                        const cur = tournamentSort[tournament.id] || { key: 'name', dir: 'asc' as const };
                                        const dir = cur.key === 'name' && cur.dir === 'asc' ? 'desc' : 'asc';
@@ -2296,8 +2353,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                               <TableBody>
                                 {(() => {
                                   const sort = tournamentSort[tournament.id] || { key: 'name' as const, dir: 'asc' as const };
-                                  const filterTxt = (tournamentFilters[tournament.id] || '').toLowerCase();
-                                  const all = games.filter(g => g.tournament_id === tournament.id).filter(g => !filterTxt || (g.name || '').toLowerCase().includes(filterTxt));
+                                  const all = games.filter(g => g.tournament_id === tournament.id);
                                   const sorted = [...all].sort((a, b) => {
                                     if (sort.key === 'name') {
                                       const an = (a.name || '').toLowerCase();
@@ -2314,13 +2370,13 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                   return (
                                     <>
                                       {page.map((game) => (
-                                        <TableRow key={game.id} className="border-white/10">
+                                        <TableRow key={game.id} className="border-cyan-400/10">
                                             <TableCell className="text-white text-xs font-medium">
                                               <div className="flex items-center gap-2">
                                                 <Input
                                                   value={inlineGameNames[game.id] ?? game.name}
                                                   onChange={(e) => setInlineGameNames(prev => ({ ...prev, [game.id]: e.target.value }))}
-                                                  className="h-7 w-48 bg-secondary/40 border-white/20 text-white text-xs"
+                                                  className="h-7 w-48 bg-secondary/40 border-cyan-400/20 text-white text-xs"
                                                 />
                                                 <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => saveGameNameInline(game.id)}>Save</Button>
                                               </div>
@@ -2339,15 +2395,15 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                                         <Input
                                                           value={edit.player_name}
                                                           onChange={(e) => setInlineScoreEdits(prev => ({ ...prev, [s.id]: { ...(prev[s.id] || edit), player_name: e.target.value } }))}
-                                                          className="h-7 w-24 bg-black/50 border-white/20 text-white text-xs"
+                                                          className="h-7 w-24 bg-black/50 border-cyan-400/20 text-white text-xs"
                                                         />
                                                         <Input
                                                           value={edit.score}
                                                           onChange={(e) => setInlineScoreEdits(prev => ({ ...prev, [s.id]: { ...(prev[s.id] || edit), score: e.target.value } }))}
-                                                          className="h-7 w-20 bg-black/50 border-white/20 text-white text-xs"
+                                                          className="h-7 w-20 bg-black/50 border-cyan-400/20 text-white text-xs"
                                                           type="number"
                                                         />
-                                                        <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => updateScoreInline(s.id)}>Save</Button>
+                                                        <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => updateScoreInline(s.id, game.tournament_id)}>Save</Button>
                                                         <Button size="sm" variant="ghost" className="h-7 px-2 border border-red-500 hover:border-red-400 hover:bg-red-500/10" onClick={() => handleDeleteScore(s.id)}>Delete</Button>
                                                       </div>
                                                     );
@@ -2355,8 +2411,8 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                                   {/* View all removed; all scores shown */}
                                                   {/* Inline add new score row */}
                                                   <div className="flex items-center gap-2 pt-1">
-                                                    <Input placeholder="Player" className="h-7 w-24 bg-black/50 border-white/20 text-white text-xs" id={`new-player-${game.id}`} />
-                                                    <Input placeholder="Score" className="h-7 w-20 bg-black/50 border-white/20 text-white text-xs" id={`new-score-${game.id}`} type="number" />
+                                                    <Input placeholder="Player" className="h-7 w-24 bg-black/50 border-cyan-400/20 text-white text-xs" id={`new-player-${game.id}`} />
+                                                    <Input placeholder="Score" className="h-7 w-20 bg-black/50 border-cyan-400/20 text-white text-xs" id={`new-score-${game.id}`} type="number" />
                                                     <Button size="sm" variant="outline" className="h-7 px-2" onClick={() => {
                                                       const p = (document.getElementById(`new-player-${game.id}`) as HTMLInputElement)?.value || '';
                                                       const sc = (document.getElementById(`new-score-${game.id}`) as HTMLInputElement)?.value || '';
@@ -2370,7 +2426,6 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                                           </TableCell>
                                           <TableCell className="text-right align-top">
                                             <div className="flex items-center justify-end gap-2 flex-wrap pl-2 relative z-50">
-                                              <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] hover:bg-blue-600/20" title="Edit game" onClick={() => openEditDialog(game)}><Pencil className="w-3 h-3" /></Button>
                                               <Button size="sm" variant="ghost" className="h-6 px-2 hover:bg-red-600/20 border border-red-500 hover:border-red-400" title="Delete game" onClick={() => handleDeleteGame(game.id)}><Trash2 className="w-3 h-3" /></Button>
                                             </div>
                                           </TableCell>
@@ -2539,88 +2594,22 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
               </TabsContent>
             </Tabs>
           </TabsContent>
-          <TabsContent value="achievements" className={`mt-6 ${enableAnimations ? (tabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}><AchievementManagerV2 /></TabsContent>
+          <TabsContent value="achievements" className={`mt-6 ${enableAnimations ? (tabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}><AchievementManagerV2 refreshTrigger={achievementRefreshTrigger} /></TabsContent>
           <TabsContent value="users" className={`mt-6 ${enableAnimations ? (tabTransitioning ? 'animate-tab-out' : 'animate-tab-in') : ''}`}><UserManagement /></TabsContent>
 
         </Tabs>
         </div>
 
-        {/* Shared Add/Edit Game Dialog */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="bg-gray-900 text-white border-white/20 max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto mx-auto">
-            <DialogHeader>
-              <DialogTitle className="text-lg font-semibold break-words">
-                {editingGame ? 'Edit Game' : 'Add New Game'}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 px-1">
-              <div className="w-full">
-                <AdvancedSearchField
-                  value={gameSearchValue}
-                  onChange={handleGameSearchChange}
-                  onSubmit={handleGameSearchSubmit}
-                  label="Game Name *"
-                  placeholder="Enter game name (logos search automatically as you type)"
-                  className="[&_input]:bg-black/50 [&_input]:border-white/20 [&_input]:text-white"
-                  enableSuggestions={true}
-                  enableRealTimeSearch={true}
-                  searchHint="💡 Tip: Try 'Street Fighter', 'Pac-Man', 'Metal Slug', or use abbreviations like 'SF'"
-                />
-              </div>
-              <div className="w-full">
-                <Label htmlFor="tournament">Tournament *</Label>
-                <Select 
-                  value={formData.tournament_id} 
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, tournament_id: value }))}
-                >
-                  <SelectTrigger className="bg-black/50 border-white/20 text-white">
-                    <SelectValue placeholder="Select Tournament" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-gray-900 border-white/20">
-                    {userTournaments.map((tournament) => (
-                      <SelectItem 
-                        key={tournament.id} 
-                        value={tournament.id} 
-                        className="text-white focus:bg-gray-800 focus:text-white"
-                      >
-                        {tournament.name}
-                        {tournament.id === currentTournament?.id && " (Current)"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="w-full">
-                <GameLogoSuggestions
-                  ref={gameLogoSuggestionsRef}
-                  gameName={formData.name}
-                  selectedImageUrl={formData.logo_url}
-                  onSelectImage={(url) => setFormData(prev => ({ ...prev, logo_url: url }))}
-                />
-              </div>
-              <div className="w-full">
-                <div className="overflow-hidden">
-                  <ImagePasteUpload
-                    value={formData.logo_url}
-                    onChange={(url) => setFormData(prev => ({ ...prev, logo_url: url }))}
-                    label="Logo URL or Upload"
-                    placeholder="Enter logo URL or paste/upload an image"
-                  />
-                </div>
-              </div>
-              <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4">
-                <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="w-full sm:w-auto">Cancel</Button>
-                <Button onClick={saveGame} variant="outline" className="w-full sm:w-auto" disabled={!formData.name.trim() || !formData.tournament_id}>
-                  {editingGame ? 'Update' : 'Create'}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        {/* Add Game Modal */}
+        <AddGameModal
+          isOpen={isAddGameModalOpen}
+          onClose={() => setIsAddGameModalOpen(false)}
+          onGameAdded={loadGames}
+        />
 
         {/* Edit Tournament Dialog */}
         <Dialog open={isTournamentEditOpen} onOpenChange={setIsTournamentEditOpen}>
-          <DialogContent className="bg-gray-900 text-white border-white/20 max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogContent className="bg-gray-900 text-white border-cyan-400/20 max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Tournament</DialogTitle>
             </DialogHeader>
@@ -2630,7 +2619,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                 <Input
                   value={tournamentFormData.name}
                   onChange={(e) => setTournamentFormData(prev => ({ ...prev, name: e.target.value }))}
-                  className="bg-black/50 border-white/20 text-white"
+                  className="bg-black/50 border-cyan-400/20 text-white"
                   placeholder="Enter tournament name"
                 />
               </div>
@@ -2639,7 +2628,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                 <Input
                   value={tournamentFormData.slug}
                   onChange={(e) => setTournamentFormData(prev => ({ ...prev, slug: e.target.value }))}
-                  className="bg-black/50 border-white/20 text-white"
+                  className="bg-black/50 border-cyan-400/20 text-white"
                   placeholder="tournament-slug"
                 />
               </div>
@@ -2648,13 +2637,13 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                   <Label className="text-white">Start Date & Time</Label>
                   <DatePicker
                     selected={tournamentFormData.start_time ? new Date(tournamentFormData.start_time) : null}
-                    onChange={(date) => setTournamentFormData(prev => ({
+                    onChange={(date: Date | null) => setTournamentFormData(prev => ({
                       ...prev,
                       start_time: date ? date.toISOString().slice(0, 16) : ''
                     }))}
                     showTimeSelect
                     dateFormat="yyyy-MM-dd h:mm aa"
-                    className="w-full px-3 py-2 bg-black/50 border border-white/20 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 bg-black/50 border border-cyan-400/20 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     wrapperClassName="w-full"
                     placeholderText="Select start date and time"
                     renderCustomHeader={({
@@ -2695,7 +2684,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                   <Label className="text-white">End Date & Time</Label>
                   <DatePicker
                     selected={tournamentFormData.end_time ? new Date(tournamentFormData.end_time) : null}
-                    onChange={(date) => setTournamentFormData(prev => ({
+                    onChange={(date: Date | null) => setTournamentFormData(prev => ({
                       ...prev,
                       end_time: date ? date.toISOString().slice(0, 16) : ''
                     }))}
@@ -2786,7 +2775,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
           description="Are you sure you want to delete this game? This action cannot be undone."
           confirmText="Delete Game"
           cancelText="Cancel"
-          variant="outline"
+          variant="default"
           onConfirm={confirmDeleteGame}
         />
 
@@ -2797,7 +2786,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
           description="Are you sure you want to delete this score? This action cannot be undone."
           confirmText="Delete Score"
           cancelText="Cancel"
-          variant="outline"
+          variant="default"
           onConfirm={confirmDeleteScore}
         />
 
@@ -2806,6 +2795,17 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
           onClose={handleStatsModalClose}
           onConfirm={handleStatsModalConfirm}
           tournamentName={statsModal.tournamentName}
+        />
+
+        <TournamentRulesEditor
+          tournamentId={rulesEditor.tournamentId}
+          tournamentName={rulesEditor.tournamentName}
+          isOpen={rulesEditor.isOpen}
+          onClose={() => setRulesEditor({ isOpen: false, tournamentId: '', tournamentName: '' })}
+          onSave={() => {
+            // Refresh tournaments data if needed
+            refreshTournaments();
+          }}
         />
       </PageContainer>
     </div>

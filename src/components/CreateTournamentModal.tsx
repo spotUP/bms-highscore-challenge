@@ -45,7 +45,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
       is_public: false,
       start_time: now.toISOString().slice(0, 16), // Format for datetime-local
       end_time: oneMonthLater.toISOString().slice(0, 16), // Format for datetime-local
-      status: 'draft' as const,
+      status: 'draft' as 'draft' | 'active' | 'completed',
       is_active: true,
       is_locked: false,
       scores_locked: false,
@@ -53,7 +53,6 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
   });
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
   const [games, setGames] = useState(initialGames);
-  const [selectedGames, setSelectedGames] = useState<Set<string>>(new Set());
   const [newGame, setNewGame] = useState({
     name: '',
     logo_url: ''
@@ -258,37 +257,8 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
     setSearchingLogos(false);
   };
 
-  const toggleGameSelection = (gameId: string | number) => {
-    const gameKey = String(gameId);
-    setSelectedGames(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(gameKey)) {
-        newSet.delete(gameKey);
-      } else {
-        newSet.add(gameKey);
-      }
-      return newSet;
-    });
-  };
-
-  const selectAllGames = () => {
-    const allGameKeys = games.map(game => String(game.id || `game-${games.indexOf(game)}`));
-    setSelectedGames(new Set(allGameKeys));
-  };
-
-  const deselectAllGames = () => {
-    setSelectedGames(new Set());
-  };
 
   const removeGameFromList = (gameIdOrIndex: number) => {
-    const gameKey = String(gameIdOrIndex);
-    // Also remove from selected set when removing from games list
-    setSelectedGames(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(gameKey);
-      return newSet;
-    });
-
     setGames(prev => {
       // Try to remove by ID first
       const filteredById = prev.filter(game => game.id !== gameIdOrIndex);
@@ -336,23 +306,21 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
     });
 
     if (tournament) {
-      // Add only selected games to the newly created tournament
-      const selectedGamesList = games.filter(game => {
-        const gameKey = String(game.id || games.indexOf(game));
-        return selectedGames.has(gameKey);
-      });
-
-      for (const game of selectedGamesList) {
+      // Add all games to the newly created tournament
+      for (const game of games) {
         try {
-          // Try to get clear logo if no logo is provided
-          let logoUrl = game.logo_url || null;
+          // Always try to get clear logo from the API (overrides any existing logo)
+          let logoUrl = null;
+          try {
+            const clearLogos = await clearLogoService.getClearLogosForGames([game.name]);
+            logoUrl = clearLogos[game.name] || null;
+          } catch (error) {
+            console.warn('Failed to fetch clear logo for', game.name, error);
+          }
+
+          // Fallback to provided logo if clear logo not found
           if (!logoUrl) {
-            try {
-              const clearLogos = await clearLogoService.getClearLogosForGames([game.name]);
-              logoUrl = clearLogos[game.name] || null;
-            } catch (error) {
-              console.warn('Failed to fetch clear logo for', game.name, error);
-            }
+            logoUrl = game.logo_url || null;
           }
 
           // Insert into tournament games table
@@ -360,7 +328,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
             .from('games')
             .insert({
               name: game.name,
-              description: game.overview || null, // Use game overview as description if available
+              description: null,
               logo_url: logoUrl,
               tournament_id: tournament.id,
             });
@@ -403,7 +371,6 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
 
       setCreateForm({
         name: '',
-        description: '',
         slug: '',
         is_public: false,
         start_time: now.toISOString().slice(0, 16),
@@ -414,11 +381,10 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
         scores_locked: false,
       });
       setGames([]);
-      setSelectedGames(new Set());
       setSlugAvailable(null);
       toast({
         title: "Success",
-        description: `Tournament created successfully! ${selectedGamesList.length > 0 ? `${selectedGamesList.length} games added.` : ''}`,
+        description: `Tournament created successfully! ${games.length > 0 ? `${games.length} games added.` : ''}`,
       });
       onClose(); // Close the modal
     }
@@ -434,7 +400,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
         <Tabs defaultValue="tournament" className="w-full flex flex-col flex-1">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="tournament">Tournament Details</TabsTrigger>
-            <TabsTrigger value="games">Games ({selectedGames.size}/{games.length})</TabsTrigger>
+            <TabsTrigger value="games">Games ({games.length})</TabsTrigger>
           </TabsList>
 
           <TabsContent value="tournament" className="space-y-4 mt-4 px-1">
@@ -554,11 +520,15 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
                 <div className="relative">
                   <DatePicker
                     selected={createForm.start_time ? new Date(createForm.start_time) : null}
-                    onChange={(date) => setCreateForm(prev => ({
-                      ...prev,
-                      start_time: date ? date.toISOString().slice(0, 16) : ''
-                    }))}
+                    onChange={(dates: Date[]) => {
+                      const date = dates[0] || null;
+                      setCreateForm(prev => ({
+                        ...prev,
+                        start_time: date ? date.toISOString().slice(0, 16) : ''
+                      }));
+                    }}
                     showTimeSelect
+                    selectsMultiple
                     dateFormat="yyyy-MM-dd h:mm aa"
                     className="w-full px-3 py-2 pr-10 bg-black/50 border border-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     wrapperClassName="w-full"
@@ -604,11 +574,15 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
                 <div className="relative">
                   <DatePicker
                     selected={createForm.end_time ? new Date(createForm.end_time) : null}
-                    onChange={(date) => setCreateForm(prev => ({
-                      ...prev,
-                      end_time: date ? date.toISOString().slice(0, 16) : ''
-                    }))}
+                    onChange={(dates: Date[]) => {
+                      const date = dates[0] || null;
+                      setCreateForm(prev => ({
+                        ...prev,
+                        end_time: date ? date.toISOString().slice(0, 16) : ''
+                      }));
+                    }}
                     showTimeSelect
+                    selectsMultiple
                     dateFormat="yyyy-MM-dd h:mm aa"
                     className="w-full px-3 py-2 pr-10 bg-black/50 border border-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     wrapperClassName="w-full"
@@ -776,60 +750,23 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
               <div className="border rounded-lg p-4 flex-1 flex flex-col">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="font-semibold text-white">Games to Add ({games.length})</h4>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={selectedGames.size === games.length ? deselectAllGames : selectAllGames}
-                      variant="outline"
-                      size="sm"
-                      className="text-xs"
-                    >
-                      {selectedGames.size === games.length ? (
-                        <>
-                          <Square className="w-3 h-3 mr-1" />
-                          Deselect All
-                        </>
-                      ) : (
-                        <>
-                          <CheckSquare className="w-3 h-3 mr-1" />
-                          Select All
-                        </>
-                      )}
-                    </Button>
-                  </div>
                 </div>
                 <div className="space-y-2 flex-1 overflow-y-auto">
                   {games.map((game, index) => {
                     const gameKey = String(game.id || `game-${index}`);
-                    const isSelected = selectedGames.has(gameKey);
 
                     return (
-                      <div key={gameKey} className={`flex items-center justify-between p-2 rounded transition-all ${
-                        isSelected
-                          ? 'bg-blue-600/30 border-2 border-blue-400'
-                          : 'bg-black/30 border-2 border-transparent hover:bg-black/50'
-                      }`}>
+                      <div key={gameKey} className="flex items-center justify-between p-2 rounded bg-black/30 border-2 border-transparent hover:bg-black/50 transition-all">
                         <div className="flex items-center space-x-3">
                           {game.logo_url && (
-                            <div
-                              onClick={() => toggleGameSelection(game.id || `game-${index}`)}
-                              className={`cursor-pointer rounded p-1 transition-all ${
-                                isSelected
-                                  ? 'ring-2 ring-blue-400 bg-blue-600/20'
-                                  : 'hover:ring-2 hover:ring-gray-400'
-                              }`}
-                            >
-                              <img
-                                src={game.logo_url}
-                                alt={game.name}
-                                className="w-8 h-8 rounded object-cover"
-                              />
-                            </div>
+                            <img
+                              src={game.logo_url}
+                              alt={game.name}
+                              className="w-8 h-8 rounded object-cover"
+                            />
                           )}
                           <div>
                             <p className="font-medium text-white">{game.name}</p>
-                            {isSelected && (
-                              <p className="text-xs text-blue-400 font-medium">✓ Selected</p>
-                            )}
                           </div>
                         </div>
                         <Button
@@ -858,7 +795,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
                 disabled={!createForm.name.trim() || !createForm.slug.trim() || isCreating || slugAvailable === false}
                 className="w-full"
               >
-                {isCreating ? 'Creating...' : `Create Tournament${selectedGames.size > 0 ? ` with ${selectedGames.size} Selected Games` : ''}`}
+                {isCreating ? 'Creating...' : `Create Tournament${games.length > 0 ? ` with ${games.length} Games` : ''}`}
               </Button>
             </div>
           </TabsContent>

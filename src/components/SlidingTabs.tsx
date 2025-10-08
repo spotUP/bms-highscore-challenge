@@ -104,7 +104,7 @@ export const SlidingTabsList: React.FC<SlidingTabsListProps> = ({ children, clas
       <TabsPrimitive.List
         ref={listRef}
         className={cn(
-          "inline-flex h-10 items-center justify-center rounded-lg bg-black/50 backdrop-blur-sm border border-white/20 p-1 text-muted-foreground relative",
+          "inline-flex h-10 items-center justify-center rounded-lg bg-black/50 backdrop-blur-sm border border-cyan-400/20 p-1 text-muted-foreground relative",
           className
         )}
       >

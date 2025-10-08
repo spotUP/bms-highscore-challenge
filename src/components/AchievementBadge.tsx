@@ -36,9 +36,9 @@ const AchievementBadge: React.FC<AchievementBadgeProps> = React.memo(({
       className={`
         ${sizeClasses[size]}
         rounded-full border-2 flex items-center justify-center
-        transition-all duration-300 hover:scale-110
-        ${isUnlocked 
-          ? 'border-yellow-400 bg-gradient-to-br from-yellow-400/20 to-yellow-600/20 shadow-lg shadow-yellow-400/25' 
+        transition-all duration-300
+        ${isUnlocked
+          ? 'border-yellow-400 bg-gradient-to-br from-yellow-400/20 to-yellow-600/20 shadow-lg shadow-yellow-400/25'
           : 'border-gray-600 bg-gray-800/50 opacity-50'
         }
       `}

@@ -1,5 +1,10 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+// @ts-ignore
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+// @ts-ignore
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.55.0';
+
+// Declare Deno global for TypeScript
+declare const Deno: any;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,6 +22,7 @@ interface AchievementWebhookRequest {
     points: number;
   };
   game_name?: string;
+  game_id?: string;
   score?: number;
   timestamp: string;
 }
@@ -33,7 +39,7 @@ const handler = async (req: Request): Promise<Response> => {
   }
 
   try {
-    const webhookData: AchievementWebhookRequest = await req.json();
+    const webhookData = await req.json() as AchievementWebhookRequest;
     
     console.log("Processing achievement webhook data:", JSON.stringify(webhookData, null, 2));
 
@@ -58,18 +64,114 @@ const handler = async (req: Request): Promise<Response> => {
       webhookData.achievement.badge_icon = "🏆";
     }
 
+    // Get Clear Logo URL if game information is available
+    let clearLogoUrl = null;
+    if (webhookData.game_id) {
+      try {
+        // Get game information
+        const { data: gameData, error: gameError } = await supabase
+          .from('games')
+          .select('name')
+          .eq('id', webhookData.game_id)
+          .single();
+
+        if (!gameError && gameData) {
+          // Generate Clear Logo URL using the same logic as the frontend
+          const safeFileName = gameData.name.replace(/[^a-zA-Z0-9\-_\s]/g, '').replace(/\s+/g, '-').toLowerCase();
+          clearLogoUrl = `http://localhost:3001/clear-logos/${safeFileName}.webp`;
+
+          // For production, use the API route
+          if (!supabaseUrl.includes('localhost')) {
+            clearLogoUrl = `${supabaseUrl.replace('/functions/v1', '')}/api/clear-logos/${safeFileName}.webp`;
+          }
+        }
+      } catch (error) {
+        console.warn("Could not get Clear Logo URL for achievement:", error);
+      }
+    }
+
     // Use a simpler approach - just use a placeholder image or remove the image entirely
     // The SVG data URI might be causing issues with Teams
     const achievementBadgeUrl = "https://cdn-icons-png.flaticon.com/512/1574/1574337.png"; // Trophy icon placeholder
 
-    // Use the absolute simplest Teams message format for testing
-    let teamsMessage = {
-      "text": `Achievement Unlocked: ${webhookData.player_name} earned ${webhookData.achievement.name || "Unknown Achievement"} (+${webhookData.achievement.points || 0} points)`
-    };
+    // Create Teams message with Adaptive Card format to include Clear Logo
+    let teamsMessage;
 
-    // Add game context if available
-    if (webhookData.game_name && webhookData.score) {
-      teamsMessage.text += ` in ${webhookData.game_name} with score ${webhookData.score.toLocaleString()}`;
+    if (clearLogoUrl) {
+      // Use Adaptive Card format when we have a Clear Logo
+      teamsMessage = {
+        "attachments": [
+          {
+            "contentType": "application/vnd.microsoft.card.adaptive",
+            "content": {
+              "type": "AdaptiveCard",
+              "version": "1.5",
+              "body": [
+                // Add Clear Logo at the top
+                {
+                  "type": "Image",
+                  "url": clearLogoUrl,
+                  "size": "Medium",
+                  "horizontalAlignment": "Center",
+                  "spacing": "Small"
+                },
+                {
+                  "type": "TextBlock",
+                  "text": "🏆 ACHIEVEMENT UNLOCKED!",
+                  "wrap": true,
+                  "style": "heading",
+                  "size": "ExtraLarge",
+                  "horizontalAlignment": "Center",
+                  "color": "Accent"
+                },
+                {
+                  "type": "Container",
+                  "horizontalAlignment": "Center",
+                  "items": [
+                    {
+                      "type": "TextBlock",
+                      "text": `${webhookData.player_name} earned ${webhookData.achievement.name || "Unknown Achievement"}`,
+                      "wrap": true,
+                      "size": "Large",
+                      "weight": "Bolder",
+                      "color": "Accent",
+                      "horizontalAlignment": "Center"
+                    },
+                    {
+                      "type": "TextBlock",
+                      "text": `+${webhookData.achievement.points || 0} points`,
+                      "wrap": true,
+                      "size": "Medium",
+                      "weight": "Bolder",
+                      "color": "Good",
+                      "horizontalAlignment": "Center"
+                    }
+                  ]
+                },
+                // Add game context if available
+                ...(webhookData.game_name && webhookData.score ? [{
+                  "type": "TextBlock",
+                  "text": `In ${webhookData.game_name} with score ${webhookData.score.toLocaleString()}`,
+                  "wrap": true,
+                  "size": "Medium",
+                  "color": "Default",
+                  "horizontalAlignment": "Center"
+                }] : [])
+              ]
+            }
+          }
+        ]
+      };
+    } else {
+      // Fallback to simple text message when no Clear Logo
+      teamsMessage = {
+        "text": `Achievement Unlocked: ${webhookData.player_name} earned ${webhookData.achievement.name || "Unknown Achievement"} (+${webhookData.achievement.points || 0} points)`
+      };
+
+      // Add game context if available
+      if (webhookData.game_name && webhookData.score) {
+        teamsMessage.text += ` in ${webhookData.game_name} with score ${webhookData.score.toLocaleString()}`;
+      }
     }
 
     // Send to Microsoft Teams
@@ -110,7 +212,7 @@ const handler = async (req: Request): Promise<Response> => {
         }
       } catch (error) {
         console.error("💥 Error sending to Teams:", error);
-        console.error("💥 Error stack:", error.stack);
+        console.error("💥 Error stack:", (error as any).stack);
       }
     } else {
       console.warn("⚠️ No Teams webhook URL configured");
@@ -236,6 +338,7 @@ const handler = async (req: Request): Promise<Response> => {
         if (webhookData.game_name && webhookData.score) {
           slackMessage.blocks.push({
             type: "context",
+            // @ts-ignore - Slack API allows elements in context blocks
             elements: [
               {
                 type: "mrkdwn",

@@ -9,6 +9,8 @@ import { supabase } from '@/integrations/supabase/client';
 import PlayerAchievements from '@/components/PlayerAchievements';
 import PlayerScoreHistoryChart from '@/components/charts/PlayerScoreHistoryChart';
 import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from '@/utils/designSystem';
+import { useAuth } from '@/hooks/useAuth';
+import { useTournament } from '@/contexts/TournamentContext';
 
 interface PlayerStats {
   id: string;
@@ -48,6 +50,8 @@ interface PlayerSummary {
 const Achievements = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { userTournaments } = useTournament();
   const selectedPlayer = searchParams.get('player');
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
   const [recentAchievements, setRecentAchievements] = useState<PlayerAchievement[]>([]);
@@ -66,6 +70,76 @@ const Achievements = () => {
     if (selectedPlayer) {
       loadPlayerData(selectedPlayer);
     }
+  }, [selectedPlayer]);
+
+  // Listen for achievement updates from score modifications
+  useEffect(() => {
+    const handleAchievementsUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('Achievements updated event received in Achievements page:', customEvent.detail);
+      const { playerName } = customEvent.detail;
+
+      // Refresh player list
+      loadPlayerList();
+
+      // If the updated player is currently selected, refresh their data
+      if (selectedPlayer && playerName.toUpperCase() === selectedPlayer.toUpperCase()) {
+        loadPlayerData(selectedPlayer);
+      }
+    };
+
+    // Listen for local events
+    window.addEventListener('achievementsUpdated', handleAchievementsUpdated);
+
+    // Listen for cross-tab broadcasts
+    let broadcastChannel: BroadcastChannel | null = null;
+    try {
+      broadcastChannel = new BroadcastChannel('achievement-updates');
+      broadcastChannel.onmessage = (event) => {
+        console.log('Broadcast achievement update received in Achievements page:', event.data);
+        const { playerName } = event.data;
+
+        // Refresh player list
+        loadPlayerList();
+
+        // If the updated player is currently selected, refresh their data
+        if (selectedPlayer && playerName.toUpperCase() === selectedPlayer.toUpperCase()) {
+          loadPlayerData(selectedPlayer);
+        }
+      };
+    } catch (error) {
+      console.warn('BroadcastChannel not supported in Achievements page');
+    }
+
+    // Listen for localStorage fallback
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'achievementUpdate' && event.newValue) {
+        try {
+          const data = JSON.parse(event.newValue);
+          console.log('localStorage achievement update received in Achievements page:', data);
+          const { playerName } = data;
+
+          // Refresh player list
+          loadPlayerList();
+
+          // If the updated player is currently selected, refresh their data
+          if (selectedPlayer && playerName.toUpperCase() === selectedPlayer.toUpperCase()) {
+            loadPlayerData(selectedPlayer);
+          }
+        } catch (error) {
+          console.warn('Failed to parse achievement update from localStorage');
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener('achievementsUpdated', handleAchievementsUpdated);
+      window.removeEventListener('storage', handleStorage);
+      if (broadcastChannel) {
+        broadcastChannel.close();
+      }
+    };
   }, [selectedPlayer]);
 
   const loadInitialData = async () => {
@@ -87,7 +161,17 @@ const Achievements = () => {
 
   const loadPlayerList = async () => {
     try {
-      // Get all players with achievements
+      // Get tournament IDs created by the current user
+      const userTournamentIds = userTournaments
+        .filter(tournament => tournament.created_by === user?.id)
+        .map(tournament => tournament.id);
+
+      if (userTournamentIds.length === 0) {
+        setPlayerList([]);
+        return;
+      }
+
+      // Get all players with achievements from user's tournaments only
       const { data, error } = await supabase
         .from('player_achievements')
         .select(`
@@ -95,9 +179,11 @@ const Achievements = () => {
           unlocked_at,
           achievements!inner (
             name,
-            points
+            points,
+            tournament_id
           )
         `)
+        .in('achievements.tournament_id', userTournamentIds)
         .order('unlocked_at', { ascending: false });
 
       if (error) {
@@ -106,17 +192,21 @@ const Achievements = () => {
         return;
       }
 
-      // Group by player and calculate summaries
+      // Group by player and calculate summaries across all user's tournaments
       const playerMap = new Map<string, PlayerSummary>();
-      
+
       data?.forEach(item => {
         const playerName = item.player_name;
         const existing = playerMap.get(playerName);
-        
+
         if (existing) {
           existing.achievement_count++;
           existing.total_points += item.achievements.points;
-          // Keep the latest achievement date (data is already sorted)
+          // Update latest achievement if this one is more recent
+          if (new Date(item.unlocked_at) > new Date(existing.latest_achievement_date || '')) {
+            existing.latest_achievement = item.achievements.name;
+            existing.latest_achievement_date = item.unlocked_at;
+          }
         } else {
           playerMap.set(playerName, {
             player_name: playerName,
@@ -142,7 +232,20 @@ const Achievements = () => {
     try {
       setError(null);
       console.log('Loading player data for:', playerName);
-      
+
+      // Get tournament IDs created by the current user
+      const userTournamentIds = userTournaments
+        .filter(tournament => tournament.created_by === user?.id)
+        .map(tournament => tournament.id);
+
+      if (userTournamentIds.length === 0) {
+        setPlayerStats(null);
+        setRecentAchievements([]);
+        setGames([]);
+        setScores([]);
+        return;
+      }
+
       // Try to load player stats (this might fail if table doesn't exist)
       let statsData = null;
       try {
@@ -150,10 +253,11 @@ const Achievements = () => {
           .from('player_stats')
           .select('*')
           .eq('player_name', playerName.toUpperCase())
+          .in('tournament_id', userTournamentIds)
           .single();
 
         console.log('Player stats result:', { data, statsError });
-        
+
         if (statsError && statsError.code !== 'PGRST116') {
           console.warn('Player stats error (non-critical):', statsError);
         } else {
@@ -173,11 +277,12 @@ const Achievements = () => {
             achievements (*)
           `)
           .eq('player_name', playerName.toUpperCase())
+          .in('achievements.tournament_id', userTournamentIds)
           .order('unlocked_at', { ascending: false })
           .limit(5);
 
         console.log('Player achievements result:', { data, achievementsError });
-        
+
         if (achievementsError) {
           console.warn('Player achievements error (non-critical):', achievementsError);
         } else {
@@ -187,7 +292,7 @@ const Achievements = () => {
         console.warn('Player achievements table might not exist:', achievementsErr);
       }
 
-      // Load games and scores (these should exist)
+      // Load games and scores from user's tournaments only
       const [gamesResult, scoresResult] = await Promise.all([
         supabase
           .from('games')
@@ -197,6 +302,7 @@ const Achievements = () => {
           .from('scores')
           .select('game_id, player_name, score, created_at')
           .eq('player_name', playerName.toUpperCase())
+          .in('tournament_id', userTournamentIds)
           .order('created_at', { ascending: false })
       ]);
 
@@ -525,7 +631,7 @@ const Achievements = () => {
                 {filteredPlayers.map((player) => (
                   <Card 
                     key={player.player_name} 
-                    className="bg-gray-800/50 border-gray-600 hover:bg-gray-700/50 transition-colors cursor-pointer"
+                    className="bg-gray-800/50 border-gray-600 transition-colors cursor-pointer"
                     onClick={() => handlePlayerSelect(player.player_name)}
                   >
                     <CardContent className="p-4">

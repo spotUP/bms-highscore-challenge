@@ -67,6 +67,24 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
 
   const segmentAngle = 360 / wheelNames.length;
 
+  // Calculate dynamic font size based on number of names
+  // Scale from 2.8rem for 2 names down to 1.2rem for 30+ names
+  const getDynamicFontSize = (nameCount: number) => {
+    const minFontSize = 1.2; // rem
+    const maxFontSize = 2.8; // rem
+    const minNames = 2;
+    const maxNames = 30;
+
+    if (nameCount <= minNames) return maxFontSize;
+    if (nameCount >= maxNames) return minFontSize;
+
+    // Linear interpolation between min and max
+    const ratio = (nameCount - minNames) / (maxNames - minNames);
+    return maxFontSize - (ratio * (maxFontSize - minFontSize));
+  };
+
+  const dynamicFontSize = getDynamicFontSize(wheelNames.length);
+
   // Create natural click sound using Web Audio API
   const playTickSound = (velocity: number) => {
     try {
@@ -181,15 +199,18 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
               setTickerAnimated(true);
               // Spring back after the peg passes
               setTimeout(() => setTickerAnimated(false), 400); // Much longer for boingier effect
+
+              // Add bounce-back effect when passing slowly over pins
+              if (newVelocity <= frictionThreshold) {
+                // Create bounce-back effect - wheel temporarily reverses direction slightly
+                const bounceAmount = Math.random() * 0.8 + 0.3; // 0.3 to 1.1 degrees for more noticeable bounce
+                actualNewRotation = prevRot - bounceAmount; // Bounce backwards
+              }
             }
-            // If we don't tick due to friction, add extra deceleration and bounce-back effect
+            // If we don't tick due to friction, add extra deceleration
             else if (newVelocity <= frictionThreshold) {
               // Add significant friction when ticker catches
               newVelocity *= 0.7; // Dramatic slow down
-
-              // Create bounce-back effect - wheel temporarily reverses direction slightly
-              const bounceAmount = Math.random() * 0.5 + 0.2; // 0.2 to 0.7 degrees
-              actualNewRotation = prevRot - bounceAmount; // Small bounce backwards
             }
           }
 
@@ -321,14 +342,6 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
               className="absolute inset-0"
               style={{ mixBlendMode: 'overlay' }}
             >
-              <defs>
-                {/* Gradient for varying spiral width */}
-                <linearGradient id="spiralGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="rgba(255, 255, 255, 0.1)" stopWidth="2"/>
-                  <stop offset="50%" stopColor="rgba(255, 255, 255, 0.6)" stopWidth="20"/>
-                  <stop offset="100%" stopColor="rgba(255, 255, 255, 0.1)" stopWidth="2"/>
-                </linearGradient>
-              </defs>
 
               {/* Create spiral arms with variable width */}
               {Array.from({ length: 6 }, (_, armIndex) => {
@@ -412,9 +425,10 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
 
             // Calculate dynamic radius based on name length
             // Wheel radius is 300px, border is 8px, so usable radius is 292px
-            // Estimate text width: roughly 2.8rem = ~45px per character at this font size
-            const estimatedTextWidth = name.length * 22; // Conservative estimate
-            const maxRadius = 292 - 50; // 50px safety margin from edge for better visual spacing
+            // Estimate text width: scale with font size (2.8rem ≈ 45px/char, 1.2rem ≈ 19px/char)
+            const baseCharWidth = 16; // Base character width in pixels at 1rem
+            const estimatedTextWidth = name.length * baseCharWidth * dynamicFontSize;
+            const maxRadius = 292 - 60; // 60px safety margin from edge (increased from 50px to account for text shadow outline)
             const minRadius = 180; // Don't go too close to center
 
             // Calculate radius that positions the text with good spacing from the wheel edge
@@ -446,7 +460,7 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
                   lineHeight: '1.1',
                   fontWeight: '900', // Extra bold for better visibility
                   letterSpacing: '0.5px',
-                  fontSize: '2.8rem',
+                  fontSize: `${dynamicFontSize}rem`,
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',

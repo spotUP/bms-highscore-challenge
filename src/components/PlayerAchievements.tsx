@@ -5,6 +5,8 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import AchievementBadge from './AchievementBadge';
+import { useAuth } from '@/hooks/useAuth';
+import { useTournament } from '@/contexts/TournamentContext';
 
 interface Achievement {
   id: string;
@@ -47,6 +49,8 @@ interface PlayerAchievementsProps {
 }
 
 const PlayerAchievements: React.FC<PlayerAchievementsProps> = ({ playerName }) => {
+  const { user } = useAuth();
+  const { userTournaments } = useTournament();
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [playerAchievements, setPlayerAchievements] = useState<PlayerAchievement[]>([]);
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
@@ -54,16 +58,133 @@ const PlayerAchievements: React.FC<PlayerAchievementsProps> = ({ playerName }) =
 
   useEffect(() => {
     loadAchievementData();
+  }, [playerName, userTournaments]);
+
+  // Listen for achievement updates
+  useEffect(() => {
+    const handleAchievementsUpdated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const { playerName: updatedPlayerName } = customEvent.detail;
+      if (updatedPlayerName.toUpperCase() === playerName.toUpperCase()) {
+        console.log('PlayerAchievements: Reloading data for updated player:', playerName);
+        loadAchievementData();
+      }
+    };
+
+    // Listen for local events
+    window.addEventListener('achievementsUpdated', handleAchievementsUpdated);
+
+    // Listen for cross-tab broadcasts
+    let broadcastChannel: BroadcastChannel | null = null;
+    try {
+      broadcastChannel = new BroadcastChannel('achievement-updates');
+      broadcastChannel.onmessage = (event) => {
+        const { playerName: updatedPlayerName } = event.data;
+        if (updatedPlayerName.toUpperCase() === playerName.toUpperCase()) {
+          console.log('PlayerAchievements: Broadcast reload for updated player:', playerName);
+          loadAchievementData();
+        }
+      };
+    } catch (error) {
+      console.warn('BroadcastChannel not supported in PlayerAchievements');
+    }
+
+    // Listen for localStorage fallback
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'achievementUpdate' && event.newValue) {
+        try {
+          const data = JSON.parse(event.newValue);
+          const { playerName: updatedPlayerName } = data;
+          if (updatedPlayerName.toUpperCase() === playerName.toUpperCase()) {
+            console.log('PlayerAchievements: localStorage reload for updated player:', playerName);
+            loadAchievementData();
+          }
+        } catch (error) {
+          console.warn('Failed to parse achievement update from localStorage');
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener('achievementsUpdated', handleAchievementsUpdated);
+      window.removeEventListener('storage', handleStorage);
+      if (broadcastChannel) {
+        broadcastChannel.close();
+      }
+    };
   }, [playerName]);
 
   const loadAchievementData = async () => {
     try {
-      // These tables don't exist in the current database schema
-      // Set empty data for now to prevent errors
-      console.log('PlayerAchievements component loaded for player:', playerName);
-      setAchievements([]);
-      setPlayerAchievements([]);
-      setPlayerStats(null);
+      // Get tournament IDs created by the current user
+      const userTournamentIds = userTournaments
+        .filter(tournament => tournament.created_by === user?.id)
+        .map(tournament => tournament.id);
+
+      if (userTournamentIds.length === 0) {
+        setAchievements([]);
+        setPlayerAchievements([]);
+        setPlayerStats(null);
+        setLoading(false);
+        return;
+      }
+
+      console.log('Loading achievements for player:', playerName, 'in tournaments:', userTournamentIds);
+
+      // Load all achievements from user's tournaments
+      const { data: achievementsData, error: achievementsError } = await supabase
+        .from('achievements')
+        .select('*')
+        .in('tournament_id', userTournamentIds)
+        .eq('is_active', true)
+        .order('name');
+
+      if (achievementsError) {
+        console.warn('Error loading achievements:', achievementsError);
+        setAchievements([]);
+      } else {
+        setAchievements(achievementsData || []);
+      }
+
+      // Load player's achievements from user's tournaments
+      const { data: playerAchievementsData, error: playerAchievementsError } = await supabase
+        .from('player_achievements')
+        .select(`
+          *,
+          achievements (*)
+        `)
+        .eq('player_name', playerName.toUpperCase())
+        .in('achievements.tournament_id', userTournamentIds)
+        .order('unlocked_at', { ascending: false });
+
+      if (playerAchievementsError) {
+        console.warn('Error loading player achievements:', playerAchievementsError);
+        setPlayerAchievements([]);
+      } else {
+        setPlayerAchievements(playerAchievementsData || []);
+      }
+
+      // Try to load player stats from user's tournaments
+      let statsData = null;
+      try {
+        const { data, error: statsError } = await supabase
+          .from('player_stats')
+          .select('*')
+          .eq('player_name', playerName.toUpperCase())
+          .in('tournament_id', userTournamentIds)
+          .single();
+
+        if (statsError && statsError.code !== 'PGRST116') {
+          console.warn('Player stats error:', statsError);
+        } else {
+          statsData = data;
+        }
+      } catch (statsErr) {
+        console.warn('Player stats table might not exist:', statsErr);
+      }
+
+      setPlayerStats(statsData);
     } catch (error) {
       console.error('Error loading achievement data:', error);
     } finally {

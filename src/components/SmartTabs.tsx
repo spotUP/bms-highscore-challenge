@@ -33,9 +33,9 @@ const SmartTabs: React.FC<SmartTabsProps> = ({
 
     switch (variant) {
       case 'pills':
-        return `${baseClasses} ${orientationClasses} bg-black/30 backdrop-blur-sm border border-white/10 rounded-xl p-1`;
+        return `${baseClasses} ${orientationClasses} bg-black/30 backdrop-blur-sm border border-cyan-400/10 rounded-xl p-1`;
       case 'underline':
-        return `${baseClasses} ${orientationClasses} bg-transparent border-b border-white/20 rounded-none p-0`;
+        return `${baseClasses} ${orientationClasses} bg-transparent border-b border-cyan-400/20 rounded-none p-0`;
       default:
         return `${baseClasses} ${orientationClasses}`;
     }
@@ -48,7 +48,7 @@ const SmartTabs: React.FC<SmartTabsProps> = ({
       case 'pills':
         return `${baseClasses} rounded-lg`;
       case 'underline':
-        return `${baseClasses} rounded-none border-b-2 border-transparent data-[state=active]:border-white/60 data-[state=active]:bg-transparent pb-2`;
+        return `${baseClasses} rounded-none border-b-2 border-transparent data-[state=active]:border-cyan-400/60 data-[state=active]:bg-transparent pb-2`;
       default:
         return baseClasses;
     }

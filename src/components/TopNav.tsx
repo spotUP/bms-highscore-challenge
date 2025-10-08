@@ -5,6 +5,8 @@ import SmartMenu from '@/components/SmartMenu';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { usePageTransitions } from '@/hooks/usePageTransitions';
+import { useTournament } from '@/contexts/TournamentContext';
+import { Clock, Edit } from 'lucide-react';
 
 interface TopNavProps {
   onSpinWheel?: () => void;
@@ -13,6 +15,7 @@ interface TopNavProps {
   centerNav?: boolean;
   hideBracketsLink?: boolean;
   hideTournamentSelector?: boolean;
+  hideTournamentTiming?: boolean;
   hideSpinButton?: boolean;
   hideStatistics?: boolean;
   onShowRules?: () => void;
@@ -25,6 +28,7 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
   const navigate = useNavigate();
   const location = useLocation();
   const { animatedNavigate } = usePageTransitions({ exitDuration: 600 });
+  const { currentTournament, hasPermission } = useTournament();
   const [currentTime, setCurrentTime] = useState(new Date());
 
   // Use the animated navigate function passed from Layout, or fallback to our own
@@ -98,6 +102,40 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
                 })}
               </div>
               {!hideTournamentSelector && <TournamentDropdown />}
+
+              {/* Tournament timing and edit button */}
+              {!hideTournamentSelector && currentTournament && (
+                <div className="flex items-center gap-2 ml-2">
+                  {currentTournament.end_time && (
+                    <div className="flex items-center gap-1 text-gray-300 text-sm">
+                      <Clock className="w-4 h-4" />
+                      <span>Ends {new Date(currentTournament.end_time).toLocaleString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                      })}</span>
+                    </div>
+                  )}
+
+                  {hasPermission('owner') && (
+                    <button
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border text-blue-300 bg-blue-500/20 border-blue-500/30 cursor-pointer hover:scale-105 transition-transform duration-200"
+                      title="Edit Tournament Settings"
+                      onClick={() => {
+                        // Create a custom event to open tournament edit modal
+                        const editEvent = new CustomEvent('openTournamentEdit');
+                        document.dispatchEvent(editEvent);
+                      }}
+                    >
+                      <Edit className="w-3 h-3" />
+                      <span>Edit</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
               <SmartMenu
                 animatedNavigate={finalAnimatedNavigate}
                 onShowRules={onShowRules}

@@ -149,6 +149,16 @@ export class MegaBezelCoordinateSystem {
       )
     });
 
+    this.transforms.set('screen->viewport', {
+      from: 'screen',
+      to: 'viewport',
+      transform: (coord) => this.transform(
+        this.transform(coord, 'screen', 'bezel'),
+        'bezel',
+        'viewport'
+      )
+    });
+
     this.transforms.set('viewport->tube', {
       from: 'viewport',
       to: 'tube',

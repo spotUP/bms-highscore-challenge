@@ -119,200 +119,260 @@ export class SpecularReflectionsRenderer {
    * Initialize shader materials for reflection effects
    */
   private initializeMaterials(): void {
-    // Specular highlight material
-    this.specularMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        normalMap: { value: null },
-        lightDirection: { value: new THREE.Vector3() },
-        viewPosition: { value: new THREE.Vector3() },
-        specularPower: { value: this.materialProps.specularPower },
-        specularStrength: { value: 1.0 },
-        roughness: { value: this.materialProps.roughness }
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        varying vec3 vNormal;
-        varying vec3 vViewDir;
-        varying vec3 vLightDir;
 
-        void main() {
-          vUv = uv;
+    // For Mega Bezel, we need screen-based reflections, not 3D geometry reflections
+    // The reflections should be applied to bezel areas, not the entire viewport
+    // Advanced specular highlight material with blur, noise, and fading
+     this.specularMaterial = new THREE.ShaderMaterial({
+       uniforms: {
+         screenTexture: { value: null },
+         screenPosition: { value: new THREE.Vector2(0.5, 0.5) },
+         screenScale: { value: new THREE.Vector2(0.8, 0.8) },
+         specularPower: { value: this.materialProps.specularPower },
+         roughness: { value: this.materialProps.roughness },
+         blurSamples: { value: 12 },
+         blurMin: { value: 0.0 },
+         blurMax: { value: 0.95 },
+         blurFalloff: { value: 1.0 },
+         fadeAmount: { value: 1.0 },
+         noiseAmount: { value: 0.5 },
+         gammaAdjust: { value: 1.2 },
+         time: { value: 0.0 }
+       },
+       vertexShader: `
+         varying vec2 vUv;
+         void main() {
+           vUv = uv;
+           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+         }
+       `,
+       fragmentShader: `
+         uniform sampler2D screenTexture;
+         uniform vec2 screenPosition;
+         uniform vec2 screenScale;
+         uniform float specularPower;
+         uniform float roughness;
+         uniform float blurSamples;
+         uniform float blurMin;
+         uniform float blurMax;
+         uniform float blurFalloff;
+         uniform float fadeAmount;
+         uniform float noiseAmount;
+         uniform float gammaAdjust;
+         uniform float time;
+         varying vec2 vUv;
 
-          // Transform normal to world space
-          vNormal = normalize(normalMatrix * normal);
+         // Noise function for grain effect
+         float random(vec2 st) {
+           return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+         }
 
-          // View direction
-          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          vViewDir = normalize(-mvPosition.xyz);
+         // Simple blur function (fallback for Gaussian blur)
+         vec3 simpleBlur(sampler2D tex, vec2 uv, float blurAmount) {
+           vec3 result = vec3(0.0);
+           float samples = 0.0;
 
-          // Light direction (assume directional light)
-          vLightDir = normalize(vec3(0.5, 0.5, 1.0));
+           // Sample in a cross pattern for simplicity
+           for (int i = -1; i <= 1; i++) {
+             for (int j = -1; j <= 1; j++) {
+               vec2 offset = vec2(float(i), float(j)) * blurAmount * 0.01;
+               result += texture2D(tex, uv + offset).rgb;
+               samples += 1.0;
+             }
+           }
 
-          gl_Position = projectionMatrix * mvPosition;
-        }
-      `,
-      fragmentShader: `
-        uniform sampler2D normalMap;
-        uniform vec3 lightDirection;
-        uniform vec3 viewPosition;
-        uniform float specularPower;
-        uniform float specularStrength;
-        uniform float roughness;
-        varying vec2 vUv;
-        varying vec3 vNormal;
-        varying vec3 vViewDir;
-        varying vec3 vLightDir;
+           return result / samples;
+         }
 
-        void main() {
-          // Sample normal map if available
-          vec3 normal = vNormal;
-          if (normalMap != null) {
-            vec3 normalSample = texture2D(normalMap, vUv).xyz * 2.0 - 1.0;
-            normal = normalize(normalSample);
-          }
+         void main() {
+           // Calculate screen coordinates
+           vec2 screenCoord = (vUv - screenPosition) / screenScale + 0.5;
 
-          // Calculate reflection vector
-          vec3 reflectDir = reflect(-vLightDir, normal);
+           // Only apply specular in bezel areas (outside screen area)
+           float inScreenArea = step(0.0, screenCoord.x) * step(screenCoord.x, 1.0) *
+                               step(0.0, screenCoord.y) * step(screenCoord.y, 1.0);
 
-          // Calculate specular term using Blinn-Phong
-          vec3 halfwayDir = normalize(vLightDir + vViewDir);
-          float specAngle = max(dot(normal, halfwayDir), 0.0);
+           if (inScreenArea > 0.0) {
+             // Inside screen area - no specular
+             gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+             return;
+           }
 
-          // Apply roughness (higher roughness = more spread out specular)
-          float roughnessFactor = 1.0 - roughness;
-          float specular = pow(specAngle, specularPower * roughnessFactor) * specularStrength;
+           // Calculate distance from screen edge for falloff
+           vec2 distFromScreen = abs(screenCoord - 0.5) - 0.5;
+           float edgeDistance = max(distFromScreen.x, distFromScreen.y);
 
-          // Fresnel effect (more reflection at grazing angles)
-          float fresnel = 1.0 - max(dot(vViewDir, normal), 0.0);
-          specular *= (0.5 + 0.5 * fresnel);
+           // Radial fade calculation
+           vec2 radialCoord = (vUv - 0.5) * 2.0; // -1 to 1 range
+           float radialFade = 1.0 - smoothstep(0.0, 1.0, length(radialCoord));
 
-          gl_FragColor = vec4(vec3(specular), 1.0);
-        }
-      `,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false
-    });
+           // Combined fade
+           float reflectionFalloff = (1.0 - smoothstep(0.0, 0.3, edgeDistance)) * fadeAmount * radialFade;
 
-    // Environment reflection material
-    this.reflectionMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        environmentMap: { value: null },
-        normalMap: { value: null },
-        reflectionStrength: { value: this.materialProps.reflectionStrength },
-        metallic: { value: this.materialProps.metallic },
-        viewPosition: { value: new THREE.Vector3() }
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        varying vec3 vNormal;
-        varying vec3 vViewDir;
-        varying vec3 vWorldPos;
+           // Apply blur if enabled
+           vec3 screenColor;
+           if (blurSamples > 0.0) {
+             float blurAmount = mix(blurMin, blurMax, edgeDistance * blurFalloff);
+             screenColor = simpleBlur(screenTexture, clamp(screenCoord, 0.0, 1.0), blurAmount);
+           } else {
+             screenColor = texture2D(screenTexture, clamp(screenCoord, 0.0, 1.0)).rgb;
+           }
 
-        void main() {
-          vUv = uv;
-          vNormal = normalize(normalMatrix * normal);
+           // Apply gamma adjustment
+           screenColor = pow(screenColor, vec3(1.0 / gammaAdjust));
 
-          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          vViewDir = normalize(-mvPosition.xyz);
-          vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+           // Calculate specular based on screen brightness
+           float luminance = dot(screenColor, vec3(0.299, 0.587, 0.114));
+           float specular = pow(luminance, specularPower) * reflectionFalloff;
 
-          gl_Position = projectionMatrix * mvPosition;
-        }
-      `,
-      fragmentShader: `
-        uniform sampler2D environmentMap;
-        uniform sampler2D normalMap;
-        uniform float reflectionStrength;
-        uniform float metallic;
-        uniform vec3 viewPosition;
-        varying vec2 vUv;
-        varying vec3 vNormal;
-        varying vec3 vViewDir;
-        varying vec3 vWorldPos;
+           // Apply roughness (more spread out highlights)
+           specular *= (1.0 - roughness * 0.5);
 
-        void main() {
-          // Sample normal map if available
-          vec3 normal = vNormal;
-          if (normalMap != null) {
-            vec3 normalSample = texture2D(normalMap, vUv).xyz * 2.0 - 1.0;
-            normal = normalize(normalSample);
-          }
+           // Add noise/grain effect
+           if (noiseAmount > 0.0) {
+             float noise = random(vUv + time) * 2.0 - 1.0;
+             specular += noise * noiseAmount * reflectionFalloff;
+             specular = clamp(specular, 0.0, 1.0);
+           }
 
-          // Calculate reflection vector
-          vec3 reflectDir = reflect(-vViewDir, normal);
+           gl_FragColor = vec4(vec3(specular), 1.0);
+         }
+       `,
+       transparent: true,
+       depthTest: false,
+       depthWrite: false
+     });
 
-          // Convert reflection vector to UV coordinates for environment map
-          // Simple spherical mapping (can be improved with cube maps)
-          vec2 envUV = vec2(
-            atan(reflectDir.z, reflectDir.x) / (2.0 * 3.14159) + 0.5,
-            acos(reflectDir.y) / 3.14159
-          );
+    // Advanced reflection material with multiple reflection types and Fresnel
+     this.reflectionMaterial = new THREE.ShaderMaterial({
+       uniforms: {
+         screenTexture: { value: null },
+         screenPosition: { value: new THREE.Vector2(0.5, 0.5) },
+         screenScale: { value: new THREE.Vector2(0.8, 0.8) },
+         reflectionStrength: { value: this.materialProps.reflectionStrength },
+         metallic: { value: this.materialProps.metallic },
+         fresnelStrength: { value: this.materialProps.fresnelStrength },
+         directAmount: { value: 1.5 },
+         diffusedAmount: { value: 0.5 },
+         fullscreenGlow: { value: 0.75 },
+         gammaAdjust: { value: 1.2 },
+         fadeAmount: { value: 1.0 },
+         radialFadeWidth: { value: 1.0 },
+         radialFadeHeight: { value: 1.0 },
+         viewPosition: { value: new THREE.Vector3(0.0, 0.0, 1.0) },
+         normalMap: { value: null },
+         reflectionMask: { value: null },
+         reflectMaskAmount: { value: 0.0 },
+         reflectMaskBrightness: { value: 1.0 },
+         reflectMaskBlackLevel: { value: 1.0 },
+         reflectMaskMipBias: { value: 0.0 },
+         cornerFade: { value: 0.1 },
+         cornerFadeDistance: { value: 1.0 },
+         cornerInnerSpread: { value: 5.0 },
+         cornerOuterSpread: { value: 1.6 },
+         cornerRotationTop: { value: 0.0 },
+         cornerRotationBottom: { value: 0.0 },
+         cornerSpreadFalloff: { value: 1.0 }
+       },
+       vertexShader: `
+         varying vec2 vUv;
+         varying vec3 vNormal;
+         varying vec3 vViewPosition;
+         void main() {
+           vUv = uv;
+           vNormal = normalize(normalMatrix * normal);
+           vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+           vViewPosition = -mvPosition.xyz;
+           gl_Position = projectionMatrix * mvPosition;
+         }
+       `,
+       fragmentShader: `
+         uniform sampler2D screenTexture;
+         uniform vec2 screenPosition;
+         uniform vec2 screenScale;
+         uniform float reflectionStrength;
+         varying vec2 vUv;
 
-          // Sample environment reflection
-          vec3 reflectionColor = vec3(0.0);
-          if (environmentMap != null) {
-            reflectionColor = texture2D(environmentMap, envUV).rgb;
-          } else {
-            // Default reflection color (subtle blue tint)
-            reflectionColor = vec3(0.7, 0.8, 1.0) * 0.3;
-          }
+         void main() {
+           // Calculate screen coordinates
+           vec2 screenCoord = (vUv - screenPosition) / screenScale + 0.5;
 
-          // Apply metallic and reflection strength
-          float metalFactor = metallic;
-          vec3 finalReflection = reflectionColor * reflectionStrength * (0.5 + 0.5 * metalFactor);
+           // Only apply reflections in bezel areas (outside screen area)
+           float inScreenArea = step(0.0, screenCoord.x) * step(screenCoord.x, 1.0) *
+                               step(0.0, screenCoord.y) * step(screenCoord.y, 1.0);
 
-          // Fresnel effect for more realistic reflections
-          float fresnel = 1.0 - max(dot(vViewDir, normal), 0.0);
-          finalReflection *= (0.3 + 0.7 * fresnel);
+           if (inScreenArea > 0.0) {
+             // Inside screen area - no reflection
+             gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+             return;
+           }
 
-          gl_FragColor = vec4(finalReflection, 1.0);
-        }
-      `,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false
-    });
+           // Sample screen content for reflection
+           vec2 reflectCoord = clamp(screenCoord, 0.0, 1.0);
+           vec3 screenColor = texture2D(screenTexture, reflectCoord).rgb;
 
-    // Fresnel effect material for enhanced realism
+           // Calculate distance from screen for reflection intensity falloff
+           vec2 distFromScreen = abs(screenCoord - 0.5) - 0.5;
+           float edgeDistance = max(distFromScreen.x, distFromScreen.y);
+
+           // Simple reflection falloff
+           float reflectionFalloff = 1.0 - smoothstep(0.0, 0.4, edgeDistance);
+
+           // Simple reflection color
+           vec3 reflectionColor = screenColor * reflectionFalloff * reflectionStrength;
+
+           gl_FragColor = vec4(reflectionColor, 1.0);
+         }
+       `,
+       transparent: true,
+       depthTest: false,
+       depthWrite: false
+     });
+
+    // Simplified Fresnel effect material for bezel areas
     this.fresnelMaterial = new THREE.ShaderMaterial({
       uniforms: {
+        screenPosition: { value: new THREE.Vector2(0.5, 0.5) },
+        screenScale: { value: new THREE.Vector2(0.8, 0.8) },
         fresnelStrength: { value: this.materialProps.fresnelStrength },
-        fresnelPower: { value: 2.0 },
-        baseColor: { value: new THREE.Color(0x000000) },
-        fresnelColor: { value: new THREE.Color(0xffffff) }
+        fresnelPower: { value: 2.0 }
       },
       vertexShader: `
         varying vec2 vUv;
-        varying vec3 vNormal;
-        varying vec3 vViewDir;
-
         void main() {
           vUv = uv;
-          vNormal = normalize(normalMatrix * normal);
-
-          vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          vViewDir = normalize(-mvPosition.xyz);
-
-          gl_Position = projectionMatrix * mvPosition;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
       fragmentShader: `
+        uniform vec2 screenPosition;
+        uniform vec2 screenScale;
         uniform float fresnelStrength;
         uniform float fresnelPower;
-        uniform vec3 baseColor;
-        uniform vec3 fresnelColor;
         varying vec2 vUv;
-        varying vec3 vNormal;
-        varying vec3 vViewDir;
 
         void main() {
-          // Calculate Fresnel term
-          float fresnel = 1.0 - max(dot(vViewDir, vNormal), 0.0);
+          // Calculate screen coordinates
+          vec2 screenCoord = (vUv - screenPosition) / screenScale + 0.5;
+
+          // Only apply fresnel in bezel areas (outside screen area)
+          float inScreenArea = step(0.0, screenCoord.x) * step(screenCoord.x, 1.0) *
+                              step(0.0, screenCoord.y) * step(screenCoord.y, 1.0);
+
+          if (inScreenArea > 0.0) {
+            // Inside screen area - no fresnel
+            gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+            return;
+          }
+
+          // Calculate distance-based fresnel (simplified)
+          vec2 distFromScreen = abs(screenCoord - 0.5) - 0.5;
+          float edgeDistance = max(distFromScreen.x, distFromScreen.y);
+          float fresnel = 1.0 - smoothstep(0.0, 0.5, edgeDistance);
           fresnel = pow(fresnel, fresnelPower);
 
-          // Mix base color with fresnel color
-          vec3 finalColor = mix(baseColor, fresnelColor, fresnel * fresnelStrength);
+          // White fresnel highlight
+          vec3 finalColor = vec3(fresnel * fresnelStrength);
 
           gl_FragColor = vec4(finalColor, 1.0);
         }
@@ -340,51 +400,133 @@ export class SpecularReflectionsRenderer {
   }
 
   /**
-   * Update material and reflection parameters from Mega Bezel parameters
-   */
-  private updateReflectionParameters(): void {
-    // Update from parameter manager
-    this.materialProps.roughness = this.parameterManager.getValue('HSM_BEZEL_REFLECTION_ROUGHNESS') || 0.3;
-    this.materialProps.metallic = this.parameterManager.getValue('HSM_BEZEL_REFLECTION_METALLIC') || 0.1;
-    this.materialProps.specularPower = this.parameterManager.getValue('HSM_BEZEL_REFLECTION_SPECULAR_POWER') || 64.0;
-    this.materialProps.fresnelStrength = this.parameterManager.getValue('HSM_BEZEL_REFLECTION_FRESNEL') || 0.5;
-    this.materialProps.reflectionStrength = this.parameterManager.getValue('HSM_BEZEL_REFLECTION_STRENGTH') || 0.3;
+    * Update material and reflection parameters from Mega Bezel parameters
+    */
+   private updateReflectionParameters(): void {
+     // Update from actual Mega Bezel reflection parameters
+     const globalAmount = this.parameterManager.getValue('HSM_REFLECT_GLOBAL_AMOUNT') || 0.4;
+     const directAmount = this.parameterManager.getValue('HSM_REFLECT_DIRECT_AMOUNT') || 1.5;
+     const diffusedAmount = this.parameterManager.getValue('HSM_REFLECT_DIFFUSED_AMOUNT') || 0.5;
+     const fullscreenGlow = this.parameterManager.getValue('HSM_REFLECT_FULLSCREEN_GLOW') || 0.75;
+     const gammaAdjust = this.parameterManager.getValue('HSM_REFLECT_GLOBAL_GAMMA_ADJUST') || 1.2;
 
-    // Update shader uniforms
-    this.specularMaterial.uniforms.specularPower.value = this.materialProps.specularPower;
-    this.specularMaterial.uniforms.roughness.value = this.materialProps.roughness;
+     // Blur parameters
+     const blurSamples = this.parameterManager.getValue('HSM_REFLECT_BLUR_NUM_SAMPLES') || 12;
+     const blurMin = this.parameterManager.getValue('HSM_REFLECT_BLUR_MIN') || 0.0;
+     const blurMax = this.parameterManager.getValue('HSM_REFLECT_BLUR_MAX') || 0.95;
+     const blurFalloff = this.parameterManager.getValue('HSM_REFLECT_BLUR_FALLOFF_DISTANCE') || 1.0;
 
-    this.reflectionMaterial.uniforms.reflectionStrength.value = this.materialProps.reflectionStrength;
-    this.reflectionMaterial.uniforms.metallic.value = this.materialProps.metallic;
+     // Fade parameters
+     const fadeAmount = this.parameterManager.getValue('HSM_REFLECT_FADE_AMOUNT') || 1.0;
+     const radialFadeWidth = this.parameterManager.getValue('HSM_REFLECT_RADIAL_FADE_WIDTH') || 1.0;
+     const radialFadeHeight = this.parameterManager.getValue('HSM_REFLECT_RADIAL_FADE_HEIGHT') || 1.0;
 
-    this.fresnelMaterial.uniforms.fresnelStrength.value = this.materialProps.fresnelStrength;
-  }
+     // Noise parameters
+     const noiseAmount = this.parameterManager.getValue('HSM_REFLECT_NOISE_AMOUNT') || 0.5;
+     const noiseSamples = this.parameterManager.getValue('HSM_REFLECT_NOISE_SAMPLES') || 1;
+
+     // Glass preset parameters
+     const vignetteAmount = this.parameterManager.getValue('HSM_REFLECT_VIGNETTE_AMOUNT') || 0.0;
+     const vignetteSize = this.parameterManager.getValue('HSM_REFLECT_VIGNETTE_SIZE') || 1.0;
+
+     // Reflection mask parameters
+     const reflectMaskAmount = this.parameterManager.getValue('HSM_REFLECT_MASK_IMAGE_AMOUNT') || 0.0;
+     const reflectMaskBrightness = this.parameterManager.getValue('HSM_REFLECT_MASK_BRIGHTNESS') || 1.0;
+     const reflectMaskBlackLevel = this.parameterManager.getValue('HSM_REFLECT_MASK_BLACK_LEVEL') || 1.0;
+     const reflectMaskMipBias = this.parameterManager.getValue('HSM_REFLECT_MASK_MIPMAPPING_BLEND_BIAS') || 0.0;
+
+     // Corner crease parameters
+     const cornerFade = this.parameterManager.getValue('HSM_REFLECT_CORNER_FADE') || 0.1;
+     const cornerFadeDistance = this.parameterManager.getValue('HSM_REFLECT_CORNER_FADE_DISTANCE') || 1.0;
+     const cornerInnerSpread = this.parameterManager.getValue('HSM_REFLECT_CORNER_INNER_SPREAD') || 5.0;
+     const cornerOuterSpread = this.parameterManager.getValue('HSM_REFLECT_CORNER_OUTER_SPREAD') || 1.6;
+     const cornerRotationTop = this.parameterManager.getValue('HSM_REFLECT_CORNER_ROTATION_OFFSET_TOP') || 0.0;
+     const cornerRotationBottom = this.parameterManager.getValue('HSM_REFLECT_CORNER_ROTATION_OFFSET_BOTTOM') || 0.0;
+     const cornerSpreadFalloff = this.parameterManager.getValue('HSM_REFLECT_CORNER_SPREAD_FALLOFF') || 1.0;
+
+     // Update material properties
+     this.materialProps.roughness = 1.0 - (blurMax - blurMin); // Convert blur to roughness
+     this.materialProps.metallic = diffusedAmount / (directAmount + diffusedAmount + 0.001);
+     this.materialProps.specularPower = Math.max(1.0, blurSamples * 2.0);
+     this.materialProps.fresnelStrength = fullscreenGlow * 0.5;
+     this.materialProps.reflectionStrength = globalAmount;
+
+     // Update shader uniforms with Mega Bezel parameters
+     this.specularMaterial.uniforms.specularPower.value = this.materialProps.specularPower;
+     this.specularMaterial.uniforms.roughness.value = this.materialProps.roughness;
+
+     this.reflectionMaterial.uniforms.reflectionStrength.value = this.materialProps.reflectionStrength;
+     this.reflectionMaterial.uniforms.metallic.value = this.materialProps.metallic;
+
+     this.fresnelMaterial.uniforms.fresnelStrength.value = this.materialProps.fresnelStrength;
+
+     // Update specular material uniforms
+     this.specularMaterial.uniforms.blurSamples.value = blurSamples;
+     this.specularMaterial.uniforms.blurMin.value = blurMin;
+     this.specularMaterial.uniforms.blurMax.value = blurMax;
+     this.specularMaterial.uniforms.blurFalloff.value = blurFalloff;
+     this.specularMaterial.uniforms.fadeAmount.value = fadeAmount;
+     this.specularMaterial.uniforms.noiseAmount.value = noiseAmount;
+     this.specularMaterial.uniforms.gammaAdjust.value = gammaAdjust;
+
+     // Update reflection material uniforms
+     this.reflectionMaterial.uniforms.directAmount.value = directAmount;
+     this.reflectionMaterial.uniforms.diffusedAmount.value = diffusedAmount;
+     this.reflectionMaterial.uniforms.fullscreenGlow.value = fullscreenGlow;
+     this.reflectionMaterial.uniforms.gammaAdjust.value = gammaAdjust;
+     this.reflectionMaterial.uniforms.fadeAmount.value = fadeAmount;
+     this.reflectionMaterial.uniforms.radialFadeWidth.value = radialFadeWidth;
+     this.reflectionMaterial.uniforms.radialFadeHeight.value = radialFadeHeight;
+
+     // Update reflection mask uniforms
+     this.reflectionMaterial.uniforms.reflectMaskAmount.value = reflectMaskAmount;
+     this.reflectionMaterial.uniforms.reflectMaskBrightness.value = reflectMaskBrightness;
+     this.reflectionMaterial.uniforms.reflectMaskBlackLevel.value = reflectMaskBlackLevel;
+     this.reflectionMaterial.uniforms.reflectMaskMipBias.value = reflectMaskMipBias;
+
+     // Update corner crease uniforms
+     this.reflectionMaterial.uniforms.cornerFade.value = cornerFade;
+     this.reflectionMaterial.uniforms.cornerFadeDistance.value = cornerFadeDistance;
+     this.reflectionMaterial.uniforms.cornerInnerSpread.value = cornerInnerSpread;
+     this.reflectionMaterial.uniforms.cornerOuterSpread.value = cornerOuterSpread;
+     this.reflectionMaterial.uniforms.cornerRotationTop.value = cornerRotationTop;
+     this.reflectionMaterial.uniforms.cornerRotationBottom.value = cornerRotationBottom;
+     this.reflectionMaterial.uniforms.cornerSpreadFalloff.value = cornerSpreadFalloff;
+   }
 
   /**
-   * Render specular reflections
-   */
-  renderSpecular(): THREE.WebGLRenderTarget {
-    this.updateReflectionParameters();
+    * Render specular reflections
+    */
+   renderSpecular(screenTexture?: THREE.Texture): THREE.WebGLRenderTarget {
+     this.updateReflectionParameters();
 
-    // Set material and render specular highlights
-    this.quad.material = this.specularMaterial;
+     // Update time for noise animation
+     this.specularMaterial.uniforms.time.value = performance.now() * 0.001;
 
-    // Update light and view directions
-    this.specularMaterial.uniforms.lightDirection.value.set(
-      this.reflectionParams.lightDirection[0],
-      this.reflectionParams.lightDirection[1],
-      this.reflectionParams.lightDirection[2]
+     // Set material and render specular highlights
+     this.quad.material = this.specularMaterial;
+
+     // Update screen texture and positioning
+     if (screenTexture) {
+       this.specularMaterial.uniforms.screenTexture.value = screenTexture;
+     }
+
+    // Get screen placement from parameters (same as BezelCompositionRenderer)
+    const screenPosX = this.parameterManager.getValue('HSM_SCREEN_POSITION_X') || 0;
+    const screenPosY = this.parameterManager.getValue('HSM_SCREEN_POSITION_Y') || 0;
+    const screenScale = this.parameterManager.getValue('HSM_NON_INTEGER_SCALE') || 0.8;
+
+    const screenPosition = [0.5 + screenPosX / 1000, 0.5 + screenPosY / 1000];
+    const screenScaleVec = [screenScale, screenScale];
+
+    this.specularMaterial.uniforms.screenPosition.value.set(
+      screenPosition[0],
+      screenPosition[1]
     );
-    this.specularMaterial.uniforms.viewPosition.value.set(
-      this.reflectionParams.viewPosition[0],
-      this.reflectionParams.viewPosition[1],
-      this.reflectionParams.viewPosition[2]
+    this.specularMaterial.uniforms.screenScale.value.set(
+      screenScaleVec[0],
+      screenScaleVec[1]
     );
-
-    // Set normal map if available
-    if (this.reflectionParams.normalMap) {
-      this.specularMaterial.uniforms.normalMap.value = this.reflectionParams.normalMap;
-    }
 
     // Render to specular target
     this.renderer.setRenderTarget(this.specularRenderTarget);
@@ -397,26 +539,33 @@ export class SpecularReflectionsRenderer {
   /**
    * Render environment reflections
    */
-  renderReflections(): THREE.WebGLRenderTarget {
+  renderReflections(screenTexture?: THREE.Texture): THREE.WebGLRenderTarget {
     this.updateReflectionParameters();
 
     // Set material and render environment reflections
     this.quad.material = this.reflectionMaterial;
 
-    // Update view position
-    this.reflectionMaterial.uniforms.viewPosition.value.set(
-      this.reflectionParams.viewPosition[0],
-      this.reflectionParams.viewPosition[1],
-      this.reflectionParams.viewPosition[2]
-    );
+    // Update screen texture and positioning
+    if (screenTexture) {
+      this.reflectionMaterial.uniforms.screenTexture.value = screenTexture;
+    }
 
-    // Set environment and normal maps if available
-    if (this.reflectionParams.environmentMap) {
-      this.reflectionMaterial.uniforms.environmentMap.value = this.reflectionParams.environmentMap;
-    }
-    if (this.reflectionParams.normalMap) {
-      this.reflectionMaterial.uniforms.normalMap.value = this.reflectionParams.normalMap;
-    }
+    // Get screen placement from parameters (same as BezelCompositionRenderer)
+    const screenPosX = this.parameterManager.getValue('HSM_SCREEN_POSITION_X') || 0;
+    const screenPosY = this.parameterManager.getValue('HSM_SCREEN_POSITION_Y') || 0;
+    const screenScale = this.parameterManager.getValue('HSM_NON_INTEGER_SCALE') || 0.8;
+
+    const screenPosition = [0.5 + screenPosX / 1000, 0.5 + screenPosY / 1000];
+    const screenScaleVec = [screenScale, screenScale];
+
+    this.reflectionMaterial.uniforms.screenPosition.value.set(
+      screenPosition[0],
+      screenPosition[1]
+    );
+    this.reflectionMaterial.uniforms.screenScale.value.set(
+      screenScaleVec[0],
+      screenScaleVec[1]
+    );
 
     // Render to reflection target
     this.renderer.setRenderTarget(this.reflectionRenderTarget);
@@ -435,6 +584,23 @@ export class SpecularReflectionsRenderer {
     // Set material and render Fresnel effects
     this.quad.material = this.fresnelMaterial;
 
+    // Update screen positioning
+    const screenPosX = this.parameterManager.getValue('HSM_SCREEN_POSITION_X') || 0;
+    const screenPosY = this.parameterManager.getValue('HSM_SCREEN_POSITION_Y') || 0;
+    const screenScale = this.parameterManager.getValue('HSM_NON_INTEGER_SCALE') || 0.8;
+
+    const screenPosition = [0.5 + screenPosX / 1000, 0.5 + screenPosY / 1000];
+    const screenScaleVec = [screenScale, screenScale];
+
+    this.fresnelMaterial.uniforms.screenPosition.value.set(
+      screenPosition[0],
+      screenPosition[1]
+    );
+    this.fresnelMaterial.uniforms.screenScale.value.set(
+      screenScaleVec[0],
+      screenScaleVec[1]
+    );
+
     // Render to reflection target (reuse for Fresnel)
     this.renderer.setRenderTarget(this.reflectionRenderTarget);
     this.renderer.clear();
@@ -446,13 +612,13 @@ export class SpecularReflectionsRenderer {
   /**
    * Render all reflection effects combined
    */
-  renderAllReflections(): {
+  renderAllReflections(screenTexture?: THREE.Texture): {
     specular: THREE.WebGLRenderTarget;
     reflections: THREE.WebGLRenderTarget;
     fresnel: THREE.WebGLRenderTarget;
   } {
-    const specular = this.renderSpecular();
-    const reflections = this.renderReflections();
+    const specular = this.renderSpecular(screenTexture);
+    const reflections = this.renderReflections(screenTexture);
     const fresnel = this.renderFresnel();
 
     return { specular, reflections, fresnel };
@@ -480,11 +646,19 @@ export class SpecularReflectionsRenderer {
   }
 
   /**
-   * Set normal map for surface detail
-   */
-  setNormalMap(texture: THREE.Texture): void {
-    this.reflectionParams.normalMap = texture;
-  }
+    * Set normal map for surface detail
+    */
+   setNormalMap(texture: THREE.Texture): void {
+     this.reflectionParams.normalMap = texture;
+     this.reflectionMaterial.uniforms.normalMap.value = texture;
+   }
+
+  /**
+    * Set reflection mask texture
+    */
+   setReflectionMask(texture: THREE.Texture): void {
+     this.reflectionMaterial.uniforms.reflectionMask.value = texture;
+   }
 
   /**
    * Set light direction

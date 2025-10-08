@@ -126,21 +126,8 @@ const GameLogoSuggestions = forwardRef<GameLogoSuggestionsRef, GameLogoSuggestio
     }
   };
 
-  // Live search with debounce when gameName changes
-  useEffect(() => {
-    // Clear logos if game name is empty
-    if (!gameName.trim()) {
-      onLogosFound?.(false, false);
-      return;
-    }
-
-    // Debounce the search to avoid too many API calls
-    const timeoutId = setTimeout(() => {
-      searchForLogos(false); // Don't show toasts for automatic searches
-    }, 500); // 500ms delay
-
-    return () => clearTimeout(timeoutId);
-  }, [gameName]);
+  // Only search when explicitly triggered (not on gameName change)
+  // The parent component should call searchForLogos when needed
 
   // Expose searchForLogos function to parent component (rarely needed now)
   useImperativeHandle(ref, () => ({

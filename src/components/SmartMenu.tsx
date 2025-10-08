@@ -75,7 +75,7 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
 
   const renderAuthenticatedMenu = () => (
     <>
-      <div className="text-gray-300 text-sm mb-3 border-b border-white/20 pb-2">
+      <div className="text-gray-300 text-sm mb-3 border-b border-cyan-400/20 pb-2">
         <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent font-medium">
           Welcome, {user?.email}
         </span>
@@ -134,7 +134,7 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
       {/* Admin Section */}
       {isAdmin && (
         <>
-          <div className="border-t border-white/20 my-3 pt-3">
+          <div className="border-t border-cyan-400/20 my-3 pt-3">
             <div className="text-xs text-gray-400 mb-3 px-2">Administration</div>
           </div>
 
@@ -155,7 +155,7 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
       )}
 
       {/* Sign Out */}
-      <div className="border-t border-white/20 my-3 pt-3">
+      <div className="border-t border-cyan-400/20 my-3 pt-3">
         <Button variant="ghost" onClick={() => handleNavigation(signOut)} className="w-full justify-start text-left hover:bg-red-500/20 hover:text-red-400">
           <LogOut size={16} className="mr-3 text-red-400" />
           Sign Out
@@ -171,7 +171,7 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
         size={variant === 'mobile' ? 'icon' : 'sm'}
         onClick={handleMenuToggle}
         className={`theme-button transition-all duration-300 hover:scale-105 hover:shadow-md ${
-          isOpen ? 'bg-white/10 border-white/40 shadow-lg scale-105' : ''
+          isOpen ? 'bg-cyan-500/10 border-cyan-400/40 shadow-lg scale-105' : ''
         } ${variant === 'mobile' ? 'md:hidden' : ''}`}
       >
         <div className={`transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`}>
@@ -180,7 +180,7 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
       </Button>
 
       <div
-        className={`absolute top-full right-0 mt-4 mx-6 w-80 bg-black/95 backdrop-blur-md border border-white/30 rounded-xl shadow-2xl z-[99999] transition-all duration-200 ease-out transform origin-top-right ${
+        className={`absolute top-full right-0 mt-4 mx-6 w-80 bg-black/95 backdrop-blur-md border border-cyan-400/30 rounded-xl shadow-2xl z-[99999] transition-all duration-200 ease-out transform origin-top-right ${
           isOpen
             ? 'opacity-100 scale-100 translate-y-0'
             : 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
@@ -242,7 +242,7 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
               </Button>
 
               {/* Sign In */}
-              <div className="border-t border-white/20 my-3 pt-3">
+              <div className="border-t border-cyan-400/20 my-3 pt-3">
                 <Button variant="ghost" onClick={() => handleAnimatedNavigation('/auth')} className="w-full justify-start text-left">
                   Sign In
                 </Button>
@@ -251,7 +251,7 @@ const SmartMenu: React.FC<SmartMenuProps> = ({
           )}
 
           {rightActions && (
-            <div className="pt-2 border-t border-white/20 mt-2">
+            <div className="pt-2 border-t border-cyan-400/20 mt-2">
               {rightActions}
             </div>
           )}

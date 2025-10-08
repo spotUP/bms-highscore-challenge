@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 
 interface Game {
-  id: string;
+  id: number;
   name: string;
   platform_name: string;
   database_id: number | null;
@@ -60,7 +60,7 @@ interface Game {
 }
 
 interface GameDetailsModalProps {
-  game: Game | null;
+  game: Partial<Game> | null;
   isOpen: boolean;
   onClose: () => void;
   favoriteGameIds?: Set<string>;
@@ -76,15 +76,15 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
   toggleFavorite,
   pulsingHearts
 }) => {
-  const [enrichedGame, setEnrichedGame] = useState<Game | null>(game);
+  const [enrichedGame, setEnrichedGame] = useState<Game | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
     if (!game || !isOpen) return;
 
-    // Start with the basic game data
-    setEnrichedGame(game);
+    // Start with null, will be set after fetching
+    setEnrichedGame(null);
     setIsLoading(true);
 
     // Fetch additional metadata from Supabase

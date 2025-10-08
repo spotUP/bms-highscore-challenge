@@ -5,12 +5,11 @@ import { Pencil, Trash2 } from "lucide-react";
 
 interface AchievementsTableProps {
   achievements: any[];
-  onEdit: (achievement: any) => void;
+  onEdit?: (achievement: any) => void;
   onDelete: (achievement: any) => void;
   onToggleStatus: (achievement: any) => void;
   getTypeIcon: (type: string) => string;
   getCriteriaDisplay: (criteria: any, type: string) => string;
-  isTournamentCreator: boolean;
   currentUserId: string | null;
 }
 
@@ -34,7 +33,6 @@ export const AchievementsTable = ({
   onToggleStatus,
   getTypeIcon,
   getCriteriaDisplay,
-  isTournamentCreator,
   currentUserId
 }: AchievementsTableProps) => {
   const [deletingIds, setDeletingIds] = React.useState<Set<string>>(new Set());
@@ -65,12 +63,10 @@ export const AchievementsTable = ({
     }, 280); // Slightly before animation completes
   };
 
-  const columnCount = isTournamentCreator ? 10 : 9;
-
   return (
     <div className="border rounded-md overflow-x-auto">
       {/* Header */}
-      <div className={`grid ${isTournamentCreator ? 'grid-cols-10' : 'grid-cols-9'} gap-2 p-3 border-b bg-muted/50 font-medium text-sm min-w-[800px]`}>
+      <div className="grid grid-cols-9 gap-2 p-3 border-b bg-muted/50 font-medium text-sm min-w-[800px]">
         <div>Icon</div>
         <div>Name</div>
         <div>Description</div>
@@ -79,7 +75,6 @@ export const AchievementsTable = ({
         <div>Points</div>
         <div>Status</div>
         <div>Unlocks</div>
-        {isTournamentCreator && <div>Created By</div>}
         <div>Actions</div>
       </div>
 
@@ -88,7 +83,7 @@ export const AchievementsTable = ({
       {localAchievements.map((achievement) => (
         <div
           key={achievement.id}
-          className={`grid ${isTournamentCreator ? 'grid-cols-10' : 'grid-cols-9'} gap-2 p-3 transition-all duration-300 ease-in-out overflow-hidden min-w-[800px] ${
+          className={`grid grid-cols-9 gap-2 p-3 transition-all duration-300 ease-in-out overflow-hidden min-w-[800px] ${
             deletingIds.has(achievement.id)
               ? 'opacity-0 max-h-0 py-0 scale-y-0'
               : 'opacity-100 max-h-20 scale-y-100'
@@ -130,7 +125,7 @@ export const AchievementsTable = ({
           <div>
             <div className="flex items-center space-x-2">
               {(() => {
-                const canEdit = isTournamentCreator || achievement.created_by === currentUserId;
+                const canEdit = achievement.created_by === currentUserId;
                 return (
                   <>
                     <Switch
@@ -151,27 +146,24 @@ export const AchievementsTable = ({
 
           <div>{achievement.unlock_count || 0}</div>
 
-          {isTournamentCreator && (
-            <div className="text-xs text-gray-500">
-              {achievement.created_by === currentUserId ? 'You' : 'User'}
-            </div>
-          )}
           <div>
             <div className="flex space-x-2">
               {(() => {
-                const canEdit = isTournamentCreator || achievement.created_by === currentUserId;
+                const canEdit = achievement.created_by === currentUserId;
                 return (
                   <>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onEdit(achievement)}
-                      disabled={!canEdit}
-                      className={canEdit ? "text-blue-500 hover:text-blue-600" : "text-gray-400 cursor-not-allowed"}
-                      title={canEdit ? "Edit achievement" : "You can only edit achievements you created or achievements in tournaments you own"}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
+                    {onEdit && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onEdit(achievement)}
+                        disabled={!canEdit}
+                        className={canEdit ? "text-blue-500 hover:text-blue-600" : "text-gray-400 cursor-not-allowed"}
+                        title={canEdit ? "Edit achievement" : "You can only edit achievements you created or achievements in tournaments you own"}
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"

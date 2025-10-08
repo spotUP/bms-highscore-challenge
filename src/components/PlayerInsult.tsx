@@ -144,8 +144,8 @@ const PlayerInsult: React.FC<PlayerInsultProps> = ({ isVisible, playerName, onCo
       <div className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none">
         <div
           className={`
-            text-white p-8 rounded-2xl shadow-2xl
-            text-center max-w-md mx-4 transform
+            text-white p-12 rounded-2xl shadow-2xl
+            text-center max-w-2xl mx-4 transform
             ${isAnimating ? 'elastic-bounce-in' : 'elastic-bounce-out'}
           `}
           style={{
@@ -156,10 +156,10 @@ const PlayerInsult: React.FC<PlayerInsultProps> = ({ isVisible, playerName, onCo
             border: '2px solid rgba(255, 255, 255, 0.2)'
           }}
         >
-          <div className="text-4xl mb-4">
+          <div className="text-6xl mb-6">
             {(playerName.toLowerCase() === 'ronny' || playerName.toLowerCase() === 'lars') ? '🎮' : '👑'}
           </div>
-          <p className="text-lg leading-relaxed font-medium">
+          <p className="text-2xl leading-relaxed font-bold">
             {currentInsult}
           </p>
         </div>

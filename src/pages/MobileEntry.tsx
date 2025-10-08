@@ -145,6 +145,8 @@ const MobileEntry = () => {
     const { data: { user } } = await supabase.auth.getUser();
 
     try {
+      console.log('MobileEntry: Starting score submission for', name, 'score:', scoreValue);
+
       // First check if player already has a score for this game
       const { data: existingScore, error: fetchError } = await supabase
         .from('scores')
@@ -153,7 +155,12 @@ const MobileEntry = () => {
         .eq('game_id', game.id)
         .maybeSingle();
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('MobileEntry: Error checking existing score:', fetchError);
+        throw fetchError;
+      }
+
+      console.log('MobileEntry: Existing score check result:', existingScore);
 
       let isHighScore = false;
       let previousHighScore = null;
@@ -275,7 +282,13 @@ const MobileEntry = () => {
       }, 1000);
       
     } catch (error: any) {
-      console.error('Error submitting score:', error);
+      console.error('MobileEntry: Error submitting score:', error);
+      console.error('MobileEntry: Error details:', {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint
+      });
 
       // Report submission failure for monitoring
       await reportSubmissionFailure({
@@ -287,7 +300,7 @@ const MobileEntry = () => {
         location: 'mobile'
       });
 
-      toast.error("Failed to submit score. Please try again.");
+      toast.error(`Failed to submit score: ${error.message || 'Unknown error'}`);
     } finally {
       setIsSubmitting(false);
     }

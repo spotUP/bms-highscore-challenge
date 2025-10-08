@@ -21,6 +21,7 @@ import Index from "./pages/Index";
 import CompetitionRulesModal from "@/components/CompetitionRulesModal";
 import CompetitionStatus from "@/components/CompetitionStatus";
 import ManualRefreshButton from "@/components/ManualRefreshButton";
+import TournamentDropdown from "@/components/TournamentDropdown";
 import { usePerformanceMode } from "@/hooks/usePerformanceMode";
 import { useTournamentGameData } from "@/hooks/useTournamentGameData";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -60,9 +61,11 @@ const IndexWithRules = ({ isExiting }: { isExiting?: boolean }) => {
 
   return (
     <Layout topNavProps={{
+      hideTournamentSelector: true,
       onShowRules: () => setIsRulesModalOpen(true),
       leftActions: !isMobile ? (
         <>
+          <TournamentDropdown />
           <CompetitionStatus />
           {!isPerformanceMode && (
             <ManualRefreshButton onRefresh={refetch} />

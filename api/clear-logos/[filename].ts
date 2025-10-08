@@ -29,9 +29,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const response = await fetch(logoUrl);
 
     if (!response.ok) {
-      console.log(`❌ Logo not found: ${filename} (${response.status} ${response.statusText})`);
-      console.log(`❌ Response headers:`, Object.fromEntries(response.headers.entries()));
-      return res.status(404).json({ error: 'Logo not found' });
+      console.log(`❌ Logo not found: ${filename} (${response.status} ${response.statusText}) - returning placeholder`);
+      // Return a small gray placeholder SVG with "No Logo" text
+      const placeholderSvg = `
+        <svg width="64" height="64" xmlns="http://www.w3.org/2000/svg">
+          <rect width="64" height="64" fill="#374151"/>
+          <text x="32" y="20" text-anchor="middle" fill="#9CA3AF" font-family="Arial" font-size="10">No Logo</text>
+          <text x="32" y="35" text-anchor="middle" fill="#6B7280" font-family="Arial" font-size="8">Available</text>
+        </svg>
+      `;
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'public, max-age=300'); // Cache missing logos for 5 minutes
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD');
+      return res.send(placeholderSvg);
     }
 
     const imageBuffer = await response.arrayBuffer();

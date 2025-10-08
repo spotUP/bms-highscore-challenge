@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { MegaBezelCoordinateSystem } from './CoordinateSystem';
 import { ParameterManager } from './ParameterManager';
 import { BezelGraphicsManager, BezelTexture } from './BezelGraphicsManager';
+import { SpecularReflectionsRenderer } from './SpecularReflectionsRenderer';
 
 export interface BezelLayer {
   name: string;
@@ -38,6 +39,7 @@ export class BezelCompositionRenderer {
   private coordinateSystem: MegaBezelCoordinateSystem;
   private parameterManager: ParameterManager;
   private bezelGraphics: BezelGraphicsManager;
+  private specularReflections: SpecularReflectionsRenderer;
 
   // Rendering resources
   private compositionScene: THREE.Scene;
@@ -69,6 +71,7 @@ export class BezelCompositionRenderer {
     this.initializeCompositionResources();
     this.initializeBezelLayers();
     this.initializeScreenPlacement();
+    this.initializeReflectionsRenderer();
   }
 
   /**
@@ -262,11 +265,18 @@ export class BezelCompositionRenderer {
     specularTexture?: THREE.Texture,
     reflectionTexture?: THREE.Texture
   ): void {
+    // Generate reflection texture if not provided
+    let finalReflectionTexture = reflectionTexture;
+    if (!finalReflectionTexture && this.specularReflections) {
+      const reflectionTarget = this.specularReflections.renderReflections(screenTexture);
+      finalReflectionTexture = reflectionTarget.texture;
+    }
+
     // Update layers from parameters
     this.updateBezelLayers();
 
     // Update shader uniforms
-    this.updateCompositionUniforms(screenTexture, lightingTexture, specularTexture, reflectionTexture);
+    this.updateCompositionUniforms(screenTexture, lightingTexture, specularTexture, finalReflectionTexture);
 
     // Set render target
     const target = outputTarget || this.compositionTarget;
@@ -352,8 +362,18 @@ export class BezelCompositionRenderer {
     uniforms.frameOpacity = { value: this.frameLayer.opacity };
     uniforms.screenOpacity = { value: 1.0 };
     uniforms.lightingIntensity = { value: lightingTexture ? 1.0 : 0.0 };
-    uniforms.specularIntensity = { value: specularTexture ? 1.0 : 0.0 };
-    uniforms.reflectionIntensity = { value: reflectionTexture ? 1.0 : 0.0 };
+
+    // Use proper Mega Bezel reflection parameters
+    const bezelInnerEdgeAmount = this.parameterManager.getValue('HSM_REFLECT_BEZEL_INNER_EDGE_AMOUNT') || 1.3;
+    const frameInnerEdgeAmount = this.parameterManager.getValue('HSM_REFLECT_FRAME_INNER_EDGE_AMOUNT') || 0.5;
+    const showTubeFxAmount = this.parameterManager.getValue('HSM_REFLECT_SHOW_TUBE_FX_AMOUNT') || 1.0;
+
+    // Calculate reflection intensities based on Mega Bezel parameters
+    const specularIntensity = specularTexture ? bezelInnerEdgeAmount * 0.01 : 0.0;
+    const reflectionIntensity = reflectionTexture ? frameInnerEdgeAmount * 0.01 : 0.0;
+
+    uniforms.specularIntensity = { value: specularIntensity };
+    uniforms.reflectionIntensity = { value: reflectionIntensity };
   }
 
   /**
@@ -454,5 +474,25 @@ export class BezelCompositionRenderer {
    */
   transformCoordinate(coord: [number, number], from: string, to: string): [number, number] {
     return this.coordinateSystem.transform(coord, from as any, to as any);
+  }
+
+  /**
+   * Initialize specular reflections renderer
+   */
+  private initializeReflectionsRenderer(): void {
+    this.specularReflections = new SpecularReflectionsRenderer(
+      this.renderer,
+      this.parameterManager,
+      this.coordinateSystem
+    );
+  }
+
+  /**
+   * Render specular reflections
+   */
+  renderReflections(screenTexture: THREE.Texture, target?: THREE.WebGLRenderTarget): void {
+    if (this.specularReflections) {
+      this.specularReflections.renderReflections(screenTexture);
+    }
   }
 }

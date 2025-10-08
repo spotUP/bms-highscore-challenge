@@ -58,8 +58,11 @@ export class SlangShaderCompiler {
    * Compile a Slang shader to WebGL-compatible GLSL
    */
   public static compile(slangSource: string, webgl2 = true): CompiledShader {
+    console.log('[SlangCompiler] Starting compilation of shader, webgl2:', webgl2);
+
     // Extract pragma directives first to get shader parameters
     const pragmas = this.extractPragmas(slangSource);
+    console.log('[SlangCompiler] Extracted pragmas:', pragmas);
 
     // Extract uniforms and bindings
     const bindings = this.extractBindings(slangSource);
@@ -101,7 +104,7 @@ export class SlangShaderCompiler {
     }
     const fragmentShader = this.convertToWebGL(fragmentStage.source, 'fragment', bindings, webgl2, pragmas.parameters, globalDefs);
 
-    return {
+    const result = {
       vertex: vertexShader,
       fragment: fragmentShader,
       parameters: pragmas.parameters,
@@ -110,6 +113,17 @@ export class SlangShaderCompiler {
       name: pragmas.name,
       format: pragmas.format
     };
+
+    console.log('[SlangCompiler] Compilation completed successfully');
+    console.log('[SlangCompiler] Final result:', {
+      vertexLength: result.vertex.length,
+      fragmentLength: result.fragment.length,
+      parameters: result.parameters.length,
+      uniforms: result.uniforms.length,
+      samplers: result.samplers.length
+    });
+
+    return result;
   }
 
   /**
@@ -660,43 +674,251 @@ export class SlangShaderCompiler {
   /**
    * Build code block from global definitions
    */
-  private static buildGlobalDefinitionsCode(globalDefs: GlobalDefinitions): string {
+  private static buildGlobalDefinitionsCode(globalDefs: GlobalDefinitions, source: string): string {
     const parts: string[] = [];
 
-    // Add stub definitions for missing Mega Bezel variables and functions
+    // Helper function to check if a definition already exists in source
+    const definitionExists = (definition: string): boolean => {
+      // For variables: check for variable declarations with word boundaries
+      if (definition.includes(' = ') && !definition.startsWith('#define')) {
+        const varMatch = definition.match(/^\s*(?:float|int|vec\d|mat\d|bool)\s+(\w+)\s*=/);
+        if (varMatch) {
+          const varName = varMatch[1];
+          // Use word boundaries to avoid partial matches
+          const varPattern = new RegExp(`\\b${varName}\\b`);
+          return varPattern.test(source);
+        }
+      }
+      // For functions: check for function declarations
+      else if (definition.includes('(') && definition.includes(')')) {
+        const funcMatch = definition.match(/^\s*(?:\w+)\s+(\w+)\s*\(/);
+        if (funcMatch) {
+          const funcName = funcMatch[1];
+          // Check for function name followed by opening parenthesis
+          const funcPattern = new RegExp(`\\b${funcName}\\s*\\(`);
+          return funcPattern.test(source);
+        }
+      }
+      // For #defines: check for macro definitions
+      else if (definition.startsWith('#define ')) {
+        const macroMatch = definition.match(/^#define\s+(\w+)/);
+        if (macroMatch) {
+          const macroName = macroMatch[1];
+          const macroPattern = new RegExp(`#define\\s+${macroName}\\b`);
+          return macroPattern.test(source);
+        }
+      }
+      return false;
+    };
+
+    // Add stub definitions for missing Mega Bezel variables and functions (only if not already present)
     parts.push('// Stub definitions for missing Mega Bezel variables and functions');
-    parts.push('#define LPOS vec3(0.0, 0.0, 1.0)');
-    parts.push('#define LCOL vec3(1.0, 1.0, 1.0)');
-    parts.push('#define FIX(c) max(abs(c), 1e-5)');
-    parts.push('#define HRG_MAX_POINT_CLOUD_SIZE 9');
-    parts.push('#define IS_POTATO_PRESET');
+    const stubDefines = [
+      '#define LPOS vec3(0.0, 0.0, 1.0)',
+      '#define LCOL vec3(1.0, 1.0, 1.0)',
+      '#define FIX(c) max(abs(c), 1e-5)',
+      '#define HRG_MAX_POINT_CLOUD_SIZE 9',
+      '#define IS_POTATO_PRESET'
+    ];
+
+    for (const define of stubDefines) {
+      if (!definitionExists(define)) {
+        parts.push(define);
+      }
+    }
     parts.push('');
+
+    // Mega Bezel coordinate and parameter variables (now injected as uniforms) - only if not already present
+    parts.push('// Mega Bezel coordinate and parameter variables (now injected as uniforms)');
+    const megaBezelVars = [
+      'vec2 TUBE_DIFFUSE_COORD = vec2(0.5, 0.5);',
+      'vec2 TUBE_DIFFUSE_SCALE = vec2(1.0, 1.0);',
+      'vec2 TUBE_SCALE = vec2(1.0, 1.0);',
+      'float TUBE_DIFFUSE_ASPECT = 1.0;',
+      'float TUBE_MASK = 1.0;'
+    ];
+
+    for (const varDef of megaBezelVars) {
+      if (!definitionExists(varDef)) {
+        parts.push(varDef);
+      }
+    }
+    parts.push('');
+
+    // Stub functions - only add if not already present in source
+    const stubFunctions = [
+      {
+        name: 'HSM_GetTubeCurvedCoord',
+        code: [
+          'vec2 HSM_GetTubeCurvedCoord(vec2 in_coord, float in_geom_mode, vec2 in_geom_radius_scaled, vec2 in_geom_view_dist, float in_geom_tilt_angle_x, float in_geom_tilt_angle_y, float in_geom_aspect_ratio, vec2 in_geom_overscan, vec2 in_geom_tilted_tangent, vec2 in_geom_tangent_angle, vec2 in_geom_tangent_angle_screen_scale, vec2 in_geom_pos_x, vec2 in_geom_pos_y) {',
+          '  return in_coord;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_GetCornerMask',
+        code: [
+          'float HSM_GetCornerMask(vec2 in_coord, float screen_aspect, float corner_radius, float edge_sharpness) {',
+          '  vec2 new_coord = min(in_coord, vec2(1.0) - in_coord) * vec2(screen_aspect, 1.0);',
+          '  vec2 corner_distance = vec2(max(corner_radius / 1000.0, (1.0 - edge_sharpness) * 0.01));',
+          '  new_coord = (corner_distance - min(new_coord, corner_distance));',
+          '  float distance = sqrt(dot(new_coord, new_coord));',
+          '  return clamp((corner_distance.x - distance) * (edge_sharpness * 500.0 + 100.0), 0.0, 1.0);',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_GetUseOnCurrentScreenIndex',
+        code: [
+          'float HSM_GetUseOnCurrentScreenIndex(float vis_mode) {',
+          '  return 1.0;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_ApplyMonochrome',
+        code: [
+          'vec4 HSM_ApplyMonochrome(vec4 in_color) {',
+          '  return in_color;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_GetMirrorWrappedCoord',
+        code: [
+          'vec2 HSM_GetMirrorWrappedCoord(vec2 in_coord, float mirror_x, float mirror_y) {',
+          '  return in_coord;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_GetCurvedCoord',
+        code: [
+          'vec2 HSM_GetCurvedCoord(vec2 in_coord, float curvature_scale, float screen_aspect) {',
+          '  return in_coord;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_Linearize',
+        code: [
+          'vec4 HSM_Linearize(vec4 in_color, float gamma) {',
+          '  return in_color;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_Delinearize',
+        code: [
+          'vec4 HSM_Delinearize(vec4 in_color, float gamma) {',
+          '  return in_color;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_BlendModeLayerMix',
+        code: [
+          'vec4 HSM_BlendModeLayerMix(vec4 color_under, vec4 color_over, float blend_mode, float layer_opacity) {',
+          '  return mix(color_under, color_over, layer_opacity);',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_Apply_Sinden_Lightgun_Border',
+        code: [
+          'vec4 HSM_Apply_Sinden_Lightgun_Border(vec4 in_color, vec2 in_coord) {',
+          '  return in_color;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_GetViewportCoordWithZoomAndPan',
+        code: [
+          'vec2 HSM_GetViewportCoordWithZoomAndPan(vec2 in_coord, float zoom_percent, vec2 pan_offset) {',
+          '  return in_coord;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_UpdateGlobalScreenValuesFromCache',
+        code: [
+          'void HSM_UpdateGlobalScreenValuesFromCache(out vec2 cache_bounds_coord, out vec2 cache_bounds_coord_clamped, out vec2 cache_bounds_clamped, out vec2 screen_curved_coord, out vec2 screen_curved_coord_clamped, out vec2 screen_pos_offset, out vec2 screen_scale_offset, out vec2 screen_pos_offset_1st_screen, out vec2 screen_scale_offset_1st_screen, out vec2 screen_curved_coord_with_overscan, out vec2 screen_curved_coord_with_overscan_clamped, out vec2 screen_coord_with_overscan, out vec2 screen_coord_with_overscan_clamped, out vec2 screen_scale_with_overscan, out vec2 screen_pos_with_overscan, out vec2 source_size_minned, out vec2 source_size_maxed, out vec2 source_size_minned_1st_screen, out vec2 source_size_maxed_1st_screen) {',
+          '  cache_bounds_coord = vec2(0.0);',
+          '  cache_bounds_coord_clamped = vec2(0.0);',
+          '  cache_bounds_clamped = vec2(0.0);',
+          '  screen_curved_coord = vec2(0.0);',
+          '  screen_curved_coord_clamped = vec2(0.0);',
+          '  screen_pos_offset = vec2(0.0);',
+          '  screen_scale_offset = vec2(0.0);',
+          '  screen_pos_offset_1st_screen = vec2(0.0);',
+          '  screen_scale_offset_1st_screen = vec2(0.0);',
+          '  screen_curved_coord_with_overscan = vec2(0.0);',
+          '  screen_curved_coord_with_overscan_clamped = vec2(0.0);',
+          '  screen_coord_with_overscan = vec2(0.0);',
+          '  screen_coord_with_overscan_clamped = vec2(0.0);',
+          '  screen_scale_with_overscan = vec2(0.0);',
+          '  screen_pos_with_overscan = vec2(0.0);',
+          '  source_size_minned = vec2(0.0);',
+          '  source_size_maxed = vec2(0.0);',
+          '  source_size_minned_1st_screen = vec2(0.0);',
+          '  source_size_maxed_1st_screen = vec2(0.0);',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_GetUseScreenVignette',
+        code: [
+          'float HSM_GetUseScreenVignette() {',
+          '  return 0.0;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_GetScreenVignetteFactor',
+        code: [
+          'float HSM_GetScreenVignetteFactor(vec2 in_coord) {',
+          '  return 1.0;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_GetBezelCoords',
+        code: [
+          'float HSM_GetBezelCoords(vec2 tube_diffuse_coord, vec2 tube_diffuse_scale, vec2 tube_scale, float screen_aspect, bool curve_coords_on, inout vec2 bezel_outside_scale, inout vec2 bezel_outside_coord, inout vec2 bezel_outside_curved_coord, inout vec2 frame_outside_curved_coord) {',
+          '  bezel_outside_scale = vec2(1.0);',
+          '  bezel_outside_coord = tube_diffuse_coord;',
+          '  bezel_outside_curved_coord = tube_diffuse_coord;',
+          '  frame_outside_curved_coord = tube_diffuse_coord;',
+          '  return 0.0;',
+          '}'
+        ]
+      },
+      {
+        name: 'hrg_get_ideal_global_eye_pos_for_points',
+        code: [
+          'vec3 hrg_get_ideal_global_eye_pos_for_points(vec3 eye_pos, vec2 output_aspect, vec3 global_coords[HRG_MAX_POINT_CLOUD_SIZE], int num_points, float in_geom_radius, float in_geom_view_dist) {',
+          '  return eye_pos;',
+          '}'
+        ]
+      },
+      {
+        name: 'hrg_get_ideal_global_eye_pos',
+        code: [
+          'vec3 hrg_get_ideal_global_eye_pos(mat3x3 local_to_global, vec2 output_aspect, float in_geom_mode, float in_geom_radius, float in_geom_view_dist) {',
+          '  return vec3(0.0, 0.0, 1.0);',
+          '}'
+        ]
+      }
+    ];
+
     parts.push('// Stub functions');
-    parts.push('// Note: mod() is built-in to GLSL, no need to redefine it');
-    parts.push('float HSM_GetCornerMask(vec2 in_coord, float screen_aspect, float corner_radius, float edge_sharpness) {');
-    parts.push('  vec2 new_coord = min(in_coord, vec2(1.0) - in_coord) * vec2(screen_aspect, 1.0);');
-    parts.push('  vec2 corner_distance = vec2(max(corner_radius / 1000.0, (1.0 - edge_sharpness) * 0.01));');
-    parts.push('  new_coord = (corner_distance - min(new_coord, corner_distance));');
-    parts.push('  float distance = sqrt(dot(new_coord, new_coord));');
-    parts.push('  return clamp((corner_distance.x - distance) * (edge_sharpness * 500.0 + 100.0), 0.0, 1.0);');
-    parts.push('}');
-    parts.push('');
-    parts.push('float HSM_GetBezelCoords(vec2 tube_diffuse_coord, vec2 tube_diffuse_scale, vec2 tube_scale, float screen_aspect, bool curve_coords_on, inout vec2 bezel_outside_scale, inout vec2 bezel_outside_coord, inout vec2 bezel_outside_curved_coord, inout vec2 frame_outside_curved_coord) {');
-    parts.push('  bezel_outside_scale = vec2(1.0);');
-    parts.push('  bezel_outside_coord = tube_diffuse_coord;');
-    parts.push('  bezel_outside_curved_coord = tube_diffuse_coord;');
-    parts.push('  frame_outside_curved_coord = tube_diffuse_coord;');
-    parts.push('  return 0.0;');
-    parts.push('}');
-    parts.push('');
-    parts.push('// HRG (royale-geometry) function stubs for potato preset');
-    parts.push('vec3 hrg_get_ideal_global_eye_pos_for_points(vec3 eye_pos, vec2 output_aspect, vec3 global_coords[HRG_MAX_POINT_CLOUD_SIZE], float num_points, float in_geom_radius, float in_geom_view_dist) {');
-    parts.push('  return eye_pos;');
-    parts.push('}');
-    parts.push('vec3 hrg_get_ideal_global_eye_pos(mat3x3 local_to_global, vec2 output_aspect, float in_geom_mode, float in_geom_radius, float in_geom_view_dist) {');
-    parts.push('  return vec3(0.0, 0.0, 1.0);');
-    parts.push('}');
-    parts.push('');
+    for (const func of stubFunctions) {
+      if (!definitionExists(func.code[0])) {
+        parts.push(...func.code);
+        parts.push('');
+      }
+    }
+
 
     if (globalDefs.defines.length > 0) {
       // Deduplicate #defines by macro name (keep first occurrence)
@@ -831,7 +1053,7 @@ export class SlangShaderCompiler {
     }
 
     // Inject global definitions after precision declarations
-    const globalDefsCode = this.buildGlobalDefinitionsCode(globalDefs);
+    const globalDefsCode = this.buildGlobalDefinitionsCode(globalDefs, output);
     if (globalDefsCode) {
       console.log(`[SlangCompiler] Injecting ${globalDefs.defines.length + globalDefs.consts.length + globalDefs.globals.length + globalDefs.functions.length} global definitions into ${stage} stage`);
 
@@ -857,42 +1079,1420 @@ export class SlangShaderCompiler {
     }
 
     // Add RetroArch params and shader parameter uniforms
-    if (stage === 'fragment') {
-      // Extract existing UBO/push constant member names to avoid redefinition
-      const existingMembers = new Set<string>();
-      bindings.forEach(binding => {
-        if (binding.members) {
-          binding.members.forEach(member => existingMembers.add(member.name));
-        }
-      });
-
-      console.log(`[SlangCompiler] Stage conversion - found ${existingMembers.size} existing binding members`);
-      console.log(`[SlangCompiler] Stage conversion - processing ${parameters.length} shader parameters`);
-
-      // Build parameter uniforms (skip if already in UBO/push constant OR duplicate in parameters array)
-      const seenParams = new Set<string>();
-      const filtered = parameters.filter(param => {
-        if (existingMembers.has(param.name)) return false; // Already in UBO/push constant
-        if (seenParams.has(param.name)) {
-          console.log(`[SlangCompiler] Skipping duplicate parameter: ${param.name}`);
-          return false; // Duplicate in parameters array
-        }
-        seenParams.add(param.name);
-        return true;
-      });
-
-      const skippedInBindings = parameters.filter(param => existingMembers.has(param.name));
-      if (skippedInBindings.length > 0) {
-        console.log(`[SlangCompiler] Skipping ${skippedInBindings.length} parameters already in bindings:`, skippedInBindings.map(p => p.name).slice(0, 20).join(', '), '...');
+    // Extract existing UBO/push constant member names to avoid redefinition
+    const existingMembers = new Set<string>();
+    bindings.forEach(binding => {
+      if (binding.members) {
+        binding.members.forEach(member => existingMembers.add(member.name));
       }
+    });
 
-      const paramUniforms = filtered
-        .map(param => `uniform float ${param.name};`)
-        .join('\n');
+    console.log(`[SlangCompiler] Stage conversion - found ${existingMembers.size} existing binding members`);
+    console.log(`[SlangCompiler] Stage conversion - processing ${parameters.length} shader parameters`);
 
-      const retroarchUniforms = `
+    // Build parameter uniforms (skip if already in UBO/push constant OR duplicate in parameters array)
+    const seenParams = new Set<string>();
+    const filtered = parameters.filter(param => {
+      if (existingMembers.has(param.name)) return false; // Already in UBO/push constant
+      if (seenParams.has(param.name)) {
+        console.log(`[SlangCompiler] Skipping duplicate parameter: ${param.name}`);
+        return false; // Duplicate in parameters array
+      }
+      seenParams.add(param.name);
+      return true;
+    });
+
+    const skippedInBindings = parameters.filter(param => existingMembers.has(param.name));
+    if (skippedInBindings.length > 0) {
+      console.log(`[SlangCompiler] Skipping ${skippedInBindings.length} parameters already in bindings:`, skippedInBindings.map(p => p.name).slice(0, 20).join(', '), '...');
+    }
+
+    const paramUniforms = filtered
+      .map(param => `uniform float ${param.name};`)
+      .join('\n');
+
+    // Mega Bezel parameters - injected as mutable variables, not uniforms
+    // Most HSM parameters need to be assignable variables, not read-only uniforms
+    let megaBezelVariables = '';
+
+    if (stage === 'fragment') {
+      megaBezelVariables = `
+float HSM_AB_COMPARE_AREA = 0.0;
+uniform float HSM_AB_COMPARE_FREEZE_CRT_TUBE;
+uniform float HSM_AB_COMPARE_FREEZE_GRAPHICS;
+uniform float HSM_AB_COMPARE_SHOW_MODE;
+uniform float HSM_AB_COMPARE_SPLIT_POSITION;
+uniform float HSM_AMBIENT_LIGHTING_OPACITY;
+uniform float HSM_AMBIENT_LIGHTING_SWAP_IMAGE_MODE;
+uniform float HSM_AMBIENT1_CONTRAST;
+uniform float HSM_AMBIENT1_DITHERING_SAMPLES;
+uniform float HSM_AMBIENT1_HUE;
+uniform float HSM_AMBIENT1_MIRROR_HORZ;
+uniform float HSM_AMBIENT1_OPACITY;
+uniform float HSM_AMBIENT1_POSITION_X;
+uniform float HSM_AMBIENT1_POSITION_Y;
+uniform float HSM_AMBIENT1_POS_INHERIT_MODE;
+uniform float HSM_AMBIENT1_ROTATE;
+uniform float HSM_AMBIENT1_SATURATION;
+uniform float HSM_AMBIENT1_SCALE;
+uniform float HSM_AMBIENT1_SCALE_INHERIT_MODE;
+uniform float HSM_AMBIENT1_SCALE_KEEP_ASPECT;
+uniform float HSM_AMBIENT1_SCALE_X;
+uniform float HSM_AMBIENT1_VALUE;
+uniform float HSM_AMBIENT2_CONTRAST;
+uniform float HSM_AMBIENT2_HUE;
+uniform float HSM_AMBIENT2_MIRROR_HORZ;
+uniform float HSM_AMBIENT2_OPACITY;
+uniform float HSM_AMBIENT2_POSITION_X;
+uniform float HSM_AMBIENT2_POSITION_Y;
+uniform float HSM_AMBIENT2_POS_INHERIT_MODE;
+uniform float HSM_AMBIENT2_ROTATE;
+uniform float HSM_AMBIENT2_SATURATION;
+uniform float HSM_AMBIENT2_SCALE;
+uniform float HSM_AMBIENT2_SCALE_INHERIT_MODE;
+uniform float HSM_AMBIENT2_SCALE_KEEP_ASPECT;
+uniform float HSM_AMBIENT2_SCALE_X;
+uniform float HSM_AMBIENT2_VALUE;
+uniform float HSM_ANTI_FLICKER_ON;
+uniform float HSM_ANTI_FLICKER_THRESHOLD;
+uniform float HSM_ASPECT_RATIO_EXPLICIT;
+uniform float HSM_ASPECT_RATIO_MODE;
+uniform float HSM_ASPECT_RATIO_ORIENTATION;
+uniform float HSM_BG_AMBIENT_LIGHTING_MULTIPLIER;
+uniform float HSM_BG_APPLY_AMBIENT_IN_ADD_MODE;
+uniform float HSM_BG_BLEND_MODE;
+uniform float HSM_BG_BRIGHTNESS;
+uniform float HSM_BG_COLORIZE_ON;
+uniform float HSM_BG_CUTOUT_MODE;
+uniform float HSM_BG_DUALSCREEN_VIS_MODE;
+uniform float HSM_BG_FILL_MODE;
+uniform float HSM_BG_FOLLOW_FULL_USES_ZOOM;
+uniform float HSM_BG_FOLLOW_LAYER;
+uniform float HSM_BG_FOLLOW_MODE;
+uniform float HSM_BG_GAMMA;
+uniform float HSM_BG_HUE;
+uniform float HSM_BG_LAYER_ORDER;
+uniform float HSM_BG_MASK_MODE;
+uniform float HSM_BG_MIPMAPPING_BLEND_BIAS;
+uniform float HSM_BG_OPACITY;
+uniform float HSM_BG_POS_X;
+uniform float HSM_BG_POS_Y;
+uniform float HSM_BG_SATURATION;
+uniform float HSM_BG_SCALE;
+uniform float HSM_BG_SCALE_X;
+uniform float HSM_BG_SOURCE_MATTE_TYPE;
+uniform float HSM_BG_SPLIT_PRESERVE_CENTER;
+uniform float HSM_BG_SPLIT_REPEAT_WIDTH;
+uniform float HSM_BG_WRAP_MODE;
+uniform float HSM_BZL_AMBIENT_LIGHTING_MULTIPLIER;
+uniform float HSM_BZL_AMBIENT2_LIGHTING_MULTIPLIER;
+uniform float HSM_BZL_BLEND_MODE;
+uniform float HSM_BZL_BRIGHTNESS;
+uniform float HSM_BZL_BRIGHTNESS_MULT_BOTTOM;
+uniform float HSM_BZL_BRIGHTNESS_MULT_SIDE_LEFT;
+uniform float HSM_BZL_BRIGHTNESS_MULT_SIDE_RIGHT;
+uniform float HSM_BZL_BRIGHTNESS_MULT_SIDES;
+uniform float HSM_BZL_BRIGHTNESS_MULT_TOP;
+uniform float HSM_BZL_COLOR_HUE;
+uniform float HSM_BZL_COLOR_SATURATION;
+uniform float HSM_BZL_COLOR_VALUE;
+uniform float HSM_BZL_HEIGHT;
+uniform float HSM_BZL_HIGHLIGHT;
+uniform float HSM_BZL_INDEPENDENT_CURVATURE_SCALE_LONG_AXIS;
+uniform float HSM_BZL_INDEPENDENT_CURVATURE_SCALE_SHORT_AXIS;
+uniform float HSM_BZL_INDEPENDENT_SCALE;
+uniform float HSM_BZL_INNER_CORNER_RADIUS_SCALE;
+uniform float HSM_BZL_INNER_CURVATURE_SCALE;
+uniform float HSM_BZL_INNER_EDGE_HIGHLIGHT;
+uniform float HSM_BZL_INNER_EDGE_SHADOW;
+uniform float HSM_BZL_INNER_EDGE_SHARPNESS;
+uniform float HSM_BZL_INNER_EDGE_THICKNESS;
+uniform float HSM_BZL_NOISE;
+uniform float HSM_BZL_OPACITY;
+uniform float HSM_BZL_OUTER_CORNER_RADIUS_SCALE;
+uniform float HSM_BZL_OUTER_CURVATURE_SCALE;
+uniform float HSM_BZL_OUTER_POSITION_Y;
+uniform float HSM_BZL_SCALE_OFFSET;
+uniform float HSM_BZL_USE_INDEPENDENT_CURVATURE;
+uniform float HSM_BZL_USE_INDEPENDENT_SCALE;
+uniform float HSM_BZL_WIDTH;
+uniform float HSM_CACHE_GRAPHICS_ON;
+uniform float HSM_CACHE_UPDATE_INDICATOR_MODE;
+uniform float HSM_CORE_RES_SAMPLING_MULT_OPPOSITE_DIR;
+uniform float HSM_CORE_RES_SAMPLING_MULT_SCANLINE_DIR;
+uniform float HSM_CROP_BLACK_THRESHOLD;
+uniform float HSM_CROP_MODE;
+uniform float HSM_CROP_PERCENT_BOTTOM;
+uniform float HSM_CROP_PERCENT_LEFT;
+uniform float HSM_CROP_PERCENT_RIGHT;
+uniform float HSM_CROP_PERCENT_TOP;
+uniform float HSM_CROP_PERCENT_ZOOM;
+uniform float HSM_CRT_BLEND_AMOUNT;
+uniform float HSM_CRT_BLEND_MODE;
+uniform float HSM_CRT_CURVATURE_SCALE;
+uniform float HSM_CRT_SCREEN_BLEND_MODE;
+uniform float HSM_CURVATURE_2D_SCALE_LONG_AXIS;
+uniform float HSM_CURVATURE_2D_SCALE_SHORT_AXIS;
+uniform float HSM_CURVATURE_3D_RADIUS;
+uniform float HSM_CURVATURE_3D_TILT_ANGLE_X;
+uniform float HSM_CURVATURE_3D_TILT_ANGLE_Y;
+uniform float HSM_CURVATURE_3D_VIEW_DIST;
+uniform float HSM_CURVATURE_MODE;
+uniform float HSM_DOWNSAMPLE_BLUR_OPPOSITE_DIR;
+uniform float HSM_DOWNSAMPLE_BLUR_SCANLINE_DIR;
+uniform float HSM_DREZ_HSHARP0;
+uniform float HSM_DREZ_SIGMA_HV;
+uniform float HSM_DREZ_SHAR;
+uniform float HSM_DREZ_THRESHOLD_RATIO;
+uniform float HSM_DUALSCREEN_CORE_IMAGE_SPLIT_MODE;
+uniform float HSM_DUALSCREEN_CORE_IMAGE_SWAP_SCREENS;
+uniform float HSM_DUALSCREEN_CORE_IMAGE_SPLIT_OFFSET;
+uniform float HSM_DUALSCREEN_MODE;
+uniform float HSM_DUALSCREEN_POSITION_OFFSET_BETWEEN_SCREENS;
+uniform float HSM_DUALSCREEN_SHIFT_POSITION_WITH_SCALE;
+uniform float HSM_DUALSCREEN_VIEWPORT_SPLIT_LOCATION;
+uniform float HSM_FAKE_SCANLINE_CURVATURE;
+uniform float HSM_FAKE_SCANLINE_INT_SCALE;
+uniform float HSM_FAKE_SCANLINE_MODE;
+uniform float HSM_FAKE_SCANLINE_OPACITY;
+uniform float HSM_FAKE_SCANLINE_RES;
+uniform float HSM_FAKE_SCANLINE_RES_MODE;
+uniform float HSM_FAKE_SCANLINE_ROLL;
+uniform float HSM_FLIP_CORE_HORIZONTAL;
+uniform float HSM_FLIP_CORE_VERTICAL;
+uniform float HSM_FLIP_VIEWPORT_HORIZONTAL;
+uniform float HSM_FLIP_VIEWPORT_VERTICAL;
+uniform float HSM_FRM_BLEND_MODE;
+uniform float HSM_FRM_COLOR_HUE;
+uniform float HSM_FRM_COLOR_SATURATION;
+uniform float HSM_FRM_COLOR_VALUE;
+uniform float HSM_FRM_INNER_EDGE_HIGHLIGHT;
+uniform float HSM_FRM_INNER_EDGE_THICKNESS;
+uniform float HSM_FRM_NOISE;
+uniform float HSM_FRM_OPACITY;
+uniform float HSM_FRM_OUTER_CORNER_RADIUS;
+uniform float HSM_FRM_OUTER_CURVATURE_SCALE;
+uniform float HSM_FRM_OUTER_EDGE_SHADING;
+uniform float HSM_FRM_OUTER_EDGE_THICKNESS;
+uniform float HSM_FRM_OUTER_POS_Y;
+uniform float HSM_FRM_SHADOW_OPACITY;
+uniform float HSM_FRM_SHADOW_WIDTH;
+uniform float HSM_FRM_TEXTURE_BLEND_MODE;
+uniform float HSM_FRM_TEXTURE_OPACITY;
+uniform float HSM_FRM_THICKNESS;
+uniform float HSM_FRM_THICKNESS_SCALE_X;
+uniform float HSM_FRM_USE_INDEPENDENT_COLOR;
+uniform float HSM_GLOBAL_CORNER_RADIUS;
+uniform float HSM_GLOBAL_GRAPHICS_BRIGHTNESS;
+uniform float HSM_INT_SCALE_MAX_HEIGHT;
+uniform float HSM_INT_SCALE_MODE;
+uniform float HSM_INT_SCALE_MULTIPLE_OFFSET;
+uniform float HSM_INT_SCALE_MULTIPLE_OFFSET_LONG;
+uniform float HSM_INTERLACE_EFFECT_SMOOTHNESS_INTERS;
+uniform float HSM_INTERLACE_MODE;
+uniform float HSM_INTERLACE_SCANLINE_EFFECT;
+uniform float HSM_INTERLACE_TRIGGER_RES;
+uniform float HSM_INTRO_LOGO_BLEND_MODE;
+uniform float HSM_INTRO_LOGO_FADE_IN;
+uniform float HSM_INTRO_LOGO_FADE_OUT;
+uniform float HSM_INTRO_LOGO_FLIP_VERTICAL;
+uniform float HSM_INTRO_LOGO_HEIGHT;
+uniform float HSM_INTRO_LOGO_HOLD;
+uniform float HSM_INTRO_LOGO_OVER_SOLID_COLOR;
+uniform float HSM_INTRO_LOGO_PLACEMENT;
+uniform float HSM_INTRO_LOGO_POS_X;
+uniform float HSM_INTRO_LOGO_POS_Y;
+uniform float HSM_INTRO_LOGO_WAIT;
+uniform float HSM_INTRO_NOISE_BLEND_MODE;
+uniform float HSM_INTRO_NOISE_FADE_OUT;
+uniform float HSM_INTRO_NOISE_HOLD;
+uniform float HSM_INTRO_SOLID_BLACK_FADE_OUT;
+uniform float HSM_INTRO_SOLID_BLACK_HOLD;
+uniform float HSM_INTRO_SOLID_COLOR_BLEND_MODE;
+uniform float HSM_INTRO_SOLID_COLOR_FADE_OUT;
+uniform float HSM_INTRO_SOLID_COLOR_HOLD;
+uniform float HSM_INTRO_SOLID_COLOR_HUE;
+uniform float HSM_INTRO_SOLID_COLOR_SAT;
+uniform float HSM_INTRO_SOLID_COLOR_VALUE;
+uniform float HSM_INTRO_SPEED;
+uniform float HSM_INTRO_WHEN_TO_SHOW;
+uniform float HSM_LAYERING_DEBUG_MASK_MODE;
+uniform float HSM_LED_AMBIENT_LIGHTING_MULTIPLIER;
+uniform float HSM_LED_APPLY_AMBIENT_IN_ADD_MODE;
+uniform float HSM_LED_BLEND_MODE;
+uniform float HSM_LED_BRIGHTNESS;
+uniform float HSM_LED_COLORIZE_ON;
+uniform float HSM_LED_CUTOUT_MODE;
+uniform float HSM_LED_DUALSCREEN_VIS_MODE;
+uniform float HSM_LED_FILL_MODE;
+uniform float HSM_LED_FOLLOW_FULL_USES_ZOOM;
+uniform float HSM_LED_FOLLOW_LAYER;
+uniform float HSM_LED_FOLLOW_MODE;
+uniform float HSM_LED_GAMMA;
+uniform float HSM_LED_HUE;
+uniform float HSM_LED_LAYER_ORDER;
+uniform float HSM_LED_MASK_MODE;
+uniform float HSM_LED_MIPMAPPING_BLEND_BIAS;
+uniform float HSM_LED_OPACITY;
+uniform float HSM_LED_POS_X;
+uniform float HSM_LED_POS_Y;
+uniform float HSM_LED_SATURATION;
+uniform float HSM_LED_SCALE;
+uniform float HSM_LED_SCALE_X;
+uniform float HSM_LED_SOURCE_MATTE_TYPE;
+uniform float HSM_LED_SPLIT_PRESERVE_CENTER;
+uniform float HSM_LED_SPLIT_REPEAT_WIDTH;
+uniform float HSM_MONOCHROME_BRIGHTNESS;
+uniform float HSM_MONOCHROME_DUALSCREEN_VIS_MODE;
+uniform float HSM_MONOCHROME_GAMMA;
+uniform float HSM_MONOCHROME_HUE_OFFSET;
+uniform float HSM_MONOCHROME_MODE;
+uniform float HSM_MONOCHROME_SATURATION;
+uniform float HSM_NON_INTEGER_SCALE;
+uniform float HSM_NON_INTEGER_SCALE_OFFSET;
+uniform float HSM_OVERSCAN_AMOUNT;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_AMOUNT;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_MODE;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_NEUTRAL_RANGE;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_NEUTRAL_RANGE_CENTER;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_ON;
+uniform float HSM_OVERSCAN_X;
+uniform float HSM_OVERSCAN_Y;
+uniform float HSM_PASS_VIEWER_EMPTY_LINE;
+uniform float HSM_PASS_VIEWER_TITLE;
+uniform float HSM_PHYSICAL_MONITOR_ASPECT_RATIO;
+uniform float HSM_PHYSICAL_MONITOR_DIAGONAL_SIZE;
+uniform float HSM_PHYSICAL_MONITOR_DIAGONAL_SIZE;
+uniform float HSM_PLACEMENT_IMAGE_MODE;
+uniform float HSM_PLACEMENT_IMAGE_USE_HORIZONTAL;
+uniform float HSM_POST_CRT_BRIGHTNESS;
+uniform float HSM_POTATO_COLORIZE_BRIGHTNESS;
+uniform float HSM_POTATO_COLORIZE_CRT_WITH_BG;
+uniform float HSM_POTATO_SHOW_BG_OVER_SCREEN;
+uniform float HSM_REFLECT_BEZEL_INNER_EDGE_AMOUNT;
+uniform float HSM_REFLECT_BEZEL_INNER_EDGE_FULLSCREEN_GLOW;
+uniform float HSM_REFLECT_BLUR_FALLOFF_DISTANCE;
+uniform float HSM_REFLECT_BLUR_MAX;
+uniform float HSM_REFLECT_BLUR_MIN;
+uniform float HSM_REFLECT_BLUR_NUM_SAMPLES;
+uniform float HSM_REFLECT_BRIGHTNESS_NOISE_BLACK_LEVEL;
+uniform float HSM_REFLECT_BRIGHTNESS_NOISE_BRIGHTNESS;
+uniform float HSM_REFLECT_CORNER_FADE;
+uniform float HSM_REFLECT_CORNER_FADE_DISTANCE;
+uniform float HSM_REFLECT_CORNER_INNER_SPREAD;
+uniform float HSM_REFLECT_CORNER_OUTER_SPREAD;
+uniform float HSM_REFLECT_CORNER_ROTATION_OFFSET_BOTTOM;
+uniform float HSM_REFLECT_CORNER_ROTATION_OFFSET_TOP;
+uniform float HSM_REFLECT_CORNER_SPREAD_FALLOFF;
+uniform float HSM_REFLECT_DIFFUSED_AMOUNT;
+uniform float HSM_REFLECT_DIRECT_AMOUNT;
+uniform float HSM_REFLECT_FADE_AMOUNT;
+uniform float HSM_REFLECT_FRAME_INNER_EDGE_AMOUNT;
+uniform float HSM_REFLECT_FRAME_INNER_EDGE_SHARPNESS;
+uniform float HSM_REFLECT_FULLSCREEN_GLOW;
+uniform float HSM_REFLECT_FULLSCREEN_GLOW_GAMMA;
+uniform float HSM_REFLECT_GLOBAL_AMOUNT;
+uniform float HSM_REFLECT_GLOBAL_GAMMA_ADJUST;
+uniform float HSM_REFLECT_LATERAL_OUTER_FADE_DISTANCE;
+uniform float HSM_REFLECT_LATERAL_OUTER_FADE_POSITION;
+uniform float HSM_REFLECT_MASK_BLACK_LEVEL;
+uniform float HSM_REFLECT_MASK_BRIGHTNESS;
+uniform float HSM_REFLECT_MASK_FOLLOW_LAYER;
+uniform float HSM_REFLECT_MASK_FOLLOW_MODE;
+uniform float HSM_REFLECT_MASK_IMAGE_AMOUNT;
+uniform float HSM_REFLECT_MASK_MIPMAPPING_BLEND_BIAS;
+uniform float HSM_REFLECT_NOISE_AMOUNT;
+uniform float HSM_REFLECT_NOISE_SAMPLE_DISTANCE;
+uniform float HSM_REFLECT_NOISE_SAMPLES;
+uniform float HSM_REFLECT_RADIAL_FADE_HEIGHT;
+uniform float HSM_REFLECT_RADIAL_FADE_WIDTH;
+uniform float HSM_REFLECT_SHOW_TUBE_FX_AMOUNT;
+uniform float HSM_REFLECT_VIGNETTE_AMOUNT;
+uniform float HSM_REFLECT_VIGNETTE_SIZE;
+uniform float HSM_RENDER_FOR_SIMPLIFIED_EMPTY_LINE;
+uniform float HSM_RENDER_FOR_SIMPLIFIED_TITLE;
+uniform float HSM_RENDER_SIMPLE_MASK_TYPE;
+uniform float HSM_RENDER_SIMPLE_MODE;
+uniform float HSM_RESOLUTION_DEBUG_ON;
+uniform float HSM_ROTATE_CORE_IMAGE;
+uniform float HSM_SCANLINE_DIRECTION;
+uniform float HSM_SCREEN_CORNER_RADIUS_SCALE;
+uniform float HSM_SCREEN_POSITION_X;
+uniform float HSM_SCREEN_POSITION_Y;
+uniform float HSM_SCREEN_REFLECTION_FOLLOW_DIFFUSE_THICKNESS;
+uniform float HSM_SCREEN_REFLECTION_POS_X;
+uniform float HSM_SCREEN_REFLECTION_POS_Y;
+uniform float HSM_SCREEN_REFLECTION_SCALE;
+uniform float HSM_SCREEN_VIGNETTE_DUALSCREEN_VIS_MODE;
+uniform float HSM_SCREEN_VIGNETTE_IN_REFLECTION;
+uniform float HSM_SCREEN_VIGNETTE_ON;
+uniform float HSM_SCREEN_VIGNETTE_POWER;
+uniform float HSM_SCREEN_VIGNETTE_STRENGTH;
+uniform float HSM_SHOW_CRT_ON_TOP_OF_COLORED_GEL;
+uniform float HSM_SHOW_PASS_ALPHA;
+uniform float HSM_SHOW_PASS_APPLY_SCREEN_COORD;
+uniform float HSM_SHOW_PASS_INDEX;
+uniform float HSM_SIGNAL_NOISE_AMOUNT;
+uniform float HSM_SIGNAL_NOISE_BLACK_LEVEL;
+uniform float HSM_SIGNAL_NOISE_ON;
+uniform float HSM_SIGNAL_NOISE_SIZE_MODE;
+uniform float HSM_SIGNAL_NOISE_SIZE_MULT;
+uniform float HSM_SIGNAL_NOISE_TYPE;
+uniform float HSM_SINDEN_BORDER_BRIGHTNESS;
+uniform float HSM_SINDEN_BORDER_EMPTY_TUBE_COMPENSATION;
+uniform float HSM_SINDEN_BORDER_ON;
+uniform float HSM_SINDEN_BORDER_THICKNESS;
+uniform float HSM_SNAP_TO_CLOSEST_INT_SCALE_TOLERANCE;
+uniform float HSM_STATIC_LAYERS_GAMMA;
+uniform float HSM_TOP_AMBIENT_LIGHTING_MULTIPLIER;
+uniform float HSM_TOP_APPLY_AMBIENT_IN_ADD_MODE;
+uniform float HSM_TOP_BLEND_MODE;
+uniform float HSM_TOP_BRIGHTNESS;
+uniform float HSM_TOP_COLORIZE_ON;
+uniform float HSM_TOP_CUTOUT_MODE;
+uniform float HSM_TOP_DUALSCREEN_VIS_MODE;
+uniform float HSM_TOP_FILL_MODE;
+uniform float HSM_TOP_FOLLOW_FULL_USES_ZOOM;
+uniform float HSM_TOP_FOLLOW_LAYER;
+uniform float HSM_TOP_FOLLOW_MODE;
+uniform float HSM_TOP_GAMMA;
+uniform float HSM_TOP_HUE;
+uniform float HSM_TOP_LAYER_ORDER;
+uniform float HSM_TOP_MASK_MODE;
+uniform float HSM_TOP_MIPMAPPING_BLEND_BIAS;
+uniform float HSM_TOP_OPACITY;
+uniform float HSM_TOP_POS_X;
+uniform float HSM_TOP_POS_Y;
+uniform float HSM_TOP_SATURATION;
+uniform float HSM_TOP_SCALE;
+uniform float HSM_TOP_SCALE_X;
+uniform float HSM_TOP_SOURCE_MATTE_TYPE;
+uniform float HSM_TOP_SPLIT_PRESERVE_CENTER;
+uniform float HSM_TOP_SPLIT_REPEAT_WIDTH;
+uniform float HSM_TUBE_ASPECT_AND_EMPTY_LINE;
+uniform float HSM_TUBE_ASPECT_AND_EMPTY_TITLE;
+uniform float HSM_TUBE_BLACK_EDGE_CORNER_RADIUS_SCALE;
+uniform float HSM_TUBE_BLACK_EDGE_CURVATURE_SCALE;
+uniform float HSM_TUBE_BLACK_EDGE_SHARPNESS;
+uniform float HSM_TUBE_BLACK_EDGE_THICKNESS;
+uniform float HSM_TUBE_BLACK_EDGE_THICKNESS_X_SCALE;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_ADDITIVE_AMOUNT;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_AMBIENT_LIGHTING;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_AMBIENT2_LIGHTING;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_DUALSCREEN_VIS_MODE;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_FAKE_SCANLINE_AMOUNT;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_FLIP_HORIZONTAL;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_FLIP_VERTICAL;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_MULTIPLY_AMOUNT;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_NORMAL_AMOUNT;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_NORMAL_BRIGHTNESS;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_NORMAL_VIGNETTE;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_ON;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_SCALE;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_TRANSPARENCY_THRESHOLD;
+uniform float HSM_TUBE_DIFFUSE_FORCE_ASPECT;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_AMBIENT_LIGHTING;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_AMBIENT2_LIGHTING;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_AMOUNT;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_BRIGHTNESS;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_COLORIZE_ON;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_DUALSCREEN_VIS_MODE;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_GAMMA;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_HUE;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_ROTATION;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_SATURATION;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_SCALE;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_SCALE_X;
+uniform float HSM_TUBE_DIFFUSE_MODE;
+uniform float HSM_TUBE_EMPTY_THICKNESS;
+uniform float HSM_TUBE_EMPTY_THICKNESS_X_SCALE;
+uniform float HSM_TUBE_OPACITY;
+uniform float HSM_TUBE_SHADOW_CURVATURE_SCALE;
+uniform float HSM_TUBE_SHADOW_IMAGE_ON;
+uniform float HSM_TUBE_SHADOW_IMAGE_OPACITY;
+uniform float HSM_TUBE_SHADOW_IMAGE_POS_X;
+uniform float HSM_TUBE_SHADOW_IMAGE_POS_Y;
+uniform float HSM_TUBE_SHADOW_IMAGE_SCALE_X;
+uniform float HSM_TUBE_SHADOW_IMAGE_SCALE_Y;
+uniform float HSM_TUBE_STATIC_AMBIENT_LIGHTING;
+uniform float HSM_TUBE_STATIC_AMBIENT2_LIGHTING;
+uniform float HSM_TUBE_STATIC_BLACK_LEVEL;
+uniform float HSM_TUBE_STATIC_DITHER_AMOUNT;
+uniform float HSM_TUBE_STATIC_DITHER_DISTANCE;
+uniform float HSM_TUBE_STATIC_DITHER_SAMPLES;
+uniform float HSM_TUBE_STATIC_OPACITY_DIFFUSE_MULTIPLY;
+uniform float HSM_TUBE_STATIC_POS_X;
+uniform float HSM_TUBE_STATIC_POS_Y;
+uniform float HSM_TUBE_STATIC_REFLECTION_IMAGE_DUALSCREEN_VIS_MODE;
+uniform float HSM_TUBE_STATIC_REFLECTION_IMAGE_ON;
+uniform float HSM_TUBE_STATIC_REFLECTION_IMAGE_OPACITY;
+uniform float HSM_TUBE_STATIC_SCALE;
+uniform float HSM_TUBE_STATIC_SCALE_X;
+uniform float HSM_TUBE_STATIC_SHADOW_OPACITY;
+uniform float HSM_USE_GEOM;
+uniform float HSM_USE_IMAGE_FOR_PLACEMENT;
+uniform float HSM_USE_PHYSICAL_SIZE_FOR_NON_INTEGER;
+uniform float HSM_USE_SNAP_TO_CLOSEST_INT_SCALE;
+uniform float HSM_VERTICAL_PRESET;
+uniform float HSM_VIEWPORT_POSITION_X;
+uniform float HSM_VIEWPORT_POSITION_Y;
+uniform float HSM_VIEWPORT_VIGNETTE_CUTOUT_MODE;
+uniform float HSM_VIEWPORT_VIGNETTE_FOLLOW_LAYER;
+uniform float HSM_VIEWPORT_VIGNETTE_LAYER_ORDER;
+uniform float HSM_VIEWPORT_VIGNETTE_MASK_MODE;
+uniform float HSM_VIEWPORT_VIGNETTE_OPACITY;
+uniform float HSM_VIEWPORT_VIGNETTE_POS_X;
+uniform float HSM_VIEWPORT_VIGNETTE_POS_Y;
+uniform float HSM_VIEWPORT_VIGNETTE_SCALE;
+uniform float HSM_VIEWPORT_VIGNETTE_SCALE_X;
+uniform float HSM_VIEWPORT_ZOOM;
+uniform float HSM_VIEWPORT_ZOOM_MASK;
+uniform float HSM_2ND_SCREEN_ASPECT_RATIO_MODE;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_BOTTOM;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_LEFT;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_RIGHT;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_TOP;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_ZOOM;
+uniform float HSM_2ND_SCREEN_INDEPENDENT_SCALE;
+uniform float HSM_2ND_SCREEN_POS_X;
+uniform float HSM_2ND_SCREEN_POS_Y;
+uniform float HSM_2ND_SCREEN_SCALE_OFFSET;
+uniform float SCREEN_ASPECT;
+uniform vec2 SCREEN_COORD;
+uniform float DEFAULT_SRGB_GAMMA;
+uniform float GAMMA_INPUT;
+uniform float gamma_out;
+uniform float post_br;
+uniform float post_br_affect_black_level;
+uniform float no_scanlines;
+uniform float iscans;
+uniform float vga_mode;
+uniform float hiscan;
+uniform float SHARPEN_ON;
+uniform float CSHARPEN;
+uniform float CCONTR;
+uniform float CDETAILS;
+uniform float DEBLUR;
+`;
+uniform float HSM_AB_COMPARE_FREEZE_GRAPHICS;
+uniform float HSM_AB_COMPARE_SHOW_MODE;
+uniform float HSM_AB_COMPARE_SPLIT_POSITION;
+uniform float HSM_AMBIENT_LIGHTING_OPACITY;
+uniform float HSM_AMBIENT_LIGHTING_SWAP_IMAGE_MODE;
+uniform float HSM_AMBIENT1_CONTRAST;
+uniform float HSM_AMBIENT1_DITHERING_SAMPLES;
+uniform float HSM_AMBIENT1_HUE;
+uniform float HSM_AMBIENT1_MIRROR_HORZ;
+uniform float HSM_AMBIENT1_OPACITY;
+uniform float HSM_AMBIENT1_POSITION_X;
+uniform float HSM_AMBIENT1_POSITION_Y;
+uniform float HSM_AMBIENT1_POS_INHERIT_MODE;
+uniform float HSM_AMBIENT1_ROTATE;
+uniform float HSM_AMBIENT1_SATURATION;
+uniform float HSM_AMBIENT1_SCALE;
+uniform float HSM_AMBIENT1_SCALE_INHERIT_MODE;
+uniform float HSM_AMBIENT1_SCALE_KEEP_ASPECT;
+uniform float HSM_AMBIENT1_SCALE_X;
+uniform float HSM_AMBIENT1_VALUE;
+uniform float HSM_AMBIENT2_CONTRAST;
+uniform float HSM_AMBIENT2_HUE;
+uniform float HSM_AMBIENT2_MIRROR_HORZ;
+uniform float HSM_AMBIENT2_OPACITY;
+uniform float HSM_AMBIENT2_POSITION_X;
+uniform float HSM_AMBIENT2_POSITION_Y;
+uniform float HSM_AMBIENT2_POS_INHERIT_MODE;
+uniform float HSM_AMBIENT2_ROTATE;
+uniform float HSM_AMBIENT2_SATURATION;
+uniform float HSM_AMBIENT2_SCALE;
+uniform float HSM_AMBIENT2_SCALE_INHERIT_MODE;
+uniform float HSM_AMBIENT2_SCALE_KEEP_ASPECT;
+uniform float HSM_AMBIENT2_SCALE_X;
+uniform float HSM_AMBIENT2_VALUE;
+uniform float HSM_ANTI_FLICKER_ON;
+uniform float HSM_ANTI_FLICKER_THRESHOLD;
+uniform float HSM_ASPECT_RATIO_EXPLICIT;
+uniform float HSM_ASPECT_RATIO_MODE;
+uniform float HSM_ASPECT_RATIO_ORIENTATION;
+uniform float HSM_BG_AMBIENT_LIGHTING_MULTIPLIER;
+uniform float HSM_BG_APPLY_AMBIENT_IN_ADD_MODE;
+uniform float HSM_BG_BLEND_MODE;
+uniform float HSM_BG_BRIGHTNESS;
+uniform float HSM_BG_COLORIZE_ON;
+uniform float HSM_BG_CUTOUT_MODE;
+uniform float HSM_BG_DUALSCREEN_VIS_MODE;
+uniform float HSM_BG_FILL_MODE;
+uniform float HSM_BG_FOLLOW_FULL_USES_ZOOM;
+uniform float HSM_BG_FOLLOW_LAYER;
+uniform float HSM_BG_FOLLOW_MODE;
+uniform float HSM_BG_GAMMA;
+uniform float HSM_BG_HUE;
+uniform float HSM_BG_LAYER_ORDER;
+uniform float HSM_BG_MASK_MODE;
+uniform float HSM_BG_MIPMAPPING_BLEND_BIAS;
+uniform float HSM_BG_OPACITY;
+uniform float HSM_BG_POS_X;
+uniform float HSM_BG_POS_Y;
+uniform float HSM_BG_SATURATION;
+uniform float HSM_BG_SCALE;
+uniform float HSM_BG_SCALE_X;
+uniform float HSM_BG_SOURCE_MATTE_TYPE;
+uniform float HSM_BG_SPLIT_PRESERVE_CENTER;
+uniform float HSM_BG_SPLIT_REPEAT_WIDTH;
+uniform float HSM_BG_WRAP_MODE;
+uniform float HSM_BZL_AMBIENT_LIGHTING_MULTIPLIER;
+uniform float HSM_BZL_AMBIENT2_LIGHTING_MULTIPLIER;
+uniform float HSM_BZL_BLEND_MODE;
+uniform float HSM_BZL_BRIGHTNESS;
+uniform float HSM_BZL_BRIGHTNESS_MULT_BOTTOM;
+uniform float HSM_BZL_BRIGHTNESS_MULT_SIDE_LEFT;
+uniform float HSM_BZL_BRIGHTNESS_MULT_SIDE_RIGHT;
+uniform float HSM_BZL_BRIGHTNESS_MULT_SIDES;
+uniform float HSM_BZL_BRIGHTNESS_MULT_TOP;
+uniform float HSM_BZL_COLOR_HUE;
+uniform float HSM_BZL_COLOR_SATURATION;
+uniform float HSM_BZL_COLOR_VALUE;
+uniform float HSM_BZL_HEIGHT;
+uniform float HSM_BZL_HIGHLIGHT;
+uniform float HSM_BZL_INDEPENDENT_CURVATURE_SCALE_LONG_AXIS;
+uniform float HSM_BZL_INDEPENDENT_CURVATURE_SCALE_SHORT_AXIS;
+uniform float HSM_BZL_INDEPENDENT_SCALE;
+uniform float HSM_BZL_INNER_CORNER_RADIUS_SCALE;
+uniform float HSM_BZL_INNER_CURVATURE_SCALE;
+uniform float HSM_BZL_INNER_EDGE_HIGHLIGHT;
+uniform float HSM_BZL_INNER_EDGE_SHADOW;
+uniform float HSM_BZL_INNER_EDGE_SHARPNESS;
+uniform float HSM_BZL_INNER_EDGE_THICKNESS;
+uniform float HSM_BZL_NOISE;
+uniform float HSM_BZL_OPACITY;
+uniform float HSM_BZL_OUTER_CORNER_RADIUS_SCALE;
+uniform float HSM_BZL_OUTER_CURVATURE_SCALE;
+uniform float HSM_BZL_OUTER_POSITION_Y;
+uniform float HSM_BZL_SCALE_OFFSET;
+uniform float HSM_BZL_USE_INDEPENDENT_CURVATURE;
+uniform float HSM_BZL_USE_INDEPENDENT_SCALE;
+uniform float HSM_BZL_WIDTH;
+uniform float HSM_CACHE_GRAPHICS_ON;
+uniform float HSM_CACHE_UPDATE_INDICATOR_MODE;
+uniform float HSM_CORE_RES_SAMPLING_MULT_OPPOSITE_DIR;
+uniform float HSM_CORE_RES_SAMPLING_MULT_SCANLINE_DIR;
+uniform float HSM_CROP_BLACK_THRESHOLD;
+uniform float HSM_CROP_MODE;
+uniform float HSM_CROP_PERCENT_BOTTOM;
+uniform float HSM_CROP_PERCENT_LEFT;
+uniform float HSM_CROP_PERCENT_RIGHT;
+uniform float HSM_CROP_PERCENT_TOP;
+uniform float HSM_CROP_PERCENT_ZOOM;
+uniform float HSM_CRT_BLEND_AMOUNT;
+uniform float HSM_CRT_BLEND_MODE;
+uniform float HSM_CRT_CURVATURE_SCALE;
+uniform float HSM_CRT_SCREEN_BLEND_MODE;
+uniform float HSM_CURVATURE_2D_SCALE_LONG_AXIS;
+uniform float HSM_CURVATURE_2D_SCALE_SHORT_AXIS;
+uniform float HSM_CURVATURE_3D_RADIUS;
+uniform float HSM_CURVATURE_3D_TILT_ANGLE_X;
+uniform float HSM_CURVATURE_3D_TILT_ANGLE_Y;
+uniform float HSM_CURVATURE_3D_VIEW_DIST;
+uniform float HSM_CURVATURE_MODE;
+uniform float HSM_DOWNSAMPLE_BLUR_OPPOSITE_DIR;
+uniform float HSM_DOWNSAMPLE_BLUR_SCANLINE_DIR;
+uniform float HSM_DREZ_HSHARP0;
+uniform float HSM_DREZ_SIGMA_HV;
+uniform float HSM_DREZ_SHAR;
+uniform float HSM_DREZ_THRESHOLD_RATIO;
+uniform float HSM_DUALSCREEN_CORE_IMAGE_SPLIT_MODE;
+uniform float HSM_DUALSCREEN_CORE_IMAGE_SWAP_SCREENS;
+uniform float HSM_DUALSCREEN_CORE_IMAGE_SPLIT_OFFSET;
+uniform float HSM_DUALSCREEN_MODE;
+uniform float HSM_DUALSCREEN_POSITION_OFFSET_BETWEEN_SCREENS;
+uniform float HSM_DUALSCREEN_SHIFT_POSITION_WITH_SCALE;
+uniform float HSM_DUALSCREEN_VIEWPORT_SPLIT_LOCATION;
+uniform float HSM_FAKE_SCANLINE_CURVATURE;
+uniform float HSM_FAKE_SCANLINE_INT_SCALE;
+uniform float HSM_FAKE_SCANLINE_MODE;
+uniform float HSM_FAKE_SCANLINE_OPACITY;
+uniform float HSM_FAKE_SCANLINE_RES;
+uniform float HSM_FAKE_SCANLINE_RES_MODE;
+uniform float HSM_FAKE_SCANLINE_ROLL;
+uniform float HSM_FLIP_CORE_HORIZONTAL;
+uniform float HSM_FLIP_CORE_VERTICAL;
+uniform float HSM_FLIP_VIEWPORT_HORIZONTAL;
+uniform float HSM_FLIP_VIEWPORT_VERTICAL;
+uniform float HSM_FRM_BLEND_MODE;
+uniform float HSM_FRM_COLOR_HUE;
+uniform float HSM_FRM_COLOR_SATURATION;
+uniform float HSM_FRM_COLOR_VALUE;
+uniform float HSM_FRM_INNER_EDGE_HIGHLIGHT;
+uniform float HSM_FRM_INNER_EDGE_THICKNESS;
+uniform float HSM_FRM_NOISE;
+uniform float HSM_FRM_OPACITY;
+uniform float HSM_FRM_OUTER_CORNER_RADIUS;
+uniform float HSM_FRM_OUTER_CURVATURE_SCALE;
+uniform float HSM_FRM_OUTER_EDGE_SHADING;
+uniform float HSM_FRM_OUTER_EDGE_THICKNESS;
+uniform float HSM_FRM_OUTER_POS_Y;
+uniform float HSM_FRM_SHADOW_OPACITY;
+uniform float HSM_FRM_SHADOW_WIDTH;
+uniform float HSM_FRM_TEXTURE_BLEND_MODE;
+uniform float HSM_FRM_TEXTURE_OPACITY;
+uniform float HSM_FRM_THICKNESS;
+uniform float HSM_FRM_THICKNESS_SCALE_X;
+uniform float HSM_FRM_USE_INDEPENDENT_COLOR;
+uniform float HSM_GLOBAL_CORNER_RADIUS;
+uniform float HSM_GLOBAL_GRAPHICS_BRIGHTNESS;
+uniform float HSM_INT_SCALE_MAX_HEIGHT;
+uniform float HSM_INT_SCALE_MODE;
+uniform float HSM_INT_SCALE_MULTIPLE_OFFSET;
+uniform float HSM_INT_SCALE_MULTIPLE_OFFSET_LONG;
+uniform float HSM_INTERLACE_EFFECT_SMOOTHNESS_INTERS;
+uniform float HSM_INTERLACE_MODE;
+uniform float HSM_INTERLACE_SCANLINE_EFFECT;
+uniform float HSM_INTERLACE_TRIGGER_RES;
+uniform float HSM_INTRO_LOGO_BLEND_MODE;
+uniform float HSM_INTRO_LOGO_FADE_IN;
+uniform float HSM_INTRO_LOGO_FADE_OUT;
+uniform float HSM_INTRO_LOGO_FLIP_VERTICAL;
+uniform float HSM_INTRO_LOGO_HEIGHT;
+uniform float HSM_INTRO_LOGO_HOLD;
+uniform float HSM_INTRO_LOGO_OVER_SOLID_COLOR;
+uniform float HSM_INTRO_LOGO_PLACEMENT;
+uniform float HSM_INTRO_LOGO_POS_X;
+uniform float HSM_INTRO_LOGO_POS_Y;
+uniform float HSM_INTRO_LOGO_WAIT;
+uniform float HSM_INTRO_NOISE_BLEND_MODE;
+uniform float HSM_INTRO_NOISE_FADE_OUT;
+uniform float HSM_INTRO_NOISE_HOLD;
+uniform float HSM_INTRO_SOLID_BLACK_FADE_OUT;
+uniform float HSM_INTRO_SOLID_BLACK_HOLD;
+uniform float HSM_INTRO_SOLID_COLOR_BLEND_MODE;
+uniform float HSM_INTRO_SOLID_COLOR_FADE_OUT;
+uniform float HSM_INTRO_SOLID_COLOR_HOLD;
+uniform float HSM_INTRO_SOLID_COLOR_HUE;
+uniform float HSM_INTRO_SOLID_COLOR_SAT;
+uniform float HSM_INTRO_SOLID_COLOR_VALUE;
+uniform float HSM_INTRO_SPEED;
+uniform float HSM_INTRO_WHEN_TO_SHOW;
+uniform float HSM_LAYERING_DEBUG_MASK_MODE;
+uniform float HSM_LED_AMBIENT_LIGHTING_MULTIPLIER;
+uniform float HSM_LED_APPLY_AMBIENT_IN_ADD_MODE;
+uniform float HSM_LED_BLEND_MODE;
+uniform float HSM_LED_BRIGHTNESS;
+uniform float HSM_LED_COLORIZE_ON;
+uniform float HSM_LED_CUTOUT_MODE;
+uniform float HSM_LED_DUALSCREEN_VIS_MODE;
+uniform float HSM_LED_FILL_MODE;
+uniform float HSM_LED_FOLLOW_FULL_USES_ZOOM;
+uniform float HSM_LED_FOLLOW_LAYER;
+uniform float HSM_LED_FOLLOW_MODE;
+uniform float HSM_LED_GAMMA;
+uniform float HSM_LED_HUE;
+uniform float HSM_LED_LAYER_ORDER;
+uniform float HSM_LED_MASK_MODE;
+uniform float HSM_LED_MIPMAPPING_BLEND_BIAS;
+uniform float HSM_LED_OPACITY;
+uniform float HSM_LED_POS_X;
+uniform float HSM_LED_POS_Y;
+uniform float HSM_LED_SATURATION;
+uniform float HSM_LED_SCALE;
+uniform float HSM_LED_SCALE_X;
+uniform float HSM_LED_SOURCE_MATTE_TYPE;
+uniform float HSM_LED_SPLIT_PRESERVE_CENTER;
+uniform float HSM_LED_SPLIT_REPEAT_WIDTH;
+uniform float HSM_MONOCHROME_BRIGHTNESS;
+uniform float HSM_MONOCHROME_DUALSCREEN_VIS_MODE;
+uniform float HSM_MONOCHROME_GAMMA;
+uniform float HSM_MONOCHROME_HUE_OFFSET;
+uniform float HSM_MONOCHROME_MODE;
+uniform float HSM_MONOCHROME_SATURATION;
+uniform float HSM_NON_INTEGER_SCALE;
+uniform float HSM_NON_INTEGER_SCALE_OFFSET;
+uniform float HSM_OVERSCAN_AMOUNT;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_AMOUNT;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_MODE;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_NEUTRAL_RANGE;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_NEUTRAL_RANGE_CENTER;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_ON;
+uniform float HSM_OVERSCAN_X;
+uniform float HSM_OVERSCAN_Y;
+uniform float HSM_PASS_VIEWER_EMPTY_LINE;
+uniform float HSM_PASS_VIEWER_TITLE;
+uniform float HSM_PHYSICAL_MONITOR_ASPECT_RATIO;
+uniform float HSM_PHYSICAL_MONITOR_DIAGONAL_SIZE;
+uniform float HSM_PHYSICAL_MONITOR_DIAGONAL_SIZE;
+uniform float HSM_PLACEMENT_IMAGE_MODE;
+uniform float HSM_PLACEMENT_IMAGE_USE_HORIZONTAL;
+uniform float HSM_POST_CRT_BRIGHTNESS;
+uniform float HSM_POTATO_COLORIZE_BRIGHTNESS;
+uniform float HSM_POTATO_COLORIZE_CRT_WITH_BG;
+uniform float HSM_POTATO_SHOW_BG_OVER_SCREEN;
+uniform float HSM_REFLECT_BEZEL_INNER_EDGE_AMOUNT;
+uniform float HSM_REFLECT_BEZEL_INNER_EDGE_FULLSCREEN_GLOW;
+uniform float HSM_REFLECT_BLUR_FALLOFF_DISTANCE;
+uniform float HSM_REFLECT_BLUR_MAX;
+uniform float HSM_REFLECT_BLUR_MIN;
+uniform float HSM_REFLECT_BLUR_NUM_SAMPLES;
+uniform float HSM_REFLECT_BRIGHTNESS_NOISE_BLACK_LEVEL;
+uniform float HSM_REFLECT_BRIGHTNESS_NOISE_BRIGHTNESS;
+uniform float HSM_REFLECT_CORNER_FADE;
+uniform float HSM_REFLECT_CORNER_FADE_DISTANCE;
+uniform float HSM_REFLECT_CORNER_INNER_SPREAD;
+uniform float HSM_REFLECT_CORNER_OUTER_SPREAD;
+uniform float HSM_REFLECT_CORNER_ROTATION_OFFSET_BOTTOM;
+uniform float HSM_REFLECT_CORNER_ROTATION_OFFSET_TOP;
+uniform float HSM_REFLECT_CORNER_SPREAD_FALLOFF;
+uniform float HSM_REFLECT_DIFFUSED_AMOUNT;
+uniform float HSM_REFLECT_DIRECT_AMOUNT;
+uniform float HSM_REFLECT_FADE_AMOUNT;
+uniform float HSM_REFLECT_FRAME_INNER_EDGE_AMOUNT;
+uniform float HSM_REFLECT_FRAME_INNER_EDGE_SHARPNESS;
+uniform float HSM_REFLECT_FULLSCREEN_GLOW;
+uniform float HSM_REFLECT_FULLSCREEN_GLOW_GAMMA;
+uniform float HSM_REFLECT_GLOBAL_AMOUNT;
+uniform float HSM_REFLECT_GLOBAL_GAMMA_ADJUST;
+uniform float HSM_REFLECT_LATERAL_OUTER_FADE_DISTANCE;
+uniform float HSM_REFLECT_LATERAL_OUTER_FADE_POSITION;
+uniform float HSM_REFLECT_MASK_BLACK_LEVEL;
+uniform float HSM_REFLECT_MASK_BRIGHTNESS;
+uniform float HSM_REFLECT_MASK_FOLLOW_LAYER;
+uniform float HSM_REFLECT_MASK_FOLLOW_MODE;
+uniform float HSM_REFLECT_MASK_IMAGE_AMOUNT;
+uniform float HSM_REFLECT_MASK_MIPMAPPING_BLEND_BIAS;
+uniform float HSM_REFLECT_NOISE_AMOUNT;
+uniform float HSM_REFLECT_NOISE_SAMPLE_DISTANCE;
+uniform float HSM_REFLECT_NOISE_SAMPLES;
+uniform float HSM_REFLECT_RADIAL_FADE_HEIGHT;
+uniform float HSM_REFLECT_RADIAL_FADE_WIDTH;
+uniform float HSM_REFLECT_SHOW_TUBE_FX_AMOUNT;
+uniform float HSM_REFLECT_VIGNETTE_AMOUNT;
+uniform float HSM_REFLECT_VIGNETTE_SIZE;
+uniform float HSM_RENDER_FOR_SIMPLIFIED_EMPTY_LINE;
+uniform float HSM_RENDER_FOR_SIMPLIFIED_TITLE;
+uniform float HSM_RENDER_SIMPLE_MASK_TYPE;
+uniform float HSM_RENDER_SIMPLE_MODE;
+uniform float HSM_RESOLUTION_DEBUG_ON;
+uniform float HSM_ROTATE_CORE_IMAGE;
+uniform float HSM_SCANLINE_DIRECTION;
+uniform float HSM_SCREEN_CORNER_RADIUS_SCALE;
+uniform float HSM_SCREEN_POSITION_X;
+uniform float HSM_SCREEN_POSITION_Y;
+uniform float HSM_SCREEN_REFLECTION_FOLLOW_DIFFUSE_THICKNESS;
+uniform float HSM_SCREEN_REFLECTION_POS_X;
+uniform float HSM_SCREEN_REFLECTION_POS_Y;
+uniform float HSM_SCREEN_REFLECTION_SCALE;
+uniform float HSM_SCREEN_VIGNETTE_DUALSCREEN_VIS_MODE;
+uniform float HSM_SCREEN_VIGNETTE_IN_REFLECTION;
+uniform float HSM_SCREEN_VIGNETTE_ON;
+uniform float HSM_SCREEN_VIGNETTE_POWER;
+uniform float HSM_SCREEN_VIGNETTE_STRENGTH;
+uniform float HSM_SHOW_CRT_ON_TOP_OF_COLORED_GEL;
+uniform float HSM_SHOW_PASS_ALPHA;
+uniform float HSM_SHOW_PASS_APPLY_SCREEN_COORD;
+uniform float HSM_SHOW_PASS_INDEX;
+uniform float HSM_SIGNAL_NOISE_AMOUNT;
+uniform float HSM_SIGNAL_NOISE_BLACK_LEVEL;
+uniform float HSM_SIGNAL_NOISE_ON;
+uniform float HSM_SIGNAL_NOISE_SIZE_MODE;
+uniform float HSM_SIGNAL_NOISE_SIZE_MULT;
+uniform float HSM_SIGNAL_NOISE_TYPE;
+uniform float HSM_SINDEN_BORDER_BRIGHTNESS;
+uniform float HSM_SINDEN_BORDER_EMPTY_TUBE_COMPENSATION;
+uniform float HSM_SINDEN_BORDER_ON;
+uniform float HSM_SINDEN_BORDER_THICKNESS;
+uniform float HSM_SNAP_TO_CLOSEST_INT_SCALE_TOLERANCE;
+uniform float HSM_STATIC_LAYERS_GAMMA;
+uniform float HSM_TOP_AMBIENT_LIGHTING_MULTIPLIER;
+uniform float HSM_TOP_APPLY_AMBIENT_IN_ADD_MODE;
+uniform float HSM_TOP_BLEND_MODE;
+uniform float HSM_TOP_BRIGHTNESS;
+uniform float HSM_TOP_COLORIZE_ON;
+uniform float HSM_TOP_CUTOUT_MODE;
+uniform float HSM_TOP_DUALSCREEN_VIS_MODE;
+uniform float HSM_TOP_FILL_MODE;
+uniform float HSM_TOP_FOLLOW_FULL_USES_ZOOM;
+uniform float HSM_TOP_FOLLOW_LAYER;
+uniform float HSM_TOP_FOLLOW_MODE;
+uniform float HSM_TOP_GAMMA;
+uniform float HSM_TOP_HUE;
+uniform float HSM_TOP_LAYER_ORDER;
+uniform float HSM_TOP_MASK_MODE;
+uniform float HSM_TOP_MIPMAPPING_BLEND_BIAS;
+uniform float HSM_TOP_OPACITY;
+uniform float HSM_TOP_POS_X;
+uniform float HSM_TOP_POS_Y;
+uniform float HSM_TOP_SATURATION;
+uniform float HSM_TOP_SCALE;
+uniform float HSM_TOP_SCALE_X;
+uniform float HSM_TOP_SOURCE_MATTE_TYPE;
+uniform float HSM_TOP_SPLIT_PRESERVE_CENTER;
+uniform float HSM_TOP_SPLIT_REPEAT_WIDTH;
+uniform float HSM_TUBE_ASPECT_AND_EMPTY_LINE;
+uniform float HSM_TUBE_ASPECT_AND_EMPTY_TITLE;
+uniform float HSM_TUBE_BLACK_EDGE_CORNER_RADIUS_SCALE;
+uniform float HSM_TUBE_BLACK_EDGE_CURVATURE_SCALE;
+uniform float HSM_TUBE_BLACK_EDGE_SHARPNESS;
+uniform float HSM_TUBE_BLACK_EDGE_THICKNESS;
+uniform float HSM_TUBE_BLACK_EDGE_THICKNESS_X_SCALE;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_ADDITIVE_AMOUNT;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_AMBIENT_LIGHTING;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_AMBIENT2_LIGHTING;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_DUALSCREEN_VIS_MODE;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_FAKE_SCANLINE_AMOUNT;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_FLIP_HORIZONTAL;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_FLIP_VERTICAL;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_MULTIPLY_AMOUNT;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_NORMAL_AMOUNT;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_NORMAL_BRIGHTNESS;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_NORMAL_VIGNETTE;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_ON;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_SCALE;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_TRANSPARENCY_THRESHOLD;
+uniform float HSM_TUBE_DIFFUSE_FORCE_ASPECT;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_AMBIENT_LIGHTING;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_AMBIENT2_LIGHTING;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_AMOUNT;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_BRIGHTNESS;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_COLORIZE_ON;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_DUALSCREEN_VIS_MODE;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_GAMMA;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_HUE;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_ROTATION;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_SATURATION;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_SCALE;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_SCALE_X;
+uniform float HSM_TUBE_DIFFUSE_MODE;
+uniform float HSM_TUBE_EMPTY_THICKNESS;
+uniform float HSM_TUBE_EMPTY_THICKNESS_X_SCALE;
+uniform float HSM_TUBE_OPACITY;
+uniform float HSM_TUBE_SHADOW_CURVATURE_SCALE;
+uniform float HSM_TUBE_SHADOW_IMAGE_ON;
+uniform float HSM_TUBE_SHADOW_IMAGE_OPACITY;
+uniform float HSM_TUBE_SHADOW_IMAGE_POS_X;
+uniform float HSM_TUBE_SHADOW_IMAGE_POS_Y;
+uniform float HSM_TUBE_SHADOW_IMAGE_SCALE_X;
+uniform float HSM_TUBE_SHADOW_IMAGE_SCALE_Y;
+uniform float HSM_TUBE_STATIC_AMBIENT_LIGHTING;
+uniform float HSM_TUBE_STATIC_AMBIENT2_LIGHTING;
+uniform float HSM_TUBE_STATIC_BLACK_LEVEL;
+uniform float HSM_TUBE_STATIC_DITHER_AMOUNT;
+uniform float HSM_TUBE_STATIC_DITHER_DISTANCE;
+uniform float HSM_TUBE_STATIC_DITHER_SAMPLES;
+uniform float HSM_TUBE_STATIC_OPACITY_DIFFUSE_MULTIPLY;
+uniform float HSM_TUBE_STATIC_POS_X;
+uniform float HSM_TUBE_STATIC_POS_Y;
+uniform float HSM_TUBE_STATIC_REFLECTION_IMAGE_DUALSCREEN_VIS_MODE;
+uniform float HSM_TUBE_STATIC_REFLECTION_IMAGE_ON;
+uniform float HSM_TUBE_STATIC_REFLECTION_IMAGE_OPACITY;
+uniform float HSM_TUBE_STATIC_SCALE;
+uniform float HSM_TUBE_STATIC_SCALE_X;
+uniform float HSM_TUBE_STATIC_SHADOW_OPACITY;
+uniform float HSM_USE_GEOM;
+uniform float HSM_USE_IMAGE_FOR_PLACEMENT;
+uniform float HSM_USE_PHYSICAL_SIZE_FOR_NON_INTEGER;
+uniform float HSM_USE_SNAP_TO_CLOSEST_INT_SCALE;
+uniform float HSM_VERTICAL_PRESET;
+uniform float HSM_VIEWPORT_POSITION_X;
+uniform float HSM_VIEWPORT_POSITION_Y;
+uniform float HSM_VIEWPORT_VIGNETTE_CUTOUT_MODE;
+uniform float HSM_VIEWPORT_VIGNETTE_FOLLOW_LAYER;
+uniform float HSM_VIEWPORT_VIGNETTE_LAYER_ORDER;
+uniform float HSM_VIEWPORT_VIGNETTE_MASK_MODE;
+uniform float HSM_VIEWPORT_VIGNETTE_OPACITY;
+uniform float HSM_VIEWPORT_VIGNETTE_POS_X;
+uniform float HSM_VIEWPORT_VIGNETTE_POS_Y;
+uniform float HSM_VIEWPORT_VIGNETTE_SCALE;
+uniform float HSM_VIEWPORT_VIGNETTE_SCALE_X;
+uniform float HSM_VIEWPORT_ZOOM;
+uniform float HSM_VIEWPORT_ZOOM_MASK;
+uniform float HSM_2ND_SCREEN_ASPECT_RATIO_MODE;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_BOTTOM;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_LEFT;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_RIGHT;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_TOP;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_ZOOM;
+uniform float HSM_2ND_SCREEN_INDEPENDENT_SCALE;
+uniform float HSM_2ND_SCREEN_POS_X;
+uniform float HSM_2ND_SCREEN_POS_Y;
+uniform float HSM_2ND_SCREEN_SCALE_OFFSET;
+uniform float SCREEN_ASPECT;
+uniform vec2 SCREEN_COORD;
+uniform float DEFAULT_SRGB_GAMMA;
+uniform float GAMMA_INPUT;
+uniform float gamma_out;
+uniform float post_br;
+uniform float post_br_affect_black_level;
+uniform float no_scanlines;
+uniform float iscans;
+uniform float vga_mode;
+uniform float hiscan;
+uniform float SHARPEN_ON;
+uniform float CSHARPEN;
+uniform float CCONTR;
+uniform float CDETAILS;
+uniform float DEBLUR;
+`;
+// Mega Bezel parameters - injected as mutable variables, not uniforms
+// Most HSM parameters need to be assignable variables, not read-only uniforms
+float HSM_AB_COMPARE_AREA = 0.0;
+uniform float HSM_AB_COMPARE_FREEZE_CRT_TUBE;
+uniform float HSM_AB_COMPARE_FREEZE_GRAPHICS;
+uniform float HSM_AB_COMPARE_SHOW_MODE;
+uniform float HSM_AB_COMPARE_SPLIT_POSITION;
+uniform float HSM_AMBIENT_LIGHTING_OPACITY;
+uniform float HSM_AMBIENT_LIGHTING_SWAP_IMAGE_MODE;
+uniform float HSM_AMBIENT1_CONTRAST;
+uniform float HSM_AMBIENT1_DITHERING_SAMPLES;
+uniform float HSM_AMBIENT1_HUE;
+uniform float HSM_AMBIENT1_MIRROR_HORZ;
+uniform float HSM_AMBIENT1_OPACITY;
+uniform float HSM_AMBIENT1_POSITION_X;
+uniform float HSM_AMBIENT1_POSITION_Y;
+uniform float HSM_AMBIENT1_POS_INHERIT_MODE;
+uniform float HSM_AMBIENT1_ROTATE;
+uniform float HSM_AMBIENT1_SATURATION;
+uniform float HSM_AMBIENT1_SCALE;
+uniform float HSM_AMBIENT1_SCALE_INHERIT_MODE;
+uniform float HSM_AMBIENT1_SCALE_KEEP_ASPECT;
+uniform float HSM_AMBIENT1_SCALE_X;
+uniform float HSM_AMBIENT1_VALUE;
+uniform float HSM_AMBIENT2_CONTRAST;
+uniform float HSM_AMBIENT2_HUE;
+uniform float HSM_AMBIENT2_MIRROR_HORZ;
+uniform float HSM_AMBIENT2_OPACITY;
+uniform float HSM_AMBIENT2_POSITION_X;
+uniform float HSM_AMBIENT2_POSITION_Y;
+uniform float HSM_AMBIENT2_POS_INHERIT_MODE;
+uniform float HSM_AMBIENT2_ROTATE;
+uniform float HSM_AMBIENT2_SATURATION;
+uniform float HSM_AMBIENT2_SCALE;
+uniform float HSM_AMBIENT2_SCALE_INHERIT_MODE;
+uniform float HSM_AMBIENT2_SCALE_KEEP_ASPECT;
+uniform float HSM_AMBIENT2_SCALE_X;
+uniform float HSM_AMBIENT2_VALUE;
+uniform float HSM_ANTI_FLICKER_ON;
+uniform float HSM_ANTI_FLICKER_THRESHOLD;
+uniform float HSM_ASPECT_RATIO_EXPLICIT;
+uniform float HSM_ASPECT_RATIO_MODE;
+uniform float HSM_ASPECT_RATIO_ORIENTATION;
+uniform float HSM_BG_AMBIENT_LIGHTING_MULTIPLIER;
+uniform float HSM_BG_APPLY_AMBIENT_IN_ADD_MODE;
+uniform float HSM_BG_BLEND_MODE;
+uniform float HSM_BG_BRIGHTNESS;
+uniform float HSM_BG_COLORIZE_ON;
+uniform float HSM_BG_CUTOUT_MODE;
+uniform float HSM_BG_DUALSCREEN_VIS_MODE;
+uniform float HSM_BG_FILL_MODE;
+uniform float HSM_BG_FOLLOW_FULL_USES_ZOOM;
+uniform float HSM_BG_FOLLOW_LAYER;
+uniform float HSM_BG_FOLLOW_MODE;
+uniform float HSM_BG_GAMMA;
+uniform float HSM_BG_HUE;
+uniform float HSM_BG_LAYER_ORDER;
+uniform float HSM_BG_MASK_MODE;
+uniform float HSM_BG_MIPMAPPING_BLEND_BIAS;
+uniform float HSM_BG_OPACITY;
+uniform float HSM_BG_POS_X;
+uniform float HSM_BG_POS_Y;
+uniform float HSM_BG_SATURATION;
+uniform float HSM_BG_SCALE;
+uniform float HSM_BG_SCALE_X;
+uniform float HSM_BG_SOURCE_MATTE_TYPE;
+uniform float HSM_BG_SPLIT_PRESERVE_CENTER;
+uniform float HSM_BG_SPLIT_REPEAT_WIDTH;
+uniform float HSM_BG_WRAP_MODE;
+uniform float HSM_BZL_AMBIENT_LIGHTING_MULTIPLIER;
+uniform float HSM_BZL_AMBIENT2_LIGHTING_MULTIPLIER;
+uniform float HSM_BZL_BLEND_MODE;
+uniform float HSM_BZL_BRIGHTNESS;
+uniform float HSM_BZL_BRIGHTNESS_MULT_BOTTOM;
+uniform float HSM_BZL_BRIGHTNESS_MULT_SIDE_LEFT;
+uniform float HSM_BZL_BRIGHTNESS_MULT_SIDE_RIGHT;
+uniform float HSM_BZL_BRIGHTNESS_MULT_SIDES;
+uniform float HSM_BZL_BRIGHTNESS_MULT_TOP;
+uniform float HSM_BZL_COLOR_HUE;
+uniform float HSM_BZL_COLOR_SATURATION;
+uniform float HSM_BZL_COLOR_VALUE;
+uniform float HSM_BZL_HEIGHT;
+uniform float HSM_BZL_HIGHLIGHT;
+uniform float HSM_BZL_INDEPENDENT_CURVATURE_SCALE_LONG_AXIS;
+uniform float HSM_BZL_INDEPENDENT_CURVATURE_SCALE_SHORT_AXIS;
+uniform float HSM_BZL_INDEPENDENT_SCALE;
+uniform float HSM_BZL_INNER_CORNER_RADIUS_SCALE;
+uniform float HSM_BZL_INNER_CURVATURE_SCALE;
+uniform float HSM_BZL_INNER_EDGE_HIGHLIGHT;
+uniform float HSM_BZL_INNER_EDGE_SHADOW;
+uniform float HSM_BZL_INNER_EDGE_SHARPNESS;
+uniform float HSM_BZL_INNER_EDGE_THICKNESS;
+uniform float HSM_BZL_NOISE;
+uniform float HSM_BZL_OPACITY;
+uniform float HSM_BZL_OUTER_CORNER_RADIUS_SCALE;
+uniform float HSM_BZL_OUTER_CURVATURE_SCALE;
+uniform float HSM_BZL_OUTER_POSITION_Y;
+uniform float HSM_BZL_SCALE_OFFSET;
+uniform float HSM_BZL_USE_INDEPENDENT_CURVATURE;
+uniform float HSM_BZL_USE_INDEPENDENT_SCALE;
+uniform float HSM_BZL_WIDTH;
+uniform float HSM_CACHE_GRAPHICS_ON;
+uniform float HSM_CACHE_UPDATE_INDICATOR_MODE;
+uniform float HSM_CORE_RES_SAMPLING_MULT_OPPOSITE_DIR;
+uniform float HSM_CORE_RES_SAMPLING_MULT_SCANLINE_DIR;
+uniform float HSM_CROP_BLACK_THRESHOLD;
+uniform float HSM_CROP_MODE;
+uniform float HSM_CROP_PERCENT_BOTTOM;
+uniform float HSM_CROP_PERCENT_LEFT;
+uniform float HSM_CROP_PERCENT_RIGHT;
+uniform float HSM_CROP_PERCENT_TOP;
+uniform float HSM_CROP_PERCENT_ZOOM;
+uniform float HSM_CRT_BLEND_AMOUNT;
+uniform float HSM_CRT_BLEND_MODE;
+uniform float HSM_CRT_CURVATURE_SCALE;
+uniform float HSM_CRT_SCREEN_BLEND_MODE;
+uniform float HSM_CURVATURE_2D_SCALE_LONG_AXIS;
+uniform float HSM_CURVATURE_2D_SCALE_SHORT_AXIS;
+uniform float HSM_CURVATURE_3D_RADIUS;
+uniform float HSM_CURVATURE_3D_TILT_ANGLE_X;
+uniform float HSM_CURVATURE_3D_TILT_ANGLE_Y;
+uniform float HSM_CURVATURE_3D_VIEW_DIST;
+uniform float HSM_CURVATURE_MODE;
+uniform float HSM_DOWNSAMPLE_BLUR_OPPOSITE_DIR;
+uniform float HSM_DOWNSAMPLE_BLUR_SCANLINE_DIR;
+uniform float HSM_DREZ_HSHARP0;
+uniform float HSM_DREZ_SIGMA_HV;
+uniform float HSM_DREZ_SHAR;
+uniform float HSM_DREZ_THRESHOLD_RATIO;
+uniform float HSM_DUALSCREEN_CORE_IMAGE_SPLIT_MODE;
+uniform float HSM_DUALSCREEN_CORE_IMAGE_SWAP_SCREENS;
+uniform float HSM_DUALSCREEN_CORE_IMAGE_SPLIT_OFFSET;
+uniform float HSM_DUALSCREEN_MODE;
+uniform float HSM_DUALSCREEN_POSITION_OFFSET_BETWEEN_SCREENS;
+uniform float HSM_DUALSCREEN_SHIFT_POSITION_WITH_SCALE;
+uniform float HSM_DUALSCREEN_VIEWPORT_SPLIT_LOCATION;
+uniform float HSM_FAKE_SCANLINE_CURVATURE;
+uniform float HSM_FAKE_SCANLINE_INT_SCALE;
+uniform float HSM_FAKE_SCANLINE_MODE;
+uniform float HSM_FAKE_SCANLINE_OPACITY;
+uniform float HSM_FAKE_SCANLINE_RES;
+uniform float HSM_FAKE_SCANLINE_RES_MODE;
+uniform float HSM_FAKE_SCANLINE_ROLL;
+uniform float HSM_FLIP_CORE_HORIZONTAL;
+uniform float HSM_FLIP_CORE_VERTICAL;
+uniform float HSM_FLIP_VIEWPORT_HORIZONTAL;
+uniform float HSM_FLIP_VIEWPORT_VERTICAL;
+uniform float HSM_FRM_BLEND_MODE;
+uniform float HSM_FRM_COLOR_HUE;
+uniform float HSM_FRM_COLOR_SATURATION;
+uniform float HSM_FRM_COLOR_VALUE;
+uniform float HSM_FRM_INNER_EDGE_HIGHLIGHT;
+uniform float HSM_FRM_INNER_EDGE_THICKNESS;
+uniform float HSM_FRM_NOISE;
+uniform float HSM_FRM_OPACITY;
+uniform float HSM_FRM_OUTER_CORNER_RADIUS;
+uniform float HSM_FRM_OUTER_CURVATURE_SCALE;
+uniform float HSM_FRM_OUTER_EDGE_SHADING;
+uniform float HSM_FRM_OUTER_EDGE_THICKNESS;
+uniform float HSM_FRM_OUTER_POS_Y;
+uniform float HSM_FRM_SHADOW_OPACITY;
+uniform float HSM_FRM_SHADOW_WIDTH;
+uniform float HSM_FRM_TEXTURE_BLEND_MODE;
+uniform float HSM_FRM_TEXTURE_OPACITY;
+uniform float HSM_FRM_THICKNESS;
+uniform float HSM_FRM_THICKNESS_SCALE_X;
+uniform float HSM_FRM_USE_INDEPENDENT_COLOR;
+uniform float HSM_GLOBAL_CORNER_RADIUS;
+uniform float HSM_GLOBAL_GRAPHICS_BRIGHTNESS;
+uniform float HSM_INT_SCALE_MAX_HEIGHT;
+uniform float HSM_INT_SCALE_MODE;
+uniform float HSM_INT_SCALE_MULTIPLE_OFFSET;
+uniform float HSM_INT_SCALE_MULTIPLE_OFFSET_LONG;
+uniform float HSM_INTERLACE_EFFECT_SMOOTHNESS_INTERS;
+uniform float HSM_INTERLACE_MODE;
+uniform float HSM_INTERLACE_SCANLINE_EFFECT;
+uniform float HSM_INTERLACE_TRIGGER_RES;
+uniform float HSM_INTRO_LOGO_BLEND_MODE;
+uniform float HSM_INTRO_LOGO_FADE_IN;
+uniform float HSM_INTRO_LOGO_FADE_OUT;
+uniform float HSM_INTRO_LOGO_FLIP_VERTICAL;
+uniform float HSM_INTRO_LOGO_HEIGHT;
+uniform float HSM_INTRO_LOGO_HOLD;
+uniform float HSM_INTRO_LOGO_OVER_SOLID_COLOR;
+uniform float HSM_INTRO_LOGO_PLACEMENT;
+uniform float HSM_INTRO_LOGO_POS_X;
+uniform float HSM_INTRO_LOGO_POS_Y;
+uniform float HSM_INTRO_LOGO_WAIT;
+uniform float HSM_INTRO_NOISE_BLEND_MODE;
+uniform float HSM_INTRO_NOISE_FADE_OUT;
+uniform float HSM_INTRO_NOISE_HOLD;
+uniform float HSM_INTRO_SOLID_BLACK_FADE_OUT;
+uniform float HSM_INTRO_SOLID_BLACK_HOLD;
+uniform float HSM_INTRO_SOLID_COLOR_BLEND_MODE;
+uniform float HSM_INTRO_SOLID_COLOR_FADE_OUT;
+uniform float HSM_INTRO_SOLID_COLOR_HOLD;
+uniform float HSM_INTRO_SOLID_COLOR_HUE;
+uniform float HSM_INTRO_SOLID_COLOR_SAT;
+uniform float HSM_INTRO_SOLID_COLOR_VALUE;
+uniform float HSM_INTRO_SPEED;
+uniform float HSM_INTRO_WHEN_TO_SHOW;
+uniform float HSM_LAYERING_DEBUG_MASK_MODE;
+uniform float HSM_LED_AMBIENT_LIGHTING_MULTIPLIER;
+uniform float HSM_LED_APPLY_AMBIENT_IN_ADD_MODE;
+uniform float HSM_LED_BLEND_MODE;
+uniform float HSM_LED_BRIGHTNESS;
+uniform float HSM_LED_COLORIZE_ON;
+uniform float HSM_LED_CUTOUT_MODE;
+uniform float HSM_LED_DUALSCREEN_VIS_MODE;
+uniform float HSM_LED_FILL_MODE;
+uniform float HSM_LED_FOLLOW_FULL_USES_ZOOM;
+uniform float HSM_LED_FOLLOW_LAYER;
+uniform float HSM_LED_FOLLOW_MODE;
+uniform float HSM_LED_GAMMA;
+uniform float HSM_LED_HUE;
+uniform float HSM_LED_LAYER_ORDER;
+uniform float HSM_LED_MASK_MODE;
+uniform float HSM_LED_MIPMAPPING_BLEND_BIAS;
+uniform float HSM_LED_OPACITY;
+uniform float HSM_LED_POS_X;
+uniform float HSM_LED_POS_Y;
+uniform float HSM_LED_SATURATION;
+uniform float HSM_LED_SCALE;
+uniform float HSM_LED_SCALE_X;
+uniform float HSM_LED_SOURCE_MATTE_TYPE;
+uniform float HSM_LED_SPLIT_PRESERVE_CENTER;
+uniform float HSM_LED_SPLIT_REPEAT_WIDTH;
+uniform float HSM_MONOCHROME_BRIGHTNESS;
+uniform float HSM_MONOCHROME_DUALSCREEN_VIS_MODE;
+uniform float HSM_MONOCHROME_GAMMA;
+uniform float HSM_MONOCHROME_HUE_OFFSET;
+uniform float HSM_MONOCHROME_MODE;
+uniform float HSM_MONOCHROME_SATURATION;
+uniform float HSM_NON_INTEGER_SCALE;
+uniform float HSM_NON_INTEGER_SCALE_OFFSET;
+uniform float HSM_OVERSCAN_AMOUNT;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_AMOUNT;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_MODE;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_NEUTRAL_RANGE;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_NEUTRAL_RANGE_CENTER;
+uniform float HSM_OVERSCAN_RASTER_BLOOM_ON;
+uniform float HSM_OVERSCAN_X;
+uniform float HSM_OVERSCAN_Y;
+uniform float HSM_PASS_VIEWER_EMPTY_LINE;
+uniform float HSM_PASS_VIEWER_TITLE;
+uniform float HSM_PHYSICAL_MONITOR_ASPECT_RATIO;
+uniform float HSM_PHYSICAL_MONITOR_DIAGONAL_SIZE;
+uniform float HSM_PHYSICAL_SIM_TUBE_DIAGONAL_SIZE;
+uniform float HSM_PLACEMENT_IMAGE_MODE;
+uniform float HSM_PLACEMENT_IMAGE_USE_HORIZONTAL;
+uniform float HSM_POST_CRT_BRIGHTNESS;
+uniform float HSM_POTATO_COLORIZE_BRIGHTNESS;
+uniform float HSM_POTATO_COLORIZE_CRT_WITH_BG;
+uniform float HSM_POTATO_SHOW_BG_OVER_SCREEN;
+uniform float HSM_REFLECT_BEZEL_INNER_EDGE_AMOUNT;
+uniform float HSM_REFLECT_BEZEL_INNER_EDGE_FULLSCREEN_GLOW;
+uniform float HSM_REFLECT_BLUR_FALLOFF_DISTANCE;
+uniform float HSM_REFLECT_BLUR_MAX;
+uniform float HSM_REFLECT_BLUR_MIN;
+uniform float HSM_REFLECT_BLUR_NUM_SAMPLES;
+uniform float HSM_REFLECT_BRIGHTNESS_NOISE_BLACK_LEVEL;
+uniform float HSM_REFLECT_BRIGHTNESS_NOISE_BRIGHTNESS;
+uniform float HSM_REFLECT_CORNER_FADE;
+uniform float HSM_REFLECT_CORNER_FADE_DISTANCE;
+uniform float HSM_REFLECT_CORNER_INNER_SPREAD;
+uniform float HSM_REFLECT_CORNER_OUTER_SPREAD;
+uniform float HSM_REFLECT_CORNER_ROTATION_OFFSET_BOTTOM;
+uniform float HSM_REFLECT_CORNER_ROTATION_OFFSET_TOP;
+uniform float HSM_REFLECT_CORNER_SPREAD_FALLOFF;
+uniform float HSM_REFLECT_DIFFUSED_AMOUNT;
+uniform float HSM_REFLECT_DIRECT_AMOUNT;
+uniform float HSM_REFLECT_FADE_AMOUNT;
+uniform float HSM_REFLECT_FRAME_INNER_EDGE_AMOUNT;
+uniform float HSM_REFLECT_FRAME_INNER_EDGE_SHARPNESS;
+uniform float HSM_REFLECT_FULLSCREEN_GLOW;
+uniform float HSM_REFLECT_FULLSCREEN_GLOW_GAMMA;
+uniform float HSM_REFLECT_GLOBAL_AMOUNT;
+uniform float HSM_REFLECT_GLOBAL_GAMMA_ADJUST;
+uniform float HSM_REFLECT_LATERAL_OUTER_FADE_DISTANCE;
+uniform float HSM_REFLECT_LATERAL_OUTER_FADE_POSITION;
+uniform float HSM_REFLECT_MASK_BLACK_LEVEL;
+uniform float HSM_REFLECT_MASK_BRIGHTNESS;
+uniform float HSM_REFLECT_MASK_FOLLOW_LAYER;
+uniform float HSM_REFLECT_MASK_FOLLOW_MODE;
+uniform float HSM_REFLECT_MASK_IMAGE_AMOUNT;
+uniform float HSM_REFLECT_MASK_MIPMAPPING_BLEND_BIAS;
+uniform float HSM_REFLECT_NOISE_AMOUNT;
+uniform float HSM_REFLECT_NOISE_SAMPLE_DISTANCE;
+uniform float HSM_REFLECT_NOISE_SAMPLES;
+uniform float HSM_REFLECT_RADIAL_FADE_HEIGHT;
+uniform float HSM_REFLECT_RADIAL_FADE_WIDTH;
+uniform float HSM_REFLECT_SHOW_TUBE_FX_AMOUNT;
+uniform float HSM_REFLECT_VIGNETTE_AMOUNT;
+uniform float HSM_REFLECT_VIGNETTE_SIZE;
+uniform float HSM_RENDER_FOR_SIMPLIFIED_EMPTY_LINE;
+uniform float HSM_RENDER_FOR_SIMPLIFIED_TITLE;
+uniform float HSM_RENDER_SIMPLE_MASK_TYPE;
+uniform float HSM_RENDER_SIMPLE_MODE;
+uniform float HSM_RESOLUTION_DEBUG_ON;
+uniform float HSM_ROTATE_CORE_IMAGE;
+uniform float HSM_SCANLINE_DIRECTION;
+uniform float HSM_SCREEN_CORNER_RADIUS_SCALE;
+uniform float HSM_SCREEN_POSITION_X;
+uniform float HSM_SCREEN_POSITION_Y;
+uniform float HSM_SCREEN_REFLECTION_FOLLOW_DIFFUSE_THICKNESS;
+uniform float HSM_SCREEN_REFLECTION_POS_X;
+uniform float HSM_SCREEN_REFLECTION_POS_Y;
+uniform float HSM_SCREEN_REFLECTION_SCALE;
+uniform float HSM_SCREEN_VIGNETTE_DUALSCREEN_VIS_MODE;
+uniform float HSM_SCREEN_VIGNETTE_IN_REFLECTION;
+uniform float HSM_SCREEN_VIGNETTE_ON;
+uniform float HSM_SCREEN_VIGNETTE_POWER;
+uniform float HSM_SCREEN_VIGNETTE_STRENGTH;
+uniform float HSM_SHOW_CRT_ON_TOP_OF_COLORED_GEL;
+uniform float HSM_SHOW_PASS_ALPHA;
+uniform float HSM_SHOW_PASS_APPLY_SCREEN_COORD;
+uniform float HSM_SHOW_PASS_INDEX;
+uniform float HSM_SIGNAL_NOISE_AMOUNT;
+uniform float HSM_SIGNAL_NOISE_BLACK_LEVEL;
+uniform float HSM_SIGNAL_NOISE_ON;
+uniform float HSM_SIGNAL_NOISE_SIZE_MODE;
+uniform float HSM_SIGNAL_NOISE_SIZE_MULT;
+uniform float HSM_SIGNAL_NOISE_TYPE;
+uniform float HSM_SINDEN_BORDER_BRIGHTNESS;
+uniform float HSM_SINDEN_BORDER_EMPTY_TUBE_COMPENSATION;
+uniform float HSM_SINDEN_BORDER_ON;
+uniform float HSM_SINDEN_BORDER_THICKNESS;
+uniform float HSM_SNAP_TO_CLOSEST_INT_SCALE_TOLERANCE;
+uniform float HSM_STATIC_LAYERS_GAMMA;
+uniform float HSM_TOP_AMBIENT_LIGHTING_MULTIPLIER;
+uniform float HSM_TOP_APPLY_AMBIENT_IN_ADD_MODE;
+uniform float HSM_TOP_BLEND_MODE;
+uniform float HSM_TOP_BRIGHTNESS;
+uniform float HSM_TOP_COLORIZE_ON;
+uniform float HSM_TOP_CUTOUT_MODE;
+uniform float HSM_TOP_DUALSCREEN_VIS_MODE;
+uniform float HSM_TOP_FILL_MODE;
+uniform float HSM_TOP_FOLLOW_FULL_USES_ZOOM;
+uniform float HSM_TOP_FOLLOW_LAYER;
+uniform float HSM_TOP_FOLLOW_MODE;
+uniform float HSM_TOP_GAMMA;
+uniform float HSM_TOP_HUE;
+uniform float HSM_TOP_LAYER_ORDER;
+uniform float HSM_TOP_MASK_MODE;
+uniform float HSM_TOP_MIPMAPPING_BLEND_BIAS;
+uniform float HSM_TOP_OPACITY;
+uniform float HSM_TOP_POS_X;
+uniform float HSM_TOP_POS_Y;
+uniform float HSM_TOP_SATURATION;
+uniform float HSM_TOP_SCALE;
+uniform float HSM_TOP_SCALE_X;
+uniform float HSM_TOP_SOURCE_MATTE_TYPE;
+uniform float HSM_TOP_SPLIT_PRESERVE_CENTER;
+uniform float HSM_TOP_SPLIT_REPEAT_WIDTH;
+uniform float HSM_TUBE_ASPECT_AND_EMPTY_LINE;
+uniform float HSM_TUBE_ASPECT_AND_EMPTY_TITLE;
+uniform float HSM_TUBE_BLACK_EDGE_CORNER_RADIUS_SCALE;
+uniform float HSM_TUBE_BLACK_EDGE_CURVATURE_SCALE;
+uniform float HSM_TUBE_BLACK_EDGE_SHARPNESS;
+uniform float HSM_TUBE_BLACK_EDGE_THICKNESS;
+uniform float HSM_TUBE_BLACK_EDGE_THICKNESS_X_SCALE;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_ADDITIVE_AMOUNT;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_AMBIENT_LIGHTING;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_AMBIENT2_LIGHTING;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_DUALSCREEN_VIS_MODE;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_FAKE_SCANLINE_AMOUNT;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_FLIP_HORIZONTAL;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_FLIP_VERTICAL;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_MULTIPLY_AMOUNT;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_NORMAL_AMOUNT;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_NORMAL_BRIGHTNESS;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_NORMAL_VIGNETTE;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_ON;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_SCALE;
+uniform float HSM_TUBE_COLORED_GEL_IMAGE_TRANSPARENCY_THRESHOLD;
+uniform float HSM_TUBE_DIFFUSE_FORCE_ASPECT;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_AMBIENT_LIGHTING;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_AMBIENT2_LIGHTING;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_AMOUNT;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_BRIGHTNESS;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_COLORIZE_ON;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_DUALSCREEN_VIS_MODE;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_GAMMA;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_HUE;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_ROTATION;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_SATURATION;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_SCALE;
+uniform float HSM_TUBE_DIFFUSE_IMAGE_SCALE_X;
+uniform float HSM_TUBE_DIFFUSE_MODE;
+uniform float HSM_TUBE_EMPTY_THICKNESS;
+uniform float HSM_TUBE_EMPTY_THICKNESS_X_SCALE;
+uniform float HSM_TUBE_OPACITY;
+uniform float HSM_TUBE_SHADOW_CURVATURE_SCALE;
+uniform float HSM_TUBE_SHADOW_IMAGE_ON;
+uniform float HSM_TUBE_SHADOW_IMAGE_OPACITY;
+uniform float HSM_TUBE_SHADOW_IMAGE_POS_X;
+uniform float HSM_TUBE_SHADOW_IMAGE_POS_Y;
+uniform float HSM_TUBE_SHADOW_IMAGE_SCALE_X;
+uniform float HSM_TUBE_SHADOW_IMAGE_SCALE_Y;
+uniform float HSM_TUBE_STATIC_AMBIENT_LIGHTING;
+uniform float HSM_TUBE_STATIC_AMBIENT2_LIGHTING;
+uniform float HSM_TUBE_STATIC_BLACK_LEVEL;
+uniform float HSM_TUBE_STATIC_DITHER_AMOUNT;
+uniform float HSM_TUBE_STATIC_DITHER_DISTANCE;
+uniform float HSM_TUBE_STATIC_DITHER_SAMPLES;
+uniform float HSM_TUBE_STATIC_OPACITY_DIFFUSE_MULTIPLY;
+uniform float HSM_TUBE_STATIC_POS_X;
+uniform float HSM_TUBE_STATIC_POS_Y;
+uniform float HSM_TUBE_STATIC_REFLECTION_IMAGE_DUALSCREEN_VIS_MODE;
+uniform float HSM_TUBE_STATIC_REFLECTION_IMAGE_ON;
+uniform float HSM_TUBE_STATIC_REFLECTION_IMAGE_OPACITY;
+uniform float HSM_TUBE_STATIC_SCALE;
+uniform float HSM_TUBE_STATIC_SCALE_X;
+uniform float HSM_TUBE_STATIC_SHADOW_OPACITY;
+uniform float HSM_USE_GEOM;
+uniform float HSM_USE_IMAGE_FOR_PLACEMENT;
+uniform float HSM_USE_PHYSICAL_SIZE_FOR_NON_INTEGER;
+uniform float HSM_USE_SNAP_TO_CLOSEST_INT_SCALE;
+uniform float HSM_VERTICAL_PRESET;
+uniform float HSM_VIEWPORT_POSITION_X;
+uniform float HSM_VIEWPORT_POSITION_Y;
+uniform float HSM_VIEWPORT_VIGNETTE_CUTOUT_MODE;
+uniform float HSM_VIEWPORT_VIGNETTE_FOLLOW_LAYER;
+uniform float HSM_VIEWPORT_VIGNETTE_LAYER_ORDER;
+uniform float HSM_VIEWPORT_VIGNETTE_MASK_MODE;
+uniform float HSM_VIEWPORT_VIGNETTE_OPACITY;
+uniform float HSM_VIEWPORT_VIGNETTE_POS_X;
+uniform float HSM_VIEWPORT_VIGNETTE_POS_Y;
+uniform float HSM_VIEWPORT_VIGNETTE_SCALE;
+uniform float HSM_VIEWPORT_VIGNETTE_SCALE_X;
+uniform float HSM_VIEWPORT_ZOOM;
+uniform float HSM_VIEWPORT_ZOOM_MASK;
+uniform float HSM_2ND_SCREEN_ASPECT_RATIO_MODE;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_BOTTOM;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_LEFT;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_RIGHT;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_TOP;
+uniform float HSM_2ND_SCREEN_CROP_PERCENT_ZOOM;
+uniform float HSM_2ND_SCREEN_INDEPENDENT_SCALE;
+uniform float HSM_2ND_SCREEN_POS_X;
+uniform float HSM_2ND_SCREEN_POS_Y;
+uniform float HSM_2ND_SCREEN_SCALE_OFFSET;
+uniform float SCREEN_ASPECT;
+uniform vec2 SCREEN_COORD;
+uniform float DEFAULT_SRGB_GAMMA;
+uniform float GAMMA_INPUT;
+uniform float gamma_out;
+uniform float post_br;
+uniform float post_br_affect_black_level;
+uniform float no_scanlines;
+uniform float iscans;
+uniform float vga_mode;
+uniform float hiscan;
+uniform float SHARPEN_ON;
+uniform float CSHARPEN;
+uniform float CCONTR;
+uniform float CDETAILS;
+uniform float DEBLUR;
+`;
+
+      const retroarchVariables = `
 // Shader parameter uniforms
 ${paramUniforms}
+${megaBezelVariables}
 `;
 
       // Insert after precision declarations
@@ -901,7 +2501,7 @@ ${paramUniforms}
         const afterPrecision = output.substring(precisionEnd).match(/precision.*?;\s*\n/);
         if (afterPrecision) {
           const insertPos = precisionEnd + afterPrecision[0].length;
-          output = output.substring(0, insertPos) + retroarchUniforms + output.substring(insertPos);
+          output = output.substring(0, insertPos) + retroarchVariables + output.substring(insertPos);
         }
       }
     }
@@ -983,6 +2583,11 @@ ${paramUniforms}
       output = output.replace(/\bin\s+vec/g, 'varying vec'); // in → varying (fragment)
       output = output.replace(/\bout\s+vec/g, 'varying vec'); // out → varying (vertex)
     }
+
+    // Fix ternary operator type mismatches
+    // Convert: condition ? vec3(...) : 0.0 → condition ? vec3(...) : vec3(0.0)
+    // Convert: condition ? 0.0 : vec3(...) → condition ? vec3(0.0) : vec3(...)
+    output = this.fixTernaryOperatorTypes(output);
 
     // Convert texture functions
     if (webgl2) {
@@ -1593,6 +3198,34 @@ ${globalInits.map(g => `  ${g.name} = ${g.init};`).join('\n')}
   }
 
   /**
+   * Fix ternary operator type mismatches
+   * Convert: condition ? vec3(...) : 0.0 → condition ? vec3(...) : vec3(0.0)
+   */
+  private static fixTernaryOperatorTypes(source: string): string {
+    let output = source;
+
+    // Pattern: condition ? vecN(...) : scalar → condition ? vecN(...) : vecN(scalar)
+    // Match vec2, vec3, vec4 followed by parentheses, then optional whitespace, then ?, then anything, then :, then a number
+    const vecTernaryPattern = /(\b(vec[2-4])\s*\([^)]+\))\s*\?\s*([^:]+)\s*:\s*(?<![.\deE\w])(-?\d+(?:\.\d+)?)(?![.\deE\w])/g;
+    output = output.replace(vecTernaryPattern, (match, vecExpr, vecType, trueExpr, scalar) => {
+      return `${vecExpr} ? ${trueExpr} : ${vecType}(${scalar})`;
+    });
+
+    // Pattern: condition ? scalar : vecN(...) → condition ? vecN(scalar) : vecN(...)
+    const reverseVecTernaryPattern = /(\b(vec[2-4])\s*\([^)]+\))\s*\?\s*(?<![.\deE\w])(-?\d+(?:\.\d+)?)(?![.\deE\w])\s*:\s*([^;,\)\}]+)/g;
+    output = output.replace(reverseVecTernaryPattern, (match, vecType, trueExpr, scalar, falseExpr) => {
+      // Extract the vecN type from the false expression
+      const falseVecMatch = falseExpr.match(/\b(vec[2-4])\s*\(/);
+      if (falseVecMatch) {
+        return `${falseVecMatch[1]}(${scalar}) ? ${vecType}(${scalar}) : ${falseExpr}`;
+      }
+      return match; // No change if we can't determine the type
+    });
+
+    return output;
+  }
+
+  /**
    * Convert Slang bindings to WebGL uniforms
    */
   private static convertBindingsToUniforms(
@@ -1736,7 +3369,33 @@ ${globalInits.map(g => `  ${g.name} = ${g.init};`).join('\n')}
 
     // Also fix #define aliases that reference struct members after UBO conversion
     // Example: #define beamg global.g_CRT_bg -> #define beamg g_CRT_bg
+    console.log(`[SlangCompiler] Before #define replacement, checking for #define global. references...`);
+    const defineGlobalRefs = output.match(/#define\s+\w+\s+global\.\w+/g);
+    console.log(`[SlangCompiler] Found #define global. references:`, defineGlobalRefs ? defineGlobalRefs.slice(0, 10) : 'none');
+
     output = output.replace(/#define\s+(\w+)\s+(global|params)\.(\w+)/g, '#define $1 $3');
+
+    console.log(`[SlangCompiler] After #define replacement, checking for remaining #define global. references...`);
+    const remainingDefineGlobalRefs = output.match(/#define\s+\w+\s+global\.\w+/g);
+    console.log(`[SlangCompiler] Remaining #define global. references:`, remainingDefineGlobalRefs ? remainingDefineGlobalRefs.slice(0, 10) : 'none');
+
+    // If there's a push_constant named 'params', replace global. references with params.
+    // This fixes shaders that include common files designed for UBO but use push_constant
+    const hasParamsPushConstant = bindings.some(b => b.type === 'pushConstant' && b.instanceName === 'params');
+    console.log(`[SlangCompiler] Has params push_constant: ${hasParamsPushConstant}`);
+    console.log(`[SlangCompiler] Push constant bindings:`, bindings.filter(b => b.type === 'pushConstant').map(b => ({ type: b.type, name: b.name, instanceName: b.instanceName })));
+
+    if (hasParamsPushConstant) {
+      console.log(`[SlangCompiler] Before global. replacement, checking for global. references...`);
+      const globalRefs = output.match(/\bglobal\.\w+\b/g);
+      console.log(`[SlangCompiler] Found global. references:`, globalRefs ? globalRefs.slice(0, 10) : 'none');
+
+      output = output.replace(/\bglobal\.(\w+)\b/g, 'params.$1');
+
+      console.log(`[SlangCompiler] After global. replacement, checking for remaining global. references...`);
+      const remainingGlobalRefs = output.match(/\bglobal\.\w+\b/g);
+      console.log(`[SlangCompiler] Remaining global. references:`, remainingGlobalRefs ? remainingGlobalRefs.slice(0, 10) : 'none');
+    }
 
     return output;
   }
@@ -2062,6 +3721,42 @@ void main() {
   }
 
   /**
+   * Deduplicate #define macros to prevent redefinition errors
+   * Keeps the first occurrence of each macro and removes subsequent duplicates
+   */
+  private static deduplicateDefines(source: string): string {
+    const lines = source.split('\n');
+    const seenDefines = new Set<string>();
+    const result: string[] = [];
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Check if this is a #define directive
+      if (trimmed.startsWith('#define ')) {
+        const macroMatch = trimmed.match(/^#define\s+(\w+)/);
+        if (macroMatch) {
+          const macroName = macroMatch[1];
+
+          // Skip if we've already seen this macro
+          if (seenDefines.has(macroName)) {
+            console.log(`[SlangCompiler] Removing duplicate #define: ${macroName}`);
+            continue; // Skip this duplicate define
+          }
+
+          // Mark this macro as seen
+          seenDefines.add(macroName);
+        }
+      }
+
+      // Keep the line (whether it's a define or not)
+      result.push(line);
+    }
+
+    return result.join('\n');
+  }
+
+  /**
    * Load and compile shader from URL
    */
   public static async loadFromURL(url: string, webgl2 = true): Promise<CompiledShader> {
@@ -2074,6 +3769,9 @@ void main() {
 
     // Preprocess includes
     source = await this.preprocessIncludes(source, url);
+
+    // Deduplicate #define macros to prevent redefinition errors
+    source = this.deduplicateDefines(source);
 
     // Debug: Log preprocessed source for specific shaders
     const shaderName = url.split('/').pop() || 'unknown';

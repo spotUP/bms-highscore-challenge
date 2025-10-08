@@ -23,7 +23,7 @@
   "type": "module",
   "scripts": {
     "predev": "tsx scripts/check-env.ts",
-    "dev": "npm run websocket & vite",
+    "dev": "npm run websocket & npx tsx scripts/logo-proxy-server.ts & vite",
     "dev:full": "npm run websocket & vite",
     "prebuild": "tsx scripts/check-env.ts && tsx scripts/build-database-for-vercel.ts && mkdir -p public/sql.js && cp node_modules/sql.js/dist/sql-wasm.wasm public/sql.js/ && cp node_modules/sql.js/dist/sql-wasm-debug.wasm public/sql.js/",
     "build": "vite build",
@@ -119,7 +119,6 @@
     "sam-js": "^0.3.1",
     "sharp": "^0.34.4",
     "sonner": "^1.5.0",
-    "sql.js": "^1.13.0",
     "sqlite3": "^5.1.7",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",

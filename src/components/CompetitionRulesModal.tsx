@@ -3,7 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { Shield, Camera, Users, Clock, Trophy, AlertTriangle, CheckCircle, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Shield, Camera, Users, Clock, Trophy, AlertTriangle, CheckCircle, X, Mail } from 'lucide-react';
+import { useTournament } from '@/contexts/TournamentContext';
 
 interface CompetitionRulesModalProps {
   isOpen: boolean;
@@ -11,6 +13,27 @@ interface CompetitionRulesModalProps {
 }
 
 const CompetitionRulesModal: React.FC<CompetitionRulesModalProps> = ({ isOpen, onClose }) => {
+  const { currentTournament } = useTournament();
+
+  const handleEmailClarification = () => {
+    const subject = encodeURIComponent(`Rule Clarification Request - ${currentTournament?.name || 'High Score Competition'}`);
+    const body = encodeURIComponent(`Hello,
+
+I have a question about the competition rules for ${currentTournament?.name || 'the high score competition'}.
+
+Please provide clarification on the following:
+
+[Describe your specific question or situation here]
+
+Tournament: ${currentTournament?.name || 'N/A'}
+Tournament URL: ${currentTournament ? `/t/${currentTournament.slug}` : 'N/A'}
+
+Thank you,
+[Your Name]`);
+
+    const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
+    window.open(mailtoLink, '_blank');
+  };
   const ruleCategories = [
     {
       title: "Fair Play & Ethics",
@@ -233,13 +256,22 @@ const CompetitionRulesModal: React.FC<CompetitionRulesModalProps> = ({ isOpen, o
             <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <h4 className="font-semibold text-blue-300">Need Clarification?</h4>
                   <p className="text-sm text-blue-100">
                     If you're unsure about any rule or have questions about a specific situation,
                     please contact the tournament administrators before submitting your score.
                     It's better to ask than to risk disqualification.
                   </p>
+                  <Button
+                    onClick={handleEmailClarification}
+                    variant="outline"
+                    size="sm"
+                    className="bg-blue-500/20 border-blue-500/50 text-blue-200 hover:bg-blue-500/30"
+                  >
+                    <Mail className="w-4 h-4 mr-2" />
+                    Email for Clarification
+                  </Button>
                 </div>
               </div>
             </div>

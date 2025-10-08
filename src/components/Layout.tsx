@@ -1,7 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { usePageTransitions } from '@/hooks/usePageTransitions';
-import { useTournamentGameData } from '@/hooks/useTournamentGameData';
+import { useAuth } from '@/hooks/useAuth';
+import { useTournament } from '@/contexts/TournamentContext';
+import { supabase } from '@/integrations/supabase/client';
 import TopNav from '@/components/TopNav';
 import SpinTheWheel from '@/components/SpinTheWheel';
 
@@ -30,8 +32,9 @@ const Layout: React.FC<LayoutProps> = ({
   const location = useLocation();
   const { isExiting, animatedNavigate } = usePageTransitions({ exitDuration: 550 });
   const [isSpinWheelOpen, setIsSpinWheelOpen] = useState(false);
-  const { gameScores } = useTournamentGameData();
-
+  const { user } = useAuth();
+  const { userTournaments } = useTournament();
+  const [leaderboardNames, setLeaderboardNames] = useState<string[]>([]);
 
   // Pages that should not show TopNav
   const noNavPages = ['/auth', '/auth/verify', '/auth/expired'];
@@ -47,37 +50,61 @@ const Layout: React.FC<LayoutProps> = ({
     return shuffled;
   };
 
-  // Get player names for the wheel - each player appears once per game they have scores for
-  const getLeaderboardNames = useMemo(() => {
-    const playerGameCounts = new Map<string, number>();
-
-    // Count how many different games each player has scores for
-    Object.values(gameScores).forEach(gameScoreList => {
-      const playersInGame = new Set();
-      gameScoreList.forEach(score => {
-        playersInGame.add(score.player_name);
-      });
-
-      playersInGame.forEach(playerName => {
-        const currentCount = playerGameCounts.get(playerName as string) || 0;
-        playerGameCounts.set(playerName as string, currentCount + 1);
-      });
-    });
-
-    // Create array where each player appears once per game they have scores for
-    const wheelNames: string[] = [];
-    playerGameCounts.forEach((gameCount, playerName) => {
-      for (let i = 0; i < gameCount; i++) {
-        wheelNames.push(playerName);
+  // Load player names from tournaments created by the current user
+  useEffect(() => {
+    const loadLeaderboardNames = async () => {
+      if (!user) {
+        setLeaderboardNames([]);
+        return;
       }
-    });
 
-    return wheelNames;
-  }, [gameScores]);
+      // Get tournament IDs created by the current user
+      const userTournamentIds = userTournaments
+        .filter(tournament => tournament.created_by === user.id)
+        .map(tournament => tournament.id);
+
+      if (userTournamentIds.length === 0) {
+        setLeaderboardNames([]);
+        return;
+      }
+
+      try {
+        // Get all scores from user's tournaments
+        const { data: scores, error } = await supabase
+          .from('scores')
+          .select('player_name, game_id')
+          .in('tournament_id', userTournamentIds);
+
+        if (error) throw error;
+
+        // Count how many different games each player has scores for
+        const playerGameCounts = new Map<string, number>();
+        scores?.forEach(score => {
+          const currentCount = playerGameCounts.get(score.player_name) || 0;
+          playerGameCounts.set(score.player_name, currentCount + 1);
+        });
+
+        // Create array where each player appears once per game they have scores for
+        const wheelNames: string[] = [];
+        playerGameCounts.forEach((gameCount, playerName) => {
+          for (let i = 0; i < gameCount; i++) {
+            wheelNames.push(playerName);
+          }
+        });
+
+        setLeaderboardNames(wheelNames);
+      } catch (error) {
+        console.error('Error loading leaderboard names:', error);
+        setLeaderboardNames([]);
+      }
+    };
+
+    loadLeaderboardNames();
+  }, [user, userTournaments]);
 
   const getRandomizedLeaderboardNames = useMemo(() => {
-    return shuffleArray(getLeaderboardNames);
-  }, [getLeaderboardNames]);
+    return shuffleArray(leaderboardNames);
+  }, [leaderboardNames]);
 
   return (
     <div className="min-h-screen text-white relative z-10 pt-2"

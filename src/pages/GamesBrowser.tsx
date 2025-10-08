@@ -16,7 +16,6 @@ import { GameRatingDisplay } from "@/components/GameRatingDisplay";
 import { ratingAggregationService } from "@/services/ratingAggregationService";
 import { CreateTournamentModal } from "@/components/CreateTournamentModal";
 import { useGameDatabaseFavorites } from "@/hooks/useGameDatabaseFavorites";
-import { sqliteService } from "@/services/sqliteService";
 import { clearLogoService } from "@/services/clearLogoService";
 import { AutocompleteDropdown } from "@/components/ui/autocomplete-dropdown";
 
@@ -137,11 +136,11 @@ const GamesBrowser: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTournamentModalOpen, setIsTournamentModalOpen] = useState(false);
   const [activeMainTab, setActiveMainTab] = useState<'all' | 'favorites'>('all');
+  const [activeFilterTab, setActiveFilterTab] = useState<'basic' | 'advanced'>('basic');
   const [searchInput, setSearchInput] = useState(''); // Separate state for input field
   const [favoritesSortBy, setFavoritesSortBy] = useState('name');
   const [favoritesSortDirection, setFavoritesSortDirection] = useState<'asc' | 'desc'>('asc');
   const [pulsingHearts, setPulsingHearts] = useState<Set<string>>(new Set());
-  const [sqliteLogos, setSqliteLogos] = useState<Record<string, string>>({});
 
   // Search suggestions state
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
@@ -191,7 +190,13 @@ const GamesBrowser: React.FC = () => {
         if (genresData) {
           const genreSet = new Set<string>();
           genresData.forEach(row => {
-            row.genres?.forEach((genre: string) => genreSet.add(genre));
+            row.genres?.forEach((genre: string) => {
+              // Filter out unwanted genres
+              const unwantedGenres = ['casino', 'compilation', 'construction and management simulation'];
+              if (!unwantedGenres.includes(genre.toLowerCase())) {
+                genreSet.add(genre);
+              }
+            });
           });
           setAllGenres(Array.from(genreSet).sort());
         }
@@ -265,7 +270,6 @@ const GamesBrowser: React.FC = () => {
         ...prev,
         search: searchInput
       }));
-      setCurrentPage(1); // Reset to first page for new search
     }
   };
 
@@ -650,6 +654,22 @@ const GamesBrowser: React.FC = () => {
         query = query.gte('community_rating', filters.minRating);
       }
 
+      // Apply minimum players filter
+      if (filters.minPlayers > 1) {
+        query = query.gte('max_players', filters.minPlayers);
+      }
+
+      // Apply ESRB rating filter
+      if (filters.esrbRating !== 'all') {
+        query = query.eq('esrb_rating', filters.esrbRating);
+      }
+
+      // Apply genre filter
+      if (filters.genre !== 'all') {
+        // Use Supabase's contains operator to check if genres array contains the selected genre
+        query = query.contains('genres', [filters.genre]);
+      }
+
       // Special case: Show interesting arcade games when no actual filters are applied
       // (but still allow sorting of featured games)
       const hasActualFilters = filters.search ||
@@ -676,36 +696,42 @@ const GamesBrowser: React.FC = () => {
       let orderColumn = 'name';
       let ascending = filters.sortDirection === 'asc';
 
+      // When a genre is selected, always sort by name in A-Z order
+      if (filters.genre !== 'all') {
+        orderColumn = 'name';
+        ascending = true;
+      }
       // For random games (no filters), use a time-based seed for consistent pagination
-      if (!hasActualFilters) {
+      else if (!hasActualFilters) {
         // Use a combination of fields that creates pseudo-random but consistent ordering
         // This allows pagination while still feeling random
         orderColumn = 'name'; // We'll actually modify the query to use a custom ordering
         ascending = true;
       }
-
-      switch (filters.sortBy) {
-        case 'rating':
-          orderColumn = 'community_rating';
-          // For rating, reverse the logic: asc = high to low, desc = low to high
-          ascending = filters.sortDirection === 'asc' ? false : true;
-          break;
-        case 'year':
-          orderColumn = 'release_year';
-          break;
-        case 'players':
-          orderColumn = 'max_players';
-          break;
-        case 'platform':
-          orderColumn = 'platform_name';
-          break;
-        case 'newest':
-          orderColumn = 'created_at';
-          // For newest, reverse the logic: asc = newest first (desc), desc = oldest first (asc)
-          ascending = filters.sortDirection === 'asc' ? false : true;
-          break;
-        default: // name
-          orderColumn = 'name';
+      else {
+        switch (filters.sortBy) {
+          case 'rating':
+            orderColumn = 'community_rating';
+            // For rating, reverse the logic: asc = high to low, desc = low to high
+            ascending = filters.sortDirection === 'asc' ? false : true;
+            break;
+          case 'year':
+            orderColumn = 'release_year';
+            break;
+          case 'players':
+            orderColumn = 'max_players';
+            break;
+          case 'platform':
+            orderColumn = 'platform_name';
+            break;
+          case 'newest':
+            orderColumn = 'created_at';
+            // For newest, reverse the logic: asc = newest first (desc), desc = oldest first (asc)
+            ascending = filters.sortDirection === 'asc' ? false : true;
+            break;
+          default: // name
+            orderColumn = 'name';
+        }
       }
 
       // Apply sorting - skip database sorting for ratings (we'll do client-side)
@@ -713,6 +739,9 @@ const GamesBrowser: React.FC = () => {
       if (!hasActualFilters) {
         // Use random ordering for featured games to show different games each time
         query = query.order('id'); // Use stable ordering first
+      } else if (filters.genre !== 'all') {
+        // When genre is selected, always sort by name A-Z
+        query = query.order('name', { ascending: true });
       } else if (filters.sortBy !== 'rating') {
         query = query.order(orderColumn, { ascending });
       } else {
@@ -864,51 +893,105 @@ const GamesBrowser: React.FC = () => {
     });
   }, []);
 
-  const getRandomGames = async (count: number = 10) => {
+  const getRandomGames = async (count: number = 100) => {
     try {
-      // Use PostgreSQL's RANDOM() function for true randomness from entire database
-      const { data: randomGames, error } = await supabase.rpc('get_random_games', {
-        game_count: count
-      });
+      // Get approved platform names for filtering
+      const approvedPlatformNames = platforms.map(p => p.name);
 
-      if (error) {
-        // Fallback to manual approach if function doesn't exist
-        console.warn('RPC function not available, using fallback method');
-        const { data: fallbackData, error: fallbackError } = await supabase
-          .from('games_database')
-          .select('id')
-          .order('id') // Use a stable order first
-          .limit(50000); // Get a very large pool from entire database
+      // Build query with same filters as main loadGames function
+      let query = supabase
+        .from('games_database')
+        .select(`
+          id,
+          name,
+          platform_name,
+          logo_base64,
+          launchbox_id,
+          created_at,
+          updated_at
+        `); // Get full game data, not just IDs
 
-        if (fallbackError) throw fallbackError;
-
-        if (fallbackData && fallbackData.length > 0) {
-          // Use Fisher-Yates shuffle for true randomness
-          const shuffled = [...fallbackData];
-          for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-          }
-
-          const selected = shuffled.slice(0, count);
-          const gameIds = new Set(selected.map(g => g.id));
-          setSelectedGames(gameIds);
-
-          toast({
-            title: "Random Selection",
-            description: `Selected ${selected.length} random games from ${fallbackData.length} total games`,
-          });
-        }
-        return;
+      // ALWAYS filter by approved platforms to prevent excluded platforms from showing
+      if (approvedPlatformNames.length > 0) {
+        query = query.in('platform_name', approvedPlatformNames);
       }
 
-      if (randomGames) {
-        const gameIds = new Set(randomGames.map(g => g.id));
+      // Apply platform filter
+      if (filters.platform !== 'all') {
+        query = query.eq('platform_name', filters.platform);
+      }
+
+      // Apply year filter
+      if (filters.yearRange[0] > 1970 || filters.yearRange[1] < 2024) {
+        query = query.gte('release_year', filters.yearRange[0]).lte('release_year', filters.yearRange[1]);
+      }
+
+      // Apply minimum community rating filter
+      if (filters.minRating > 0) {
+        query = query.gte('community_rating', filters.minRating);
+      }
+
+      // Apply minimum players filter
+      if (filters.minPlayers > 1) {
+        query = query.gte('max_players', filters.minPlayers);
+      }
+
+      // Apply ESRB rating filter
+      if (filters.esrbRating !== 'all') {
+        query = query.eq('esrb_rating', filters.esrbRating);
+      }
+
+      // Apply genre filter (if selected)
+      if (filters.genre !== 'all') {
+        // Use Supabase's contains operator to check if genres array contains the selected genre
+        query = query.contains('genres', [filters.genre]);
+      }
+
+      // Get a large pool of games matching the filters
+      const { data: filteredGames, error: filterError } = await query.limit(10000); // Large pool for randomness
+
+      if (filterError) throw filterError;
+
+      if (filteredGames && filteredGames.length > 0) {
+        // Use Fisher-Yates shuffle for true randomness
+        const shuffled = [...filteredGames];
+        for (let i = shuffled.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+
+        // Select up to the requested count (or all available if fewer)
+        const selectedGamesData = shuffled.slice(0, Math.min(count, shuffled.length));
+
+        // Update the displayed games list with the random selection
+        setGames(selectedGamesData);
+        setHasMoreGames(false); // No more games to load for random selection
+        setTotalGames(selectedGamesData.length);
+
+        // Also update the selected games set for tournament creation
+        const gameIds = new Set(selectedGamesData.map(g => g.id));
         setSelectedGames(gameIds);
 
+        // Create filter description
+        const activeFilters = [];
+        if (filters.platform !== 'all') activeFilters.push(`platform: ${filters.platform}`);
+        if (filters.genre !== 'all') activeFilters.push(`genre: ${filters.genre}`);
+        if (filters.yearRange[0] > 1970 || filters.yearRange[1] < 2024) activeFilters.push(`years: ${filters.yearRange[0]}-${filters.yearRange[1]}`);
+        if (filters.minRating > 0) activeFilters.push(`min rating: ${filters.minRating}`);
+        if (filters.minPlayers > 1) activeFilters.push(`min players: ${filters.minPlayers}`);
+        if (filters.esrbRating !== 'all') activeFilters.push(`ESRB: ${filters.esrbRating}`);
+
+        const filterText = activeFilters.length > 0 ? ` (respecting filters: ${activeFilters.join(', ')})` : '';
+
         toast({
-          title: "Random Selection",
-          description: `Selected ${randomGames.length} truly random games`,
+          title: "Random Games Loaded",
+          description: `Showing ${selectedGamesData.length} random games from ${filteredGames.length} matching games${filterText}`,
+        });
+      } else {
+        toast({
+          title: "No Games Found",
+          description: "No games match your current filter criteria",
+          variant: "destructive"
         });
       }
     } catch (error) {
@@ -1025,22 +1108,6 @@ const GamesBrowser: React.FC = () => {
   const [favoritesWithRatings, setFavoritesWithRatings] = useState<Game[]>([]);
   const [favoritesRatingLoading, setFavoritesRatingLoading] = useState(false);
 
-  // Load SQLite logos for favorites when they change
-  useEffect(() => {
-    const loadFavoritesLogos = async () => {
-      if (activeMainTab === 'favorites' && favoriteGamesDetails.length > 0) {
-        try {
-          const gameNames = favoriteGamesDetails.map(game => game.name);
-          const logoMap = await sqliteService.getLogosForGames(gameNames);
-          setSqliteLogos(prev => ({ ...prev, ...logoMap }));
-        } catch (error) {
-          console.warn('Failed to load SQLite logos for favorites:', error);
-        }
-      }
-    };
-
-    loadFavoritesLogos();
-  }, [activeMainTab, favoriteGamesDetails]);
 
   // Fetch aggregated ratings for favorites when sorting by rating
   useEffect(() => {
@@ -1183,15 +1250,15 @@ const GamesBrowser: React.FC = () => {
                 <Filter className="w-4 h-4 mr-2" />
                 Clear Filters
               </Button>
-              <Button onClick={() => getRandomGames(10)} variant="outline" size="sm">
+              <Button onClick={() => getRandomGames(100)} variant="outline" size="sm">
                 <Shuffle className="w-4 h-4 mr-2" />
-                Random 10
+                Random
               </Button>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="basic" className="w-full">
+          <Tabs value={activeFilterTab} onValueChange={(value) => setActiveFilterTab(value as 'basic' | 'advanced')} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="basic">Basic Filters</TabsTrigger>
               <TabsTrigger value="advanced">Advanced Filters</TabsTrigger>
@@ -1280,7 +1347,6 @@ const GamesBrowser: React.FC = () => {
                         platform: value,
                         search: searchInput || prev.search // Apply pending search input if any
                       }));
-                      setCurrentPage(1); // Reset to first page when platform changes
                     }}
                   >
                     <SelectTrigger>
@@ -1368,6 +1434,7 @@ const GamesBrowser: React.FC = () => {
                     max={2024}
                     step={1}
                     className="w-full"
+                    defaultValue={[1970, 2024]}
                   />
                 </div>
 
@@ -1444,77 +1511,48 @@ const GamesBrowser: React.FC = () => {
           <Card
             ref={index === displayedGames.length - 1 ? lastGameRef : null}
             key={game.id}
-            className={`cursor-pointer transition-all hover:shadow-lg overflow-hidden flex flex-col h-full ${
+            className={`cursor-pointer transition-all overflow-hidden flex flex-col h-full ${
               selectedGames.has(game.id) ? 'ring-2 ring-primary' : ''
             }`}
             onClick={() => toggleGameSelection(game.id)}
           >
-            {/* Game Image - Always try GameLogo first with skeleton loading, then fallback to other images if clear logo fails */}
+            {/* Game Image - Load clear logo from API with skeleton loading */}
             <div className="relative aspect-video w-full overflow-hidden">
-              {(() => {
-                // If we have a pre-loaded SQLite logo, use it immediately
-                if (sqliteLogos[game.name]) {
-                  return (
-                    <img
-                      src={sqliteLogos[game.name]}
-                      alt={`${game.name} clear logo`}
-                      className="w-full h-full object-contain bg-gradient-to-br from-gray-900 to-gray-700"
-                      onError={() => handleImageError(game.id)}
-                    />
-                  );
-                }
-
-                // If we have a pre-loaded logo_base64, use it immediately
-                if (game.logo_base64) {
-                  return (
-                    <img
-                      src={game.logo_base64}
-                      alt={`${game.name} clear logo`}
-                      className="w-full h-full object-contain bg-gradient-to-br from-gray-900 to-gray-700"
-                      onError={() => handleImageError(game.id)}
-                    />
-                  );
-                }
-
-                // Try to load clear logo from API, show skeleton while loading
-                return (
-                  <div className="w-full h-full relative">
-                    {/* Always show skeleton initially */}
-                    <div
-                      className="w-full h-full rounded-md relative overflow-hidden bg-gradient-to-r from-card via-muted to-card animate-pulse"
-                      style={{
-                        backgroundSize: '200% 100%',
-                        animation: 'shimmer 2.0s ease-in-out infinite'
-                      }}
-                    >
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="text-center p-4">
-                          <div className="text-xs text-gray-400 mt-2 font-medium">
-                            {game.name.substring(0, 15)}{game.name.length > 15 ? '...' : ''}
-                          </div>
-                        </div>
+              <div className="w-full h-full relative">
+                {/* Always show skeleton initially */}
+                <div
+                  className="w-full h-full rounded-md relative overflow-hidden bg-gradient-to-r from-card via-muted to-card animate-pulse"
+                  style={{
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 2.0s ease-in-out infinite'
+                  }}
+                >
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="text-center p-4">
+                      <div className="text-xs text-gray-400 mt-2 font-medium">
+                        {game.name.substring(0, 15)}{game.name.length > 15 ? '...' : ''}
                       </div>
                     </div>
-                    {/* Clear logo image loads on top when available */}
-                    <img
-                      src={`/api/clear-logos/${game.name.replace(/[^a-zA-Z0-9\-_\s]/g, '').replace(/\s+/g, '-').toLowerCase()}.webp`}
-                      alt={`${game.name} clear logo`}
-                      className="absolute inset-0 w-full h-full object-contain bg-gradient-to-br from-gray-900 to-gray-700 opacity-0 transition-opacity duration-300"
-                      onLoad={(e) => {
-                        // Show image when loaded
-                        e.currentTarget.style.opacity = '1';
-                      }}
-                      onError={(e) => {
-                        // Hide image on error, keep skeleton visible
-                        e.currentTarget.style.display = 'none';
-                      }}
-                      loading={index >= 4 ? "lazy" : "eager"}
-                      decoding="async"
-                      fetchpriority={index < 2 ? "high" : "auto"}
-                    />
                   </div>
-                );
-              })()}
+                </div>
+                {/* Clear logo image loads on top when available */}
+                <img
+                  src={`/api/clear-logos/${game.name.replace(/[^a-zA-Z0-9\-_\s]/g, '').replace(/\s+/g, '-').toLowerCase()}.webp`}
+                  alt={`${game.name} clear logo`}
+                  className="absolute inset-0 w-full h-full object-contain bg-gradient-to-br from-gray-900 to-gray-700 opacity-0 transition-opacity duration-300"
+                  onLoad={(e) => {
+                    // Show image when loaded
+                    e.currentTarget.style.opacity = '1';
+                  }}
+                  onError={(e) => {
+                    // Hide image on error, keep skeleton visible
+                    e.currentTarget.style.display = 'none';
+                  }}
+                  loading={index >= 4 ? "lazy" : "eager"}
+                  decoding="async"
+                  fetchPriority={index < 2 ? "high" : "auto"}
+                />
+              </div>
 
               {/* Heart icon for favorites - only show for logged in users */}
               {user && (
@@ -1754,73 +1792,44 @@ const GamesBrowser: React.FC = () => {
                     }`}
                     onClick={() => toggleGameSelection(game.id)}
                   >
-                    {/* Game Image - Always try GameLogo first with skeleton loading, only clear logos in game lists */}
+                    {/* Game Image - Load clear logo from API with skeleton loading */}
                     <div className="relative aspect-video w-full overflow-hidden">
-                      {(() => {
-                        // If we have a pre-loaded SQLite logo, use it immediately
-                        if (sqliteLogos[game.name]) {
-                          return (
-                            <img
-                              src={sqliteLogos[game.name]}
-                              alt={`${game.name} clear logo`}
-                              className="w-full h-full object-contain bg-gradient-to-br from-gray-900 to-gray-700"
-                              onError={() => handleImageError(game.id)}
-                            />
-                          );
-                        }
-
-                        // If we have a pre-loaded logo_base64, use it immediately
-                        if (game.logo_base64) {
-                          return (
-                            <img
-                              src={game.logo_base64}
-                              alt={`${game.name} clear logo`}
-                              className="w-full h-full object-contain bg-gradient-to-br from-gray-900 to-gray-700"
-                              onError={() => handleImageError(game.id)}
-                            />
-                          );
-                        }
-
-                        // All games have clear logos, show skeleton while loading
-                        return (
-                          <div className="w-full h-full relative">
-                            {/* Always show skeleton initially */}
-                            <div
-                              className="w-full h-full rounded-md relative overflow-hidden bg-gradient-to-r from-card via-muted to-card animate-pulse"
-                              style={{
-                                backgroundSize: '200% 100%',
-                                animation: 'shimmer 2.0s ease-in-out infinite'
-                              }}
-                            >
-                              <div className="absolute inset-0 flex items-center justify-center">
-                                <div className="text-center p-4">
-                                  <div className="text-xs text-gray-400 mt-2 font-medium">
-                                    {game.name.substring(0, 15)}{game.name.length > 15 ? '...' : ''}
-                                  </div>
-                                </div>
+                      <div className="w-full h-full relative">
+                        {/* Always show skeleton initially */}
+                        <div
+                          className="w-full h-full rounded-md relative overflow-hidden bg-gradient-to-r from-card via-muted to-card animate-pulse"
+                          style={{
+                            backgroundSize: '200% 100%',
+                            animation: 'shimmer 2.0s ease-in-out infinite'
+                          }}
+                        >
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="text-center p-4">
+                              <div className="text-xs text-gray-400 mt-2 font-medium">
+                                {game.name.substring(0, 15)}{game.name.length > 15 ? '...' : ''}
                               </div>
                             </div>
-                            {/* Clear logo image loads on top when available */}
-                            <img
-                              src={`/api/clear-logos/${game.name.replace(/[^a-zA-Z0-9\-_\s]/g, '').replace(/\s+/g, '-').toLowerCase()}.webp`}
-                              alt={`${game.name} clear logo`}
-                              className="absolute inset-0 w-full h-full object-contain bg-gradient-to-br from-gray-900 to-gray-700 opacity-0 transition-opacity duration-300"
-                              onLoad={(e) => {
-                                // Show image when loaded
-                                e.currentTarget.style.opacity = '1';
-                              }}
-                              onError={(e) => {
-                                // Hide image on error, keep skeleton visible
-                                e.currentTarget.style.display = 'none';
-                                handleImageError(game.id);
-                              }}
-                              loading={index >= 4 ? "lazy" : "eager"}
-                              decoding="async"
-                              fetchpriority={index < 2 ? "high" : "auto"}
-                            />
                           </div>
-                        );
-                      })()}
+                        </div>
+                        {/* Clear logo image loads on top when available */}
+                        <img
+                          src={`/api/clear-logos/${game.name.replace(/[^a-zA-Z0-9\-_\s]/g, '').replace(/\s+/g, '-').toLowerCase()}.webp`}
+                          alt={`${game.name} clear logo`}
+                          className="absolute inset-0 w-full h-full object-contain bg-gradient-to-br from-gray-900 to-gray-700 opacity-0 transition-opacity duration-300"
+                          onLoad={(e) => {
+                            // Show image when loaded
+                            e.currentTarget.style.opacity = '1';
+                          }}
+                          onError={(e) => {
+                            // Hide image on error, keep skeleton visible
+                            e.currentTarget.style.display = 'none';
+                            handleImageError(game.id);
+                          }}
+                          loading={index >= 4 ? "lazy" : "eager"}
+                          decoding="async"
+                          fetchPriority={index < 2 ? "high" : "auto"}
+                        />
+                      </div>
 
                       {/* Heart icon for favorites - only show for logged in users */}
                       {user && (

@@ -48,6 +48,40 @@ class GameMediaService {
   }
 
   /**
+   * Convert RAWG image URL to proxy URL for CORS bypass
+   */
+  private proxyRAWGImageUrl(rawgUrl: string): string {
+    if (!rawgUrl || !rawgUrl.includes('media.rawg.io')) {
+      return rawgUrl;
+    }
+
+    // Extract the path after 'media.rawg.io/media/'
+    const mediaMatch = rawgUrl.match(/media\.rawg\.io\/media\/(.+)/);
+    if (mediaMatch) {
+      return `http://localhost:3001/rawg-images/${mediaMatch[1]}`;
+    }
+
+    return rawgUrl;
+  }
+
+  /**
+   * Convert IGDB image URL to proxy URL for CORS bypass
+   */
+  private proxyIGDBImageUrl(igdbUrl: string): string {
+    if (!igdbUrl || !igdbUrl.includes('images.igdb.com')) {
+      return igdbUrl;
+    }
+
+    // Extract the path after 'images.igdb.com/'
+    const imageMatch = igdbUrl.match(/images\.igdb\.com\/(.+)/);
+    if (imageMatch) {
+      return `http://localhost:3001/igdb-images/${imageMatch[1]}`;
+    }
+
+    return igdbUrl;
+  }
+
+  /**
    * Extract YouTube video ID from various YouTube URL formats
    */
   private extractYouTubeId(url: string): string | null {
@@ -89,7 +123,7 @@ class GameMediaService {
 
     try {
       const response = await fetch(
-        `https://api.rawg.io/api/games/${gameSlug}/screenshots?key=${this.rawgApiKey}`
+        `http://localhost:3001/rawg-api/api/games/${gameSlug}/screenshots?key=${this.rawgApiKey}`
       );
 
       if (!response.ok) return [];
@@ -98,8 +132,8 @@ class GameMediaService {
 
       return data.results?.map((screenshot: any, index: number) => ({
         id: `rawg-${screenshot.id || index}`,
-        url: screenshot.image,
-        thumbnailUrl: screenshot.image, // RAWG doesn't provide separate thumbnails
+        url: this.proxyRAWGImageUrl(screenshot.image),
+        thumbnailUrl: this.proxyRAWGImageUrl(screenshot.image), // RAWG doesn't provide separate thumbnails
         source: 'rawg' as const,
         width: screenshot.width,
         height: screenshot.height
@@ -107,6 +141,10 @@ class GameMediaService {
 
     } catch (error) {
       console.error('RAWG screenshots error:', error);
+      // Check if it's a rate limit error (429) or auth error (401)
+      if (error instanceof Response && (error.status === 401 || error.status === 429)) {
+        console.warn('RAWG API rate limited or auth failed - skipping RAWG screenshots');
+      }
       return [];
     }
   }
@@ -119,7 +157,7 @@ class GameMediaService {
 
     try {
       const response = await fetch(
-        `https://api.rawg.io/api/games/${gameSlug}/movies?key=${this.rawgApiKey}`
+        `http://localhost:3001/rawg-api/api/games/${gameSlug}/movies?key=${this.rawgApiKey}`
       );
 
       if (!response.ok) return [];
@@ -133,7 +171,7 @@ class GameMediaService {
         return {
           id: `rawg-video-${video.id || index}`,
           url: videoUrl,
-          thumbnailUrl: video.preview || (embedId ? `https://img.youtube.com/vi/${embedId}/hqdefault.jpg` : undefined),
+          thumbnailUrl: video.preview ? this.proxyRAWGImageUrl(video.preview) : (embedId ? `https://img.youtube.com/vi/${embedId}/hqdefault.jpg` : undefined),
           source: 'rawg' as const,
           type: 'trailer' as const,
           title: video.name,
@@ -143,6 +181,10 @@ class GameMediaService {
 
     } catch (error) {
       console.error('RAWG videos error:', error);
+      // Check if it's a rate limit error (429) or auth error (401)
+      if (error instanceof Response && (error.status === 401 || error.status === 429)) {
+        console.warn('RAWG API rate limited or auth failed - skipping RAWG videos');
+      }
       return [];
     }
   }
@@ -154,28 +196,53 @@ class GameMediaService {
     if (!this.igdbClientId || !this.igdbAccessToken) return [];
 
     try {
-      const response = await fetch('https://api.igdb.com/v4/screenshots', {
+      const response = await fetch('http://localhost:3001/igdb-api/v4/screenshots', {
         method: 'POST',
         headers: {
           'Client-ID': this.igdbClientId,
           'Authorization': `Bearer ${this.igdbAccessToken}`,
           'Content-Type': 'application/json'
         },
-        body: `where game = ${gameId}; fields url,width,height; limit 20;`
+        body: `where game = ${gameId}; fields *; limit 20;`
       });
 
       if (!response.ok) return [];
 
       const data = await response.json();
 
-      return data.map((screenshot: any, index: number) => ({
-        id: `igdb-${screenshot.id || index}`,
-        url: `https:${screenshot.url?.replace('t_thumb', 't_1080p')}`, // Get high-res version
-        thumbnailUrl: `https:${screenshot.url}`, // Thumbnail version
-        source: 'igdb' as const,
-        width: screenshot.width,
-        height: screenshot.height
-      }));
+      return data.map((screenshot: any, index: number) => {
+        // IGDB should provide image_id field for URL construction
+        // Format: https://images.igdb.com/igdb/image/upload/t_{size}/{image_id}.jpg
+        let fullUrl = null;
+        let thumbnailUrl = null;
+
+        if (screenshot.image_id) {
+          // Construct full URLs using IGDB's image format
+          const baseUrl = `https://images.igdb.com/igdb/image/upload`;
+          fullUrl = this.proxyIGDBImageUrl(`${baseUrl}/t_1080p/${screenshot.image_id}.jpg`);
+          thumbnailUrl = this.proxyIGDBImageUrl(`${baseUrl}/t_thumb/${screenshot.image_id}.jpg`);
+        } else if (screenshot.url) {
+          // Fallback: if url field exists, use it
+          const normalizedUrl = screenshot.url.startsWith('//') ? `https:${screenshot.url}` : screenshot.url;
+          fullUrl = this.proxyIGDBImageUrl(normalizedUrl.replace('t_thumb', 't_1080p'));
+          thumbnailUrl = this.proxyIGDBImageUrl(normalizedUrl);
+        }
+
+        // Skip screenshots without valid URLs
+        if (!fullUrl) {
+          console.log('Skipping IGDB screenshot - no valid URL or image_id:', screenshot);
+          return null;
+        }
+
+        return {
+          id: `igdb-${screenshot.id || index}`,
+          url: fullUrl,
+          thumbnailUrl: thumbnailUrl,
+          source: 'igdb' as const,
+          width: screenshot.width,
+          height: screenshot.height
+        };
+      }).filter((screenshot: any) => screenshot !== null);
 
     } catch (error) {
       console.error('IGDB screenshots error:', error);
@@ -190,29 +257,53 @@ class GameMediaService {
     if (!this.igdbClientId || !this.igdbAccessToken) return [];
 
     try {
-      const response = await fetch('https://api.igdb.com/v4/game_videos', {
+      const response = await fetch('http://localhost:3001/igdb-api/v4/game_videos', {
         method: 'POST',
         headers: {
           'Client-ID': this.igdbClientId,
           'Authorization': `Bearer ${this.igdbAccessToken}`,
           'Content-Type': 'application/json'
         },
-        body: `where game = ${gameId}; fields name,video_id; limit 10;`
+        body: `where game = ${gameId}; fields *; limit 10;`
       });
 
       if (!response.ok) return [];
 
       const data = await response.json();
 
-      return data.map((video: any, index: number) => ({
-        id: `igdb-video-${video.video_id || index}`,
-        url: `https://www.youtube.com/watch?v=${video.video_id}`,
-        thumbnailUrl: `https://img.youtube.com/vi/${video.video_id}/hqdefault.jpg`,
-        source: 'igdb' as const,
-        type: 'trailer' as const,
-        title: video.name,
-        embedId: video.video_id
-      }));
+      return data.map((video: any, index: number) => {
+        // IGDB videos can be hosted on different platforms
+        // Check if it's a YouTube video by looking for video_id and checking if it's a YouTube URL
+        let embedId = null;
+        let videoUrl = null;
+
+        // If video has a URL field, try to extract YouTube ID from it
+        if (video.url) {
+          embedId = this.extractYouTubeId(video.url);
+          videoUrl = video.url;
+        }
+        // Otherwise, assume video_id is a YouTube ID (legacy behavior)
+        else if (video.video_id) {
+          embedId = video.video_id;
+          videoUrl = `https://www.youtube.com/watch?v=${video.video_id}`;
+        }
+
+        // Skip non-YouTube videos for now
+        if (!embedId || !videoUrl) {
+          console.log('Skipping IGDB video - not YouTube:', video);
+          return null;
+        }
+
+        return {
+          id: `igdb-video-${embedId}`,
+          url: videoUrl,
+          thumbnailUrl: `https://img.youtube.com/vi/${embedId}/hqdefault.jpg`,
+          source: 'igdb' as const,
+          type: 'trailer' as const,
+          title: video.name || video.title,
+          embedId: embedId
+        };
+      }).filter((video: any) => video !== null);
 
     } catch (error) {
       console.error('IGDB videos error:', error);
@@ -235,7 +326,7 @@ class GameMediaService {
       try {
         const searchQuery = encodeURIComponent(gameName);
         const response = await fetch(
-          `https://api.rawg.io/api/games?key=${this.rawgApiKey}&search=${searchQuery}&page_size=1`
+          `http://localhost:3001/rawg-api/api/games?key=${this.rawgApiKey}&search=${searchQuery}&page_size=1`
         );
 
         if (response.ok) {
@@ -248,13 +339,17 @@ class GameMediaService {
         }
       } catch (error) {
         console.error('RAWG search error:', error);
+        // Check if it's a rate limit error (429) or auth error (401)
+        if (error instanceof Response && (error.status === 401 || error.status === 429)) {
+          console.warn('RAWG API rate limited or auth failed - skipping RAWG search');
+        }
       }
     }
 
     // Get IGDB game ID
     if (this.igdbClientId && this.igdbAccessToken) {
       try {
-        const response = await fetch('https://api.igdb.com/v4/games', {
+        const response = await fetch('http://localhost:3001/igdb-api/v4/games', {
           method: 'POST',
           headers: {
             'Client-ID': this.igdbClientId,
@@ -315,7 +410,7 @@ class GameMediaService {
         id: 'supabase-video',
         url: existingMedia.video_url,
         thumbnailUrl: embedId ? `https://img.youtube.com/vi/${embedId}/hqdefault.jpg` : undefined,
-        source: 'manual',
+        source: 'launchbox',
         type: 'trailer',
         title: `${gameName} Video`,
         embedId
@@ -327,39 +422,22 @@ class GameMediaService {
     const identifiers = await this.getGameIdentifiers(gameName);
     console.log(`🔍 Game identifiers for "${gameName}":`, identifiers);
 
-    // Fetch from RAWG (primary source for screenshots and videos)
-    if (identifiers.rawgSlug) {
-      const [rawgScreenshots, rawgVideos] = await Promise.allSettled([
-        this.fetchRAWGScreenshots(identifiers.rawgSlug),
-        this.fetchRAWGVideos(identifiers.rawgSlug)
-      ]);
+    // Try IGDB screenshots first (now requesting all fields)
+    if (identifiers.igdbId) {
+      const igdbScreenshots = await this.fetchIGDBScreenshots(identifiers.igdbId);
+      screenshots.push(...igdbScreenshots);
+      console.log(`🖼️ IGDB: Found ${igdbScreenshots.length} screenshots for "${gameName}"`);
 
-      if (rawgScreenshots.status === 'fulfilled') {
-        screenshots.push(...rawgScreenshots.value);
-      }
-
-      if (rawgVideos.status === 'fulfilled') {
-        videos.push(...rawgVideos.value);
-        console.log(`🎬 RAWG: Found ${rawgVideos.value.length} videos for "${gameName}"`);
-      } else {
-        console.log(`⚠️ RAWG videos failed for "${gameName}":`, rawgVideos.reason);
-      }
+      const igdbVideos = await this.fetchIGDBVideos(identifiers.igdbId);
+      videos.push(...igdbVideos);
+      console.log(`🎬 IGDB: Found ${igdbVideos.length} videos for "${gameName}"`);
     }
 
-    // Fetch from IGDB
-    if (identifiers.igdbId) {
-      const [igdbScreenshots, igdbVideos] = await Promise.allSettled([
-        this.fetchIGDBScreenshots(identifiers.igdbId),
-        this.fetchIGDBVideos(identifiers.igdbId)
-      ]);
-
-      if (igdbScreenshots.status === 'fulfilled') {
-        screenshots.push(...igdbScreenshots.value);
-      }
-
-      if (igdbVideos.status === 'fulfilled') {
-        videos.push(...igdbVideos.value);
-      }
+    // Only try RAWG as fallback if IGDB didn't provide screenshots
+    if (identifiers.rawgSlug && screenshots.length === 0) {
+      const rawgScreenshots = await this.fetchRAWGScreenshots(identifiers.rawgSlug);
+      screenshots.push(...rawgScreenshots);
+      console.log(`🖼️ RAWG: Found ${rawgScreenshots.length} screenshots for "${gameName}" (fallback)`);
     }
 
     // Remove duplicates and sort by source preference

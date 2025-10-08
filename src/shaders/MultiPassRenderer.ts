@@ -392,7 +392,6 @@ export class MultiPassRenderer {
 
     // Debug logging
     if (this.frameCount % 60 === 0) { // Log every 60 frames
-      console.log(`[MultiPassRenderer] Frame ${this.frameCount}: ${totalTime.toFixed(2)}ms total`);
     }
   }
 

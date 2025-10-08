@@ -116,7 +116,7 @@ class RatingAggregationService {
     try {
       const searchQuery = encodeURIComponent(gameName);
       const response = await fetch(
-        `https://api.rawg.io/api/games?key=${this.rawgApiKey}&search=${searchQuery}&page_size=5`
+        `http://localhost:3001/rawg-api/api/games?key=${this.rawgApiKey}&search=${searchQuery}&page_size=5`
       );
 
       if (!response.ok) return null;
@@ -135,6 +135,10 @@ class RatingAggregationService {
       }
     } catch (error) {
       console.error('RAWG API error:', error);
+      // Check if it's a rate limit error (429) or auth error (401)
+      if (error instanceof Response && (error.status === 401 || error.status === 429)) {
+        console.warn('RAWG API rate limited or auth failed - skipping RAWG rating');
+      }
     }
 
     return null;
@@ -147,7 +151,7 @@ class RatingAggregationService {
     if (!this.igdbClientId || !this.igdbAccessToken) return null;
 
     try {
-      const response = await fetch('https://api.igdb.com/v4/games', {
+      const response = await fetch('http://localhost:3001/igdb-api/v4/games', {
         method: 'POST',
         headers: {
           'Client-ID': this.igdbClientId,

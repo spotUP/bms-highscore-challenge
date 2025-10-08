@@ -326,12 +326,26 @@ export class BezelGraphicsManager {
   }
 
   /**
-   * Get texture for shader uniform
-   */
-  getTextureForUniform(name: string): THREE.Texture | null {
-    const bezelTexture = this.textures.get(name);
-    return bezelTexture ? bezelTexture.texture : null;
-  }
+    * Get texture for shader uniform
+    */
+   getTextureForUniform(name: string): THREE.Texture | null {
+     const bezelTexture = this.textures.get(name);
+     return bezelTexture ? bezelTexture.texture : null;
+   }
+
+  /**
+    * Get reflection mask texture
+    */
+   getReflectionMaskTexture(): THREE.Texture | null {
+     // Look for reflection mask texture in loaded textures
+     // In Mega Bezel, this would typically be named something like "ReflectionMaskImage"
+     const reflectionMaskNames = ['ReflectionMaskImage', 'reflection_mask', 'reflect_mask'];
+     for (const name of reflectionMaskNames) {
+       const texture = this.getTextureForUniform(name);
+       if (texture) return texture;
+     }
+     return null;
+   }
 
   /**
    * Dispose all textures

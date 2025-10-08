@@ -14,6 +14,37 @@ import { rawgGamesService, GameSearchFilters } from "@/services/rawgGamesService
 import { RAWGGame } from "@/utils/rawgApi";
 import { GameDetailsModal } from "@/components/GameDetailsModal";
 import { CreateTournamentModal } from "@/components/CreateTournamentModal";
+
+// Import Game interface for type transformation
+interface Game {
+  id: number;
+  name: string;
+  platform_name: string;
+  database_id: number | null;
+  release_year: number | null;
+  overview: string | null;
+  max_players: number | null;
+  cooperative: boolean | null;
+  community_rating: number | null;
+  community_rating_count: number | null;
+  esrb_rating: string | null;
+  genres: string[];
+  developer: string | null;
+  publisher: string | null;
+  video_url: string | null;
+  screenshot_url: string | null;
+  cover_url: string | null;
+  logo_url: string | null;
+  series?: string | null;
+  region?: string | null;
+  alternative_names?: string[];
+  play_modes?: string[];
+  themes?: string[];
+  wikipedia_url?: string | null;
+  video_urls?: string[];
+  release_type?: string | null;
+  release_date?: string | null;
+}
 import { useFavorites } from "@/hooks/useFavorites";
 import RAWGAPI from "@/utils/rawgApi";
 import { AdvancedSearchField } from "@/components/ui/advanced-search-field";
@@ -64,7 +95,7 @@ const RAWGGamesBrowser: React.FC = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [hasNextPage, setHasNextPage] = useState(false);
   const [selectedGameForDetails, setSelectedGameForDetails] = useState<RAWGGame | null>(null);
-  const [detailedGame, setDetailedGame] = useState<RAWGGame | null>(null);
+  const [detailedGame, setDetailedGame] = useState<Partial<Game> | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [isTournamentModalOpen, setIsTournamentModalOpen] = useState(false);
@@ -317,6 +348,30 @@ const RAWGGamesBrowser: React.FC = () => {
     });
   }, [games]);
 
+  // Transform RAWGGame to Game format for GameDetailsModal
+  const transformRAWGGameToGame = (rawgGame: RAWGGame): Partial<Game> => {
+    return {
+      id: rawgGame.id,
+      name: rawgGame.name,
+      platform_name: rawgGame.platforms?.[0]?.platform?.name || 'Unknown',
+      database_id: null,
+      release_year: rawgGame.released ? new Date(rawgGame.released).getFullYear() : null,
+      overview: rawgGame.description || rawgGame.description_raw || null,
+      max_players: null,
+      cooperative: null,
+      community_rating: rawgGame.rating || null,
+      community_rating_count: rawgGame.ratings_count || null,
+      esrb_rating: rawgGame.esrb_rating?.name || null,
+      genres: rawgGame.genres?.map(g => g.name) || [],
+      developer: rawgGame.developers?.[0]?.name || null,
+      publisher: rawgGame.publishers?.[0]?.name || null,
+      video_url: null,
+      screenshot_url: rawgGame.background_image || null,
+      cover_url: rawgGame.background_image || null,
+      logo_url: null,
+    };
+  };
+
   const openGameDetails = useCallback(async (game: RAWGGame) => {
     if (!isConfigured) return;
 
@@ -331,11 +386,14 @@ const RAWGGamesBrowser: React.FC = () => {
 
       // Fetch detailed game information
       const detailedGameData = await api.getGame(game.id);
-      setDetailedGame(detailedGameData);
+      // Transform to Game format
+      const transformedGame = transformRAWGGameToGame(detailedGameData);
+      setDetailedGame(transformedGame);
     } catch (error) {
       console.error('Error fetching game details:', error);
-      // Fall back to basic game data from the list
-      setDetailedGame(game);
+      // Fall back to basic game data from the list, also transformed
+      const transformedGame = transformRAWGGameToGame(game);
+      setDetailedGame(transformedGame);
       toast({
         title: "Info",
         description: "Showing basic game information",
@@ -608,7 +666,7 @@ const RAWGGamesBrowser: React.FC = () => {
           return (
             <Card
               key={game.id}
-              className={`group relative transition-all duration-300 hover:shadow-xl hover:scale-105 overflow-hidden bg-card border-border/40 ${
+              className={`group relative transition-all duration-300 overflow-hidden bg-card border-border/40 ${
                 selectedGames.has(game.id) ? 'ring-2 ring-primary shadow-lg' : ''
               }`}
             >
@@ -619,7 +677,7 @@ const RAWGGamesBrowser: React.FC = () => {
                     <img
                       src={imageUrl}
                       alt={`${game.name} screenshot`}
-                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                      className="w-full h-full object-cover transition-transform duration-300"
                       loading="lazy"
                     />
                   ) : (
@@ -635,7 +693,7 @@ const RAWGGamesBrowser: React.FC = () => {
                   {/* Header */}
                   <div className="space-y-2">
                     <div className="flex items-start justify-between">
-                      <h3 className="font-bold text-sm sm:text-base leading-tight line-clamp-2 group-hover:text-primary transition-colors">
+                      <h3 className="font-bold text-sm sm:text-base leading-tight line-clamp-2 transition-colors">
                         {game.name}
                       </h3>
                     </div>

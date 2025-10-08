@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { useTournament } from "@/contexts/TournamentContext";
 import { Lock, Unlock, Plus } from "lucide-react";
 
 const TournamentDropdown = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const {
     currentTournament,
     userTournaments,
@@ -23,6 +26,11 @@ const TournamentDropdown = () => {
     if (selectedTournament && selectedTournament.id !== currentTournament?.id) {
       try {
         await switchTournament(selectedTournament);
+
+        // Redirect to index page if not already there
+        if (location.pathname !== '/') {
+          navigate('/');
+        }
       } catch (error) {
         console.error('Error switching tournament:', error);
       }
@@ -84,13 +92,11 @@ const TournamentDropdown = () => {
         onValueChange={handleTournamentChange}
       >
         <SelectTrigger className="bg-secondary/40 border-white/20 text-white min-w-[240px]">
-          <div className="flex items-center gap-2">
-            <SelectValue placeholder="Select Tournament">
-              {currentTournament?.name}
-            </SelectValue>
+          <div className="flex items-center gap-2 w-full">
+            <SelectValue placeholder="Select Tournament" />
             {currentTournament?.scores_locked && (
               <div title="Score submissions are locked">
-                <Lock className="w-4 h-4 text-red-400" />
+                <Lock className="w-4 h-4 text-red-400 flex-shrink-0" />
               </div>
             )}
           </div>

@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTournamentGameData } from "@/hooks/useTournamentGameData";
 import { getGameLogoUrl } from "@/lib/utils";
-import { clearLogoService } from "@/services/clearLogoService";
 import StorageImage from "@/components/StorageImage";
 import { parseStorageObjectUrl } from "@/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,22 +14,11 @@ import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import TournamentDropdown from "@/components/TournamentDropdown";
 import { useTournament } from "@/contexts/TournamentContext";
 import { dlog } from "@/lib/debug";
+import { supabase } from "@/integrations/supabase/client";
 // import pacmanLogo from "@/assets/pacman-logo.png";
 // import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 // import tetrisLogo from "@/assets/tetris-logo.png";
 // import donkeyKongLogo from "@/assets/donkey-kong-logo.png";
-import { supabase } from "@/integrations/supabase/client";
-
-// Fallback logo mapping for backwards compatibility
-const LOGO_MAP: Record<string, string> = {
-  // "pacman": pacmanLogo,
-  // "pac-man": pacmanLogo,
-  // "spaceinvaders": spaceInvadersLogo,
-  // "space invaders": spaceInvadersLogo,
-  // "tetris": tetrisLogo,
-  // "donkeykong": donkeyKongLogo,
-  // "donkey kong": donkeyKongLogo,
-};
 
 interface Game {
   id: string;
@@ -63,83 +51,12 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   const isMobile = useIsMobile();
   const { activeGames: games, gameScores, loading: gamesLoading, refetch } = useTournamentGameData();
 
-  // State for cached database logos and clear logos
-  const [databaseLogos, setDatabaseLogos] = useState<Record<string, string>>({});
-  const [clearLogos, setClearLogos] = useState<Record<string, string>>({});
 
-  // Function to fetch logos from games_database with SQLite fallback
-  const fetchDatabaseLogos = useCallback(async () => {
-    if (!games || games.length === 0) return;
 
-    try {
-      const gameNames = games.map(game => game.name);
-      let logoMap: Record<string, string> = {};
 
-      // First try Supabase (development/primary source)
-      const { data: dbGames, error } = await supabase
-        .from('games_database')
-        .select('name, logo_base64')
-        .in('name', gameNames)
-        .not('logo_base64', 'is', null);
 
-      if (!error && dbGames) {
-        dbGames.forEach(dbGame => {
-          if (dbGame.logo_base64) {
-            logoMap[dbGame.name] = dbGame.logo_base64;
-          }
-        });
-        console.log('📸 Loaded Supabase logos for:', Object.keys(logoMap).length, 'games');
-      } else {
-        console.warn('Supabase logos fetch failed:', error);
-      }
 
-      // If we didn't get all logos from Supabase, try SQLite fallback
-      const missingGames = gameNames.filter(name => !logoMap[name]);
-      if (missingGames.length > 0) {
-        console.log('🗄️ Trying SQLite fallback for', missingGames.length, 'missing logos...');
 
-        try {
-          const { sqliteService } = await import('@/services/sqliteService');
-          const sqliteLogos = await sqliteService.getLogosForGames(missingGames);
-
-          // Merge SQLite results with existing logos
-          Object.assign(logoMap, sqliteLogos);
-          console.log('📸 Loaded SQLite logos for:', Object.keys(sqliteLogos).length, 'additional games');
-        } catch (sqliteError) {
-          console.warn('SQLite fallback failed:', sqliteError);
-        }
-      }
-
-      setDatabaseLogos(logoMap);
-      console.log('📸 Total logos loaded:', Object.keys(logoMap).length, 'out of', gameNames.length, 'games');
-    } catch (error) {
-      console.error('Failed to fetch database logos:', error);
-    }
-  }, [games]);
-
-  // Function to fetch clear logos from clear logo service
-  const fetchClearLogos = useCallback(async () => {
-    if (!games || games.length === 0) return;
-
-    try {
-      const gameNames = games.map(game => game.name);
-      const logoMap = await clearLogoService.getClearLogosForGames(gameNames);
-      console.log('🎯 Clear logos loaded:', Object.keys(logoMap).length, 'out of', gameNames.length, 'games');
-      setClearLogos(logoMap);
-    } catch (error) {
-      console.warn('Failed to load clear logos:', error);
-    }
-  }, [games]);
-
-  // Fetch database logos when games change
-  useEffect(() => {
-    fetchDatabaseLogos();
-  }, [fetchDatabaseLogos]);
-
-  // Fetch clear logos when games change
-  useEffect(() => {
-    fetchClearLogos();
-  }, [fetchClearLogos]);
 
   // Temporarily allow overflow during animations
   useEffect(() => {
@@ -320,6 +237,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   return (
     <div className="p-3 md:p-4 overflow-visible">
 
+
       <div className="w-full space-y-4 overflow-visible">
         <div className={`grid gap-3 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-12rem)] grid-cols-1 lg:grid-cols-6'} overflow-visible`}>
           {/* Left column - Overall Leaderboard (narrower) */}
@@ -330,42 +248,46 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
           {/* Right column - Game content (5 games) */}
           <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-5 flex flex-col'} overflow-visible`}>
 
-            <div className={`${isMobile ? 'flex flex-col space-y-6' : 'grid gap-2 flex-1 min-h-0'}`} style={{
-              overflow: 'visible',
-              position: 'relative',
-              gridTemplateColumns: isMobile ? 'none' : `repeat(${games?.length || 1}, 1fr)`
-            }}>
-              {games.map((game) => {
-                // Get logo URL with priority: clear logos > database > tournament game logo > fallback map
-                const clearLogo = clearLogos[game.name];
-                const databaseLogo = databaseLogos[game.name];
-                const fallbackLogo = getGameLogoUrl(game.logo_url) || LOGO_MAP[game.name.toLowerCase()] || LOGO_MAP[game.id.toLowerCase()];
-                const logoUrl = clearLogo || databaseLogo || fallbackLogo;
-                const storageRef = logoUrl && logoUrl.includes('supabase.co/storage/') ? parseStorageObjectUrl(logoUrl) : null;
-                const isPublicObject = !!(logoUrl && logoUrl.includes('/storage/v1/object/public/'));
+            {(() => {
+              const filteredGames = games.filter(game => {
+                const logoUrl = getGameLogoUrl(game.logo_url);
+                return !!logoUrl;
+              });
 
-                const filtered = gameScores[game.id] || [];
+              return (
+                <div className={`${isMobile ? 'flex flex-col space-y-6' : 'grid gap-2 flex-1 min-h-0'}`} style={{
+                  overflow: 'visible',
+                  position: 'relative',
+                  gridTemplateColumns: isMobile ? 'none' : `repeat(${filteredGames.length || 1}, 1fr)`
+                }}>
+                  {filteredGames.map((game) => {
+                    // Get logo URL from tournament game logo_url only
+                    const logoUrl = getGameLogoUrl(game.logo_url);
+                    const storageRef = logoUrl && logoUrl.includes('supabase.co/storage/') ? parseStorageObjectUrl(logoUrl) : null;
+                    const isPublicObject = !!(logoUrl && logoUrl.includes('/storage/v1/object/public/'));
 
-                // Debug logging for joust specifically
-                if (game.name.toLowerCase().includes('joust')) {
-                  dlog('🎮 Joust Debug Info:', {
-                    gameName: game.name,
-                    gameId: game.id,
-                    scoresForThisGame: filtered,
-                    allGameScores: gameScores,
-                    totalGames: games.length
-                  });
-                }
+                    const filtered = gameScores[game.id] || [];
 
-                return (
-                <section key={game.id} data-game-id={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full min-h-0'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? `${(games.length - 1 - games.findIndex(g => g.id === game.id)) * 50}ms` : `${games.findIndex(g => g.id === game.id) * 200}ms`)}}>
-                  {/* Card containing logo, scores and QR code */}
-                  <Card
-                    className="bg-black/30 border-white/20 theme-card flex-1 flex flex-col cursor-pointer hover:scale-105 transition-transform duration-200 min-h-0"
-                    style={getRunnerStyle(game.id)}
-                    onClick={() => handleGameLogoClick(game)}
-                    title={`Click to submit score for ${game.name}`}
-                  >
+                    // Debug logging for joust specifically
+                    if (game.name.toLowerCase().includes('joust')) {
+                      dlog('🎮 Joust Debug Info:', {
+                        gameName: game.name,
+                        gameId: game.id,
+                        scoresForThisGame: filtered,
+                        allGameScores: gameScores,
+                        totalGames: games.length
+                      });
+                    }
+
+                    return (
+                      <section key={game.id} data-game-id={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full min-h-0'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? `${(filteredGames.length - 1 - filteredGames.findIndex(g => g.id === game.id)) * 50}ms` : `${filteredGames.findIndex(g => g.id === game.id) * 200}ms`)}}>
+                    {/* Card containing logo, scores and QR code */}
+                    <Card
+                      className="bg-black/30 border-white/20 theme-card flex-1 flex flex-col cursor-pointer transition-transform duration-200 min-h-0"
+                      style={getRunnerStyle(game.id)}
+                      onClick={() => handleGameLogoClick(game)}
+                      title={`Click to submit score for ${game.name}`}
+                    >
                       <CardHeader className="px-3 py-2 pb-4">
                         {/* Game logo inside card header */}
                         <div className="flex flex-col items-center space-y-2">
@@ -426,15 +348,17 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                         </div>
                       </CardContent>
                     </Card>
-                </section>
+                  </section>
                 );
-              })}
-              {!gamesLoading && games.length === 0 && (
-                <div className={`col-span-4 text-center py-8 text-gray-400 ${suppressAnimations ? '' : (isExiting ? 'animate-wave-out-right' : 'animate-wave-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? '0ms' : '600ms')}}>
-                  No active games found. Please contact an administrator.
-                </div>
-              )}
-            </div>
+                        })}
+                        {!gamesLoading && games.length === 0 && (
+                          <div className={`col-span-4 text-center py-8 text-gray-400 ${suppressAnimations ? '' : (isExiting ? 'animate-wave-out-right' : 'animate-wave-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? '0ms' : '600ms')}}>
+                            No active games found. Please contact an administrator.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
           </div>
         </div>
 

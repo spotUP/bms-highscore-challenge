@@ -91,11 +91,6 @@ const MediaLightbox: React.FC<MediaLightboxProps> = ({
     <div
       className="fixed inset-0 bg-black bg-opacity-95 flex items-center justify-center"
       style={{ zIndex: 1000 }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
       onKeyDown={handleKeyDown}
       tabIndex={-1}
     >
@@ -271,35 +266,28 @@ export const GameMediaGallery: React.FC<GameMediaGalleryProps> = ({
     ...videos.map(video => ({ ...video, type: 'video' }))
   ];
 
-  // Auto-advance slideshow with special handling for videos
+  // Auto-advance slideshow - images advance every 3 seconds, videos play in full
   useEffect(() => {
     if (!autoPlayEnabled || unifiedMedia.length <= 1) return;
 
-    const currentMedia = unifiedMedia[currentSlideIndex];
-    const isVideo = currentMedia?.type === 'video';
+    const currentItem = unifiedMedia[currentSlideIndex];
+    const isVideo = currentItem?.type === 'video';
 
-    // Different timing for videos vs images
-    let interval: NodeJS.Timeout;
+    // If current item is a video, don't auto-advance (let video play)
+    if (isVideo) return;
 
-    if (isVideo) {
-      // For videos, wait longer to let them play fully
-      // YouTube videos get longer duration, direct videos get standard duration
-      const videoDuration = currentMedia.embedId ? 15000 : 8000; // 15s for YouTube, 8s for direct videos
-      interval = setTimeout(() => {
-        // After video finishes, go back to first image if at end, otherwise next
-        const nextIndex = currentSlideIndex === unifiedMedia.length - 1 ? 0 : currentSlideIndex + 1;
-        setCurrentSlideIndex(nextIndex);
-      }, videoDuration);
-    } else {
-      // For images, advance every 3 seconds
-      interval = setTimeout(() => {
-        setCurrentSlideIndex((prev) => (prev + 1) % unifiedMedia.length);
-      }, 3000);
+    // Clear any existing YouTube timer
+    if ((window as any).youtubeTimer) {
+      clearTimeout((window as any).youtubeTimer);
+      (window as any).youtubeTimer = null;
     }
 
-    return () => {
-      if (interval) clearTimeout(interval);
-    };
+    // For images, advance every 3 seconds
+    const interval = setTimeout(() => {
+      setCurrentSlideIndex((prev) => (prev + 1) % unifiedMedia.length);
+    }, 3000);
+
+    return () => clearTimeout(interval);
   }, [currentSlideIndex, autoPlayEnabled, unifiedMedia]);
 
   if (loading) {
@@ -387,25 +375,37 @@ export const GameMediaGallery: React.FC<GameMediaGalleryProps> = ({
           >
             {unifiedMedia[currentSlideIndex]?.type === 'video' ? (
               <div className="w-full h-full relative">
-                {unifiedMedia[currentSlideIndex].embedId ? (
+                {'embedId' in unifiedMedia[currentSlideIndex] && unifiedMedia[currentSlideIndex].embedId ? (
                   <iframe
-                    src={`https://www.youtube.com/embed/${unifiedMedia[currentSlideIndex].embedId}?autoplay=1&mute=1&controls=0&rel=0&loop=1&playlist=${unifiedMedia[currentSlideIndex].embedId}&modestbranding=1&showinfo=0`}
+                    src={`https://www.youtube.com/embed/${unifiedMedia[currentSlideIndex].embedId}?autoplay=1&mute=0&controls=0&rel=0&modestbranding=1&showinfo=0`}
                     className="w-full h-full"
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                     style={{ pointerEvents: 'none' }}
+                    onLoad={() => {
+                      // For YouTube videos, advance after a reasonable duration (2 minutes for trailers)
+                      // Since we can't detect YouTube end events easily, use a fallback timer
+                      const fallbackTimer = setTimeout(() => {
+                        setCurrentSlideIndex((prev) => (prev + 1) % unifiedMedia.length);
+                      }, 120000); // 2 minutes
+
+                      // Store timer for cleanup
+                      (window as any).youtubeTimer = fallbackTimer;
+                    }}
                   />
                 ) : (
                   <video
                     src={unifiedMedia[currentSlideIndex].url}
                     autoPlay
-                    muted
-                    loop
                     playsInline
                     className="w-full h-full object-contain bg-black"
                     style={{ pointerEvents: 'none' }}
                     onLoadedMetadata={(e) => {
                       const video = e.currentTarget;
                       setVideoDuration(video.duration);
+                    }}
+                    onEnded={() => {
+                      // When video ends, advance to next item
+                      setCurrentSlideIndex((prev) => (prev + 1) % unifiedMedia.length);
                     }}
                   />
                 )}

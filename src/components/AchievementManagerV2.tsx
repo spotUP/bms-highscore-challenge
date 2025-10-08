@@ -1,12 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
@@ -137,37 +133,15 @@ const ACHIEVEMENT_TYPES = [
 const DEFAULT_ICONS = ['🏆', '🥇', '🎯', '⭐', '💎', '🔥', '⚡', '🎮', '👑', '🏅', '🌟', '💫'];
 const DEFAULT_COLORS = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE'];
 
-const AchievementManagerV2 = () => {
+const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) => {
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [games, setGames] = useState<Array<{ id: string; name: string; logo_url: string | null }>>([]);
   const [selectedGameId, setSelectedGameId] = useState<string>('all');
   const [expandedGames, setExpandedGames] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
-  const [editingAchievement, setEditingAchievement] = useState<Achievement | null>(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [playerAchievements, setPlayerAchievements] = useState<any[]>([]);
   const [loadingPlayerAchievements, setLoadingPlayerAchievements] = useState(false);
-  const [formData, setFormData] = useState<{
-    name: string;
-    description: string;
-    type: AchievementType;
-    badge_icon: string;
-    badge_color: string;
-    criteria: AchievementCriteria;
-    points: number;
-    is_active: boolean;
-  }>({
-    name: "",
-    description: "",
-    type: "first_score",
-    badge_icon: "🏆",
-    badge_color: "#FFD700",
-    criteria: { game_id: null },
-    points: 10,
-    is_active: true
-  });
 
   const { toast } = useToast();
   const { currentTournament, userTournaments, switchTournament, hasPermission } = useTournament();
@@ -214,6 +188,225 @@ const AchievementManagerV2 = () => {
     getUser();
   }, []);
 
+  // Generate base achievements for new users
+  const generateBaseAchievements = useCallback(async () => {
+    if (!currentTournament || !currentUserId) return;
+
+    const baseAchievements = [
+      {
+        name: 'Welcome Aboard',
+        description: 'Submit your first score to any game',
+        type: 'first_score' as const,
+        badge_icon: '🎯',
+        badge_color: '#4ECDC4',
+        criteria: { is_first_score: true },
+        points: 10,
+      },
+      {
+        name: 'Getting Started',
+        description: 'Score 5,000 points or more in any game',
+        type: 'score_milestone' as const,
+        badge_icon: '🎯',
+        badge_color: '#4ECDC4',
+        criteria: { min_score: 5000 },
+        points: 25,
+      },
+      {
+        name: 'Score Rookie',
+        description: 'Score 10,000 points or more in any game',
+        type: 'score_milestone' as const,
+        badge_icon: '🏆',
+        badge_color: '#FFD700',
+        criteria: { min_score: 10000 },
+        points: 50,
+      },
+      {
+        name: 'Century Club',
+        description: 'Score 100,000 points or more',
+        type: 'score_milestone' as const,
+        badge_icon: '💯',
+        badge_color: '#FFD700',
+        criteria: { min_score: 100000 },
+        points: 100,
+      },
+      {
+        name: 'Speed Runner',
+        description: 'Submit 10 scores within 2 hours',
+        type: 'speed_demon' as const,
+        badge_icon: '⚡',
+        badge_color: '#FF6B6B',
+        criteria: { scores_in_timeframe: 10, timeframe_hours: 2 },
+        points: 75,
+      },
+      {
+        name: 'Dedicated Player',
+        description: 'Submit scores for 7 days straight',
+        type: 'streak_master' as const,
+        badge_icon: '🔥',
+        badge_color: '#FF6B6B',
+        criteria: { consecutive_days: 7 },
+        points: 125,
+      },
+      {
+        name: 'Game Explorer',
+        description: 'Play 10 different games',
+        type: 'game_master' as const,
+        badge_icon: '🗺️',
+        badge_color: '#45B7D1',
+        criteria: { game_count: 10 },
+        points: 100,
+      },
+      {
+        name: 'Champion',
+        description: 'Achieve first place on any leaderboard',
+        type: 'first_place' as const,
+        badge_icon: '🏆',
+        badge_color: '#FFD700',
+        criteria: { max_rank: 1 },
+        points: 200,
+      },
+      {
+        name: 'Perfectionist',
+        description: 'Score exactly 250,000 points',
+        type: 'perfectionist' as const,
+        badge_icon: '💎',
+        badge_color: '#BB8FCE',
+        criteria: { exact_score: 250000 },
+        points: 150,
+      },
+      {
+        name: 'Score Veteran',
+        description: 'Submit 25 scores total',
+        type: 'consistent_player' as const,
+        badge_icon: '👥',
+        badge_color: '#96CEB4',
+        criteria: { min_scores: 25 },
+        points: 75,
+      },
+      {
+        name: 'Lightning Fast',
+        description: 'Submit 5 scores within 1 hour',
+        type: 'speed_demon' as const,
+        badge_icon: '💨',
+        badge_color: '#FF6B6B',
+        criteria: { scores_in_timeframe: 5, timeframe_hours: 1 },
+        points: 100,
+      },
+      {
+        name: 'Marathon Player',
+        description: 'Submit scores for 14 days straight',
+        type: 'streak_master' as const,
+        badge_icon: '🏃',
+        badge_color: '#4ECDC4',
+        criteria: { consecutive_days: 14 },
+        points: 200,
+      },
+      {
+        name: 'Game Master',
+        description: 'Play 20 different games',
+        type: 'game_master' as const,
+        badge_icon: '🎮',
+        badge_color: '#45B7D1',
+        criteria: { game_count: 20 },
+        points: 150,
+      },
+      {
+        name: 'Score Legend',
+        description: 'Score 500,000 points or more',
+        type: 'score_milestone' as const,
+        badge_icon: '⭐',
+        badge_color: '#FFD700',
+        criteria: { min_score: 500000 },
+        points: 250,
+      },
+      {
+        name: 'Consistent Champion',
+        description: 'Submit 50 scores total',
+        type: 'consistent_player' as const,
+        badge_icon: '🔥',
+        badge_color: '#FF6B6B',
+        criteria: { min_scores: 50 },
+        points: 125,
+      },
+      {
+        name: 'Speed Demon',
+        description: 'Submit 20 scores within 3 hours',
+        type: 'speed_demon' as const,
+        badge_icon: '⚡',
+        badge_color: '#FF6B6B',
+        criteria: { scores_in_timeframe: 20, timeframe_hours: 3 },
+        points: 150,
+      },
+      {
+        name: 'Ultimate Streak',
+        description: 'Submit scores for 30 days straight',
+        type: 'streak_master' as const,
+        badge_icon: '🔥',
+        badge_color: '#FFD700',
+        criteria: { consecutive_days: 30 },
+        points: 500,
+      },
+      {
+        name: 'Perfect Score',
+        description: 'Score exactly 1,000,000 points',
+        type: 'perfectionist' as const,
+        badge_icon: '💎',
+        badge_color: '#BB8FCE',
+        criteria: { exact_score: 1000000 },
+        points: 1000,
+      },
+      {
+        name: 'Tournament Veteran',
+        description: 'Submit 100 scores total',
+        type: 'consistent_player' as const,
+        badge_icon: '🏆',
+        badge_color: '#FFD700',
+        criteria: { min_scores: 100 },
+        points: 200,
+      },
+      {
+        name: 'Ultimate Champion',
+        description: 'Achieve first place 5 times',
+        type: 'first_place' as const,
+        badge_icon: '👑',
+        badge_color: '#FFD700',
+        criteria: { max_rank: 1, count: 5 },
+        points: 300,
+      },
+    ];
+
+    // Create achievements in database
+    const createdAchievements = [];
+    for (const achievement of baseAchievements) {
+      try {
+        const { data, error } = await supabase
+          .from('achievements')
+          .insert({
+            tournament_id: currentTournament.id,
+            name: achievement.name,
+            description: achievement.description,
+            type: achievement.type,
+            badge_icon: achievement.badge_icon,
+            badge_color: achievement.badge_color,
+            criteria: achievement.criteria,
+            points: achievement.points,
+            is_active: true,
+            created_by: currentUserId,
+          })
+          .select()
+          .single();
+
+        if (!error && data) {
+          createdAchievements.push(data);
+        }
+      } catch (error) {
+        console.error('Error creating base achievement:', achievement.name, error);
+      }
+    }
+
+    return createdAchievements;
+  }, [currentTournament, currentUserId]);
+
   // Load achievements for current tournament
   const loadAchievements = useCallback(async () => {
     if (!currentTournament) return;
@@ -231,37 +424,31 @@ const AchievementManagerV2 = () => {
       }), { general: true });
       setExpandedGames(initialExpandedState);
 
-      // If user is tournament creator or admin, show ALL achievements in the tournament
-      // Otherwise, show only achievements they created
-      if (isTournamentCreator) {
-        // Show all achievements in tournaments the user owns or if user is admin
+      // Always show only achievements created by the current user
+      if (currentUserId) {
+        // Check if user has any achievements in this tournament
         let rows: any[] | null = null;
         try {
           const { data, error } = await supabase
             .from('achievements')
-            .select(
-              'id,name,description,type,badge_icon,badge_color,criteria,points,is_active,created_at,updated_at,tournament_id,created_by'
-            )
+            .select('id')
             .eq('tournament_id', currentTournament.id)
-            .order('created_at', { ascending: false });
+            .eq('created_by', currentUserId)
+            .limit(1);
           if (error) throw error;
           rows = (data as unknown as any[]) || [];
         } catch (e: any) {
           // Column may not exist in older schemas
-          const { data, error } = await supabase
-            .from('achievements')
-            .select(
-              'id,name,description,type,badge_icon,badge_color,criteria,points,is_active,created_at,updated_at,tournament_id'
-            )
-            .eq('tournament_id', currentTournament.id)
-            .order('created_at', { ascending: false });
-          if (error) throw error;
-          rows = (data as unknown as any[]) || [];
+          rows = [];
         }
-        setAchievements((rows as unknown as Achievement[]) || []);
-      } else if (currentUserId) {
-        // Non-owners only see achievements they created
-        let rows: any[] | null = null;
+
+        // If no achievements exist, generate base achievements
+        if (rows.length === 0) {
+          console.log('Generating base achievements for new user...');
+          await generateBaseAchievements();
+        }
+
+        // Load user's achievements
         try {
           const { data, error } = await supabase
             .from('achievements')
@@ -307,7 +494,7 @@ const AchievementManagerV2 = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentTournament, loadGames, toast, currentUserId]);
+  }, [currentTournament, loadGames, toast, currentUserId, generateBaseAchievements]);
 
   // Load player achievements for current tournament (only for tournament creators)
   const loadPlayerAchievements = useCallback(async () => {
@@ -345,7 +532,7 @@ const AchievementManagerV2 = () => {
     if (isTournamentCreator) {
       loadPlayerAchievements();
     }
-  }, [loadAchievements, loadPlayerAchievements, isTournamentCreator]);
+  }, [loadAchievements, loadPlayerAchievements, isTournamentCreator, refreshTrigger]);
 
   // Group achievements by game ID (or 'general' if no game_id)
   const groupedAchievements = achievements.reduce((acc, achievement) => {
@@ -368,169 +555,6 @@ const AchievementManagerV2 = () => {
     }));
   };
 
-  // Handle form input changes
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  // Handle select changes
-  const handleSelectChange = (name: string, value: string) => {
-    if (name === 'type') {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value as AchievementType,
-        // Reset criteria when type changes
-        criteria: { game_id: prev.criteria.game_id }
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
-  };
-
-  // Handle criteria changes
-  const handleCriteriaChange = (field: keyof AchievementCriteria, value: any) => {
-    // If changing game_id, clear high_score_table_id to avoid conflicts
-    const updates: Partial<AchievementCriteria> = { [field]: value };
-    if (field === 'game_id') {
-      updates.high_score_table_id = null;
-    }
-    
-    setFormData(prev => ({
-      ...prev,
-      criteria: {
-        ...prev.criteria,
-        ...updates
-      }
-    }));
-  };
-
-  // Invalidate queries
-  const invalidateQueries = async () => {
-    await queryClient.invalidateQueries({ queryKey: ['achievements'] });
-  };
-
-  // Save or update an achievement
-  const saveAchievement = async () => {
-    if (!currentTournament) return;
-    
-    try {
-      setIsSaving(true);
-      // Basic validation
-      const trimmedName = formData.name.trim();
-      if (!trimmedName) {
-        toast({
-          title: "Name required",
-          description: "Please enter a name for the achievement.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Client-side duplicate check to avoid server error round-trip
-      const hasDuplicate = achievements.some((a) =>
-        a.tournament_id === currentTournament.id &&
-        a.name.trim().toLowerCase() === trimmedName.toLowerCase() &&
-        (!editingAchievement || a.id !== editingAchievement.id)
-      );
-      if (hasDuplicate) {
-        toast({
-          title: "Duplicate name",
-          description: "An achievement with this name already exists in this tournament. Please choose a different name.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      const achievementData = {
-        ...formData,
-        name: trimmedName,
-        tournament_id: currentTournament.id,
-        criteria: typeof formData.criteria === 'string' 
-          ? JSON.parse(formData.criteria) 
-          : formData.criteria
-      };
-
-      if (editingAchievement) {
-        const { error } = await supabase
-          .from('achievements')
-          .update(achievementData)
-          .eq('id', editingAchievement.id);
-          
-        if (error) throw error;
-        
-        toast({
-          title: "Success",
-          description: "Achievement updated successfully",
-        });
-      } else {
-        // Ensure we have a user id for author attribution
-        if (!currentUserId) {
-          toast({
-            title: "Not signed in",
-            description: "You must be signed in to create achievements.",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        // Try including created_by; if column doesn't exist, retry without it
-        let insertError: any | null = null;
-        try {
-          const insertData = {
-            ...achievementData,
-            created_by: currentUserId,
-          } as any;
-          const { error } = await supabase
-            .from('achievements')
-            .insert([insertData]);
-          if (error) throw error;
-        } catch (e: any) {
-          insertError = e;
-          // Retry without created_by
-          const { error: retryError } = await supabase
-            .from('achievements')
-            .insert([achievementData as any]);
-          if (retryError) throw retryError;
-        }
-
-        toast({
-          title: "Success",
-          description: "Achievement created successfully",
-        });
-      }
-      
-      setIsDialogOpen(false);
-      resetForm();
-      loadAchievements();
-      await invalidateQueries();
-      
-    } catch (error: any) {
-      console.error('Error saving achievement:', error);
-      if (error?.code === '23505') {
-        // Unique constraint violation on (name, tournament_id)
-        toast({
-          title: "Duplicate name",
-          description: "An achievement with this name already exists in this tournament. Please choose a different name.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to save achievement",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   // Delete an achievement via confirmation dialog
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; id: string | null; achievement: Achievement | null }>({ open: false, id: null, achievement: null });
@@ -566,7 +590,7 @@ const AchievementManagerV2 = () => {
       });
 
       loadAchievements();
-      await invalidateQueries();
+      await queryClient.invalidateQueries({ queryKey: ['achievements'] });
 
     } catch (error) {
       console.error('Error deleting achievement:', error);
@@ -623,7 +647,7 @@ const AchievementManagerV2 = () => {
       });
 
       setClearAllDialog({ open: false });
-      await invalidateQueries();
+      await queryClient.invalidateQueries({ queryKey: ['achievements'] });
 
     } catch (error) {
       console.error('Error clearing player achievements:', error);
@@ -655,7 +679,7 @@ const AchievementManagerV2 = () => {
 
       setClearAllAchievementsDialog({ open: false });
       loadAchievements();
-      await invalidateQueries();
+      await queryClient.invalidateQueries({ queryKey: ['achievements'] });
 
     } catch (error) {
       console.error('Error clearing achievement definitions:', error);
@@ -687,7 +711,7 @@ const AchievementManagerV2 = () => {
       if (error) throw error;
 
       loadAchievements();
-      await invalidateQueries();
+      await queryClient.invalidateQueries({ queryKey: ['achievements'] });
 
     } catch (error) {
       console.error('Error toggling achievement status:', error);
@@ -750,53 +774,6 @@ const AchievementManagerV2 = () => {
     }
   };
 
-  // Reset form to initial state
-  const resetForm = () => {
-    setFormData({
-      name: "",
-      description: "",
-      type: "first_score",
-      badge_icon: "🏆",
-      badge_color: "#FFD700",
-      criteria: { game_id: null },
-      points: 10,
-      is_active: true
-    });
-    setEditingAchievement(null);
-  };
-
-  // Open edit dialog with achievement data
-  const handleEditAchievement = (achievement: Achievement) => {
-    // Only allow editing if user is tournament creator or achievement creator
-    if (!isTournamentCreator && achievement.created_by !== currentUserId) {
-      toast({
-        title: "Access Denied",
-        description: "You can only edit achievements in tournaments you created, or achievements you created yourself.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setEditingAchievement(achievement);
-    // Ensure badge icon matches the type
-    const typeInfo = ACHIEVEMENT_TYPES.find(t => t.value === achievement.type);
-    setFormData({
-      name: achievement.name,
-      description: achievement.description,
-      type: achievement.type,
-      badge_icon: typeInfo?.icon || achievement.badge_icon,
-      badge_color: achievement.badge_color,
-      criteria: achievement.criteria,
-      points: achievement.points,
-      is_active: achievement.is_active
-    });
-    setIsDialogOpen(true);
-  };
-
-  // Open create dialog
-  const openCreateDialog = () => {
-    resetForm();
-    setIsDialogOpen(true);
-  };
 
   // Get icon for achievement type
   const getTypeIcon = (type: string) => {
@@ -835,15 +812,6 @@ const AchievementManagerV2 = () => {
     );
   }
 
-  // Derived UI validation state
-  const trimmedNameForUI = formData.name.trim();
-  const isDuplicateNameForUI = achievements.some((a) =>
-    currentTournament &&
-    a.tournament_id === currentTournament.id &&
-    a.name.trim().toLowerCase() === trimmedNameForUI.toLowerCase() &&
-    (!editingAchievement || a.id !== editingAchievement.id)
-  );
-  const isSaveDisabled = isSaving || !trimmedNameForUI || isDuplicateNameForUI;
 
   return (
     <div className="flex flex-col space-y-6 w-full max-w-full overflow-hidden">
@@ -897,373 +865,6 @@ const AchievementManagerV2 = () => {
               </>
             )}
             <div className="flex gap-2">
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button onClick={openCreateDialog} variant="outline">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Achievement
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle className="text-xl font-bold">
-                      {editingAchievement ? 'Edit Achievement' : 'Create New Achievement'}
-                    </DialogTitle>
-                    <DialogDescription>
-                      Create meaningful achievements that will motivate and reward your players.
-                    </DialogDescription>
-                  </DialogHeader>
-
-                  <div className="space-y-6 py-4">
-                    {/* Step 1: Achievement Type Selection */}
-                    <Card className="border-l-4 border-l-blue-500">
-                      <CardHeader>
-                        <CardTitle className="text-lg flex items-center">
-                          <span className="mr-2 text-xl">🎯</span>
-                          Step 1: Choose Achievement Type
-                        </CardTitle>
-                        <CardDescription>
-                          Select what type of achievement you want to create. Each type has different requirements and motivates different player behaviors.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <Select
-                          value={formData.type}
-                          onValueChange={(value: AchievementType) => {
-                            const typeInfo = ACHIEVEMENT_TYPES.find(t => t.value === value);
-                            setFormData(prev => ({
-                              ...prev,
-                              type: value,
-                              badge_icon: typeInfo?.icon || '🏆'
-                            }));
-                          }}
-                        >
-                          <SelectTrigger className="h-12">
-                            <SelectValue placeholder="Select achievement type..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ACHIEVEMENT_TYPES.map(type => (
-                              <SelectItem key={type.value} value={type.value} className="p-3">
-                                <div className="flex items-start space-x-3">
-                                  <span className="text-lg mt-0.5">{type.icon}</span>
-                                  <div>
-                                    <div className="font-medium">{type.label}</div>
-                                    <div className="text-sm text-muted-foreground">{type.description}</div>
-                                  </div>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-
-                        {formData.type && (
-                          <div className="mt-4 p-4 bg-muted rounded-lg">
-                            <h4 className="font-medium mb-2">Example:</h4>
-                            <p className="text-sm text-muted-foreground">
-                              {ACHIEVEMENT_TYPES.find(t => t.value === formData.type)?.example}
-                            </p>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    {/* Step 2: Basic Information */}
-                    <Card className="border-l-4 border-l-green-500">
-                      <CardHeader>
-                        <CardTitle className="text-lg flex items-center">
-                          <span className="mr-2 text-xl">✏️</span>
-                          Step 2: Basic Information
-                        </CardTitle>
-                        <CardDescription>
-                          Give your achievement a memorable name and clear description.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="name" className="text-sm font-medium">Achievement Name *</Label>
-                            <Input
-                              id="name"
-                              name="name"
-                              value={formData.name}
-                              onChange={handleInputChange}
-                              placeholder="e.g., High Scorer"
-                              className="h-11"
-                            />
-                            {!trimmedNameForUI && (
-                              <p className="text-xs text-red-500">Name is required.</p>
-                            )}
-                            {trimmedNameForUI && isDuplicateNameForUI && (
-                              <p className="text-xs text-red-500">An achievement with this name already exists in this tournament.</p>
-                            )}
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="points" className="text-sm font-medium">Points Awarded</Label>
-                            <Input
-                              id="points"
-                              name="points"
-                              type="number"
-                              min="1"
-                              value={formData.points}
-                              onChange={handleInputChange}
-                              placeholder="e.g., 100"
-                              className="h-11"
-                            />
-                            <p className="text-xs text-muted-foreground">How many points players earn for this achievement</p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label htmlFor="description" className="text-sm font-medium">Description</Label>
-                          <Textarea
-                            id="description"
-                            name="description"
-                            value={formData.description}
-                            onChange={handleInputChange}
-                            placeholder="e.g., Reach the top of any game leaderboard"
-                            rows={3}
-                          />
-                          <p className="text-xs text-muted-foreground">Tell players exactly what they need to do to earn this achievement</p>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Step 3: Requirements */}
-                    {formData.type && (
-                      <Card className="border-l-4 border-l-orange-500">
-                        <CardHeader>
-                          <CardTitle className="text-lg flex items-center">
-                            <span className="mr-2 text-xl">⚙️</span>
-                            Step 3: Requirements
-                          </CardTitle>
-                          <CardDescription>
-                            Set the specific requirements for earning this achievement.
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="game_id" className="text-sm font-medium">Target Game</Label>
-                              <Select
-                                value={formData.criteria?.game_id ?? 'general'}
-                                onValueChange={(value) => handleCriteriaChange('game_id', value === 'general' ? null : value)}
-                              >
-                                <SelectTrigger className="h-11">
-                                  <SelectValue placeholder="Select a game (optional)" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="general">Any Game (General Achievement)</SelectItem>
-                                  {games.map(game => (
-                                    <SelectItem key={game.id} value={game.id}>
-                                      {game.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <p className="text-xs text-muted-foreground">Choose a specific game or make it apply to any game</p>
-                            </div>
-
-                            {formData.type === 'score_milestone' && (
-                              <div className="space-y-2">
-                                <Label htmlFor="threshold" className="text-sm font-medium">Target Score</Label>
-                                <Input
-                                  id="threshold"
-                                  type="number"
-                                  min="1"
-                                  value={formData.criteria?.threshold || ''}
-                                  onChange={(e) => handleCriteriaChange('threshold', parseInt(e.target.value))}
-                                  placeholder="e.g., 50000"
-                                  className="h-11"
-                                />
-                                <p className="text-xs text-muted-foreground">Players must score this many points or more</p>
-                              </div>
-                            )}
-
-                            {formData.type === 'game_master' && (
-                              <div className="space-y-2">
-                                <Label htmlFor="game_count" className="text-sm font-medium">Number of Games</Label>
-                                <Input
-                                  id="game_count"
-                                  type="number"
-                                  min="1"
-                                  value={formData.criteria?.count || ''}
-                                  onChange={(e) => handleCriteriaChange('count', parseInt(e.target.value))}
-                                  placeholder="e.g., 5"
-                                  className="h-11"
-                                />
-                                <p className="text-xs text-muted-foreground">Players must submit scores to this many different games</p>
-                              </div>
-                            )}
-
-                            {formData.type === 'high_scorer' && (
-                              <div className="space-y-2">
-                                <Label htmlFor="rank" className="text-sm font-medium">Required Ranking</Label>
-                                <Input
-                                  id="rank"
-                                  type="number"
-                                  min="1"
-                                  value={formData.criteria?.rank || ''}
-                                  onChange={(e) => handleCriteriaChange('rank', parseInt(e.target.value))}
-                                  placeholder="e.g., 3"
-                                  className="h-11"
-                                />
-                                <p className="text-xs text-muted-foreground">Players must finish in the top X positions (e.g., 3 for top 3)</p>
-                              </div>
-                            )}
-
-                            {formData.type === 'consistent_player' && (
-                              <div className="space-y-2">
-                                <Label htmlFor="score_count" className="text-sm font-medium">Total Scores</Label>
-                                <Input
-                                  id="score_count"
-                                  type="number"
-                                  min="1"
-                                  value={formData.criteria?.count || ''}
-                                  onChange={(e) => handleCriteriaChange('count', parseInt(e.target.value))}
-                                  placeholder="e.g., 25"
-                                  className="h-11"
-                                />
-                                <p className="text-xs text-muted-foreground">Players must submit this many total scores</p>
-                              </div>
-                            )}
-
-                            {formData.type === 'perfectionist' && (
-                              <div className="space-y-2">
-                                <Label htmlFor="exact_score" className="text-sm font-medium">Exact Score</Label>
-                                <Input
-                                  id="exact_score"
-                                  type="number"
-                                  min="1"
-                                  value={formData.criteria?.threshold || ''}
-                                  onChange={(e) => handleCriteriaChange('threshold', parseInt(e.target.value))}
-                                  placeholder="e.g., 100000"
-                                  className="h-11"
-                                />
-                                <p className="text-xs text-muted-foreground">Players must score exactly this amount</p>
-                              </div>
-                            )}
-
-                            {formData.type === 'streak_master' && (
-                              <div className="space-y-2">
-                                <Label htmlFor="streak_days" className="text-sm font-medium">Consecutive Days</Label>
-                                <Input
-                                  id="streak_days"
-                                  type="number"
-                                  min="1"
-                                  value={formData.criteria?.days || ''}
-                                  onChange={(e) => handleCriteriaChange('days', parseInt(e.target.value))}
-                                  placeholder="e.g., 7"
-                                  className="h-11"
-                                />
-                                <p className="text-xs text-muted-foreground">Players must submit scores for this many days in a row</p>
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    {/* Step 4: Appearance & Settings */}
-                    <Card className="border-l-4 border-l-purple-500">
-                      <CardHeader>
-                        <CardTitle className="text-lg flex items-center">
-                          <span className="mr-2 text-xl">🎨</span>
-                          Step 4: Appearance & Settings
-                        </CardTitle>
-                        <CardDescription>
-                          Customize how your achievement looks and whether it's active.
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="space-y-4">
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">Badge Color</Label>
-                              <Select
-                                value={formData.badge_color}
-                                onValueChange={(value) => setFormData(prev => ({ ...prev, badge_color: value }))}
-                              >
-                                <SelectTrigger className="h-11">
-                                  <div className="flex items-center">
-                                    <div className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: formData.badge_color }} />
-                                    <SelectValue placeholder="Choose color" />
-                                  </div>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {DEFAULT_COLORS.map(color => (
-                                    <SelectItem key={color} value={color}>
-                                      <div className="flex items-center">
-                                        <div className="w-4 h-4 rounded-full mr-2" style={{ backgroundColor: color }} />
-                                        {color}
-                                      </div>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium">Status</Label>
-                              <div className="flex items-center space-x-3">
-                                <Switch
-                                  id="is_active"
-                                  checked={formData.is_active}
-                                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, is_active: checked }))}
-                                />
-                                <Label htmlFor="is_active" className="text-sm">
-                                  {formData.is_active ? 'Active (players can earn this achievement)' : 'Inactive (temporarily disabled)'}
-                                </Label>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium">Preview</Label>
-                            <div className="border rounded-lg p-4 bg-muted/30">
-                              <div className="flex items-center space-x-3">
-                                <div
-                                  className="w-12 h-12 rounded-full flex items-center justify-center text-xl font-emoji shadow-lg"
-                                  style={{ backgroundColor: formData.badge_color }}
-                                >
-                                  {formData.type ? getTypeIcon(formData.type) : '🏆'}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <h3 className="font-medium text-sm truncate">
-                                    {formData.name || 'Achievement Name'}
-                                  </h3>
-                                  <p className="text-xs text-muted-foreground line-clamp-2">
-                                    {formData.description || 'Achievement description goes here...'}
-                                  </p>
-                                  <div className="flex items-center space-x-2 mt-1">
-                                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
-                                      {formData.points || 0} points
-                                    </span>
-                                    {!formData.is_active && (
-                                      <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">
-                                        Inactive
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  <div className="flex justify-end space-x-2 pt-4">
-                    <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>
-                      Cancel
-                    </Button>
-                    <Button onClick={saveAchievement} disabled={isSaveDisabled} variant="outline">
-                      {isSaving ? 'Saving...' : (editingAchievement ? 'Update Achievement' : 'Create Achievement')}
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
               <SuggestAchievementDialog onAchievementAdded={loadAchievements} />
             </div>
       </div>
@@ -1273,11 +874,10 @@ const AchievementManagerV2 = () => {
           <div className="flex justify-between items-center">
             <div>
               <CardTitle>
-                {isTournamentCreator ? 'All Tournament Achievements' : 'My Achievements'}
+                My Achievements
               </CardTitle>
               <CardDescription>
                 {filteredAchievements.length} achievement{filteredAchievements.length !== 1 ? 's' : ''} found
-                {isTournamentCreator && ' (you can edit all achievements in tournaments you created)'}
               </CardDescription>
             </div>
           </div>
@@ -1290,12 +890,10 @@ const AchievementManagerV2 = () => {
           ) : (
             <AchievementsTable
               achievements={filteredAchievements}
-              onEdit={handleEditAchievement}
               onDelete={handleDeleteAchievement}
               onToggleStatus={toggleAchievementStatus}
               getTypeIcon={getTypeIcon}
               getCriteriaDisplay={getCriteriaDisplay}
-              isTournamentCreator={isTournamentCreator}
               currentUserId={currentUserId}
             />
           )}
@@ -1340,7 +938,7 @@ const AchievementManagerV2 = () => {
         description="Are you sure you want to delete this achievement? This action cannot be undone."
         confirmText="Delete Achievement"
         cancelText="Cancel"
-        variant="outline"
+        variant="destructive"
         onConfirm={confirmDeleteAchievement}
       />
 
@@ -1351,7 +949,7 @@ const AchievementManagerV2 = () => {
         description={`Are you sure you want to clear ALL PLAYERS' achievement progress for "${currentTournament?.name}"? This will reset everyone's achievement unlocks but keep the achievements themselves. This action cannot be undone.`}
         confirmText="Clear All Progress"
         cancelText="Cancel"
-        variant="outline"
+        variant="destructive"
         onConfirm={confirmClearAllAchievements}
       />
 
@@ -1362,7 +960,7 @@ const AchievementManagerV2 = () => {
         description={`Are you sure you want to delete ALL ACHIEVEMENT DEFINITIONS for "${currentTournament?.name}"? This will permanently remove all achievements and their progress. This action cannot be undone.`}
         confirmText="Delete All Achievements"
         cancelText="Cancel"
-        variant="outline"
+        variant="destructive"
         onConfirm={confirmClearAllAchievementDefinitions}
       />
       </div>

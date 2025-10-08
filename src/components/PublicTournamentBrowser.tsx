@@ -105,7 +105,7 @@ const PublicTournamentBrowser = () => {
               {filteredTournaments.map((tournament) => (
                 <Card 
                   key={tournament.id} 
-                  className="bg-gray-800/50 border-gray-700 hover:bg-gray-700/50 transition-colors cursor-pointer"
+                  className="bg-gray-800/50 border-gray-700 transition-colors cursor-pointer"
                   onClick={() => handleTournamentClick(tournament)}
                 >
                   <CardContent className="p-4">
