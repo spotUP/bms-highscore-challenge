@@ -8,6 +8,8 @@
  * - Vertex and fragment shader stage separation
  */
 
+import { IncludePreprocessor } from './IncludePreprocessor';
+
 export interface ShaderParameter {
   name: string;
   displayName: string;
@@ -80,13 +82,47 @@ export class SlangShaderCompiler {
     }
     const excludeNames = new Set([...parameterNames, ...uboMemberNames]);
     const globalDefs = this.extractGlobalDefinitions(slangSource, excludeNames);
+
+    // Debug: Check if DEFAULT defines were extracted
+    const defaultDefinesExtracted = globalDefs.defines.filter(d => d.includes('DEFAULT_'));
+
     console.log('[SlangCompiler] Extracted global definitions:', {
       functions: globalDefs.functions.length,
       defines: globalDefs.defines.length,
       consts: globalDefs.consts.length,
       globals: globalDefs.globals.length,
-      excludedNames: excludeNames.size
+      excludedNames: excludeNames.size,
+      defaultDefines: defaultDefinesExtracted.length
     });
+
+    if (defaultDefinesExtracted.length > 0) {
+      console.log('[SlangCompiler] DEFAULT defines extracted:', defaultDefinesExtracted.slice(0, 5).map(d => d.substring(0, 60)));
+    } else {
+      console.log('[SlangCompiler] WARNING: No DEFAULT_* defines extracted from source!');
+    }
+
+    // CRITICAL: Apply params./global. replacement BEFORE stage splitting
+    // This ensures both vertex and fragment stages get the replacements
+    console.log('[SlangCompiler] Applying UBO prefix replacements before stage split...');
+
+    // Replace params.X with just X (UBO instance name prefix removal)
+    const beforeParamsCount = (slangSource.match(/\bparams\.\w+/g) || []).length;
+    slangSource = slangSource.replace(/\bparams\.(\w+)\b/g, '$1');
+    const afterParamsCount = (slangSource.match(/\bparams\.\w+/g) || []).length;
+    console.log(`[SlangCompiler] params. replacement: ${beforeParamsCount} -> ${afterParamsCount}`);
+
+    // Replace global.X with just X (UBO instance name prefix removal)
+    const beforeGlobalCount = (slangSource.match(/\bglobal\.\w+/g) || []).length;
+    slangSource = slangSource.replace(/\bglobal\.(\w+)\b/g, '$1');
+    const afterGlobalCount = (slangSource.match(/\bglobal\.\w+/g) || []).length;
+    console.log(`[SlangCompiler] global. replacement: ${beforeGlobalCount} -> ${afterGlobalCount}`);
+
+    // CRITICAL: Also fix #define macros that reference UBO members
+    // Example: #define SPC params.g_space_out -> #define SPC g_space_out
+    const beforeDefineCount = (slangSource.match(/#define\s+\w+\s+(global|params)\.\w+/g) || []).length;
+    slangSource = slangSource.replace(/#define\s+(\w+)\s+(global|params)\.(\w+)/g, '#define $1 $3');
+    const afterDefineCount = (slangSource.match(/#define\s+\w+\s+(global|params)\.\w+/g) || []).length;
+    console.log(`[SlangCompiler] #define UBO reference replacement: ${beforeDefineCount} -> ${afterDefineCount}`);
 
     // Split into stages
     const stages = this.splitStages(slangSource);
@@ -674,8 +710,9 @@ export class SlangShaderCompiler {
   /**
    * Build code block from global definitions
    */
-  private static buildGlobalDefinitionsCode(globalDefs: GlobalDefinitions, source: string): string {
+  private static buildGlobalDefinitionsCode(globalDefs: GlobalDefinitions, source: string, stage: 'vertex' | 'fragment' = 'vertex'): string {
     const parts: string[] = [];
+    const isVertex = stage === 'vertex';
 
     // Helper function to check if a definition already exists in source
     const definitionExists = (definition: string): boolean => {
@@ -712,15 +749,98 @@ export class SlangShaderCompiler {
     };
 
     // Add stub definitions for missing Mega Bezel variables and functions (only if not already present)
+    // Add to both vertex and fragment shaders (they're needed in both)
     parts.push('// Stub definitions for missing Mega Bezel variables and functions');
     const stubDefines = [
       '#define LPOS vec3(0.0, 0.0, 1.0)',
       '#define LCOL vec3(1.0, 1.0, 1.0)',
       '#define FIX(c) max(abs(c), 1e-5)',
       '#define HRG_MAX_POINT_CLOUD_SIZE 9',
-      '#define IS_POTATO_PRESET'
+      '#define IS_POTATO_PRESET',
+      // FXAA constants (reasonable defaults for simple shaders without FXAA params)
+      '#define FXAA_EDGE_THRESHOLD 0.125',
+      '#define FXAA_EDGE_THRESHOLD_MIN 0.0312',
+      '#define FXAA_SUBPIX_TRIM 0.25',
+      '#define FXAA_SUBPIX_TRIM_SCALE 1.0',
+      '#define FXAA_SUBPIX_CAP 0.75',
+      '#define FXAA_SEARCH_STEPS 8.0',
+      '#define FXAA_SEARCH_THRESHOLD 0.25',
+      // DEFAULT constants - Workaround for extraction issue
+      '#define DEFAULT_CRT_GAMMA 2.4',
+      '#define DEFAULT_SRGB_GAMMA 2.2',
+      '#define DEFAULT_SCREEN_HEIGHT 0.8297',
+      // Don't define DEFAULT_SCREEN_HEIGHT_PORTRAIT_MULTIPLIER - it's calculated in globals.inc
+      '#define DEFAULT_UNCORRECTED_SCREEN_SCALE vec2(1.10585, 0.8296)',
+      '#define DEFAULT_UNCORRECTED_BEZEL_SCALE vec2(1.2050, 0.9110)',
+      '#define DEFAULT_SCREEN_CORNER_RADIUS 10.0'
+      // Don't define MAX_NEGATIVE_CROP - it's a mutable global in globals.inc, not a #define
     ];
 
+    // Note: TEXTURE_ASPECT_MODE_* and SHOW_ON_DUALSCREEN_MODE_* are defined in globals.inc
+    // DEFAULT_* should also come from globals.inc but adding as fallback for now
+
+    // Only add SOURCE_MATTE_*/BLEND_MODE_* if helper-functions.inc was NOT included
+    // (helper-functions.inc defines these as mutable float globals - our #defines would conflict)
+    const hasHelperFunctions = globalDefs.globals.some(g =>
+      g.includes('SOURCE_MATTE_WHITE') ||
+      g.includes('BLEND_MODE_OFF')
+    );
+
+    if (!hasHelperFunctions) {
+      stubDefines.push(
+        // Missing constants from potato preset (fallback for simple shaders)
+        '#define SOURCE_MATTE_WHITE 0',
+        '#define SOURCE_MATTE_NONE 1',
+        '#define BLEND_MODE_OFF 0',
+        '#define BLEND_MODE_NORMAL 1',
+        '#define BLEND_MODE_ADD 2',
+        '#define BLEND_MODE_MULTIPLY 3'
+      );
+      console.log('[SlangCompiler] helper-functions.inc NOT detected - adding SOURCE_MATTE_*/BLEND_MODE_* stubs');
+    } else {
+      console.log('[SlangCompiler] helper-functions.inc detected - skipping SOURCE_MATTE_*/BLEND_MODE_* stubs to avoid conflicts');
+    }
+
+    // Only add DEFAULT_* constants if globals.inc was NOT included
+    // (globals.inc has the correct calculated macros - ours would conflict)
+    const hasGlobalsInc = globalDefs.defines.some(d =>
+      d.includes('DEFAULT_SCREEN_HEIGHT_PORTRAIT_MULTIPLIER') ||
+      d.includes('SHOW_ON_DUALSCREEN_MODE_BOTH')
+    );
+
+    if (!hasGlobalsInc) {
+      stubDefines.push(
+        // DEFAULT constants from globals.inc (fallback for simple shaders)
+        '#define DEFAULT_CRT_GAMMA 2.4',
+        '#define DEFAULT_SRGB_GAMMA 2.2',
+        '#define DEFAULT_SCREEN_HEIGHT 0.8297',
+        '#define DEFAULT_SCREEN_HEIGHT_PORTRAIT_MULTIPLIER 0.42229',
+        '#define DEFAULT_UNCORRECTED_SCREEN_SCALE vec2(1.10585, 0.8296)',
+        '#define DEFAULT_UNCORRECTED_BEZEL_SCALE vec2(1.2050, 0.9110)',
+        '#define DEFAULT_SCREEN_CORNER_RADIUS 10.0',
+        // Note: MAX_NEGATIVE_CROP is a mutable global in globals.inc, NOT a #define, so don't add it here
+        // TEXTURE_ASPECT_MODE constants from globals.inc
+        '#define TEXTURE_ASPECT_MODE_VIEWPORT 0',
+        '#define TEXTURE_ASPECT_MODE_EXPLICIT 1',
+        '#define TEXTURE_ASPECT_MODE_4_3 2',
+        '#define TEXTURE_ASPECT_MODE_3_4 3',
+        '#define TEXTURE_ASPECT_MODE_16_9 4',
+        '#define TEXTURE_ASPECT_MODE_9_16 5',
+        // SHOW_ON_DUALSCREEN_MODE constants from globals.inc
+        '#define SHOW_ON_DUALSCREEN_MODE_BOTH 0',
+        '#define SHOW_ON_DUALSCREEN_MODE_SCREEN_1 1',
+        '#define SHOW_ON_DUALSCREEN_MODE_SCREEN_2 2'
+      );
+      console.log('[SlangCompiler] globals.inc NOT detected - adding DEFAULT_*, TEXTURE_ASPECT_MODE_*, SHOW_ON_DUALSCREEN_MODE_* stubs');
+    } else {
+      console.log('[SlangCompiler] globals.inc detected - skipping stubs to avoid conflicts');
+    }
+
+    if (isVertex) {
+      // Vertex-specific stubs (if any)
+    }
+
+    // Add stub defines to both vertex and fragment
     for (const define of stubDefines) {
       if (!definitionExists(define)) {
         parts.push(define);
@@ -728,25 +848,42 @@ export class SlangShaderCompiler {
     }
     parts.push('');
 
-    // Mega Bezel coordinate and parameter variables (now injected as uniforms) - only if not already present
-    parts.push('// Mega Bezel coordinate and parameter variables (now injected as uniforms)');
-    const megaBezelVars = [
-      'vec2 TUBE_DIFFUSE_COORD = vec2(0.5, 0.5);',
-      'vec2 TUBE_DIFFUSE_SCALE = vec2(1.0, 1.0);',
-      'vec2 TUBE_SCALE = vec2(1.0, 1.0);',
-      'float TUBE_DIFFUSE_ASPECT = 1.0;',
-      'float TUBE_MASK = 1.0;'
-    ];
+    // Function stubs disabled - functions ARE being extracted from includes
+    // The "function already has a body" errors show they exist in globalDefs.functions
+    // They should be injected below in the globalDefs.functions section
 
-    for (const varDef of megaBezelVars) {
-      if (!definitionExists(varDef)) {
-        parts.push(varDef);
+    if (isVertex) {
+      // Mega Bezel coordinate and parameter variables
+      // Only add these stubs if they haven't been extracted from globals.inc
+      // Check if TUBE_MASK exists in globalDefs (means globals.inc was included)
+      const hasMegaBezelGlobals = globalDefs.globals.some(g => /TUBE_MASK|TUBE_SCALE|TUBE_DIFFUSE_COORD/.test(g));
+
+      if (!hasMegaBezelGlobals) {
+        parts.push('// Mega Bezel coordinate and parameter variables (stubs for simple shaders)');
+        // Add stubs with initialization (they'll be moved to initGlobalVars by convertGlobalInitializers)
+        parts.push('vec2 TUBE_DIFFUSE_COORD = vec2(0.5, 0.5);');
+        parts.push('vec2 TUBE_DIFFUSE_SCALE = vec2(1.0, 1.0);');
+        parts.push('vec2 TUBE_SCALE = vec2(1.0, 1.0);');
+        parts.push('float TUBE_DIFFUSE_ASPECT = 1.0;');
+        parts.push('float TUBE_MASK = 1.0;');
+      } else {
+        console.log('[SlangCompiler] Mega Bezel globals found - they will be included from globalDefs');
       }
-    }
-    parts.push('');
 
-    // Stub functions - only add if not already present in source
-    const stubFunctions = [
+      parts.push('');
+    }
+
+    // Stub functions - only add if not already extracted from globals.inc
+    // Check if functions exist in globalDefs (means they were in includes)
+    const hasMegaBezelFunctions = globalDefs.functions.some(f => /HSM_GetTubeCurvedCoord|HSM_GetCornerMask|HSM_Linearize|HSM_BlendModeLayerMix/.test(f));
+
+    if (hasMegaBezelFunctions) {
+      console.log('[SlangCompiler] Skipping Mega Bezel function stubs (already extracted from includes)');
+    }
+
+    // IMPORTANT: Add stubs to BOTH vertex and fragment shaders if functions not extracted
+    // Fragment shaders need these functions too!
+    const stubFunctions = (!hasMegaBezelFunctions) ? [
       {
         name: 'HSM_GetTubeCurvedCoord',
         code: [
@@ -908,14 +1045,32 @@ export class SlangShaderCompiler {
           '  return vec3(0.0, 0.0, 1.0);',
           '}'
         ]
+      },
+      {
+        name: 'HSM_GetRotatedCoreOriginalSize',
+        code: [
+          'vec2 HSM_GetRotatedCoreOriginalSize() {',
+          '  return vec2(800.0, 600.0);  // Fallback size',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_GetRotatedDerezedSize',
+        code: [
+          'vec2 HSM_GetRotatedDerezedSize() {',
+          '  return vec2(800.0, 600.0);  // Fallback size',
+          '}'
+        ]
       }
-    ];
+    ] : []; // Empty array for fragment shader
 
-    parts.push('// Stub functions');
-    for (const func of stubFunctions) {
-      if (!definitionExists(func.code[0])) {
-        parts.push(...func.code);
-        parts.push('');
+    if (stubFunctions.length > 0) {
+      parts.push('// Stub functions');
+      for (const func of stubFunctions) {
+        if (!definitionExists(func.code[0])) {
+          parts.push(...func.code);
+          parts.push('');
+        }
       }
     }
 
@@ -925,11 +1080,19 @@ export class SlangShaderCompiler {
       const seenDefines = new Set<string>();
       const uniqueDefines: string[] = [];
 
-      // Prevent stub definitions from being overridden
+      // Prevent stub definitions from being overridden by extracted versions
+      // (our stubs are simpler and added first)
       seenDefines.add('LPOS');
       seenDefines.add('LCOL');
       seenDefines.add('FIX');
       seenDefines.add('HRG_MAX_POINT_CLOUD_SIZE');
+      seenDefines.add('FXAA_EDGE_THRESHOLD');
+      seenDefines.add('FXAA_EDGE_THRESHOLD_MIN');
+      seenDefines.add('FXAA_SUBPIX_TRIM');
+      seenDefines.add('FXAA_SUBPIX_TRIM_SCALE');
+      seenDefines.add('FXAA_SUBPIX_CAP');
+      seenDefines.add('FXAA_SEARCH_STEPS');
+      seenDefines.add('FXAA_SEARCH_THRESHOLD');
 
       for (const define of globalDefs.defines) {
         const macroName = define.match(/#define\s+(\w+)/)?.[1];
@@ -937,14 +1100,18 @@ export class SlangShaderCompiler {
           seenDefines.add(macroName);
           uniqueDefines.push(define);
 
-          // Debug: Log HRG define
-          if (macroName === 'HRG_MAX_POINT_CLOUD_SIZE') {
-            console.log(`[SlangCompiler] buildGlobalDefinitionsCode: Adding HRG define to uniqueDefines:`, define);
+          // Debug: Log important defines
+          if (macroName.startsWith('DEFAULT_') || macroName === 'HRG_MAX_POINT_CLOUD_SIZE') {
+            console.log(`[SlangCompiler] Adding define to shader:`, macroName);
           }
-        } else if (macroName === 'HRG_MAX_POINT_CLOUD_SIZE') {
-          console.log(`[SlangCompiler] buildGlobalDefinitionsCode: SKIPPING HRG define (duplicate or no macroName):`, define, 'seen:', seenDefines.has(macroName));
+        } else if (macroName && macroName.startsWith('DEFAULT_')) {
+          console.log(`[SlangCompiler] SKIPPING define (already seen):`, macroName);
         }
       }
+
+      // Debug: Check if DEFAULT defines are in uniqueDefines
+      const defaultDefines = uniqueDefines.filter(d => d.includes('DEFAULT_'));
+      console.log(`[SlangCompiler] Total DEFAULT_* defines in shader: ${defaultDefines.length}`);
 
       parts.push('// Global #define macros');
       parts.push(...uniqueDefines);
@@ -958,22 +1125,76 @@ export class SlangShaderCompiler {
     }
 
     if (globalDefs.consts.length > 0) {
-      parts.push('// Global const declarations');
-      parts.push(...globalDefs.consts);
-      parts.push('');
+      // Deduplicate consts by name (keep first occurrence)
+      const seenConsts = new Set<string>();
+      const uniqueConsts: string[] = [];
+
+      for (const constDecl of globalDefs.consts) {
+        const constName = constDecl.match(/const\s+\w+\s+(\w+)\s*=/)?.[1];
+        if (constName && !seenConsts.has(constName) && !definitionExists(constDecl)) {
+          seenConsts.add(constName);
+          uniqueConsts.push(constDecl);
+        }
+      }
+
+      if (uniqueConsts.length > 0) {
+        parts.push('// Global const declarations');
+        parts.push(...uniqueConsts);
+        parts.push('');
+      }
     }
 
     if (globalDefs.globals.length > 0) {
-      parts.push('// Global mutable variables');
-      parts.push(...globalDefs.globals);
-      parts.push('');
+      // Deduplicate globals by name (keep first occurrence)
+      const seenGlobals = new Set<string>();
+      const uniqueGlobals: string[] = [];
+
+      for (const globalDecl of globalDefs.globals) {
+        const globalMatch = globalDecl.match(/(?:float|int|vec\d|mat\d|bool)\s+(\w+)/);
+        const globalName = globalMatch?.[1];
+
+        // For Mega Bezel globals, ALWAYS include them even if they "exist" in source
+        // because they need to be redeclared at the shader stage level
+        // Include common Mega Bezel global patterns AND any UPPERCASE globals (Mega Bezel convention)
+        const isMegaBezelGlobal = /SCREEN_|TUBE_|AVERAGE_LUMA|SAMPLING_|CROPPED_|ROTATED_|SAMPLE_AREA|VIEWPORT_|CORE_|CACHE_|NEGATIVE_CROP|BEZEL_|GRID_|REFLECTION_|FRAME_|ASPECT|SCALE|COORD|MASK/.test(globalName || '');
+        const isUppercaseGlobal = globalName && /^[A-Z_][A-Z0-9_]*$/.test(globalName);
+        const shouldInclude = isMegaBezelGlobal || isUppercaseGlobal || !definitionExists(globalDecl);
+
+        if (globalName && !seenGlobals.has(globalName) && shouldInclude) {
+          seenGlobals.add(globalName);
+          uniqueGlobals.push(globalDecl);
+        }
+      }
+
+      if (uniqueGlobals.length > 0) {
+        parts.push('// Global mutable variables');
+        parts.push(...uniqueGlobals);
+        parts.push('');
+      }
     }
 
     if (globalDefs.functions.length > 0) {
+      // Deduplicate functions by name (keep first occurrence)
+      const seenFunctions = new Set<string>();
+      const uniqueFunctions: string[] = [];
+
+      for (const funcDef of globalDefs.functions) {
+        const funcName = funcDef.match(/\s+(\w+)\s*\(/)?.[1];
+        if (funcName && !seenFunctions.has(funcName) && !definitionExists(funcDef)) {
+          seenFunctions.add(funcName);
+          uniqueFunctions.push(funcDef);
+        }
+      }
+
+      if (uniqueFunctions.length === 0) {
+        // No functions to add
+        return parts.join('\n');
+      }
+
       parts.push('// Global function definitions');
 
       // Fix int/float division and arithmetic in extracted functions
-      const fixedFunctions = globalDefs.functions.map(func => {
+      const fixedFunctions = uniqueFunctions.map(func => {
         let fixed = func;
 
         // Fix division: int / float → float / float
@@ -1053,9 +1274,18 @@ export class SlangShaderCompiler {
     }
 
     // Inject global definitions after precision declarations
-    const globalDefsCode = this.buildGlobalDefinitionsCode(globalDefs, output);
+    // IMPORTANT: Only inject #defines in vertex stage to avoid redefinition errors
+    // Functions, consts, and globals CAN be in both stages (they're needed by both)
+    // Mega Bezel shaders need ALL globals in fragment shaders (from globals.inc)
+    const isVertex = stage === 'vertex';
+    const filteredGlobalDefs = isVertex
+      ? globalDefs  // Vertex gets everything
+      : { ...globalDefs, defines: [] };  // Fragment gets consts, functions, and ALL globals
+
+    const globalDefsCode = this.buildGlobalDefinitionsCode(filteredGlobalDefs, output, stage);
     if (globalDefsCode) {
-      console.log(`[SlangCompiler] Injecting ${globalDefs.defines.length + globalDefs.consts.length + globalDefs.globals.length + globalDefs.functions.length} global definitions into ${stage} stage`);
+      const totalDefs = filteredGlobalDefs.defines.length + filteredGlobalDefs.consts.length + filteredGlobalDefs.globals.length + filteredGlobalDefs.functions.length;
+      console.log(`[SlangCompiler] Injecting ${totalDefs} global definitions into ${stage} stage (${filteredGlobalDefs.defines.length} defines, ${filteredGlobalDefs.consts.length} consts, ${filteredGlobalDefs.globals.length} globals, ${filteredGlobalDefs.functions.length} functions)`);
 
       // Find insertion point: after precision declarations
       const precisionEnd = output.search(/precision\s+\w+\s+\w+\s*;\s*\n/);
@@ -1087,13 +1317,22 @@ export class SlangShaderCompiler {
       }
     });
 
+    // Also extract #define names to avoid conflicts (uniforms can't have same name as #defines)
+    const existingDefines = new Set<string>();
+    globalDefs.defines.forEach(def => {
+      const match = def.match(/#define\s+(\w+)/);
+      if (match) existingDefines.add(match[1]);
+    });
+
     console.log(`[SlangCompiler] Stage conversion - found ${existingMembers.size} existing binding members`);
+    console.log(`[SlangCompiler] Stage conversion - found ${existingDefines.size} existing #defines`);
     console.log(`[SlangCompiler] Stage conversion - processing ${parameters.length} shader parameters`);
 
-    // Build parameter uniforms (skip if already in UBO/push constant OR duplicate in parameters array)
+    // Build parameter uniforms (skip if already in UBO/push constant OR duplicate in parameters array OR already a #define)
     const seenParams = new Set<string>();
     const filtered = parameters.filter(param => {
       if (existingMembers.has(param.name)) return false; // Already in UBO/push constant
+      if (existingDefines.has(param.name)) return false; // Already a #define
       if (seenParams.has(param.name)) {
         console.log(`[SlangCompiler] Skipping duplicate parameter: ${param.name}`);
         return false; // Duplicate in parameters array
@@ -1573,464 +1812,6 @@ uniform float CSHARPEN;
 uniform float CCONTR;
 uniform float CDETAILS;
 uniform float DEBLUR;
-`;
-uniform float HSM_AB_COMPARE_FREEZE_GRAPHICS;
-uniform float HSM_AB_COMPARE_SHOW_MODE;
-uniform float HSM_AB_COMPARE_SPLIT_POSITION;
-uniform float HSM_AMBIENT_LIGHTING_OPACITY;
-uniform float HSM_AMBIENT_LIGHTING_SWAP_IMAGE_MODE;
-uniform float HSM_AMBIENT1_CONTRAST;
-uniform float HSM_AMBIENT1_DITHERING_SAMPLES;
-uniform float HSM_AMBIENT1_HUE;
-uniform float HSM_AMBIENT1_MIRROR_HORZ;
-uniform float HSM_AMBIENT1_OPACITY;
-uniform float HSM_AMBIENT1_POSITION_X;
-uniform float HSM_AMBIENT1_POSITION_Y;
-uniform float HSM_AMBIENT1_POS_INHERIT_MODE;
-uniform float HSM_AMBIENT1_ROTATE;
-uniform float HSM_AMBIENT1_SATURATION;
-uniform float HSM_AMBIENT1_SCALE;
-uniform float HSM_AMBIENT1_SCALE_INHERIT_MODE;
-uniform float HSM_AMBIENT1_SCALE_KEEP_ASPECT;
-uniform float HSM_AMBIENT1_SCALE_X;
-uniform float HSM_AMBIENT1_VALUE;
-uniform float HSM_AMBIENT2_CONTRAST;
-uniform float HSM_AMBIENT2_HUE;
-uniform float HSM_AMBIENT2_MIRROR_HORZ;
-uniform float HSM_AMBIENT2_OPACITY;
-uniform float HSM_AMBIENT2_POSITION_X;
-uniform float HSM_AMBIENT2_POSITION_Y;
-uniform float HSM_AMBIENT2_POS_INHERIT_MODE;
-uniform float HSM_AMBIENT2_ROTATE;
-uniform float HSM_AMBIENT2_SATURATION;
-uniform float HSM_AMBIENT2_SCALE;
-uniform float HSM_AMBIENT2_SCALE_INHERIT_MODE;
-uniform float HSM_AMBIENT2_SCALE_KEEP_ASPECT;
-uniform float HSM_AMBIENT2_SCALE_X;
-uniform float HSM_AMBIENT2_VALUE;
-uniform float HSM_ANTI_FLICKER_ON;
-uniform float HSM_ANTI_FLICKER_THRESHOLD;
-uniform float HSM_ASPECT_RATIO_EXPLICIT;
-uniform float HSM_ASPECT_RATIO_MODE;
-uniform float HSM_ASPECT_RATIO_ORIENTATION;
-uniform float HSM_BG_AMBIENT_LIGHTING_MULTIPLIER;
-uniform float HSM_BG_APPLY_AMBIENT_IN_ADD_MODE;
-uniform float HSM_BG_BLEND_MODE;
-uniform float HSM_BG_BRIGHTNESS;
-uniform float HSM_BG_COLORIZE_ON;
-uniform float HSM_BG_CUTOUT_MODE;
-uniform float HSM_BG_DUALSCREEN_VIS_MODE;
-uniform float HSM_BG_FILL_MODE;
-uniform float HSM_BG_FOLLOW_FULL_USES_ZOOM;
-uniform float HSM_BG_FOLLOW_LAYER;
-uniform float HSM_BG_FOLLOW_MODE;
-uniform float HSM_BG_GAMMA;
-uniform float HSM_BG_HUE;
-uniform float HSM_BG_LAYER_ORDER;
-uniform float HSM_BG_MASK_MODE;
-uniform float HSM_BG_MIPMAPPING_BLEND_BIAS;
-uniform float HSM_BG_OPACITY;
-uniform float HSM_BG_POS_X;
-uniform float HSM_BG_POS_Y;
-uniform float HSM_BG_SATURATION;
-uniform float HSM_BG_SCALE;
-uniform float HSM_BG_SCALE_X;
-uniform float HSM_BG_SOURCE_MATTE_TYPE;
-uniform float HSM_BG_SPLIT_PRESERVE_CENTER;
-uniform float HSM_BG_SPLIT_REPEAT_WIDTH;
-uniform float HSM_BG_WRAP_MODE;
-uniform float HSM_BZL_AMBIENT_LIGHTING_MULTIPLIER;
-uniform float HSM_BZL_AMBIENT2_LIGHTING_MULTIPLIER;
-uniform float HSM_BZL_BLEND_MODE;
-uniform float HSM_BZL_BRIGHTNESS;
-uniform float HSM_BZL_BRIGHTNESS_MULT_BOTTOM;
-uniform float HSM_BZL_BRIGHTNESS_MULT_SIDE_LEFT;
-uniform float HSM_BZL_BRIGHTNESS_MULT_SIDE_RIGHT;
-uniform float HSM_BZL_BRIGHTNESS_MULT_SIDES;
-uniform float HSM_BZL_BRIGHTNESS_MULT_TOP;
-uniform float HSM_BZL_COLOR_HUE;
-uniform float HSM_BZL_COLOR_SATURATION;
-uniform float HSM_BZL_COLOR_VALUE;
-uniform float HSM_BZL_HEIGHT;
-uniform float HSM_BZL_HIGHLIGHT;
-uniform float HSM_BZL_INDEPENDENT_CURVATURE_SCALE_LONG_AXIS;
-uniform float HSM_BZL_INDEPENDENT_CURVATURE_SCALE_SHORT_AXIS;
-uniform float HSM_BZL_INDEPENDENT_SCALE;
-uniform float HSM_BZL_INNER_CORNER_RADIUS_SCALE;
-uniform float HSM_BZL_INNER_CURVATURE_SCALE;
-uniform float HSM_BZL_INNER_EDGE_HIGHLIGHT;
-uniform float HSM_BZL_INNER_EDGE_SHADOW;
-uniform float HSM_BZL_INNER_EDGE_SHARPNESS;
-uniform float HSM_BZL_INNER_EDGE_THICKNESS;
-uniform float HSM_BZL_NOISE;
-uniform float HSM_BZL_OPACITY;
-uniform float HSM_BZL_OUTER_CORNER_RADIUS_SCALE;
-uniform float HSM_BZL_OUTER_CURVATURE_SCALE;
-uniform float HSM_BZL_OUTER_POSITION_Y;
-uniform float HSM_BZL_SCALE_OFFSET;
-uniform float HSM_BZL_USE_INDEPENDENT_CURVATURE;
-uniform float HSM_BZL_USE_INDEPENDENT_SCALE;
-uniform float HSM_BZL_WIDTH;
-uniform float HSM_CACHE_GRAPHICS_ON;
-uniform float HSM_CACHE_UPDATE_INDICATOR_MODE;
-uniform float HSM_CORE_RES_SAMPLING_MULT_OPPOSITE_DIR;
-uniform float HSM_CORE_RES_SAMPLING_MULT_SCANLINE_DIR;
-uniform float HSM_CROP_BLACK_THRESHOLD;
-uniform float HSM_CROP_MODE;
-uniform float HSM_CROP_PERCENT_BOTTOM;
-uniform float HSM_CROP_PERCENT_LEFT;
-uniform float HSM_CROP_PERCENT_RIGHT;
-uniform float HSM_CROP_PERCENT_TOP;
-uniform float HSM_CROP_PERCENT_ZOOM;
-uniform float HSM_CRT_BLEND_AMOUNT;
-uniform float HSM_CRT_BLEND_MODE;
-uniform float HSM_CRT_CURVATURE_SCALE;
-uniform float HSM_CRT_SCREEN_BLEND_MODE;
-uniform float HSM_CURVATURE_2D_SCALE_LONG_AXIS;
-uniform float HSM_CURVATURE_2D_SCALE_SHORT_AXIS;
-uniform float HSM_CURVATURE_3D_RADIUS;
-uniform float HSM_CURVATURE_3D_TILT_ANGLE_X;
-uniform float HSM_CURVATURE_3D_TILT_ANGLE_Y;
-uniform float HSM_CURVATURE_3D_VIEW_DIST;
-uniform float HSM_CURVATURE_MODE;
-uniform float HSM_DOWNSAMPLE_BLUR_OPPOSITE_DIR;
-uniform float HSM_DOWNSAMPLE_BLUR_SCANLINE_DIR;
-uniform float HSM_DREZ_HSHARP0;
-uniform float HSM_DREZ_SIGMA_HV;
-uniform float HSM_DREZ_SHAR;
-uniform float HSM_DREZ_THRESHOLD_RATIO;
-uniform float HSM_DUALSCREEN_CORE_IMAGE_SPLIT_MODE;
-uniform float HSM_DUALSCREEN_CORE_IMAGE_SWAP_SCREENS;
-uniform float HSM_DUALSCREEN_CORE_IMAGE_SPLIT_OFFSET;
-uniform float HSM_DUALSCREEN_MODE;
-uniform float HSM_DUALSCREEN_POSITION_OFFSET_BETWEEN_SCREENS;
-uniform float HSM_DUALSCREEN_SHIFT_POSITION_WITH_SCALE;
-uniform float HSM_DUALSCREEN_VIEWPORT_SPLIT_LOCATION;
-uniform float HSM_FAKE_SCANLINE_CURVATURE;
-uniform float HSM_FAKE_SCANLINE_INT_SCALE;
-uniform float HSM_FAKE_SCANLINE_MODE;
-uniform float HSM_FAKE_SCANLINE_OPACITY;
-uniform float HSM_FAKE_SCANLINE_RES;
-uniform float HSM_FAKE_SCANLINE_RES_MODE;
-uniform float HSM_FAKE_SCANLINE_ROLL;
-uniform float HSM_FLIP_CORE_HORIZONTAL;
-uniform float HSM_FLIP_CORE_VERTICAL;
-uniform float HSM_FLIP_VIEWPORT_HORIZONTAL;
-uniform float HSM_FLIP_VIEWPORT_VERTICAL;
-uniform float HSM_FRM_BLEND_MODE;
-uniform float HSM_FRM_COLOR_HUE;
-uniform float HSM_FRM_COLOR_SATURATION;
-uniform float HSM_FRM_COLOR_VALUE;
-uniform float HSM_FRM_INNER_EDGE_HIGHLIGHT;
-uniform float HSM_FRM_INNER_EDGE_THICKNESS;
-uniform float HSM_FRM_NOISE;
-uniform float HSM_FRM_OPACITY;
-uniform float HSM_FRM_OUTER_CORNER_RADIUS;
-uniform float HSM_FRM_OUTER_CURVATURE_SCALE;
-uniform float HSM_FRM_OUTER_EDGE_SHADING;
-uniform float HSM_FRM_OUTER_EDGE_THICKNESS;
-uniform float HSM_FRM_OUTER_POS_Y;
-uniform float HSM_FRM_SHADOW_OPACITY;
-uniform float HSM_FRM_SHADOW_WIDTH;
-uniform float HSM_FRM_TEXTURE_BLEND_MODE;
-uniform float HSM_FRM_TEXTURE_OPACITY;
-uniform float HSM_FRM_THICKNESS;
-uniform float HSM_FRM_THICKNESS_SCALE_X;
-uniform float HSM_FRM_USE_INDEPENDENT_COLOR;
-uniform float HSM_GLOBAL_CORNER_RADIUS;
-uniform float HSM_GLOBAL_GRAPHICS_BRIGHTNESS;
-uniform float HSM_INT_SCALE_MAX_HEIGHT;
-uniform float HSM_INT_SCALE_MODE;
-uniform float HSM_INT_SCALE_MULTIPLE_OFFSET;
-uniform float HSM_INT_SCALE_MULTIPLE_OFFSET_LONG;
-uniform float HSM_INTERLACE_EFFECT_SMOOTHNESS_INTERS;
-uniform float HSM_INTERLACE_MODE;
-uniform float HSM_INTERLACE_SCANLINE_EFFECT;
-uniform float HSM_INTERLACE_TRIGGER_RES;
-uniform float HSM_INTRO_LOGO_BLEND_MODE;
-uniform float HSM_INTRO_LOGO_FADE_IN;
-uniform float HSM_INTRO_LOGO_FADE_OUT;
-uniform float HSM_INTRO_LOGO_FLIP_VERTICAL;
-uniform float HSM_INTRO_LOGO_HEIGHT;
-uniform float HSM_INTRO_LOGO_HOLD;
-uniform float HSM_INTRO_LOGO_OVER_SOLID_COLOR;
-uniform float HSM_INTRO_LOGO_PLACEMENT;
-uniform float HSM_INTRO_LOGO_POS_X;
-uniform float HSM_INTRO_LOGO_POS_Y;
-uniform float HSM_INTRO_LOGO_WAIT;
-uniform float HSM_INTRO_NOISE_BLEND_MODE;
-uniform float HSM_INTRO_NOISE_FADE_OUT;
-uniform float HSM_INTRO_NOISE_HOLD;
-uniform float HSM_INTRO_SOLID_BLACK_FADE_OUT;
-uniform float HSM_INTRO_SOLID_BLACK_HOLD;
-uniform float HSM_INTRO_SOLID_COLOR_BLEND_MODE;
-uniform float HSM_INTRO_SOLID_COLOR_FADE_OUT;
-uniform float HSM_INTRO_SOLID_COLOR_HOLD;
-uniform float HSM_INTRO_SOLID_COLOR_HUE;
-uniform float HSM_INTRO_SOLID_COLOR_SAT;
-uniform float HSM_INTRO_SOLID_COLOR_VALUE;
-uniform float HSM_INTRO_SPEED;
-uniform float HSM_INTRO_WHEN_TO_SHOW;
-uniform float HSM_LAYERING_DEBUG_MASK_MODE;
-uniform float HSM_LED_AMBIENT_LIGHTING_MULTIPLIER;
-uniform float HSM_LED_APPLY_AMBIENT_IN_ADD_MODE;
-uniform float HSM_LED_BLEND_MODE;
-uniform float HSM_LED_BRIGHTNESS;
-uniform float HSM_LED_COLORIZE_ON;
-uniform float HSM_LED_CUTOUT_MODE;
-uniform float HSM_LED_DUALSCREEN_VIS_MODE;
-uniform float HSM_LED_FILL_MODE;
-uniform float HSM_LED_FOLLOW_FULL_USES_ZOOM;
-uniform float HSM_LED_FOLLOW_LAYER;
-uniform float HSM_LED_FOLLOW_MODE;
-uniform float HSM_LED_GAMMA;
-uniform float HSM_LED_HUE;
-uniform float HSM_LED_LAYER_ORDER;
-uniform float HSM_LED_MASK_MODE;
-uniform float HSM_LED_MIPMAPPING_BLEND_BIAS;
-uniform float HSM_LED_OPACITY;
-uniform float HSM_LED_POS_X;
-uniform float HSM_LED_POS_Y;
-uniform float HSM_LED_SATURATION;
-uniform float HSM_LED_SCALE;
-uniform float HSM_LED_SCALE_X;
-uniform float HSM_LED_SOURCE_MATTE_TYPE;
-uniform float HSM_LED_SPLIT_PRESERVE_CENTER;
-uniform float HSM_LED_SPLIT_REPEAT_WIDTH;
-uniform float HSM_MONOCHROME_BRIGHTNESS;
-uniform float HSM_MONOCHROME_DUALSCREEN_VIS_MODE;
-uniform float HSM_MONOCHROME_GAMMA;
-uniform float HSM_MONOCHROME_HUE_OFFSET;
-uniform float HSM_MONOCHROME_MODE;
-uniform float HSM_MONOCHROME_SATURATION;
-uniform float HSM_NON_INTEGER_SCALE;
-uniform float HSM_NON_INTEGER_SCALE_OFFSET;
-uniform float HSM_OVERSCAN_AMOUNT;
-uniform float HSM_OVERSCAN_RASTER_BLOOM_AMOUNT;
-uniform float HSM_OVERSCAN_RASTER_BLOOM_MODE;
-uniform float HSM_OVERSCAN_RASTER_BLOOM_NEUTRAL_RANGE;
-uniform float HSM_OVERSCAN_RASTER_BLOOM_NEUTRAL_RANGE_CENTER;
-uniform float HSM_OVERSCAN_RASTER_BLOOM_ON;
-uniform float HSM_OVERSCAN_X;
-uniform float HSM_OVERSCAN_Y;
-uniform float HSM_PASS_VIEWER_EMPTY_LINE;
-uniform float HSM_PASS_VIEWER_TITLE;
-uniform float HSM_PHYSICAL_MONITOR_ASPECT_RATIO;
-uniform float HSM_PHYSICAL_MONITOR_DIAGONAL_SIZE;
-uniform float HSM_PHYSICAL_MONITOR_DIAGONAL_SIZE;
-uniform float HSM_PLACEMENT_IMAGE_MODE;
-uniform float HSM_PLACEMENT_IMAGE_USE_HORIZONTAL;
-uniform float HSM_POST_CRT_BRIGHTNESS;
-uniform float HSM_POTATO_COLORIZE_BRIGHTNESS;
-uniform float HSM_POTATO_COLORIZE_CRT_WITH_BG;
-uniform float HSM_POTATO_SHOW_BG_OVER_SCREEN;
-uniform float HSM_REFLECT_BEZEL_INNER_EDGE_AMOUNT;
-uniform float HSM_REFLECT_BEZEL_INNER_EDGE_FULLSCREEN_GLOW;
-uniform float HSM_REFLECT_BLUR_FALLOFF_DISTANCE;
-uniform float HSM_REFLECT_BLUR_MAX;
-uniform float HSM_REFLECT_BLUR_MIN;
-uniform float HSM_REFLECT_BLUR_NUM_SAMPLES;
-uniform float HSM_REFLECT_BRIGHTNESS_NOISE_BLACK_LEVEL;
-uniform float HSM_REFLECT_BRIGHTNESS_NOISE_BRIGHTNESS;
-uniform float HSM_REFLECT_CORNER_FADE;
-uniform float HSM_REFLECT_CORNER_FADE_DISTANCE;
-uniform float HSM_REFLECT_CORNER_INNER_SPREAD;
-uniform float HSM_REFLECT_CORNER_OUTER_SPREAD;
-uniform float HSM_REFLECT_CORNER_ROTATION_OFFSET_BOTTOM;
-uniform float HSM_REFLECT_CORNER_ROTATION_OFFSET_TOP;
-uniform float HSM_REFLECT_CORNER_SPREAD_FALLOFF;
-uniform float HSM_REFLECT_DIFFUSED_AMOUNT;
-uniform float HSM_REFLECT_DIRECT_AMOUNT;
-uniform float HSM_REFLECT_FADE_AMOUNT;
-uniform float HSM_REFLECT_FRAME_INNER_EDGE_AMOUNT;
-uniform float HSM_REFLECT_FRAME_INNER_EDGE_SHARPNESS;
-uniform float HSM_REFLECT_FULLSCREEN_GLOW;
-uniform float HSM_REFLECT_FULLSCREEN_GLOW_GAMMA;
-uniform float HSM_REFLECT_GLOBAL_AMOUNT;
-uniform float HSM_REFLECT_GLOBAL_GAMMA_ADJUST;
-uniform float HSM_REFLECT_LATERAL_OUTER_FADE_DISTANCE;
-uniform float HSM_REFLECT_LATERAL_OUTER_FADE_POSITION;
-uniform float HSM_REFLECT_MASK_BLACK_LEVEL;
-uniform float HSM_REFLECT_MASK_BRIGHTNESS;
-uniform float HSM_REFLECT_MASK_FOLLOW_LAYER;
-uniform float HSM_REFLECT_MASK_FOLLOW_MODE;
-uniform float HSM_REFLECT_MASK_IMAGE_AMOUNT;
-uniform float HSM_REFLECT_MASK_MIPMAPPING_BLEND_BIAS;
-uniform float HSM_REFLECT_NOISE_AMOUNT;
-uniform float HSM_REFLECT_NOISE_SAMPLE_DISTANCE;
-uniform float HSM_REFLECT_NOISE_SAMPLES;
-uniform float HSM_REFLECT_RADIAL_FADE_HEIGHT;
-uniform float HSM_REFLECT_RADIAL_FADE_WIDTH;
-uniform float HSM_REFLECT_SHOW_TUBE_FX_AMOUNT;
-uniform float HSM_REFLECT_VIGNETTE_AMOUNT;
-uniform float HSM_REFLECT_VIGNETTE_SIZE;
-uniform float HSM_RENDER_FOR_SIMPLIFIED_EMPTY_LINE;
-uniform float HSM_RENDER_FOR_SIMPLIFIED_TITLE;
-uniform float HSM_RENDER_SIMPLE_MASK_TYPE;
-uniform float HSM_RENDER_SIMPLE_MODE;
-uniform float HSM_RESOLUTION_DEBUG_ON;
-uniform float HSM_ROTATE_CORE_IMAGE;
-uniform float HSM_SCANLINE_DIRECTION;
-uniform float HSM_SCREEN_CORNER_RADIUS_SCALE;
-uniform float HSM_SCREEN_POSITION_X;
-uniform float HSM_SCREEN_POSITION_Y;
-uniform float HSM_SCREEN_REFLECTION_FOLLOW_DIFFUSE_THICKNESS;
-uniform float HSM_SCREEN_REFLECTION_POS_X;
-uniform float HSM_SCREEN_REFLECTION_POS_Y;
-uniform float HSM_SCREEN_REFLECTION_SCALE;
-uniform float HSM_SCREEN_VIGNETTE_DUALSCREEN_VIS_MODE;
-uniform float HSM_SCREEN_VIGNETTE_IN_REFLECTION;
-uniform float HSM_SCREEN_VIGNETTE_ON;
-uniform float HSM_SCREEN_VIGNETTE_POWER;
-uniform float HSM_SCREEN_VIGNETTE_STRENGTH;
-uniform float HSM_SHOW_CRT_ON_TOP_OF_COLORED_GEL;
-uniform float HSM_SHOW_PASS_ALPHA;
-uniform float HSM_SHOW_PASS_APPLY_SCREEN_COORD;
-uniform float HSM_SHOW_PASS_INDEX;
-uniform float HSM_SIGNAL_NOISE_AMOUNT;
-uniform float HSM_SIGNAL_NOISE_BLACK_LEVEL;
-uniform float HSM_SIGNAL_NOISE_ON;
-uniform float HSM_SIGNAL_NOISE_SIZE_MODE;
-uniform float HSM_SIGNAL_NOISE_SIZE_MULT;
-uniform float HSM_SIGNAL_NOISE_TYPE;
-uniform float HSM_SINDEN_BORDER_BRIGHTNESS;
-uniform float HSM_SINDEN_BORDER_EMPTY_TUBE_COMPENSATION;
-uniform float HSM_SINDEN_BORDER_ON;
-uniform float HSM_SINDEN_BORDER_THICKNESS;
-uniform float HSM_SNAP_TO_CLOSEST_INT_SCALE_TOLERANCE;
-uniform float HSM_STATIC_LAYERS_GAMMA;
-uniform float HSM_TOP_AMBIENT_LIGHTING_MULTIPLIER;
-uniform float HSM_TOP_APPLY_AMBIENT_IN_ADD_MODE;
-uniform float HSM_TOP_BLEND_MODE;
-uniform float HSM_TOP_BRIGHTNESS;
-uniform float HSM_TOP_COLORIZE_ON;
-uniform float HSM_TOP_CUTOUT_MODE;
-uniform float HSM_TOP_DUALSCREEN_VIS_MODE;
-uniform float HSM_TOP_FILL_MODE;
-uniform float HSM_TOP_FOLLOW_FULL_USES_ZOOM;
-uniform float HSM_TOP_FOLLOW_LAYER;
-uniform float HSM_TOP_FOLLOW_MODE;
-uniform float HSM_TOP_GAMMA;
-uniform float HSM_TOP_HUE;
-uniform float HSM_TOP_LAYER_ORDER;
-uniform float HSM_TOP_MASK_MODE;
-uniform float HSM_TOP_MIPMAPPING_BLEND_BIAS;
-uniform float HSM_TOP_OPACITY;
-uniform float HSM_TOP_POS_X;
-uniform float HSM_TOP_POS_Y;
-uniform float HSM_TOP_SATURATION;
-uniform float HSM_TOP_SCALE;
-uniform float HSM_TOP_SCALE_X;
-uniform float HSM_TOP_SOURCE_MATTE_TYPE;
-uniform float HSM_TOP_SPLIT_PRESERVE_CENTER;
-uniform float HSM_TOP_SPLIT_REPEAT_WIDTH;
-uniform float HSM_TUBE_ASPECT_AND_EMPTY_LINE;
-uniform float HSM_TUBE_ASPECT_AND_EMPTY_TITLE;
-uniform float HSM_TUBE_BLACK_EDGE_CORNER_RADIUS_SCALE;
-uniform float HSM_TUBE_BLACK_EDGE_CURVATURE_SCALE;
-uniform float HSM_TUBE_BLACK_EDGE_SHARPNESS;
-uniform float HSM_TUBE_BLACK_EDGE_THICKNESS;
-uniform float HSM_TUBE_BLACK_EDGE_THICKNESS_X_SCALE;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_ADDITIVE_AMOUNT;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_AMBIENT_LIGHTING;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_AMBIENT2_LIGHTING;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_DUALSCREEN_VIS_MODE;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_FAKE_SCANLINE_AMOUNT;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_FLIP_HORIZONTAL;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_FLIP_VERTICAL;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_MULTIPLY_AMOUNT;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_NORMAL_AMOUNT;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_NORMAL_BRIGHTNESS;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_NORMAL_VIGNETTE;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_ON;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_SCALE;
-uniform float HSM_TUBE_COLORED_GEL_IMAGE_TRANSPARENCY_THRESHOLD;
-uniform float HSM_TUBE_DIFFUSE_FORCE_ASPECT;
-uniform float HSM_TUBE_DIFFUSE_IMAGE_AMBIENT_LIGHTING;
-uniform float HSM_TUBE_DIFFUSE_IMAGE_AMBIENT2_LIGHTING;
-uniform float HSM_TUBE_DIFFUSE_IMAGE_AMOUNT;
-uniform float HSM_TUBE_DIFFUSE_IMAGE_BRIGHTNESS;
-uniform float HSM_TUBE_DIFFUSE_IMAGE_COLORIZE_ON;
-uniform float HSM_TUBE_DIFFUSE_IMAGE_DUALSCREEN_VIS_MODE;
-uniform float HSM_TUBE_DIFFUSE_IMAGE_GAMMA;
-uniform float HSM_TUBE_DIFFUSE_IMAGE_HUE;
-uniform float HSM_TUBE_DIFFUSE_IMAGE_ROTATION;
-uniform float HSM_TUBE_DIFFUSE_IMAGE_SATURATION;
-uniform float HSM_TUBE_DIFFUSE_IMAGE_SCALE;
-uniform float HSM_TUBE_DIFFUSE_IMAGE_SCALE_X;
-uniform float HSM_TUBE_DIFFUSE_MODE;
-uniform float HSM_TUBE_EMPTY_THICKNESS;
-uniform float HSM_TUBE_EMPTY_THICKNESS_X_SCALE;
-uniform float HSM_TUBE_OPACITY;
-uniform float HSM_TUBE_SHADOW_CURVATURE_SCALE;
-uniform float HSM_TUBE_SHADOW_IMAGE_ON;
-uniform float HSM_TUBE_SHADOW_IMAGE_OPACITY;
-uniform float HSM_TUBE_SHADOW_IMAGE_POS_X;
-uniform float HSM_TUBE_SHADOW_IMAGE_POS_Y;
-uniform float HSM_TUBE_SHADOW_IMAGE_SCALE_X;
-uniform float HSM_TUBE_SHADOW_IMAGE_SCALE_Y;
-uniform float HSM_TUBE_STATIC_AMBIENT_LIGHTING;
-uniform float HSM_TUBE_STATIC_AMBIENT2_LIGHTING;
-uniform float HSM_TUBE_STATIC_BLACK_LEVEL;
-uniform float HSM_TUBE_STATIC_DITHER_AMOUNT;
-uniform float HSM_TUBE_STATIC_DITHER_DISTANCE;
-uniform float HSM_TUBE_STATIC_DITHER_SAMPLES;
-uniform float HSM_TUBE_STATIC_OPACITY_DIFFUSE_MULTIPLY;
-uniform float HSM_TUBE_STATIC_POS_X;
-uniform float HSM_TUBE_STATIC_POS_Y;
-uniform float HSM_TUBE_STATIC_REFLECTION_IMAGE_DUALSCREEN_VIS_MODE;
-uniform float HSM_TUBE_STATIC_REFLECTION_IMAGE_ON;
-uniform float HSM_TUBE_STATIC_REFLECTION_IMAGE_OPACITY;
-uniform float HSM_TUBE_STATIC_SCALE;
-uniform float HSM_TUBE_STATIC_SCALE_X;
-uniform float HSM_TUBE_STATIC_SHADOW_OPACITY;
-uniform float HSM_USE_GEOM;
-uniform float HSM_USE_IMAGE_FOR_PLACEMENT;
-uniform float HSM_USE_PHYSICAL_SIZE_FOR_NON_INTEGER;
-uniform float HSM_USE_SNAP_TO_CLOSEST_INT_SCALE;
-uniform float HSM_VERTICAL_PRESET;
-uniform float HSM_VIEWPORT_POSITION_X;
-uniform float HSM_VIEWPORT_POSITION_Y;
-uniform float HSM_VIEWPORT_VIGNETTE_CUTOUT_MODE;
-uniform float HSM_VIEWPORT_VIGNETTE_FOLLOW_LAYER;
-uniform float HSM_VIEWPORT_VIGNETTE_LAYER_ORDER;
-uniform float HSM_VIEWPORT_VIGNETTE_MASK_MODE;
-uniform float HSM_VIEWPORT_VIGNETTE_OPACITY;
-uniform float HSM_VIEWPORT_VIGNETTE_POS_X;
-uniform float HSM_VIEWPORT_VIGNETTE_POS_Y;
-uniform float HSM_VIEWPORT_VIGNETTE_SCALE;
-uniform float HSM_VIEWPORT_VIGNETTE_SCALE_X;
-uniform float HSM_VIEWPORT_ZOOM;
-uniform float HSM_VIEWPORT_ZOOM_MASK;
-uniform float HSM_2ND_SCREEN_ASPECT_RATIO_MODE;
-uniform float HSM_2ND_SCREEN_CROP_PERCENT_BOTTOM;
-uniform float HSM_2ND_SCREEN_CROP_PERCENT_LEFT;
-uniform float HSM_2ND_SCREEN_CROP_PERCENT_RIGHT;
-uniform float HSM_2ND_SCREEN_CROP_PERCENT_TOP;
-uniform float HSM_2ND_SCREEN_CROP_PERCENT_ZOOM;
-uniform float HSM_2ND_SCREEN_INDEPENDENT_SCALE;
-uniform float HSM_2ND_SCREEN_POS_X;
-uniform float HSM_2ND_SCREEN_POS_Y;
-uniform float HSM_2ND_SCREEN_SCALE_OFFSET;
-uniform float SCREEN_ASPECT;
-uniform vec2 SCREEN_COORD;
-uniform float DEFAULT_SRGB_GAMMA;
-uniform float GAMMA_INPUT;
-uniform float gamma_out;
-uniform float post_br;
-uniform float post_br_affect_black_level;
-uniform float no_scanlines;
-uniform float iscans;
-uniform float vga_mode;
-uniform float hiscan;
-uniform float SHARPEN_ON;
-uniform float CSHARPEN;
-uniform float CCONTR;
-uniform float CDETAILS;
-uniform float DEBLUR;
-`;
-// Mega Bezel parameters - injected as mutable variables, not uniforms
-// Most HSM parameters need to be assignable variables, not read-only uniforms
 float HSM_AB_COMPARE_AREA = 0.0;
 uniform float HSM_AB_COMPARE_FREEZE_CRT_TUBE;
 uniform float HSM_AB_COMPARE_FREEZE_GRAPHICS;
@@ -2489,21 +2270,13 @@ uniform float CDETAILS;
 uniform float DEBLUR;
 `;
 
-      const retroarchVariables = `
-// Shader parameter uniforms
-${paramUniforms}
-${megaBezelVariables}
-`;
+      // FIX: Don't inject megaBezelVariables or paramUniforms here
+      // They're handled by convertBindingsToUniforms() which reads shader parameters
+      // Injecting them here causes duplicate uniform declarations and shader compilation errors
 
-      // Insert after precision declarations
-      const precisionEnd = output.search(/precision.*?;\s*\n\s*precision.*?;\s*\n|precision.*?;\s*\n/);
-      if (precisionEnd !== -1) {
-        const afterPrecision = output.substring(precisionEnd).match(/precision.*?;\s*\n/);
-        if (afterPrecision) {
-          const insertPos = precisionEnd + afterPrecision[0].length;
-          output = output.substring(0, insertPos) + retroarchVariables + output.substring(insertPos);
-        }
-      }
+      // The megaBezelVariables list is a huge hardcoded set of Mega Bezel uniforms
+      // that will be created as needed from the shader parameters list
+      // No manual injection needed!
     }
 
     // Convert Slang-specific syntax
@@ -3364,8 +3137,29 @@ ${globalInits.map(g => `  ${g.name} = ${g.init};`).join('\n')}
             output = output.replace(pattern, member.name);
           });
         }
+
+        // Also handle params.X references where X is not in the members array
+        // This fixes cases like params.MVP where MVP is a separate uniform
+        // Apply to ANY binding with instanceName 'params' (not just pushConstant)
+        if (binding.instanceName === 'params') {
+          const beforeReplacement = output.match(/\bparams\.(\w+)\b/g);
+          console.log(`[SlangCompiler] Found params. references to replace (binding type: ${binding.type}):`, beforeReplacement ? beforeReplacement.slice(0, 10) : 'none');
+          // Replace any remaining params.X with just X
+          output = output.replace(/\bparams\.(\w+)\b/g, '$1');
+          const afterReplacement = output.match(/\bparams\.(\w+)\b/g);
+          console.log(`[SlangCompiler] After params. replacement:`, afterReplacement ? afterReplacement.slice(0, 10) : 'none');
+        }
       }
     }
+
+    // CRITICAL FIX: Replace ALL params.X references with just X
+    // This is needed because Mega Bezel shaders reference params.MVP, params.FinalViewportSize, etc.
+    // but we've converted the UBO to individual uniforms
+    console.log(`[SlangCompiler] Before params. replacement, checking for params. references...`);
+    const allParamsRefs = output.match(/\bparams\.\w+\b/g);
+    console.log(`[SlangCompiler] Found params. references:`, allParamsRefs ? allParamsRefs.slice(0, 10) : 'none');
+
+    output = output.replace(/\bparams\.(\w+)\b/g, '$1');
 
     // Also fix #define aliases that reference struct members after UBO conversion
     // Example: #define beamg global.g_CRT_bg -> #define beamg g_CRT_bg
@@ -3379,23 +3173,18 @@ ${globalInits.map(g => `  ${g.name} = ${g.init};`).join('\n')}
     const remainingDefineGlobalRefs = output.match(/#define\s+\w+\s+global\.\w+/g);
     console.log(`[SlangCompiler] Remaining #define global. references:`, remainingDefineGlobalRefs ? remainingDefineGlobalRefs.slice(0, 10) : 'none');
 
-    // If there's a push_constant named 'params', replace global. references with params.
-    // This fixes shaders that include common files designed for UBO but use push_constant
-    const hasParamsPushConstant = bindings.some(b => b.type === 'pushConstant' && b.instanceName === 'params');
-    console.log(`[SlangCompiler] Has params push_constant: ${hasParamsPushConstant}`);
-    console.log(`[SlangCompiler] Push constant bindings:`, bindings.filter(b => b.type === 'pushConstant').map(b => ({ type: b.type, name: b.name, instanceName: b.instanceName })));
+    // CRITICAL FIX: Do NOT re-introduce params. prefix!
+    // We already removed all params./global. prefixes at the beginning (lines 108-118)
+    // Re-introducing them breaks everything because we use individual uniforms, not UBOs
+    // Just remove any remaining global. prefixes without adding params. back
+    console.log(`[SlangCompiler] Removing any remaining global. prefixes (without adding params. back)...`);
+    const globalRefs = output.match(/\bglobal\.\w+\b/g);
+    console.log(`[SlangCompiler] Found global. references:`, globalRefs ? globalRefs.slice(0, 10) : 'none');
 
-    if (hasParamsPushConstant) {
-      console.log(`[SlangCompiler] Before global. replacement, checking for global. references...`);
-      const globalRefs = output.match(/\bglobal\.\w+\b/g);
-      console.log(`[SlangCompiler] Found global. references:`, globalRefs ? globalRefs.slice(0, 10) : 'none');
+    output = output.replace(/\bglobal\.(\w+)\b/g, '$1');
 
-      output = output.replace(/\bglobal\.(\w+)\b/g, 'params.$1');
-
-      console.log(`[SlangCompiler] After global. replacement, checking for remaining global. references...`);
-      const remainingGlobalRefs = output.match(/\bglobal\.\w+\b/g);
-      console.log(`[SlangCompiler] Remaining global. references:`, remainingGlobalRefs ? remainingGlobalRefs.slice(0, 10) : 'none');
-    }
+    const remainingGlobalRefs = output.match(/\bglobal\.\w+\b/g);
+    console.log(`[SlangCompiler] Remaining global. references:`, remainingGlobalRefs ? remainingGlobalRefs.slice(0, 10) : 'none');
 
     return output;
   }
@@ -3464,6 +3253,7 @@ void main() {
 
   /**
    * Enhanced GLSL preprocessor for Mega Bezel complex #include handling
+   * Delegates to centralized IncludePreprocessor for consistency
    */
   private static async preprocessIncludes(
     source: string,
@@ -3472,252 +3262,14 @@ void main() {
     definedMacros = new Set<string>(),
     includeStack: string[] = []
   ): Promise<string> {
-    // Prevent infinite recursion
-    if (includeStack.length > 20) {
-      throw new Error(`Include stack too deep: ${includeStack.join(' -> ')}`);
-    }
-
-    // Extract base directory from URL
-    const baseDir = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
-
-    // Track this file to prevent circular includes
-    if (processedFiles.has(baseUrl)) {
-      console.warn(`[SlangCompiler] Circular include detected: ${baseUrl}`);
-      return `// Circular include prevented: ${baseUrl}`;
-    }
-    processedFiles.add(baseUrl);
-    includeStack.push(baseUrl);
-
-    // Extract all #define macros from this file to track what's defined
-    const definePattern = /#define\s+(\w+)(?:\s+.*)?$/gm;
-    let defineMatch;
-    while ((defineMatch = definePattern.exec(source)) !== null) {
-      definedMacros.add(defineMatch[1]);
-    }
-
-    // Extract #ifdef/#ifndef blocks to understand conditional compilation
-    const conditionalBlocks = this.extractConditionalBlocks(source, definedMacros);
-
-    // Find all #include directives with their positions and context
-    const includePattern = /#include\s+"([^"]+)"/g;
-    let match;
-    let result = source;
-    const includes: Array<{
-      directive: string;
-      path: string;
-      index: number;
-      isInDisabledBlock: boolean;
-      condition?: string;
-    }> = [];
-
-    while ((match = includePattern.exec(source)) !== null) {
-      const isInDisabledBlock = this.isIncludeInDisabledBlock(source, match.index, definedMacros);
-      includes.push({
-        directive: match[0],
-        path: match[1],
-        index: match.index,
-        isInDisabledBlock,
-        condition: this.getConditionalContext(source, match.index, conditionalBlocks)
-      });
-    }
-
-    // Process includes in reverse order to preserve line positions
-    for (const include of includes.reverse()) {
-      if (include.isInDisabledBlock) {
-        console.log(`[SlangCompiler] Skipping #include "${include.path}" (inside disabled conditional block: ${include.condition})`);
-        result = result.replace(include.directive, `// SKIPPED (conditional): ${include.directive}`);
-        continue;
-      }
-
-      // Resolve relative path with enhanced logic
-      const includePath = include.path;
-      let includeUrl: string;
-
-      if (includePath.startsWith('/')) {
-        // Absolute path from shader root
-        includeUrl = includePath;
-      } else if (includePath.startsWith('./') || includePath.startsWith('../')) {
-        // Explicit relative path
-        includeUrl = this.resolveRelativePath(baseDir, includePath);
-      } else {
-        // Relative to current file directory
-        includeUrl = this.resolveRelativePath(baseDir, includePath);
-      }
-
-      // Load included file with enhanced error handling
-      try {
-        console.log(`[SlangCompiler] Processing include: ${include.path} -> ${includeUrl}`);
-        const response = await fetch(includeUrl);
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-
-        let includeSource = await response.text();
-        console.log(`[SlangCompiler] Loaded ${includeSource.length} chars from ${includeUrl}`);
-
-        // Recursively process includes in the included file
-        const childDefinedMacros = new Set(definedMacros); // Copy current macros
-        includeSource = await this.preprocessIncludes(
-          includeSource,
-          includeUrl,
-          processedFiles,
-          childDefinedMacros,
-          [...includeStack]
-        );
-
-        // Replace the include directive with the file contents
-        const replacement = `// Included from: ${include.path} (${includeUrl})\n${includeSource}\n// End include: ${include.path}`;
-        result = result.replace(include.directive, replacement);
-
-      } catch (error) {
-        console.error(`[SlangCompiler] Failed to load include ${includeUrl}:`, error);
-        const errorComment = `// ERROR: Failed to load ${include.path} from ${includeUrl}\n// ${error.message}`;
-        result = result.replace(include.directive, errorComment);
-      }
-    }
-
-    includeStack.pop();
-    return result;
-  }
-
-  /**
-   * Extract conditional compilation blocks (#ifdef, #ifndef, #if)
-   */
-  private static extractConditionalBlocks(source: string, definedMacros: Set<string>): Array<{
-    type: 'ifdef' | 'ifndef' | 'if';
-    macro?: string;
-    start: number;
-    end: number;
-    enabled: boolean;
-    definedMacros: Set<string>;
-  }> {
-    const blocks: Array<any> = [];
-    const lines = source.split('\n');
-    const stack: Array<{type: string, macro?: string, line: number, enabled: boolean}> = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-
-      if (line.startsWith('#ifdef ')) {
-        const macro = line.split(' ')[1];
-        const enabled = definedMacros.has(macro);
-        stack.push({ type: 'ifdef', macro, line: i, enabled });
-      } else if (line.startsWith('#ifndef ')) {
-        const macro = line.split(' ')[1];
-        const enabled = !definedMacros.has(macro);
-        stack.push({ type: 'ifndef', macro, line: i, enabled });
-      } else if (line.startsWith('#if ')) {
-        // Complex #if conditions - for now, assume enabled
-        stack.push({ type: 'if', line: i, enabled: true });
-      } else if (line === '#else') {
-        if (stack.length > 0) {
-            stack[stack.length - 1].enabled = !stack[stack.length - 1].enabled;
-        }
-      } else if (line === '#endif') {
-        if (stack.length > 0) {
-          const block = stack.pop()!;
-          blocks.push({
-            type: block.type,
-            macro: block.macro,
-            start: block.line,
-            end: i,
-            enabled: block.enabled,
-            definedMacros: new Set(definedMacros)
-          });
-        }
-      }
-    }
-
-    return blocks;
-  }
-
-  /**
-   * Get conditional context for an include directive
-   */
-  private static getConditionalContext(source: string, includeIndex: number, conditionalBlocks: any[]): string | undefined {
-    const includeLine = source.substring(0, includeIndex).split('\n').length - 1;
-
-    for (const block of conditionalBlocks) {
-      if (includeLine >= block.start && includeLine <= block.end) {
-        return `${block.type} ${block.macro || 'complex'} (${block.enabled ? 'enabled' : 'disabled'})`;
-      }
-    }
-
-    return undefined;
-  }
-
-  /**
-   * Check if an #include directive is inside a disabled conditional block
-   */
-  private static isIncludeInDisabledBlock(source: string, includeIndex: number, definedMacros: Set<string>): boolean {
-    // Walk backwards from the #include to find the nearest conditional directive
-    const textBefore = source.substring(0, includeIndex);
-    const lines = textBefore.split('\n');
-
-    // Stack to track nested conditionals
-    const stack: Array<{ directive: string; macro?: string; enabled: boolean }> = [];
-
-    for (const line of lines) {
-      const trimmed = line.trim();
-
-      // Match #ifndef MACRO
-      const ifndefMatch = trimmed.match(/^#ifndef\s+(\w+)/);
-      if (ifndefMatch) {
-        const macro = ifndefMatch[1];
-        const enabled = !definedMacros.has(macro); // Enabled if macro is NOT defined
-        stack.push({ directive: 'ifndef', macro, enabled });
-        continue;
-      }
-
-      // Match #ifdef MACRO
-      const ifdefMatch = trimmed.match(/^#ifdef\s+(\w+)/);
-      if (ifdefMatch) {
-        const macro = ifdefMatch[1];
-        const enabled = definedMacros.has(macro); // Enabled if macro IS defined
-        stack.push({ directive: 'ifdef', macro, enabled });
-        continue;
-      }
-
-      // Match #else
-      if (trimmed === '#else') {
-        if (stack.length > 0) {
-          const top = stack[stack.length - 1];
-          // Invert the enabled state
-          top.enabled = !top.enabled;
-        }
-        continue;
-      }
-
-      // Match #endif
-      if (trimmed === '#endif') {
-        stack.pop();
-        continue;
-      }
-    }
-
-    // If any conditional in the stack is disabled, the #include is in a disabled block
-    return stack.some(cond => !cond.enabled);
-  }
-
-  /**
-   * Resolve relative path from base directory
-   */
-  private static resolveRelativePath(baseDir: string, relativePath: string): string {
-    // Split paths into segments
-    const baseSegments = baseDir.split('/').filter(s => s);
-    const relativeSegments = relativePath.split('/').filter(s => s);
-
-    // Process .. and . in relative path
-    for (const segment of relativeSegments) {
-      if (segment === '..') {
-        baseSegments.pop();
-      } else if (segment !== '.') {
-        baseSegments.push(segment);
-      }
-    }
-
-    // Reconstruct URL
-    return '/' + baseSegments.join('/');
+    // Use centralized IncludePreprocessor to avoid code duplication
+    return await IncludePreprocessor.preprocessIncludes(
+      source,
+      baseUrl,
+      processedFiles,
+      definedMacros,
+      includeStack
+    );
   }
 
   /**
