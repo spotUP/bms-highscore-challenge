@@ -1059,7 +1059,7 @@ export class SlangShaderCompiler {
           '}'
         ]
       }
-    ] : []; // Empty array for fragment shader
+    ]; // Stub functions for Potato preset
 
     if (stubFunctions.length > 0) {
       parts.push('// Stub functions');
