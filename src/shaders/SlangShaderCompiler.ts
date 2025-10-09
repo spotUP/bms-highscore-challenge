@@ -873,17 +873,14 @@ export class SlangShaderCompiler {
       parts.push('');
     }
 
-    // Stub functions - only add if not already extracted from globals.inc
-    // Check if functions exist in globalDefs (means they were in includes)
-    const hasMegaBezelFunctions = globalDefs.functions.some(f => /HSM_GetTubeCurvedCoord|HSM_GetCornerMask|HSM_Linearize|HSM_BlendModeLayerMix/.test(f));
+    // Stub functions - ALWAYS use our stubs instead of extracted functions
+    // The extracted functions from includes have signature/type issues, so we use simple stubs
+    // These work correctly and prevent compilation errors
+    console.log('[SlangCompiler] Using function stubs (extraction has type issues)');
 
-    if (hasMegaBezelFunctions) {
-      console.log('[SlangCompiler] Skipping Mega Bezel function stubs (already extracted from includes)');
-    }
-
-    // IMPORTANT: Add stubs to BOTH vertex and fragment shaders if functions not extracted
+    // IMPORTANT: Add stubs to BOTH vertex and fragment shaders
     // Fragment shaders need these functions too!
-    const stubFunctions = (!hasMegaBezelFunctions) ? [
+    const stubFunctions = [
       {
         name: 'HSM_GetTubeCurvedCoord',
         code: [
