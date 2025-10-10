@@ -7067,15 +7067,16 @@ const Pong404: React.FC = () => {
       }
 
       // 3. Strobing borders on synth stabs (steps 0 and 4)
-      if ((step16th === 0 || step16th === 4) && beatPhase < 0.2) {
-        const borderSize = 20 + beatPhase * 40;
-        const strobeBrightness = 1 - (beatPhase / 0.2);
-        ctx.globalAlpha = strobeBrightness * 0.8;
-        ctx.strokeStyle = rainbowColor;
-        ctx.lineWidth = borderSize;
-        ctx.strokeRect(borderSize / 2, borderSize / 2, canvasSize.width - borderSize, canvasSize.height - borderSize);
-        ctx.globalAlpha = 1;
-      }
+      // DISABLED - Strobing border removed for clean canvas
+      // if ((step16th === 0 || step16th === 4) && beatPhase < 0.2) {
+      //   const borderSize = 20 + beatPhase * 40;
+      //   const strobeBrightness = 1 - (beatPhase / 0.2);
+      //   ctx.globalAlpha = strobeBrightness * 0.8;
+      //   ctx.strokeStyle = rainbowColor;
+      //   ctx.lineWidth = borderSize;
+      //   ctx.strokeRect(borderSize / 2, borderSize / 2, canvasSize.width - borderSize, canvasSize.height - borderSize);
+      //   ctx.globalAlpha = 1;
+      // }
 
       // 4. Rotating corner particles
       const particleCount = 8;
@@ -7433,12 +7434,13 @@ const Pong404: React.FC = () => {
       // Main border with dramatic inner glow
       const mainGlowSize = 15 + glowIntensity * 25; // 15-40px based on music (much more visible)
 
-      ctx.strokeStyle = currentColors.foreground;
-      ctx.lineWidth = BORDER_THICKNESS;
-      ctx.shadowBlur = mainGlowSize;
-      ctx.shadowColor = currentColors.foreground;
-      // Draw border centered at BORDER_THICKNESS/2 from edges so full width is visible
-      ctx.strokeRect(BASE_BORDER_THICKNESS/2, BASE_BORDER_THICKNESS/2, 800 - BASE_BORDER_THICKNESS, 800 - BASE_BORDER_THICKNESS);
+      // DISABLED - Border drawing removed for clean canvas
+      // ctx.strokeStyle = currentColors.foreground;
+      // ctx.lineWidth = BORDER_THICKNESS;
+      // ctx.shadowBlur = mainGlowSize;
+      // ctx.shadowColor = currentColors.foreground;
+      // // Draw border centered at BORDER_THICKNESS/2 from edges so full width is visible
+      // ctx.strokeRect(BASE_BORDER_THICKNESS/2, BASE_BORDER_THICKNESS/2, 800 - BASE_BORDER_THICKNESS, 800 - BASE_BORDER_THICKNESS);
     }
 
     // Clear shadow for other elements
