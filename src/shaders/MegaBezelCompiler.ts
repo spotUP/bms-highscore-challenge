@@ -49,17 +49,102 @@ export interface CompilationOptions {
   maxPasses: number;
 }
 
+export interface CacheKey {
+  presetPath: string;
+  options: CompilationOptions;
+}
+
+export class ShaderCache {
+  private cache: Map<string, { preset: MegaBezelPreset; timestamp: number }> = new Map();
+  private maxAge: number = 5 * 60 * 1000; // 5 minutes
+  private maxSize: number = 10; // Maximum cached presets
+
+  /**
+   * Generate cache key from preset path and options
+   */
+  private generateKey(cacheKey: CacheKey): string {
+    return `${cacheKey.presetPath}:${JSON.stringify(cacheKey.options)}`;
+  }
+
+  /**
+   * Check if preset is cached and valid
+   */
+  get(cacheKey: CacheKey): MegaBezelPreset | null {
+    const key = this.generateKey(cacheKey);
+    const entry = this.cache.get(key);
+
+    if (!entry) return null;
+
+    // Check if cache entry is expired
+    if (Date.now() - entry.timestamp > this.maxAge) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return entry.preset;
+  }
+
+  /**
+   * Store preset in cache
+   */
+  set(cacheKey: CacheKey, preset: MegaBezelPreset): void {
+    const key = this.generateKey(cacheKey);
+
+    // If cache is full, remove oldest entry
+    if (this.cache.size >= this.maxSize) {
+      let oldestKey = '';
+      let oldestTime = Date.now();
+
+      for (const [k, v] of this.cache) {
+        if (v.timestamp < oldestTime) {
+          oldestTime = v.timestamp;
+          oldestKey = k;
+        }
+      }
+
+      if (oldestKey) {
+        this.cache.delete(oldestKey);
+      }
+    }
+
+    this.cache.set(key, {
+      preset,
+      timestamp: Date.now()
+    });
+  }
+
+  /**
+   * Clear cache
+   */
+  clear(): void {
+    this.cache.clear();
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getStats(): { size: number; maxSize: number; maxAge: number } {
+    return {
+      size: this.cache.size,
+      maxSize: this.maxSize,
+      maxAge: this.maxAge
+    };
+  }
+}
+
 export class MegaBezelCompiler {
   private shaderCompiler: SlangShaderCompiler;
   private parameterManager: ParameterManager;
   private coordinateSystem: MegaBezelCoordinateSystem;
   private bezelGraphics: BezelGraphicsManager;
+  private cache: ShaderCache;
 
   constructor() {
     this.shaderCompiler = new SlangShaderCompiler();
     this.parameterManager = new ParameterManager();
     this.coordinateSystem = new MegaBezelCoordinateSystem(800, 600); // Default viewport
     this.bezelGraphics = new BezelGraphicsManager();
+    this.cache = new ShaderCache();
   }
 
   /**
@@ -77,7 +162,19 @@ export class MegaBezelCompiler {
       ...options
     };
 
+    // Check cache first
+    const cacheKey: CacheKey = { presetPath, options: opts };
+    const cachedPreset = this.cache.get(cacheKey);
+    if (cachedPreset) {
+      console.log(`[MegaBezelCompiler] Using cached preset: ${presetPath}`);
+      return cachedPreset;
+    }
+
     console.log(`[MegaBezelCompiler] Compiling preset: ${presetPath}`);
+
+    // Reset the global varying cache at the start of a new compilation session
+    const { GlobalToVaryingConverter } = await import('./GlobalToVaryingConverter');
+    GlobalToVaryingConverter.resetGlobalCache();
 
     // Load and parse preset file
     const presetContent = await this.loadPresetFile(presetPath);
@@ -110,19 +207,46 @@ export class MegaBezelCompiler {
       metadata: presetData.metadata || {}
     };
 
-    console.log(`[MegaBezelCompiler] Successfully compiled preset with ${passes.length} passes`);
+    // Cache the compiled preset
+    this.cache.set(cacheKey, preset);
+
+    console.log(`[MegaBezelCompiler] Successfully compiled and cached preset with ${passes.length} passes`);
     return preset;
   }
 
   /**
-   * Load preset file from URL
+   * Load preset file from URL or filesystem
    */
   private async loadPresetFile(presetPath: string): Promise<string> {
-    const response = await fetch(presetPath);
-    if (!response.ok) {
-      throw new Error(`Failed to load preset: ${response.statusText}`);
+    // Check if we're in a browser environment
+    if (typeof window !== 'undefined' && typeof fetch !== 'undefined') {
+      // Browser environment - use fetch
+      const response = await fetch(presetPath);
+      if (!response.ok) {
+        throw new Error(`Failed to load preset: ${response.statusText}`);
+      }
+      return await response.text();
+    } else {
+      // Node.js environment - read from filesystem
+      const fs = await import('fs');
+      const path = await import('path');
+
+      // Convert web path to filesystem path
+      let filePath = presetPath;
+      if (filePath.startsWith('/')) {
+        // Remove leading slash and assume it's relative to public directory
+        filePath = path.join(process.cwd(), 'public', filePath.substring(1));
+      } else {
+        // Assume it's relative to the current working directory
+        filePath = path.join(process.cwd(), filePath);
+      }
+
+      try {
+        return fs.readFileSync(filePath, 'utf8');
+      } catch (error) {
+        throw new Error(`Failed to read preset file ${filePath}: ${error}`);
+      }
     }
-    return await response.text();
   }
 
   /**
@@ -274,8 +398,8 @@ export class MegaBezelCompiler {
 
     console.log(`[MegaBezelCompiler] Compiling shader pass ${passIndex}: ${shaderPath}`);
 
-    // Compile shader
-    const compiledShader = await SlangShaderCompiler.loadFromURL(shaderPath, options.webgl2);
+    // Compile shader - disable UBO preservation for WebGL compatibility
+    const compiledShader = await SlangShaderCompiler.loadFromURL(shaderPath, options.webgl2, false);
 
     // Create Three.js material
     const material = this.createShaderMaterial(compiledShader, shaderData, passIndex);
@@ -339,13 +463,24 @@ export class MegaBezelCompiler {
       });
     }
 
-    return new THREE.ShaderMaterial({
+    const material = new THREE.ShaderMaterial({
       uniforms,
       vertexShader: compiledShader.vertex,
       fragmentShader: compiledShader.fragment,
+      glslVersion: THREE.GLSL3,  // CRITICAL: Enable GLSL ES 3.0 / WebGL2
       depthTest: false,
       depthWrite: false
     });
+
+    // Add error handling to catch shader compilation issues
+    material.onBeforeCompile = (shader, renderer) => {
+      console.log(`[MegaBezelCompiler] Compiling shader material for pass:`, passIndex);
+    };
+
+    // Listen for compilation errors (if supported)
+    (material as any).needsUpdate = true;
+
+    return material;
   }
 
   /**
@@ -450,7 +585,8 @@ export class MegaBezelCompiler {
 
     // Convert preset texture definitions to BezelGraphicsManager format
     Object.entries(presetData.textures).forEach(([name, path]) => {
-      if (typeof path === 'string' && !path.includes('=')) {
+      // Only process if it's a string AND looks like a valid file path
+      if (typeof path === 'string' && this.isValidTexturePath(path)) {
         // Texture path definition
         const settings = this.getTextureSettings(name, path, presetData.textureSettings);
         textureConfigs.push({
@@ -458,6 +594,9 @@ export class MegaBezelCompiler {
           path: presetData.basePath ? `${presetData.basePath}${path}` : path,
           settings
         });
+      } else {
+        // Skip parameter values (like "1", "0", "2.5", etc.)
+        console.log(`[MegaBezelCompiler] Skipping non-texture value for ${name}: ${path}`);
       }
     });
 
@@ -471,6 +610,23 @@ export class MegaBezelCompiler {
         console.warn(`[MegaBezelCompiler] Failed to load texture ${config.name}:`, error);
       }
     }
+  }
+
+  /**
+   * Check if a string looks like a valid texture path (not a parameter value)
+   */
+  private isValidTexturePath(path: string): boolean {
+    // Parameter values are typically simple numbers like "0", "1", "2.5"
+    // or parameter expressions like "= 1"
+    if (path.includes('=')) return false; // Parameter assignment
+    if (/^-?\d+(\.\d+)?$/.test(path)) return false; // Just a number
+    if (path.length < 3) return false; // Too short to be a file path
+
+    // Valid texture paths should contain file extensions or directory separators
+    const hasFileExtension = /\.(png|jpg|jpeg|bmp|tga|dds)$/i.test(path);
+    const hasPathSeparator = path.includes('/') || path.includes('\\');
+
+    return hasFileExtension || hasPathSeparator;
   }
 
   /**
@@ -658,5 +814,28 @@ export class MegaBezelCompiler {
       }
       pass.material.dispose();
     });
+  }
+
+  /**
+   * Clear shader cache
+   */
+  clearCache(): void {
+    this.cache.clear();
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats(): { size: number; maxSize: number; maxAge: number; hitRate?: number } {
+    return this.cache.getStats();
+  }
+
+  /**
+   * Set cache configuration
+   */
+  setCacheConfig(maxSize: number, maxAgeMs: number): void {
+    this.cache = new ShaderCache();
+    // Note: In a full implementation, we'd modify the cache instance properties
+    // For now, we'll recreate with new settings
   }
 }

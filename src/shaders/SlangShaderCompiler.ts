@@ -9,6 +9,7 @@
  */
 
 import { IncludePreprocessor } from './IncludePreprocessor';
+import { GlobalToVaryingConverter } from './GlobalToVaryingConverter';
 
 export interface ShaderParameter {
   name: string;
@@ -81,6 +82,30 @@ export class SlangShaderCompiler {
       }
     }
     const excludeNames = new Set([...parameterNames, ...uboMemberNames]);
+
+    // CRITICAL FIX: Strip UBO initializer lines BEFORE extracting globals
+    // These lines like "float HSM_POTATO_COLORIZE_CRT_WITH_BG = global.HSM_POTATO_COLORIZE_CRT_WITH_BG / 100;"
+    // cause redefinition errors because:
+    // 1. The pragma creates a uniform with the name HSM_POTATO_COLORIZE_CRT_WITH_BG
+    // 2. extractGlobalDefinitions would extract the assignment line as a "global"
+    // 3. Both get injected, causing redefinition
+    // Must happen BEFORE extraction AND BEFORE global./params. replacement
+    // IMPORTANT: Only strip lines where variable name matches the UBO member name
+    // Example: float X = global.X / 100; (strip this, it's redundant with uniform X)
+    // But NOT: float y = global.X * global.Z; (keep this, it's a derived calculation)
+    console.log('[SlangCompiler] Stripping redundant UBO initializer lines before global extraction...');
+
+    // Match pattern: float VARNAME = global.VARNAME or float VARNAME = params.VARNAME
+    // Using backreference \1 to ensure variable name matches UBO member name
+    const redundantUBOInitializers = /^\s*(?:float|int|uint|vec[2-4]|mat[2-4]|bool)\s+(\w+)\s*=\s*(?:global\.|params\.)\1\b.*$/gm;
+    const redundantMatches = slangSource.match(redundantUBOInitializers);
+    if (redundantMatches && redundantMatches.length > 0) {
+      console.log(`[SlangCompiler] Stripping ${redundantMatches.length} redundant UBO initializer lines (e.g., "${redundantMatches[0].trim().substring(0, 70)}...")`);
+      slangSource = slangSource.replace(redundantUBOInitializers, '// [Stripped redundant UBO initializer]');
+    } else {
+      console.log(`[SlangCompiler] No redundant UBO initializer lines found to strip`);
+    }
+
     const globalDefs = this.extractGlobalDefinitions(slangSource, excludeNames);
 
     // Debug: Check if DEFAULT defines were extracted
@@ -129,7 +154,7 @@ export class SlangShaderCompiler {
 
     // Convert vertex shader
     const vertexStage = stages.find(s => s.type === 'vertex');
-    const vertexShader = vertexStage
+    let vertexShader = vertexStage
       ? this.convertToWebGL(vertexStage.source, 'vertex', bindings, webgl2, pragmas.parameters, globalDefs)
       : this.generateDefaultVertexShader(webgl2);
 
@@ -138,11 +163,38 @@ export class SlangShaderCompiler {
     if (!fragmentStage) {
       throw new Error('No fragment shader stage found');
     }
-    const fragmentShader = this.convertToWebGL(fragmentStage.source, 'fragment', bindings, webgl2, pragmas.parameters, globalDefs);
+    let fragmentShader = this.convertToWebGL(fragmentStage.source, 'fragment', bindings, webgl2, pragmas.parameters, globalDefs);
+
+    // CRITICAL: Convert mutable globals to varyings for WebGL compatibility
+    // This fixes the architectural issue where globals set in vertex shader are accessed in fragment shader
+    // TEMPORARILY DISABLED for Pure WebGL2 testing - the converter has redefinition bugs
+    if (false && globalDefs.globals.length > 0) {
+      console.log('[SlangCompiler] Applying global-to-varying conversion...');
+      const converter = new GlobalToVaryingConverter(webgl2);
+
+      // Reconstruct globals.inc source from globalDefs.globals
+      const globalsIncSource = globalDefs.globals.join('\n');
+
+      const converted = converter.convertGlobalsToVaryings(
+        vertexShader,
+        fragmentShader,
+        globalsIncSource
+      );
+
+      vertexShader = converted.vertex;
+      fragmentShader = converted.fragment;
+      console.log('[SlangCompiler] Global-to-varying conversion complete');
+    } else if (globalDefs.globals.length > 0) {
+      console.log('[SlangCompiler] SKIPPING global-to-varying conversion (testing without it)');
+    }
+
+    // Fix WebGL incompatibilities based on target version
+    const fixedVertex = this.fixWebGLIncompatibilities(vertexShader, webgl2);
+    const fixedFragment = this.fixWebGLIncompatibilities(fragmentShader, webgl2);
 
     const result = {
-      vertex: vertexShader,
-      fragment: fragmentShader,
+      vertex: fixedVertex,
+      fragment: fixedFragment,
       parameters: pragmas.parameters,
       uniforms: this.extractUniformNames(bindings),
       samplers: this.extractSamplerNames(bindings),
@@ -453,15 +505,43 @@ export class SlangShaderCompiler {
     // Pattern 1: Initialized globals - float/vec2/mat4/bool variable_name = value;
     const mutableGlobalPattern = /^[ \t]*((?:float|int|uint|vec[2-4]|mat[2-4]x[2-4]|mat[2-4]|ivec[2-4]|uvec[2-4]|bvec[2-4]|bool))\s+(\w+)\s*=\s*([^;]+);/gm;
     let mutableMatch;
+    let mutableGlobalsProcessed = 0;
     while ((mutableMatch = mutableGlobalPattern.exec(globalSection)) !== null) {
       if (isInsideFunction(mutableMatch.index) || isInsideUBOBlock(mutableMatch.index)) continue;
 
       const type = mutableMatch[1];
       const name = mutableMatch[2];
       let value = mutableMatch[3];
+      mutableGlobalsProcessed++;
+
+      // Debug first 5 HSM_ variables
+      if (name.startsWith('HSM_') && mutableGlobalsProcessed <= 5) {
+        console.log(`[SlangCompiler] Processing HSM global ${mutableGlobalsProcessed}: ${name} = ${value.substring(0, 50)}, inExcludeNames=${excludeNames.has(name)}`);
+      }
 
       // Skip if this name conflicts with a shader parameter or common uniform
       if (excludeNames.has(name) || commonUniformNames.has(name)) {
+        if (name.startsWith('HSM_')) {
+          console.log(`[SlangCompiler] Skipped ${name} via excludeNames (in pragmas or UBO)`);
+        }
+        continue;
+      }
+
+      // CRITICAL FIX: Skip globals that initialize from global.X or params.X
+      // These reference UBO members that will become uniforms, and extracting the global causes redefinition
+      // Example: float HSM_POTATO_COLORIZE_CRT_WITH_BG = global.HSM_POTATO_COLORIZE_CRT_WITH_BG / 100;
+      // The pragma parameter creates uniform HSM_POTATO_COLORIZE_CRT_WITH_BG, so don't also create a global
+      if (value.includes('global.') || value.includes('params.')) {
+        console.log(`[SlangCompiler] Skipping global '${name}' (initializes from UBO: ${value.trim().substring(0, 50)})`);
+        continue;
+      }
+
+      // AGGRESSIVE FIX: Skip ALL HSM_* variables that initialize from calculations
+      // These are Mega Bezel shader parameters that get uniforms from pragmas
+      // but also have local assignment statements like: float HSM_X = global.HSM_X / 100;
+      // The pragma creates the uniform, so we should NOT extract the assignment as a global
+      if (name.startsWith('HSM_') && (value.includes('/') || value.includes('*') || value.includes('+') || value.includes('-'))) {
+        console.log(`[SlangCompiler] Skipping HSM_ parameter calculation: ${name} = ${value.trim().substring(0, 40)}`);
         continue;
       }
 
@@ -492,13 +572,19 @@ export class SlangShaderCompiler {
       const type = uninitMatch[1];
       const name = uninitMatch[2];
 
-      // Skip if already extracted or conflicts with shader parameter or common uniform
+      // Skip if already extracted (Pattern 1 takes precedence - initialized version wins)
+      // or conflicts with shader parameter or common uniform
       if (extractedGlobalNames.has(name) || excludeNames.has(name) || commonUniformNames.has(name)) {
+        // Only log if it's a duplicate from Pattern 1 (not just excluded)
+        if (extractedGlobalNames.has(name)) {
+          console.log(`[SlangCompiler] Skipping uninitialized global '${name}' (already extracted with initializer)`);
+        }
         continue;
       }
 
       // Add uninitialized global
       globals.push(`${type} ${name};`);
+      extractedGlobalNames.add(name);
     }
 
     console.log('[SlangCompiler] extractGlobalDefinitions - found:');
@@ -714,6 +800,13 @@ export class SlangShaderCompiler {
     const parts: string[] = [];
     const isVertex = stage === 'vertex';
 
+    console.log(`[buildGlobalDefinitionsCode] Building for ${stage} stage:`, {
+      defines: globalDefs.defines.length,
+      consts: globalDefs.consts.length,
+      globals: globalDefs.globals.length,
+      functions: globalDefs.functions.length
+    });
+
     // Helper function to check if a definition already exists in source
     const definitionExists = (definition: string): boolean => {
       // For variables: check for variable declarations with word boundaries
@@ -852,26 +945,28 @@ export class SlangShaderCompiler {
     // The "function already has a body" errors show they exist in globalDefs.functions
     // They should be injected below in the globalDefs.functions section
 
-    if (isVertex) {
-      // Mega Bezel coordinate and parameter variables
-      // Only add these stubs if they haven't been extracted from globals.inc
-      // Check if TUBE_MASK exists in globalDefs (means globals.inc was included)
-      const hasMegaBezelGlobals = globalDefs.globals.some(g => /TUBE_MASK|TUBE_SCALE|TUBE_DIFFUSE_COORD/.test(g));
+    // CRITICAL: Add TUBE_* variables to BOTH vertex and fragment shaders
+    // They're used in fragment shader functions like HSM_GetPostCrtPreppedColorPotato
+    // Mega Bezel coordinate and parameter variables
+    // Only add these stubs if they haven't been extracted from globals.inc
+    // Check if TUBE_MASK exists in globalDefs (means globals.inc was included)
+    const hasMegaBezelGlobals = globalDefs.globals.some(g => /TUBE_MASK|TUBE_SCALE|TUBE_DIFFUSE_COORD/.test(g));
 
-      if (!hasMegaBezelGlobals) {
-        parts.push('// Mega Bezel coordinate and parameter variables (stubs for simple shaders)');
-        // Add stubs with initialization (they'll be moved to initGlobalVars by convertGlobalInitializers)
-        parts.push('vec2 TUBE_DIFFUSE_COORD = vec2(0.5, 0.5);');
-        parts.push('vec2 TUBE_DIFFUSE_SCALE = vec2(1.0, 1.0);');
-        parts.push('vec2 TUBE_SCALE = vec2(1.0, 1.0);');
-        parts.push('float TUBE_DIFFUSE_ASPECT = 1.0;');
-        parts.push('float TUBE_MASK = 1.0;');
-      } else {
-        console.log('[SlangCompiler] Mega Bezel globals found - they will be included from globalDefs');
-      }
-
-      parts.push('');
+    if (!hasMegaBezelGlobals) {
+      parts.push('// Mega Bezel coordinate and parameter variables (stubs for simple shaders)');
+      // Add stubs with initialization (they'll be moved to initGlobalVars by convertGlobalInitializers)
+      parts.push('vec2 TUBE_DIFFUSE_COORD = vec2(0.5, 0.5);');
+      parts.push('vec2 TUBE_DIFFUSE_SCALE = vec2(1.0, 1.0);');
+      parts.push('vec2 TUBE_SCALE = vec2(1.0, 1.0);');
+      parts.push('float TUBE_DIFFUSE_ASPECT = 1.0;');
+      parts.push('float TUBE_MASK = 1.0;');
+      parts.push('float SCREEN_ASPECT = 1.0;');
+      parts.push('vec2 SCREEN_COORD = vec2(0.5, 0.5);');
+    } else {
+      console.log('[SlangCompiler] Mega Bezel globals found - they will be included from globalDefs');
     }
+
+    parts.push('');
 
     // Stub functions - ALWAYS use our stubs instead of extracted functions
     // The extracted functions from includes have signature/type issues, so we use simple stubs
@@ -1058,6 +1153,81 @@ export class SlangShaderCompiler {
           '  return vec2(800.0, 600.0);  // Fallback size',
           '}'
         ]
+      },
+      {
+        name: 'HSM_GetUseScreenVignette',
+        code: [
+          'float HSM_GetUseScreenVignette() {',
+          '  return 0.0;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_GetScreenVignetteFactor',
+        code: [
+          'float HSM_GetScreenVignetteFactor(vec2 coord) {',
+          '  return 1.0;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_BlendModeLayerMix',
+        code: [
+          'vec4 HSM_BlendModeLayerMix(vec4 base, vec4 layer, float mode, float opacity) {',
+          '  if (mode < 0.5) return base;',
+          '  if (mode < 1.5) return mix(base, layer, opacity);',
+          '  if (mode < 2.5) return base + layer * opacity;',
+          '  return base * mix(vec4(1.0), layer, opacity);',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_Apply_Sinden_Lightgun_Border',
+        code: [
+          'vec4 HSM_Apply_Sinden_Lightgun_Border(vec4 color, vec2 coord) {',
+          '  return color;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_GetViewportCoordWithZoomAndPan',
+        code: [
+          'vec2 HSM_GetViewportCoordWithZoomAndPan(vec2 coord) {',
+          '  return coord;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_UpdateGlobalScreenValuesFromCache',
+        code: [
+          'void HSM_UpdateGlobalScreenValuesFromCache(sampler2D cache) {',
+          '  // Stub - actual implementation would read from cache',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_GetCurvedCoord',
+        code: [
+          'vec2 HSM_GetCurvedCoord(vec2 coord, float curvature, float aspect) {',
+          '  return coord;',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_Linearize',
+        code: [
+          'vec4 HSM_Linearize(vec4 color, float gamma) {',
+          '  return pow(color, vec4(gamma));',
+          '}'
+        ]
+      },
+      {
+        name: 'HSM_Delinearize',
+        code: [
+          'vec4 HSM_Delinearize(vec4 color, float gamma) {',
+          '  return pow(color, vec4(1.0 / gamma));',
+          '}'
+        ]
       }
     ]; // Stub functions for Potato preset
 
@@ -1142,31 +1312,39 @@ export class SlangShaderCompiler {
     }
 
     if (globalDefs.globals.length > 0) {
-      // Deduplicate globals by name (keep first occurrence)
-      const seenGlobals = new Set<string>();
-      const uniqueGlobals: string[] = [];
+      // CRITICAL: Only inject globals into VERTEX shader
+      // Fragment shader will receive them as varyings via GlobalToVaryingConverter
+      // Injecting into both causes 897 redefinition errors
+      if (isVertex) {
+        // Deduplicate globals by name (keep first occurrence)
+        const seenGlobals = new Set<string>();
+        const uniqueGlobals: string[] = [];
 
-      for (const globalDecl of globalDefs.globals) {
-        const globalMatch = globalDecl.match(/(?:float|int|vec\d|mat\d|bool)\s+(\w+)/);
-        const globalName = globalMatch?.[1];
+        for (const globalDecl of globalDefs.globals) {
+          const globalMatch = globalDecl.match(/(?:float|int|vec\d|mat\d|bool)\s+(\w+)/);
+          const globalName = globalMatch?.[1];
 
-        // For Mega Bezel globals, ALWAYS include them even if they "exist" in source
-        // because they need to be redeclared at the shader stage level
-        // Include common Mega Bezel global patterns AND any UPPERCASE globals (Mega Bezel convention)
-        const isMegaBezelGlobal = /SCREEN_|TUBE_|AVERAGE_LUMA|SAMPLING_|CROPPED_|ROTATED_|SAMPLE_AREA|VIEWPORT_|CORE_|CACHE_|NEGATIVE_CROP|BEZEL_|GRID_|REFLECTION_|FRAME_|ASPECT|SCALE|COORD|MASK/.test(globalName || '');
-        const isUppercaseGlobal = globalName && /^[A-Z_][A-Z0-9_]*$/.test(globalName);
-        const shouldInclude = isMegaBezelGlobal || isUppercaseGlobal || !definitionExists(globalDecl);
+          // Include Mega Bezel global patterns AND any UPPERCASE globals
+          const isMegaBezelGlobal = /SCREEN_|TUBE_|AVERAGE_LUMA|SAMPLING_|CROPPED_|ROTATED_|SAMPLE_AREA|VIEWPORT_|CORE_|CACHE_|NEGATIVE_CROP|BEZEL_|GRID_|REFLECTION_|FRAME_|ASPECT|SCALE|COORD|MASK/.test(globalName || '');
+          const isUppercaseGlobal = globalName && /^[A-Z_][A-Z0-9_]*$/.test(globalName);
 
-        if (globalName && !seenGlobals.has(globalName) && shouldInclude) {
-          seenGlobals.add(globalName);
-          uniqueGlobals.push(globalDecl);
+          const shouldInclude = isMegaBezelGlobal || isUppercaseGlobal || !definitionExists(globalDecl);
+
+          if (globalName && !seenGlobals.has(globalName) && shouldInclude) {
+            seenGlobals.add(globalName);
+            uniqueGlobals.push(globalDecl);
+          }
         }
-      }
 
-      if (uniqueGlobals.length > 0) {
-        parts.push('// Global mutable variables');
-        parts.push(...uniqueGlobals);
-        parts.push('');
+        if (uniqueGlobals.length > 0) {
+          parts.push('// Global mutable variables (vertex only - fragment gets varyings)');
+          parts.push(...uniqueGlobals);
+          parts.push('');
+        }
+      } else {
+        // Fragment shader: globals converted to varyings by GlobalToVaryingConverter
+        // Do NOT inject global declarations here - would cause redefinition errors
+        console.log(`[buildGlobalDefinitionsCode] Fragment stage: skipping ${globalDefs.globals.length} globals (handled by varyings)`);
       }
     }
 
@@ -1226,7 +1404,8 @@ export class SlangShaderCompiler {
       parts.push('');
     }
 
-    return parts.join('\n');
+    const result = parts.join('\n');
+    return result;
   }
 
   /**
@@ -1240,13 +1419,39 @@ export class SlangShaderCompiler {
     parameters: ShaderParameter[] = [],
     globalDefs: GlobalDefinitions = { functions: [], defines: [], consts: [], globals: [] }
   ): string {
+    console.log(`[convertToWebGL] *** Called for ${stage} stage, globalDefs.globals.length=${globalDefs.globals.length} ***`);
+
+    // Debug: Check if HHLP_GetMaskCenteredOnValue is in the input
+    if (source.includes('HHLP_GetMaskCenteredOnValue')) {
+      const idx = source.indexOf('HHLP_GetMaskCenteredOnValue');
+      const context = source.substring(Math.max(0, idx - 30), Math.min(source.length, idx + 150));
+      console.log(`[convertToWebGL ${stage}] INPUT contains HHLP, context:`, context);
+    } else {
+      console.log(`[convertToWebGL ${stage}] HHLP_GetMaskCenteredOnValue NOT in input source`);
+    }
+
     let output = source;
 
-    // Replace #version
+    // Replace or add #version directive
+    // Note: The regex needs to match decimal versions too (like 300.0)
+    const versionMatch = output.match(/#version\s+([\d.]+)/);
+    if (versionMatch) {
+      console.log(`[convertToWebGL] Found version directive: "${versionMatch[0]}", version number: "${versionMatch[1]}"`);
+    }
+
+    const hasVersion = /#version\s+[\d.]+/.test(output);
     if (webgl2) {
-      output = output.replace(/#version\s+\d+/, '#version 300 es');
+      if (hasVersion) {
+        // Replace any version (including decimal like 300.0) with proper format
+        // Make sure to handle both integer and decimal versions
+        output = output.replace(/#version\s+[\d.]+\s*(?:es)?/g, '#version 300 es');
+      } else {
+        // Add #version 300 es at the very beginning
+        output = '#version 300 es\n' + output;
+      }
     } else {
-      output = output.replace(/#version\s+\d+/, '');
+      // Remove version directive for WebGL1
+      output = output.replace(/#version\s+[\d.]+\s*(?:es)?/g, '');
     }
 
     // Strip #pragma parameter lines (they become uniforms instead)
@@ -1257,15 +1462,18 @@ export class SlangShaderCompiler {
     const uboDefines = /^\s*#define\s+(SourceSize|OriginalSize|OriginalFeedbackSize|OutputSize|FinalViewportSize|DerezedPassSize|FrameCount|FrameDirection|MVP)\s+.*$/gm;
     output = output.replace(uboDefines, '');
 
+    // NOTE: UBO initializer stripping now happens earlier in the compile() method
+    // BEFORE global./params. replacement, so the pattern can match properly
+
     // Add precision (both vertex and fragment need it for uniform injection)
     const precisionLine = webgl2
       ? 'precision highp float;\nprecision highp int;\n'
       : 'precision mediump float;\n';
 
     // Insert after #version
-    const versionMatch = output.match(/#version.*?\n/);
-    if (versionMatch) {
-      output = output.replace(versionMatch[0], versionMatch[0] + precisionLine);
+    const versionMatch2 = output.match(/#version.*?\n/);
+    if (versionMatch2) {
+      output = output.replace(versionMatch2[0], versionMatch2[0] + precisionLine);
     } else {
       output = precisionLine + output;
     }
@@ -1280,8 +1488,12 @@ export class SlangShaderCompiler {
       : { ...globalDefs, defines: [] };  // Fragment gets consts, functions, and ALL globals
 
     const globalDefsCode = this.buildGlobalDefinitionsCode(filteredGlobalDefs, output, stage);
+    const totalDefs = filteredGlobalDefs.defines.length + filteredGlobalDefs.consts.length + filteredGlobalDefs.globals.length + filteredGlobalDefs.functions.length;
+
+    // Log for both stages to debug
+    console.log(`[SlangCompiler] buildGlobalDefinitionsCode for ${stage}: code.length=${globalDefsCode.length}, totalDefs=${totalDefs}`);
+
     if (globalDefsCode) {
-      const totalDefs = filteredGlobalDefs.defines.length + filteredGlobalDefs.consts.length + filteredGlobalDefs.globals.length + filteredGlobalDefs.functions.length;
       console.log(`[SlangCompiler] Injecting ${totalDefs} global definitions into ${stage} stage (${filteredGlobalDefs.defines.length} defines, ${filteredGlobalDefs.consts.length} consts, ${filteredGlobalDefs.globals.length} globals, ${filteredGlobalDefs.functions.length} functions)`);
 
       // Find insertion point: after precision declarations
@@ -1296,13 +1508,34 @@ export class SlangShaderCompiler {
         // No precision found, insert after #version
         const versionEnd = output.search(/#version.*?\n/);
         if (versionEnd !== -1) {
-          const versionMatch = output.match(/#version.*?\n/);
-          if (versionMatch) {
-            const insertPos = versionEnd + versionMatch[0].length;
+          const versionMatch3 = output.match(/#version.*?\n/);
+          if (versionMatch3) {
+            const insertPos = versionEnd + versionMatch3[0].length;
             output = output.substring(0, insertPos) + '\n' + globalDefsCode + '\n' + output.substring(insertPos);
           }
         }
       }
+    }
+
+    // Debug fragment global injection - check if globals were actually added
+    if (!isVertex && globalDefsCode) {
+      const globalVarCount = (globalDefsCode.match(/(?:float|int|vec\d|mat\d|bool)\s+[A-Z_][A-Z0-9_]*\s*=/g) || []).length;
+      console.log(`[SlangCompiler] Fragment global vars in injected code: ${globalVarCount}`);
+
+      // Sample the first few global variables to verify
+      const sampleGlobals = globalDefsCode.match(/(?:float|int|vec\d|mat\d|bool)\s+([A-Z_][A-Z0-9_]*)\s*=/g);
+      if (sampleGlobals && sampleGlobals.length > 0) {
+        console.log(`[SlangCompiler] Fragment global samples:`, sampleGlobals.slice(0, 5));
+      }
+    }
+
+    // Debug: Check HHLP RIGHT AFTER global defs injection
+    if (output.includes('HHLP_GetMaskCenteredOnValue')) {
+      const idx = output.indexOf('HHLP_GetMaskCenteredOnValue');
+      const lineStart = output.lastIndexOf('\n', idx) + 1;
+      const lineEnd = output.indexOf('\n', idx);
+      const functionLine = output.substring(lineStart, lineEnd > idx ? lineEnd : idx + 100);
+      console.log('[convertToWebGL CHECKPOINT 1] RIGHT AFTER global defs injection:', functionLine);
     }
 
     // Add RetroArch params and shader parameter uniforms
@@ -1647,6 +1880,14 @@ uniform float HSM_REFLECT_VIGNETTE_AMOUNT;
 uniform float HSM_REFLECT_VIGNETTE_SIZE;
 uniform float HSM_RENDER_FOR_SIMPLIFIED_EMPTY_LINE;
 uniform float HSM_RENDER_FOR_SIMPLIFIED_TITLE;
+uniform float HSM_MONOCHROME_MODE;
+uniform float HSM_MONOCHROME_DUALSCREEN_VIS_MODE;
+uniform float HSM_GLOBAL_CORNER_RADIUS;
+uniform float HSM_TUBE_BLACK_EDGE_CORNER_RADIUS_SCALE;
+uniform float HSM_TUBE_BLACK_EDGE_CURVATURE_SCALE;
+uniform float HSM_CRT_SCREEN_BLEND_MODE;
+uniform float HSM_SCREEN_VIGNETTE_IN_REFLECTION;
+uniform float HSM_CRT_CURVATURE_SCALE;
 uniform float HSM_RENDER_SIMPLE_MASK_TYPE;
 uniform float HSM_RENDER_SIMPLE_MODE;
 uniform float HSM_RESOLUTION_DEBUG_ON;
@@ -2103,6 +2344,14 @@ uniform float HSM_REFLECT_VIGNETTE_AMOUNT;
 uniform float HSM_REFLECT_VIGNETTE_SIZE;
 uniform float HSM_RENDER_FOR_SIMPLIFIED_EMPTY_LINE;
 uniform float HSM_RENDER_FOR_SIMPLIFIED_TITLE;
+uniform float HSM_MONOCHROME_MODE;
+uniform float HSM_MONOCHROME_DUALSCREEN_VIS_MODE;
+uniform float HSM_GLOBAL_CORNER_RADIUS;
+uniform float HSM_TUBE_BLACK_EDGE_CORNER_RADIUS_SCALE;
+uniform float HSM_TUBE_BLACK_EDGE_CURVATURE_SCALE;
+uniform float HSM_CRT_SCREEN_BLEND_MODE;
+uniform float HSM_SCREEN_VIGNETTE_IN_REFLECTION;
+uniform float HSM_CRT_CURVATURE_SCALE;
 uniform float HSM_RENDER_SIMPLE_MASK_TYPE;
 uniform float HSM_RENDER_SIMPLE_MODE;
 uniform float HSM_RESOLUTION_DEBUG_ON;
@@ -2276,6 +2525,15 @@ uniform float DEBLUR;
       // No manual injection needed!
     }
 
+    // Debug: Check HHLP BEFORE swizzle replacements
+    if (output.includes('HHLP_GetMaskCenteredOnValue')) {
+      const idx = output.indexOf('HHLP_GetMaskCenteredOnValue');
+      const lineStart = output.lastIndexOf('\n', idx) + 1;
+      const lineEnd = output.indexOf('\n', idx);
+      const functionLine = output.substring(lineStart, lineEnd > idx ? lineEnd : idx + 100);
+      console.log('[convertToWebGL CHECKPOINT 2] BEFORE swizzle replacements:', functionLine);
+    }
+
     // Convert Slang-specific syntax
     // Convert swizzle shorthand: 0.0.xxx → vec3(0.0), DEBLUR.xxx → vec3(DEBLUR)
     // Handle both literals and variables
@@ -2290,6 +2548,15 @@ uniform float DEBLUR;
     output = output.replace(/\b([a-zA-Z_]\w*)\.xxx\b/g, 'vec3($1)');
     output = output.replace(/\b([a-zA-Z_]\w*)\.xxxx\b/g, 'vec4($1)');
     output = output.replace(/\b([a-zA-Z_]\w*)\.xx\b/g, 'vec2($1)');
+
+    // Debug: Check HHLP AFTER swizzle replacements
+    if (output.includes('HHLP_GetMaskCenteredOnValue')) {
+      const idx = output.indexOf('HHLP_GetMaskCenteredOnValue');
+      const lineStart = output.lastIndexOf('\n', idx) + 1;
+      const lineEnd = output.indexOf('\n', idx);
+      const functionLine = output.substring(lineStart, lineEnd > idx ? lineEnd : idx + 100);
+      console.log('[convertToWebGL CHECKPOINT 3] AFTER swizzle replacements:', functionLine);
+    }
 
     // Fix global variable initialization with uniforms
     // GLSL doesn't allow global variables to be initialized with non-constant expressions
@@ -2316,15 +2583,18 @@ uniform float DEBLUR;
 
     // Convert Three.js standard attribute names (vertex stage only)
     if (stage === 'vertex') {
-      // Remove attribute declarations - Three.js ShaderMaterial provides these automatically
-      output = output.replace(/\bin\s+vec4\s+Position\s*;/g, '// Position provided by Three.js');
-      output = output.replace(/\bin\s+vec2\s+TexCoord\s*;/g, '// uv provided by Three.js');
+      // Convert Slang attribute declarations to Three.js declarations
+      // Position (vec4 in Slang) → position (vec3 in Three.js)
+      output = output.replace(/\battribute\s+vec4\s+Position\s*;/g, 'attribute vec3 position;');
+      output = output.replace(/\bin\s+vec4\s+Position\s*;/g, 'attribute vec3 position;');
 
-      // Convert Slang vertex shader to Three.js format
-      // Replace 'MVP * Position' with proper transformation using Three.js attributes
-      output = output.replace(/\bglobal\.MVP\s*\*\s*Position\b/g, 'MVP * vec4(position, 1.0)');
-      output = output.replace(/\bMVP\s*\*\s*Position\b/g, 'MVP * vec4(position, 1.0)');
-      // Convert TexCoord to Three.js uv attribute
+      // TexCoord → uv (both vec2)
+      output = output.replace(/\battribute\s+vec2\s+TexCoord\s*;/g, 'attribute vec2 uv;');
+      output = output.replace(/\bin\s+vec2\s+TexCoord\s*;/g, 'attribute vec2 uv;');
+
+      // Convert usage: Position is vec4 in Slang but vec3 in Three.js, so we need vec4(position, 1.0)
+      output = output.replace(/\bPosition\b/g, 'vec4(position, 1.0)');
+      // TexCoord → uv (both are vec2)
       output = output.replace(/\bTexCoord\b/g, 'uv');
     }
 
@@ -2337,16 +2607,21 @@ uniform float DEBLUR;
         output = output.replace(/\bvarying\b/g, 'in');
       }
 
-      // Three.js ShaderMaterial handles gl_FragColor automatically for WebGL 2
-      // Convert any custom fragment outputs back to gl_FragColor
+      // Handle fragment shader output for WebGL2 (GLSL ES 3.0)
       if (stage === 'fragment') {
-        // Remove any 'layout(...) out vec4 FragColor;' declarations (may span multiple lines)
-        // Use [\s\S] to match any character including newlines
-        output = output.replace(/layout\s*\([^)]*\)\s*out\s+vec4\s+FragColor\s*;/gs, '');
-        // Also remove plain 'out vec4 FragColor;' if no layout
-        output = output.replace(/out\s+vec4\s+FragColor\s*;/g, '');
-        // Convert FragColor assignments to gl_FragColor (Three.js will handle the rest)
-        output = output.replace(/\bFragColor\b/g, 'gl_FragColor');
+        // Remove layout qualifiers from FragColor (WebGL2 doesn't need them)
+        output = output.replace(/layout\s*\([^)]*\)\s*out\s+vec4\s+FragColor\s*;/gs, 'out vec4 FragColor;');
+
+        // If no FragColor declaration exists, add it (required for GLSL ES 3.0)
+        if (!output.includes('out vec4 FragColor')) {
+          // Add after precision declarations
+          const precisionMatch = output.match(/(precision\s+\w+\s+\w+\s*;\s*\n)/);
+          if (precisionMatch) {
+            output = output.replace(precisionMatch[0], precisionMatch[0] + 'out vec4 FragColor;\n');
+          }
+        }
+        // Convert gl_FragColor to FragColor (GLSL ES 3.0 doesn't have gl_FragColor)
+        output = output.replace(/\bgl_FragColor\b/g, 'FragColor');
       }
     } else {
       // WebGL 1.0: keep varying, attribute, gl_FragColor
@@ -2418,6 +2693,15 @@ uniform float DEBLUR;
       }
     }
 
+    // Debug: Check HHLP BEFORE returning from convertToWebGL
+    if (output.includes('HHLP_GetMaskCenteredOnValue')) {
+      const idx = output.indexOf('HHLP_GetMaskCenteredOnValue');
+      const lineStart = output.lastIndexOf('\n', idx) + 1;
+      const lineEnd = output.indexOf('\n', idx);
+      const functionLine = output.substring(lineStart, lineEnd > idx ? lineEnd : idx + 100);
+      console.log('[convertToWebGL CHECKPOINT 4] BEFORE return:', functionLine);
+    }
+
     return output;
   }
 
@@ -2480,6 +2764,14 @@ ${globalInits.map(g => `  ${g.name} = ${g.init};`).join('\n')}
   private static convertIntLiteralsInComparisons(source: string, bindings: SlangUniformBinding[] = []): string {
     console.log('[convertIntLiteralsInComparisons] START - bindings:', bindings.length);
     let output = source;
+
+    // CRITICAL FIX: Protect #version directive from int-to-float conversion
+    // Save and replace #version line temporarily
+    const versionDirective = output.match(/#version\s+[\d.]+\s*(?:es)?\s*\n/);
+    const versionPlaceholder = '__VERSION_DIRECTIVE_PROTECTED__';
+    if (versionDirective) {
+      output = output.replace(/#version\s+[\d.]+\s*(?:es)?\s*\n/, versionPlaceholder + '\n');
+    }
 
     // Extract all int/uint uniform names from BOTH bindings AND source
     const intUniforms = new Set<string>();
@@ -2964,6 +3256,11 @@ ${globalInits.map(g => `  ${g.name} = ${g.init};`).join('\n')}
       output = output.replace(placeholder, original);
     });
 
+    // CRITICAL FIX: Restore #version directive that was protected at the start
+    if (versionDirective) {
+      output = output.replace(versionPlaceholder + '\n', versionDirective[0]);
+    }
+
     return output;
   }
 
@@ -3004,12 +3301,22 @@ ${globalInits.map(g => `  ${g.name} = ${g.init};`).join('\n')}
     webgl2: boolean
   ): string {
     let output = source;
-    const declaredUniforms = new Set<string>(); // Track which uniforms we've already declared
+    const declaredUniforms = new Set<string>(); // Track which uniforms/variables we've already declared
 
-    // Parse existing uniform declarations from source (e.g., shader parameters)
+    // Parse existing uniform declarations AND global variable declarations from source
+    // We need to check for both:
+    // 1. uniform float HSM_POTATO_COLORIZE_CRT_WITH_BG;
+    // 2. float HSM_POTATO_COLORIZE_CRT_WITH_BG = value;
     const existingUniformRegex = /^\s*uniform\s+\w+\s+(\w+)\s*;/gm;
+    const existingVariableRegex = /^\s*(?:float|int|vec\d|mat\d|bool)\s+(\w+)\s*=/gm;
+
     let match;
     while ((match = existingUniformRegex.exec(source)) !== null) {
+      declaredUniforms.add(match[1]);
+    }
+
+    // Reset lastIndex after first regex
+    while ((match = existingVariableRegex.exec(source)) !== null) {
       declaredUniforms.add(match[1]);
     }
 
@@ -3206,17 +3513,18 @@ void main() {
 }
 `;
     } else {
+      // Three.js compatible vertex shader
+      // Three.js provides: position (vec3), uv (vec2), normal (vec3)
+      // and matrices: projectionMatrix, modelViewMatrix, modelMatrix
       return `
-attribute vec4 Position;
-attribute vec2 TexCoord;
-
 uniform mat4 MVP;
 
 varying vec2 vTexCoord;
 
 void main() {
-  gl_Position = MVP * Position;
-  vTexCoord = TexCoord;
+  // Three.js provides 'position' as vec3 and 'uv' as vec2
+  gl_Position = MVP * vec4(position, 1.0);
+  vTexCoord = uv;
 }
 `;
     }
@@ -3303,6 +3611,497 @@ void main() {
     }
 
     return result.join('\n');
+  }
+
+  /**
+   * Convert GLSL ES 3.0 storage qualifiers (in/out) to WebGL 1 compatible versions
+   * Only converts interface block variables (global scope), not function parameters
+   */
+  private static convertStorageQualifiers(glslCode: string): string {
+    const lines = glslCode.split('\n');
+    const result: string[] = [];
+    let insideFunction = false;
+    let braceDepth = 0;
+    let conversions = 0;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Debug HHLP processing
+      if (line.includes('HHLP_GetMaskCenteredOnValue')) {
+        console.log('[convertStorageQualifiers] Processing HHLP line:', line);
+        console.log('[convertStorageQualifiers] insideFunction:', insideFunction, 'braceDepth:', braceDepth);
+      }
+
+      // Track when we're inside a function - MUST DO THIS BEFORE PROCESSING THE LINE!
+      const isFunctionDeclaration = trimmed.match(/^(void|vec[234]|float|bool|mat[234]|int|uint|ivec[234]|uvec[234])\s+\w+\s*\(/);
+      if (isFunctionDeclaration) {
+        insideFunction = true;
+        if (line.includes('HHLP_GetMaskCenteredOnValue')) {
+          console.log('[convertStorageQualifiers] Detected function declaration, set insideFunction=true');
+        }
+      }
+
+      // Track brace depth
+      for (const char of line) {
+        if (char === '{') braceDepth++;
+        else if (char === '}') {
+          braceDepth--;
+          if (braceDepth === 0) insideFunction = false;
+        }
+      }
+
+      // Only convert at global scope (outside functions)
+      // If this line is a function declaration, skip conversion even if insideFunction hasn't been set yet
+      if (!insideFunction && !isFunctionDeclaration && braceDepth === 0) {
+        // Convert 'in' to 'varying' for interface variables (not function params)
+        // Only if it's at the start of a line or after a semicolon
+        if (trimmed.match(/^in\s+(vec[234]|float|mat[234])/)) {
+          if (line.includes('HHLP')) console.log('[convertStorageQualifiers] CONVERTING in→varying:', line);
+          result.push(line.replace(/^(\s*)in\s+/, '$1varying '));
+          conversions++;
+          continue;
+        }
+
+        // Convert 'out' to 'varying' for interface variables
+        if (trimmed.match(/^out\s+(vec[234]|float|mat[234])/)) {
+          if (line.includes('HHLP')) console.log('[convertStorageQualifiers] CONVERTING out→varying:', line);
+          result.push(line.replace(/^(\s*)out\s+/, '$1varying '));
+          conversions++;
+          continue;
+        }
+      }
+
+      if (line.includes('HHLP_GetMaskCenteredOnValue')) {
+        console.log('[convertStorageQualifiers] Pushing line to result:', line);
+      }
+      result.push(line);
+    }
+
+    if (conversions > 0) {
+      console.log(`[SlangCompiler] Converted ${conversions} in/out qualifiers to varying`);
+    }
+
+    return result.join('\n');
+  }
+
+  /**
+   * Remove duplicate function definitions
+   */
+  private static removeDuplicateFunctions(glslCode: string): string {
+    // Debug: Check if HHLP_GetMaskCenteredOnValue is in the input
+    const hasHHLP = glslCode.includes('HHLP_GetMaskCenteredOnValue');
+    console.log('[removeDuplicateFunctions] Called with input length:', glslCode.length);
+    console.log('[removeDuplicateFunctions] Contains HHLP_GetMaskCenteredOnValue:', hasHHLP);
+
+    if (hasHHLP) {
+      const idx = glslCode.indexOf('HHLP_GetMaskCenteredOnValue');
+      const context = glslCode.substring(Math.max(0, idx - 20), Math.min(glslCode.length, idx + 120));
+      console.log('[removeDuplicateFunctions] HHLP context:', context);
+    }
+
+    // This is complex because functions can have the opening brace on the next line
+    // We need to track functions and skip duplicates entirely
+    const lines = glslCode.split('\n');
+    const result: string[] = [];
+    const seenFunctions = new Set<string>();
+    let skipping = false;
+    let braceDepth = 0;
+    let skipCount = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+
+      // If we're currently skipping a duplicate function
+      if (skipping) {
+        skipCount++;
+
+        // Track braces to know when the function ends
+        for (const char of line) {
+          if (char === '{') braceDepth++;
+          else if (char === '}') {
+            braceDepth--;
+            if (braceDepth === 0) {
+              skipping = false;
+            }
+          }
+        }
+        continue;
+      }
+
+      // Check if this line starts a function definition
+      // Match: return_type function_name(params) with optional {
+      // Updated regex to handle more type variations including mat3x3, highp/mediump/lowp qualifiers
+      const funcMatch = trimmed.match(/^((?:const\s+)?(?:highp\s+|mediump\s+|lowp\s+)?(?:vec[234]|mat[234](?:x[234])?|float|bool|void|int|uint|[iu]?vec[234]|sampler2D))\s+(\w+)\s*\(([^)]*)\)/);
+
+      if (funcMatch) {
+        const functionName = funcMatch[2];
+        const params = funcMatch[3].trim();
+
+        // Create a full signature including parameter TYPES (not names) to support function overloading
+        // Extract just the types from parameters to match function signatures properly
+        const paramTypes = params.split(',').map(p => {
+          const trimmedParam = p.trim();
+          if (trimmedParam.length === 0) return '';
+          // Extract type by removing the last word (which is the parameter name)
+          const parts = trimmedParam.split(/\s+/);
+          if (parts.length >= 2) {
+            // Return all but the last part (the variable name)
+            return parts.slice(0, -1).join(' ');
+          }
+          // If only one part, it's probably just a type (like in forward declarations)
+          return trimmedParam;
+        }).filter(t => t.length > 0).join(', ');
+
+        const fullSignature = `${functionName}(${paramTypes})`;
+
+        // Debug logging for critical functions
+        if (functionName === 'HHLP_GetMaskCenteredOnValue' || functionName === 'HSM_Linearize' || functionName === 'HSM_Delinearize' || functionName === 'HSM_GetCurvedCoord') {
+          console.log(`[removeDuplicateFunctions] ${functionName}`);
+          console.log(`  Full line: "${line}"`);
+          console.log(`  Trimmed: "${trimmed}"`);
+          console.log(`  Raw params: "${params}"`);
+          console.log(`  Param types: "${paramTypes}"`);
+          console.log(`  Signature: "${fullSignature}"`);
+          console.log(`  Already seen: ${seenFunctions.has(fullSignature)}`);
+        }
+
+        // Check if we've seen this EXACT function signature before
+        if (seenFunctions.has(fullSignature)) {
+          // Skip this duplicate function
+          skipCount++;
+          skipping = true;
+          braceDepth = 0;
+
+          // Debug logging for critical functions
+          if (functionName === 'HHLP_GetMaskCenteredOnValue' || functionName === 'HSM_Linearize' || functionName === 'HSM_Delinearize' || functionName === 'HSM_GetCurvedCoord') {
+            console.log(`[removeDuplicateFunctions] SKIPPING duplicate: ${fullSignature}`);
+          }
+
+          // Check if the brace is on this line
+          if (trimmed.includes('{')) {
+            braceDepth = 1;
+          }
+          continue;
+        }
+
+        // New function - remember it and keep the line
+        seenFunctions.add(fullSignature);
+        result.push(line);
+
+        // Check if we're entering the function body on this line
+        if (trimmed.includes('{')) {
+          // We're not skipping, but we might want to track depth
+          // for future use (not needed for non-duplicate)
+        }
+      } else {
+        // Not a function definition, keep the line
+        result.push(line);
+      }
+    }
+
+    if (skipCount > 0) {
+      console.log(`[SlangCompiler] Removed ${skipCount} lines from ${seenFunctions.size} unique functions (duplicates removed)`);
+    }
+
+    return result.join('\n');
+  }
+
+  /**
+   * Convert do-while loops to while loops (do-while not supported in WebGL 1 GLSL)
+   *
+   * Transforms:
+   *   do { body } while (condition);
+   * Into:
+   *   { body while (condition) { body } }
+   */
+  private static convertDoWhileLoops(glslCode: string): string {
+    // Match do { ... } while (condition);
+    // This regex matches do-while loops with proper brace tracking
+    const doWhileRegex = /\bdo\s*\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}\s*while\s*\(([^)]+)\)\s*;/g;
+
+    let fixed = glslCode;
+    let match;
+    let replacements = 0;
+
+    while ((match = doWhileRegex.exec(glslCode)) !== null) {
+      const body = match[1];
+      const condition = match[2];
+
+      // Replace do-while with: { body while (condition) { body } }
+      const replacement = `{ ${body} while (${condition}) { ${body} } }`;
+      fixed = fixed.replace(match[0], replacement);
+      replacements++;
+    }
+
+    if (replacements > 0) {
+      console.log(`[SlangCompiler] Converted ${replacements} do-while loops to while loops`);
+    }
+
+    return fixed;
+  }
+
+  /**
+   * Fix WebGL 1 incompatibilities in GLSL code
+   *
+   * Converts unsigned integer types to floats since Three.js with WebGL 1
+   * does not support uint uniforms or variables.
+   */
+  private static fixWebGLIncompatibilities(glslCode: string, webgl2: boolean = true): string {
+    let fixed = glslCode;
+
+    // Debug: Check HHLP at the VERY START of fixWebGLIncompatibilities
+    if (fixed.includes('HHLP_GetMaskCenteredOnValue')) {
+      const idx = fixed.indexOf('HHLP_GetMaskCenteredOnValue');
+      const lineStart = fixed.lastIndexOf('\n', idx) + 1;
+      const lineEnd = fixed.indexOf('\n', idx);
+      const functionLine = fixed.substring(lineStart, lineEnd > idx ? lineEnd : idx + 100);
+      console.log('[fixWebGLIncompatibilities] AT START OF METHOD:', functionLine);
+    }
+
+    // Count replacements for logging
+    const uintUniformCount = (fixed.match(/uniform\s+uint\s+/g) || []).length;
+    const uintVarCount = (fixed.match(/\buint\s+\w+\s*=/g) || []).length;
+    const uintCastCount = (fixed.match(/uint\(/g) || []).length;
+    const mat3x3Count = (fixed.match(/\bmat3x3\b/g) || []).length;
+    const textureCallCount = (glslCode.match(/\btexture\s*\(/g) || []).length; // Count conversions
+    const outQualifierCount = (fixed.match(/\bout\s+/g) || []).length;
+    const inQualifierCount = (fixed.match(/\bin\s+/g) || []).length;
+
+    // Replace unsigned integer uniforms based on WebGL version
+    // WebGL1 doesn't support uint uniforms (convert to float)
+    // WebGL2 supports uint uniforms natively
+    if (!webgl2) {
+      fixed = fixed.replace(/uniform\s+uint\s+/g, 'uniform float ');
+    }
+
+    // Replace uint variable declarations and casts based on WebGL version
+    if (!webgl2) {
+      // WebGL1: convert uint to float
+      fixed = fixed.replace(/\buint\s+(\w+)\s*=/g, 'float $1 =');
+      fixed = fixed.replace(/uint\(/g, 'float(');
+    }
+
+    // Fix mat3x3 syntax error - GLSL uses mat3 not mat3x3
+    fixed = fixed.replace(/\bmat3x3\b/g, 'mat3');
+
+    // Fix texture() calls based on WebGL version
+    // WebGL2 (GLSL ES 3.0) uses texture()
+    // WebGL1 (GLSL ES 1.0) uses texture2D()
+    if (!webgl2) {
+      // Only convert to texture2D for WebGL1
+      // IMPORTANT: Process line-by-line to avoid corrupting function signatures that contain commas
+      const lines = fixed.split('\n');
+      const processedLines = lines.map(line => {
+        const trimmed = line.trim();
+
+        // Skip function declaration lines to avoid corrupting function signatures
+        // Match patterns like: float FunctionName(float param1, float param2)
+        if (trimmed.match(/^(void|vec[234]|float|bool|mat[234]|int|uint|ivec[234]|uvec[234]|sampler2D)\s+\w+\s*\(/)) {
+          return line;
+        }
+
+        // Apply texture replacements only to non-function-declaration lines
+        let processed = line;
+
+        // First, handle 3-argument texture() calls with LOD (strip the LOD parameter)
+        // texture(sampler, coord, lod) → texture2D(sampler, coord)
+        processed = processed.replace(/\btexture\s*\(([^,]+),\s*([^,]+),\s*[^)]+\)/g, 'texture2D($1, $2)');
+
+        // Then handle regular 2-argument texture() calls
+        processed = processed.replace(/\btexture\s*\(/g, 'texture2D(');
+
+        // Fix textureLodOffset - not available in WebGL 1, use texture2D instead
+        // textureLodOffset(sampler, coord, lod, offset) → texture2D(sampler, coord)
+        processed = processed.replace(/textureLodOffset\s*\(([^,]+),\s*([^,]+),\s*[^,]+,\s*ivec2\([^)]*\)\)/g, 'texture2D($1, $2)');
+
+        // Fix textureLod - not available in WebGL 1, use texture2D instead
+        // textureLod(sampler, coord, lod) → texture2D(sampler, coord)
+        processed = processed.replace(/textureLod\s*\(([^,]+),\s*([^,]+),\s*[^)]+\)/g, 'texture2D($1, $2)');
+
+        return processed;
+      });
+      fixed = processedLines.join('\n');
+    } else {
+      // For WebGL2, we keep texture() but need to handle special functions
+      // textureLodOffset and textureLod might not be available even in WebGL2
+      // Convert them to regular texture() calls
+      fixed = fixed.replace(/textureLodOffset\s*\(([^,]+),\s*([^,]+),\s*[^,]+,\s*ivec2\([^)]*\)\)/g, 'texture($1, $2)');
+      fixed = fixed.replace(/textureLod\s*\(([^,]+),\s*([^,]+),\s*[^)]+\)/g, 'texture($1, $2)');
+    }
+
+    // Fix textureSize - not available in WebGL 1
+    // We need to replace textureSize(sampler, lod) with a uniform or constant
+    // For now, replace with vec2(1024.0, 1024.0) as a reasonable default
+    fixed = fixed.replace(/textureSize\s*\([^,]+,\s*[^)]+\)/g, 'ivec2(1024, 1024)');
+
+    // Fix mat2x2 syntax error - GLSL uses mat2 not mat2x2
+    fixed = fixed.replace(/\bmat2x2\b/g, 'mat2');
+
+    // Fix do-while loops - not supported in WebGL 1 GLSL
+    // Convert: do { ... } while (condition); → { ... while (condition) { ... } }
+    // This is a simple transformation that works for most cases
+    fixed = this.convertDoWhileLoops(fixed);
+
+    // Fix 'out' qualifiers on sampler2D parameters - not allowed in GLSL
+    // sampler2D cannot be output parameters, they are opaque types
+    fixed = fixed.replace(/\bout\s+sampler2D\b/g, 'sampler2D');
+    fixed = fixed.replace(/\binout\s+sampler2D\b/g, 'sampler2D');
+
+    // Fix out/in qualifiers based on WebGL version
+    // WebGL2/GLSL ES 3.0 uses 'in'/'out'
+    // WebGL1/GLSL ES 1.0 uses 'attribute'/'varying'
+    if (!webgl2) {
+      // Only convert for WebGL1
+      fixed = this.convertStorageQualifiers(fixed);
+    }
+
+    // Debug: Check HHLP RIGHT AFTER convertStorageQualifiers
+    if (fixed.includes('HHLP_GetMaskCenteredOnValue')) {
+      const idx = fixed.indexOf('HHLP_GetMaskCenteredOnValue');
+      const lineStart = fixed.lastIndexOf('\n', idx) + 1;
+      const lineEnd = fixed.indexOf('\n', idx);
+      const functionLine = fixed.substring(lineStart, lineEnd > idx ? lineEnd : idx + 100);
+      console.log('[fixWebGLIncompatibilities] AFTER convertStorageQualifiers:', functionLine);
+    }
+
+    // Debug: Check for HHLP_GetMaskCenteredOnValue before removeDuplicateFunctions
+    if (fixed.includes('HHLP_GetMaskCenteredOnValue')) {
+      const idx = fixed.indexOf('HHLP_GetMaskCenteredOnValue');
+      const context = fixed.substring(Math.max(0, idx - 30), Math.min(fixed.length, idx + 150));
+      console.log('[fixWebGLIncompatibilities] BEFORE removeDuplicateFunctions, HHLP context:', context);
+    } else {
+      console.log('[fixWebGLIncompatibilities] HHLP_GetMaskCenteredOnValue NOT FOUND before removeDuplicateFunctions');
+    }
+
+    // Remove duplicate function definitions
+    fixed = this.removeDuplicateFunctions(fixed);
+
+    // Log if any replacements were made
+    if (uintUniformCount > 0 || uintVarCount > 0 || uintCastCount > 0 || mat3x3Count > 0 || textureCallCount > 0 || outQualifierCount > 0 || inQualifierCount > 0) {
+      console.log(`[SlangCompiler] Fixed WebGL incompatibilities: ${uintUniformCount} uint uniforms, ${uintVarCount} uint vars, ${uintCastCount} uint casts, ${mat3x3Count} mat3x3 → mat3, ${textureCallCount} texture() → texture2D(), ${outQualifierCount} 'out' → 'varying', ${inQualifierCount} 'in' → 'varying'`);
+    }
+
+    // Inject missing constant declarations
+    fixed = this.injectMissingConstants(fixed);
+
+    return fixed;
+  }
+
+  /**
+   * Inject missing constant declarations that should come from parameters or includes
+   */
+  private static injectMissingConstants(glslCode: string): string {
+    // Check if M_PI is already defined
+    const hasMPI = glslCode.includes('#define M_PI');
+    if (hasMPI) {
+      console.log('[SlangCompiler] M_PI already defined, skipping injection');
+    }
+
+    // These constants are often missing from Mega Bezel shaders due to conditional compilation
+    // Add them with default values to prevent "undeclared identifier" errors
+    const missingConstants = `
+// Missing constants with default values
+${!hasMPI ? `#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif` : ''}
+
+#ifndef CCONTR
+#define CCONTR 0.0
+#endif
+
+#ifndef CSHARPEN
+#define CSHARPEN 0.0
+#endif
+
+#ifndef CDETAILS
+#define CDETAILS 0.0
+#endif
+
+// Don't add shader parameter defaults - they're causing syntax errors when already defined
+
+// CRITICAL: transpose() is NOT available in GLSL ES 1.0 (WebGL 1)!
+// Add polyfill for WebGL 1 compatibility (only if not already available)
+// Note: GLSL doesn't have a way to check if a function exists, so we use a version check
+#if __VERSION__ < 300
+  #ifndef TRANSPOSE_POLYFILL_DEFINED
+  #define TRANSPOSE_POLYFILL_DEFINED
+  mat3 transpose(mat3 m) {
+    return mat3(
+      m[0][0], m[1][0], m[2][0],
+      m[0][1], m[1][1], m[2][1],
+      m[0][2], m[1][2], m[2][2]
+    );
+  }
+  #endif
+#endif
+
+// Mega Bezel shader parameters are injected as uniforms in megaBezelVariables (lines 1488+)
+// DO NOT add fallback definitions here - they cause redefinition errors with the uniforms!
+
+// Color and gamut constants
+float RW = 0.0;
+float crtgamut = 0.0;
+float SPC = 0.0;
+float beamr = 0.0;
+float beamg = 0.0;
+float beamb = 0.0;
+float satr = 0.0;
+float satg = 0.0;
+float satb = 0.0;
+float vibr = 0.0;
+float wp_temp = 0.0;
+float lum_fix = 0.0;
+float SMS_bl = 0.0;
+float MD_Palette = 0.0;
+float hue_degrees = 0.0;
+float U_SHIFT = 0.0;
+float U_MUL = 0.0;
+float V_SHIFT = 0.0;
+float V_MUL = 0.0;
+float signal = 0.0;
+float CRT_l = 0.0;
+float GCompress = 0.0;
+float cntrst = 0.0;
+float mid = 0.0;
+float lum = 0.0;
+float lift = 0.0;
+vec3 c = vec3(0.0);
+`;
+
+    // Find the position after version and precision statements
+    const lines = glslCode.split('\n');
+    let insertIndex = 0;
+
+    // Find where to insert (after #version, precision, and any #define at the top)
+    for (let i = 0; i < lines.length; i++) {
+      const trimmed = lines[i].trim();
+      if (trimmed.startsWith('#version') ||
+          trimmed.startsWith('precision') ||
+          (trimmed.startsWith('#define') && i < 10)) {
+        insertIndex = i + 1;
+      } else if (trimmed.length > 0 && !trimmed.startsWith('//')) {
+        // Found first real code line
+        break;
+      }
+    }
+
+    // Check if position/uv are already defined before inserting constants
+    // These are added by attribute conversion, so we should skip injection if they exist
+    const codeText = glslCode.toLowerCase();
+    const hasPositionDecl = codeText.includes('vec3 position') || codeText.includes('position');
+    const hasUvDecl = codeText.includes('vec2 uv') || codeText.includes(' uv;') || codeText.includes(' uv,');
+
+    // Always insert constants, they won't conflict
+    lines.splice(insertIndex, 0, missingConstants);
+    if (hasPositionDecl || hasUvDecl) {
+      console.log('[SlangCompiler] Injected missing constant declarations (position/uv already exist)');
+    } else {
+      console.log('[SlangCompiler] Injected missing constant declarations');
+    }
+
+    return lines.join('\n');
   }
 
   /**

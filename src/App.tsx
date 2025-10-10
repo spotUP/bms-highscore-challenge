@@ -49,6 +49,8 @@ const GamesBrowser = lazy(() => import("./pages/GamesBrowser"));
 const ClearLogoTest = lazy(() => import("./components/ClearLogoTest"));
 const Pong404 = lazy(() => import("./pages/Pong404"));
 const PongSlangDemo = lazy(() => import("./pages/PongSlangDemo"));
+const PureWebGL2Test = lazy(() => import("./pages/PureWebGL2Test"));
+const PongPureWebGL2 = lazy(() => import("./pages/PongPureWebGL2"));
 
 const queryClient = new QueryClient();
 
@@ -215,6 +217,10 @@ const App = () => (
                           <Route path="/t/:slug/mobile-entry" element={<Layout><TournamentAccessGuard><MobileEntry /></TournamentAccessGuard></Layout>} />
                           {/* Slang Shader Demo */}
                           <Route path="/slang-demo" element={<PongSlangDemo />} />
+                          {/* Pure WebGL2 Test - NO THREE.JS */}
+                          <Route path="/webgl2-test" element={<PureWebGL2Test />} />
+                          {/* Pure WebGL2 Pong - Real Mega Bezel CRT */}
+                          <Route path="/pong" element={<PongPureWebGL2 />} />
                           {/* 404 Catch-all route */}
                           <Route path="*" element={<Pong404 />} />
                         </Routes>
