@@ -766,9 +766,10 @@ const PRECALC_PICKUP_PATTERNS = {
 
 const Pong404: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const pixiAppRef = useRef<Application | null>(null);
-  const pixiContainerRef = useRef<HTMLDivElement>(null);
-  const crtFilterRef = useRef<CRTFilter | null>(null);
+  // REMOVED: PixiJS refs - pure canvas only
+  // const pixiAppRef = useRef<Application | null>(null);
+  // const pixiContainerRef = useRef<HTMLDivElement>(null);
+  // const crtFilterRef = useRef<CRTFilter | null>(null);
   const animationFrameRef = useRef<number>(0);
   const coinSoundsPlayedRef = useRef<Set<string>>(new Set());
   const previousMachineGunBallCountRef = useRef<number>(0);
@@ -816,16 +817,12 @@ const Pong404: React.FC = () => {
   const updateGameRef = useRef<any>(null);
 
   // 🔧 Reflection adjustment controls (all sides controlled together)
-  const [reflectionParams, setReflectionParams] = useState({
-    offset: 0.190,
-    depth: 0.175,
-  });
-  const reflectionParamsRef = useRef(reflectionParams);
-
-  // Sync reflectionParams state to ref whenever it changes
-  useEffect(() => {
-    reflectionParamsRef.current = reflectionParams;
-  }, [reflectionParams]);
+  // REMOVED: Reflection params - were for fake shader
+  // const [reflectionParams, setReflectionParams] = useState({
+  //   offset: 0.190,
+  //   depth: 0.175,
+  // });
+  // const reflectionParamsRef = useRef(reflectionParams);
 
   const renderRef = useRef<any>(null);
 
@@ -1193,7 +1190,8 @@ const Pong404: React.FC = () => {
   }, []);
 
   const [localTestMode, setLocalTestMode] = useState(false);
-  const [crtEffect, setCrtEffect] = useState(false); // CRT shader DISABLED - using pure canvas
+  // REMOVED: CRT effect state - pure canvas only, no shaders
+  // const [crtEffect, setCrtEffect] = useState(false);
   const [lanMode, setLanMode] = useState(false); // LAN mode - mute all clients, only spectator plays audio
   const [showAudioPrompt, setShowAudioPrompt] = useState(!isSpectatorMode); // Show audio interaction prompt on first load (skip for spectators)
   const audioPromptDismissedRef = useRef(isSpectatorMode); // Track if audio prompt was dismissed (auto-dismiss for spectators)
@@ -9396,212 +9394,212 @@ const Pong404: React.FC = () => {
   // Prevent React strict mode from causing duplicate WebSocket connections
   const hasInitialized = useRef(false);
 
-  // Initialize PixiJS for CRT shader effect (only when CRT is enabled)
-  useEffect(() => {
-    if (!crtEffect) return; // Skip initialization if CRT is disabled
-    if (!pixiContainerRef.current || !canvasRef.current) return;
-
-    let app: Application | null = null;
-
-    (async () => {
-      try {
-        app = new Application();
-
-        // Create PixiJS canvas with explicit resolution to avoid Retina scaling
-        await app.init({
-          width: canvasSize.width,
-          height: canvasSize.height,
-          backgroundAlpha: 0,
-          antialias: false,
-          resolution: 1, // Force 1:1 pixel mapping, ignore devicePixelRatio
-        });
-
-        if (!pixiContainerRef.current) {
-          console.warn('[PixiJS] Container ref no longer available after init');
-          return;
-        }
-        if (!app || !app.stage) {
-          console.error('[PixiJS] Stage is null - initialization failed');
-          return;
-        }
-      } catch (error) {
-        console.error('[PixiJS] Initialization error:', error);
-        return;
-      }
-
-      pixiContainerRef.current.appendChild(app.canvas);
-      pixiAppRef.current = app;
-
-      // Style the PixiJS canvas - exact dimensions to avoid scaling
-      app.canvas.style.position = 'absolute';
-      app.canvas.style.top = '0';
-      app.canvas.style.left = '0';
-      app.canvas.style.width = `${canvasSize.width}px`;
-      app.canvas.style.height = `${canvasSize.height}px`;
-      app.canvas.style.display = 'block';
-      // Set cursor style on PixiJS canvas to match game state
-      app.canvas.style.cursor = cursorHidden ? 'none' : 'default';
-
-      // Create sprite that we'll update each frame
-      if (!canvasRef.current) {
-        console.error('Canvas ref is null');
-        return;
-      }
-      // Force texture to exact canvas dimensions
-      // Use linear for smooth blur sampling (blur will average big pixels smoothly)
-      let texture = Texture.from(canvasRef.current, {
-        scaleMode: 'linear',
-        resolution: 1
-      });
-
-      // Override texture frame and source resolution to ensure exact 1:1 mapping
-      texture.frame.width = canvasRef.current.width;
-      texture.frame.height = canvasRef.current.height;
-      if (texture.source) {
-        texture.source.resolution = 1; // Force source resolution to 1
-        // Set texture wrapping to CLAMP to prevent magenta artifacts in corners
-        texture.source.style.addressMode = 'clamp-to-edge';
-      }
-      texture.updateUvs();
-
-      // Single sprite with CRT effects and curved reflections
-      const playfieldSprite = new Sprite(texture);
-      playfieldSprite.width = canvasRef.current.width;
-      playfieldSprite.height = canvasRef.current.height;
-      playfieldSprite.x = 0;
-      playfieldSprite.y = 0;
-
-      const filter = new CRTFilter({
-        curvature: 12.0,
-        scanlineIntensity: 0.1,
-        vignetteIntensity: 0.15,
-        noiseIntensity: 0.05,
-        brightness: 1.25,
-        chromaticAberration: 0.004,
-        bezelSize: 0.0625,
-        reflectionOpacity: 0.8,  // Enable reflections on curved bezel
-        borderNormalized: 0,  // No border - reflections start at playfield edge
-        reflectionWidth: 80 / canvasSize.width,
-      });
-      playfieldSprite.filters = [filter];
-      app.stage.addChild(playfieldSprite);
-
-      crtFilterRef.current = filter;
-
-      // console.log('[CRT] Filter created and applied:', {
-      //   hasCrtFilter: !!filter,
-      //   filterApplied: sprite.filters.length > 0,
-      //   filterSettings: {
-      //     curvature: 6.0,
-      //     scanlineIntensity: 0.15,
-      //     vignetteIntensity: 0.3
-      //   }
-      // });
-
-      // Don't recreate texture - just keep one and it should update automatically
-      // PixiJS will detect the canvas has changed and update the texture
-      let frameCount = 0;
-      let lastLogTime = 0;
-      let loggedReflectionParams = false;
-      app.ticker.add(() => {
-        // Safety check: ensure app and stage still exist (prevents errors during cleanup)
-        if (!app || !app.stage) {
-          return;
-        }
-
-        frameCount++;
-
-        // Debug log every 120 frames (every 2 seconds at 60fps)
-        // const now = Date.now();
-        // if (now - lastLogTime > 2000) {
-        //   console.log('[CRT] Render frame:', {
-        //     frame: frameCount,
-        //     hasTexture: !!sprite.texture,
-        //     hasFilter: !!sprite.filters && sprite.filters.length > 0,
-        //     filterCount: sprite.filters?.length || 0,
-        //     filterTime: (filter.uniforms as any)?.uTime
-        //   });
-        //   lastLogTime = now;
-        // }
-
-        // PixiJS v8: Access uniforms via filter.resources.crtUniforms.uniforms (nested!)
-        if (filter && filter.resources && filter.resources.crtUniforms) {
-          const uniformGroup = filter.resources.crtUniforms;
-          const uniforms = uniformGroup.uniforms; // The actual uniforms are nested inside!
-
-          // Update uniforms directly
-          if (uniforms.uTime !== undefined) uniforms.uTime = Date.now() * 0.001;
-          if (uniforms.uResolutionX !== undefined) uniforms.uResolutionX = canvasSize.width;
-          if (uniforms.uResolutionY !== undefined) uniforms.uResolutionY = canvasSize.height;
-          if (uniforms.uBorderNormalized !== undefined) uniforms.uBorderNormalized = 0;  // No border
-
-          // Update CRT filter with music analysis data for RGB bleed effect
-          const musicData = (window as any).generativeMusic?.getAnalysisData?.() || { volume: 0, disharmonic: 0, beat: 0 };
-          if (uniforms.uDisharmonic !== undefined) {
-            uniforms.uDisharmonic = musicData.disharmonic;
-          }
-          // Make reflections pulse with music
-          if (uniforms.uReflectionOpacity !== undefined) {
-            uniforms.uReflectionOpacity = 1.3 + musicData.disharmonic * 0.5; // 1.3 to 1.8 based on music
-          }
-
-          // Update reflection adjustment parameters (use ref for latest values, apply to all sides)
-          const params = reflectionParamsRef.current;
-          if (uniforms.uTopOffset !== undefined) {
-            uniforms.uTopOffset = params.offset;
-            uniforms.uTopDepth = params.depth;
-            uniforms.uRightOffset = params.offset;
-            uniforms.uRightDepth = params.depth;
-            uniforms.uBottomOffset = params.offset;
-            uniforms.uBottomDepth = params.depth;
-            uniforms.uLeftOffset = params.offset;
-            uniforms.uLeftDepth = params.depth;
-
-            // Log reflection params once
-            if (!loggedReflectionParams) {
-              console.log('🔧 Reflection uniform values (all sides):', {
-                offset: uniforms.uTopOffset,
-                depth: uniforms.uTopDepth
-              });
-              loggedReflectionParams = true;
-            }
-          }
-        }
-
-        // Force texture update from canvas source every frame
-        // In PixiJS v8, we need to force update to capture canvas changes
-        if (texture.source) {
-          texture.source.update();
-        }
-      });
-
-      // console.log('[CRT] PixiJS initialized with CRT filter:', {
-      //   filterEnabled: crtEffect,
-      //   canvasSize: { width: canvasSize.width, height: canvasSize.height },
-      //   hasSprite: !!sprite,
-      //   hasFilter: !!filter
-      // });
-    })();
-
-    return () => {
-      if (app) {
-        try {
-          app.destroy(true);
-        } catch (e) {
-          // Ignore errors during cleanup
-        }
-      }
-    };
-  }, [crtEffect, canvasSize.width, canvasSize.height]);
-
+//   // Initialize PixiJS for CRT shader effect (only when CRT is enabled)
+//   useEffect(() => {
+//     if (!crtEffect) return; // Skip initialization if CRT is disabled
+//     if (!pixiContainerRef.current || !canvasRef.current) return;
+// 
+//     let app: Application | null = null;
+// 
+//     (async () => {
+//       try {
+//         app = new Application();
+// 
+//         // Create PixiJS canvas with explicit resolution to avoid Retina scaling
+//         await app.init({
+//           width: canvasSize.width,
+//           height: canvasSize.height,
+//           backgroundAlpha: 0,
+//           antialias: false,
+//           resolution: 1, // Force 1:1 pixel mapping, ignore devicePixelRatio
+//         });
+// 
+//         if (!pixiContainerRef.current) {
+//           console.warn('[PixiJS] Container ref no longer available after init');
+//           return;
+//         }
+//         if (!app || !app.stage) {
+//           console.error('[PixiJS] Stage is null - initialization failed');
+//           return;
+//         }
+//       } catch (error) {
+//         console.error('[PixiJS] Initialization error:', error);
+//         return;
+//       }
+// 
+//       pixiContainerRef.current.appendChild(app.canvas);
+//       pixiAppRef.current = app;
+// 
+//       // Style the PixiJS canvas - exact dimensions to avoid scaling
+//       app.canvas.style.position = 'absolute';
+//       app.canvas.style.top = '0';
+//       app.canvas.style.left = '0';
+//       app.canvas.style.width = `${canvasSize.width}px`;
+//       app.canvas.style.height = `${canvasSize.height}px`;
+//       app.canvas.style.display = 'block';
+//       // Set cursor style on PixiJS canvas to match game state
+//       app.canvas.style.cursor = cursorHidden ? 'none' : 'default';
+// 
+//       // Create sprite that we'll update each frame
+//       if (!canvasRef.current) {
+//         console.error('Canvas ref is null');
+//         return;
+//       }
+//       // Force texture to exact canvas dimensions
+//       // Use linear for smooth blur sampling (blur will average big pixels smoothly)
+//       let texture = Texture.from(canvasRef.current, {
+//         scaleMode: 'linear',
+//         resolution: 1
+//       });
+// 
+//       // Override texture frame and source resolution to ensure exact 1:1 mapping
+//       texture.frame.width = canvasRef.current.width;
+//       texture.frame.height = canvasRef.current.height;
+//       if (texture.source) {
+//         texture.source.resolution = 1; // Force source resolution to 1
+//         // Set texture wrapping to CLAMP to prevent magenta artifacts in corners
+//         texture.source.style.addressMode = 'clamp-to-edge';
+//       }
+//       texture.updateUvs();
+// 
+//       // Single sprite with CRT effects and curved reflections
+//       const playfieldSprite = new Sprite(texture);
+//       playfieldSprite.width = canvasRef.current.width;
+//       playfieldSprite.height = canvasRef.current.height;
+//       playfieldSprite.x = 0;
+//       playfieldSprite.y = 0;
+// 
+//       const filter = new CRTFilter({
+//         curvature: 12.0,
+//         scanlineIntensity: 0.1,
+//         vignetteIntensity: 0.15,
+//         noiseIntensity: 0.05,
+//         brightness: 1.25,
+//         chromaticAberration: 0.004,
+//         bezelSize: 0.0625,
+//         reflectionOpacity: 0.8,  // Enable reflections on curved bezel
+//         borderNormalized: 0,  // No border - reflections start at playfield edge
+//         reflectionWidth: 80 / canvasSize.width,
+//       });
+//       playfieldSprite.filters = [filter];
+//       app.stage.addChild(playfieldSprite);
+// 
+//       crtFilterRef.current = filter;
+// 
+//       // console.log('[CRT] Filter created and applied:', {
+//       //   hasCrtFilter: !!filter,
+//       //   filterApplied: sprite.filters.length > 0,
+//       //   filterSettings: {
+//       //     curvature: 6.0,
+//       //     scanlineIntensity: 0.15,
+//       //     vignetteIntensity: 0.3
+//       //   }
+//       // });
+// 
+//       // Don't recreate texture - just keep one and it should update automatically
+//       // PixiJS will detect the canvas has changed and update the texture
+//       let frameCount = 0;
+//       let lastLogTime = 0;
+//       let loggedReflectionParams = false;
+//       app.ticker.add(() => {
+//         // Safety check: ensure app and stage still exist (prevents errors during cleanup)
+//         if (!app || !app.stage) {
+//           return;
+//         }
+// 
+//         frameCount++;
+// 
+//         // Debug log every 120 frames (every 2 seconds at 60fps)
+//         // const now = Date.now();
+//         // if (now - lastLogTime > 2000) {
+//         //   console.log('[CRT] Render frame:', {
+//         //     frame: frameCount,
+//         //     hasTexture: !!sprite.texture,
+//         //     hasFilter: !!sprite.filters && sprite.filters.length > 0,
+//         //     filterCount: sprite.filters?.length || 0,
+//         //     filterTime: (filter.uniforms as any)?.uTime
+//         //   });
+//         //   lastLogTime = now;
+//         // }
+// 
+//         // PixiJS v8: Access uniforms via filter.resources.crtUniforms.uniforms (nested!)
+//         if (filter && filter.resources && filter.resources.crtUniforms) {
+//           const uniformGroup = filter.resources.crtUniforms;
+//           const uniforms = uniformGroup.uniforms; // The actual uniforms are nested inside!
+// 
+//           // Update uniforms directly
+//           if (uniforms.uTime !== undefined) uniforms.uTime = Date.now() * 0.001;
+//           if (uniforms.uResolutionX !== undefined) uniforms.uResolutionX = canvasSize.width;
+//           if (uniforms.uResolutionY !== undefined) uniforms.uResolutionY = canvasSize.height;
+//           if (uniforms.uBorderNormalized !== undefined) uniforms.uBorderNormalized = 0;  // No border
+// 
+//           // Update CRT filter with music analysis data for RGB bleed effect
+//           const musicData = (window as any).generativeMusic?.getAnalysisData?.() || { volume: 0, disharmonic: 0, beat: 0 };
+//           if (uniforms.uDisharmonic !== undefined) {
+//             uniforms.uDisharmonic = musicData.disharmonic;
+//           }
+//           // Make reflections pulse with music
+//           if (uniforms.uReflectionOpacity !== undefined) {
+//             uniforms.uReflectionOpacity = 1.3 + musicData.disharmonic * 0.5; // 1.3 to 1.8 based on music
+//           }
+// 
+//           // Update reflection adjustment parameters (use ref for latest values, apply to all sides)
+//           const params = reflectionParamsRef.current;
+//           if (uniforms.uTopOffset !== undefined) {
+//             uniforms.uTopOffset = params.offset;
+//             uniforms.uTopDepth = params.depth;
+//             uniforms.uRightOffset = params.offset;
+//             uniforms.uRightDepth = params.depth;
+//             uniforms.uBottomOffset = params.offset;
+//             uniforms.uBottomDepth = params.depth;
+//             uniforms.uLeftOffset = params.offset;
+//             uniforms.uLeftDepth = params.depth;
+// 
+//             // Log reflection params once
+//             if (!loggedReflectionParams) {
+//               console.log('🔧 Reflection uniform values (all sides):', {
+//                 offset: uniforms.uTopOffset,
+//                 depth: uniforms.uTopDepth
+//               });
+//               loggedReflectionParams = true;
+//             }
+//           }
+//         }
+// 
+//         // Force texture update from canvas source every frame
+//         // In PixiJS v8, we need to force update to capture canvas changes
+//         if (texture.source) {
+//           texture.source.update();
+//         }
+//       });
+// 
+//       // console.log('[CRT] PixiJS initialized with CRT filter:', {
+//       //   filterEnabled: crtEffect,
+//       //   canvasSize: { width: canvasSize.width, height: canvasSize.height },
+//       //   hasSprite: !!sprite,
+//       //   hasFilter: !!filter
+//       // });
+//     })();
+// 
+//     return () => {
+//       if (app) {
+//         try {
+//           app.destroy(true);
+//         } catch (e) {
+//           // Ignore errors during cleanup
+//         }
+//       }
+//     };
+//   }, [crtEffect, canvasSize.width, canvasSize.height]);
+// 
   // Toggle CRT filter on/off
   useEffect(() => {
-    if (pixiAppRef.current && pixiAppRef.current.stage && crtFilterRef.current && pixiAppRef.current.stage.children.length > 0) {
-      const sprite = pixiAppRef.current.stage.children[0] as Sprite;
-      if (sprite) {
-        sprite.filters = crtEffect ? [crtFilterRef.current] : [];
-        // console.log('[CRT] Filter toggled:', crtEffect ? 'ON' : 'OFF');
-      }
+//     if (pixiAppRef.current && pixiAppRef.current.stage && crtFilterRef.current && pixiAppRef.current.stage.children.length > 0) {
+//       const sprite = pixiAppRef.current.stage.children[0] as Sprite;
+//       if (sprite) {
+//         sprite.filters = crtEffect ? [crtFilterRef.current] : [];
+//         // console.log('[CRT] Filter toggled:', crtEffect ? 'ON' : 'OFF');
+//       }
     }
   }, [crtEffect]);
 
@@ -9667,13 +9665,13 @@ const Pong404: React.FC = () => {
     return () => document.removeEventListener('click', handleGlobalClick);
   }, []);
 
-  // Update PixiJS canvas cursor when cursorHidden changes
-  useEffect(() => {
-    try {
-      if (pixiAppRef.current?.canvas?.style) {
-        pixiAppRef.current.canvas.style.cursor = cursorHidden ? 'none' : 'default';
-      }
-    } catch (e) {
+//   // Update PixiJS canvas cursor when cursorHidden changes
+//   useEffect(() => {
+//     try {
+//       if (pixiAppRef.current?.canvas?.style) {
+//         pixiAppRef.current.canvas.style.cursor = cursorHidden ? 'none' : 'default';
+//       }
+//     } catch (e) {
       // Ignore canvas access errors during hot reload
     }
   }, [cursorHidden]);
@@ -10029,7 +10027,7 @@ const Pong404: React.FC = () => {
             WebkitFontSmoothing: 'none',
             MozOsxFontSmoothing: 'unset',
             textRendering: 'geometricPrecision',
-            visibility: crtEffect ? 'hidden' : 'visible', // Hide canvas when CRT is active
+            visibility: 'visible', // Hide canvas when CRT is active
           } as React.CSSProperties}
           tabIndex={0}
           onClick={async () => {
@@ -10287,22 +10285,6 @@ const Pong404: React.FC = () => {
         }}
       />
 
-      {/* PixiJS WebGL container for CRT shader post-processing - visible when CRT is ON */}
-      <div
-        ref={pixiContainerRef}
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: `${canvasSize.width}px`,
-          height: `${canvasSize.height}px`,
-          cursor: cursorHidden ? 'none' : 'default',
-          imageRendering: 'pixelated',
-          pointerEvents: 'none', // Let events pass through to canvas
-          zIndex: 10, // Above canvas
-          visibility: crtEffect ? 'visible' : 'hidden', // Only show when CRT is active
-        }}
-      />
 
       {/* Inner border glow overlay - visible inside game area */}
       <div style={{
