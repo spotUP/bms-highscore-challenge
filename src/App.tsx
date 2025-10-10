@@ -47,11 +47,6 @@ const Competition = lazy(() => import("./pages/Competition"));
 const RAWGGamesBrowser = lazy(() => import("./pages/RAWGGamesBrowser"));
 const GamesBrowser = lazy(() => import("./pages/GamesBrowser"));
 const ClearLogoTest = lazy(() => import("./components/ClearLogoTest"));
-const Pong404 = lazy(() => import("./pages/Pong404"));
-const Pong404WebGL = lazy(() => import("./pages/Pong404WebGL"));
-const WebGLTest = lazy(() => import("./pages/WebGLTest"));
-const PongSlangDemo = lazy(() => import("./pages/PongSlangDemo"));
-const PureWebGL2Test = lazy(() => import("./pages/PureWebGL2Test"));
 const PongPureWebGL2 = lazy(() => import("./pages/PongPureWebGL2"));
 
 const queryClient = new QueryClient();
@@ -217,18 +212,10 @@ const App = () => (
                           <Route path="/t/:slug/statistics" element={<Layout topNavProps={{ hideStatistics: true }}><TournamentAccessGuard><Statistics /></TournamentAccessGuard></Layout>} />
                           <Route path="/t/:slug/achievements" element={<Layout><TournamentAccessGuard><Achievements /></TournamentAccessGuard></Layout>} />
                           <Route path="/t/:slug/mobile-entry" element={<Layout><TournamentAccessGuard><MobileEntry /></TournamentAccessGuard></Layout>} />
-                          {/* Slang Shader Demo */}
-                          <Route path="/slang-demo" element={<PongSlangDemo />} />
-                          {/* Pure WebGL2 Test - NO THREE.JS */}
-                          <Route path="/webgl2-test" element={<PureWebGL2Test />} />
-                          {/* Pure WebGL2 Pong - Real Mega Bezel CRT */}
+                          {/* Pure WebGL2 Pong - Real Mega Bezel CRT - NO THREE.JS, NO PIXI.JS */}
                           <Route path="/pong" element={<PongPureWebGL2 />} />
-                          {/* WebGL Test page */}
-                          <Route path="/webgl-test" element={<WebGLTest />} />
-                          {/* Canvas2D Pong (legacy) */}
-                          <Route path="/pong-canvas" element={<Pong404 />} />
-                          {/* 404 Catch-all route - Pure WebGL2D renderer */}
-                          <Route path="*" element={<Pong404WebGL />} />
+                          {/* 404 Catch-all route - Pure WebGL2 */}
+                          <Route path="*" element={<PongPureWebGL2 />} />
                         </Routes>
                       </Suspense>
                     </BrowserRouter>

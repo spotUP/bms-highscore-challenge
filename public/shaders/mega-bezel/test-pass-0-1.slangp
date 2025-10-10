@@ -1,0 +1,17 @@
+# Test first two passes
+shaders = 2
+
+shader0 = shaders/guest/extras/hsm-drez-g-sharp_resampler.slang
+filter_linear0 = false
+scale_type_x0 = viewport
+scale_x0 = 1.0
+scale_type_y0 = viewport
+scale_y0 = 1.0
+wrap_mode0 = "clamp_to_edge"
+alias0 = "DerezedPass"
+
+shader1 = shaders/base/cache-info-potato-params.slang
+filter_linear1 = false
+scale_type1 = source
+scale1 = 1.0
+alias1 = "InfoCachePass"

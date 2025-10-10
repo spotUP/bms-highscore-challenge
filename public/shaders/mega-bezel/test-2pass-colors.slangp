@@ -1,0 +1,13 @@
+# Minimal 2-pass test: Pass 0 outputs red, Pass 1 samples it
+shaders = 2
+
+# Pass 0: Output red (with render target)
+shader0 = shaders/test-red.slang
+filter_linear0 = true
+scale_type0 = source
+scale0 = 1.0
+alias0 = "RedPass"
+
+# Pass 1: Sample and output (should show red, final output to screen)
+shader1 = shaders/test-sample.slang
+filter_linear1 = true

@@ -1,0 +1,12 @@
+# 2-pass test with identical passthrough shaders
+shaders = 2
+
+# Pass 0: Passthrough (with render target)
+shader0 = shaders/test-passthrough.slang
+filter_linear0 = true
+scale_type0 = source
+scale0 = 1.0
+
+# Pass 1: Passthrough again (final output to screen)
+shader1 = shaders/test-passthrough.slang
+filter_linear1 = true
