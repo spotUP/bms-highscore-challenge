@@ -4,6 +4,7 @@ import SamJs from 'sam-js';
 import { getDynamicTauntSystem, GameContext, PlayerBehavior } from '../utils/browserTauntSystem';
 import { CollisionManager, CollisionDetector, CollisionResult } from '../utils/CollisionDetection';
 import GlobalAmbientMusic from '../components/GlobalAmbientMusic';
+import { WebGL2D } from '../utils/WebGL2D';
 
 interface Pickup {
   x: number;
@@ -764,8 +765,9 @@ const PRECALC_PICKUP_PATTERNS = {
   )
 };
 
-const Pong404: React.FC = () => {
+const Pong404WebGL: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const webglCtxRef = useRef<WebGL2D | null>(null); // WebGL2D context - reused every frame
   // REMOVED: PixiJS refs - pure canvas only
   // const pixiAppRef = useRef<Application | null>(null);
   // const pixiContainerRef = useRef<HTMLDivElement>(null);
@@ -1065,7 +1067,7 @@ const Pong404: React.FC = () => {
     },
     score: { left: 0, right: 0, top: 0, bottom: 0 }, // 4-player scoring
     isPlaying: false,
-    showStartScreen: false,
+    showStartScreen: true,
     gameMode: 'auto',
     colorIndex: 0,
     isPaused: false,
@@ -6991,7 +6993,18 @@ const Pong404: React.FC = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    // Initialize WebGL2D context once and reuse (performance optimization)
+    if (!webglCtxRef.current) {
+      try {
+        webglCtxRef.current = new WebGL2D(canvas);
+        console.log('✅ WebGL2D context initialized');
+      } catch (error) {
+        console.error('❌ Failed to initialize WebGL2D:', error);
+        return;
+      }
+    }
+
+    const ctx = webglCtxRef.current;
     if (!ctx) return;
 
     // DEBUG: Check if there's a transform or clip active
@@ -10030,18 +10043,16 @@ const Pong404: React.FC = () => {
           } as React.CSSProperties}
           tabIndex={0}
           onClick={async () => {
-            // Handle audio prompt dismissal
-            if (showAudioPrompt) {
-            audioPromptDismissedRef.current = true; // Set ref like keyboard handler
-            setShowAudioPrompt(false);
-            // Initialize audio context on user interaction
-            await initializeAudio();
-            // Don't process game start on this click - just dismiss the prompt
-            return;
-          }
+            // Note: Audio prompt and game start are handled by the global event listener (line 9696)
+            // This onClick just handles canvas focus and pointer lock
 
-          // Handle start screen - start game on click
-          if (gameState.showStartScreen) {
+            // Don't start game if audio prompt is shown or was just dismissed
+            if (showAudioPrompt || Date.now() - justDismissedAudioRef.current < 500) {
+              return;
+            }
+
+            // Handle start screen - start game on click
+            if (gameState.showStartScreen) {
             await initializeAudio();
             // Start paddle animation
             paddleAnimationStartTimeRef.current = Date.now();
@@ -10140,12 +10151,17 @@ const Pong404: React.FC = () => {
           if (showAudioPrompt) {
             audioPromptDismissedRef.current = true;
             setShowAudioPrompt(false);
+            // Show start screen after dismissing audio prompt
+            if (!isSpectatorMode) {
+              setGameState(prev => ({ ...prev, showStartScreen: true }));
+            }
             // Don't process game start on this touch - just dismiss the prompt
             return;
           }
 
           // Handle start screen - start game on touch
-          if (gameState.showStartScreen) {
+          // Only start if audio prompt was already dismissed (not in the same touch)
+          if (gameState.showStartScreen && !showAudioPrompt) {
             // Start paddle animation
             paddleAnimationStartTimeRef.current = Date.now();
             setPaddleAnimationProgress(0);
@@ -10323,4 +10339,4 @@ const Pong404: React.FC = () => {
   );
 };
 
-export default Pong404;
+export default Pong404WebGL;

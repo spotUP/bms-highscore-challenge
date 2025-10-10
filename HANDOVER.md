@@ -1,10 +1,17 @@
 # 🎮 Pure Canvas Pong - Handover Documentation
 
+## ⚠️ CRITICAL: WebGL PORT MUST BE 100% IDENTICAL ⚠️
+
+**THIS CANVAS VERSION IS THE GOLD STANDARD - THE WEBGL PORT MUST REPLICATE IT EXACTLY**
+- Every pixel, every color, every animation frame must be IDENTICAL
+- No improvements, optimizations, or "better" implementations allowed
+- The ONLY addition is shader post-processing on top of identical base rendering
+
 ## 📍 Current Status
 
 **Branch:** `pong-canvas-clean` in `/Users/spot/Code/bms-22b71be`
 **Commit:** `aab94d7` - "Fix REMOVED variable error - add missing quotes"
-**Status:** ✅ Fully functional pure Canvas2D Pong game
+**Status:** ✅ Fully functional pure Canvas2D Pong game - THIS IS THE EXACT SPECIFICATION FOR WEBGL PORT
 
 ## 🎯 What Was Accomplished
 
@@ -120,18 +127,29 @@ Has a **Pure WebGL2 implementation** with real Mega Bezel shaders:
 
 **Status:** Shader compilation works, rendering works, but needs full Pong game ported
 
-## 🎯 Next Steps
+## 🎯 Next Steps - EXACT REPLICATION REQUIRED
 
-### Option 1: Port Clean Canvas to Pure WebGL2
-1. Copy `Pong404Clean.tsx` game logic to main repo
-2. Replace canvas rendering with Pure WebGL2 post-processing
-3. Use PureWebGL2MultiPassRenderer for real Mega Bezel shaders
-4. Keep game logic identical, add shader layer on top
+### ⚠️ MANDATORY: Read WEBGL_PORT_REQUIREMENTS.md First! ⚠️
+
+### Option 1: Port Clean Canvas to Pure WebGL2 (RECOMMENDED)
+1. **EXACT PORT:** Copy `Pong404Clean.tsx` - preserve EVERY behavior
+2. **PIXEL-PERFECT:** WebGL rendering must produce IDENTICAL pixels to Canvas
+3. **NO CHANGES:** Do not "improve", "optimize", or modify ANY game logic
+4. **SHADER LAYER:** Add Mega Bezel shaders ONLY as post-processing overlay
+5. **VERIFY:** Use screenshot diff tools to ensure 100% visual match
 
 ### Option 2: Continue in Current Repo
 1. Import Pure WebGL2 renderer files to this repo
-2. Integrate into Pong404Clean
-3. Add real shader post-processing
+2. Create WebGL context that renders IDENTICALLY to Canvas
+3. Every draw call must produce EXACT same pixels
+4. Add shader post-processing WITHOUT changing base game
+
+### 🔴 CRITICAL VERIFICATION STEPS:
+- Take screenshots of Canvas version at various game states
+- WebGL version must produce PIXEL-IDENTICAL screenshots (shader disabled)
+- Both versions must be able to play multiplayer together with ZERO desync
+- All 30+ pickups must behave EXACTLY the same
+- Frame-by-frame gameplay recordings must match PERFECTLY
 
 ## 🐛 Known Issues
 
@@ -174,13 +192,28 @@ d6a3405 - Create clean canvas-based Pong without fake shader
 
 ## 🎬 Final State
 
-**The game is now pure Canvas2D and ready to be ported to Pure WebGL2 with real Mega Bezel shaders.**
+**The game is now pure Canvas2D and serves as the EXACT SPECIFICATION for WebGL port.**
 
 All PixiJS/WebGL/Three.js code has been removed. The game runs perfectly with HTML5 Canvas rendering only.
+
+## ⚠️ FINAL CRITICAL REMINDER ⚠️
+
+**THE WEBGL VERSION MUST BE INDISTINGUISHABLE FROM THIS CANVAS VERSION**
+
+1. **DO NOT** make it "better" - make it IDENTICAL
+2. **DO NOT** fix "issues" - replicate them EXACTLY
+3. **DO NOT** optimize gameplay - preserve EXACT behavior
+4. **DO NOT** modernize anything - keep it EXACTLY as is
+
+The Canvas version IS the specification. Every quirk, every pixel, every frame timing is INTENTIONAL and must be preserved.
+
+**Success = User cannot tell Canvas from WebGL (with shaders off)**
+**Failure = Any visible or behavioral difference**
 
 ---
 
 **Handover Date:** 2025-10-10
-**Last Tested:** http://localhost:8080 - ✅ Working
+**Last Tested:** http://localhost:8080 - ✅ Working (THIS IS THE TARGET TO MATCH)
 **Branch:** `pong-canvas-clean`
 **Location:** `/Users/spot/Code/bms-22b71be`
+**Required Reading:** `WEBGL_PORT_REQUIREMENTS.md` and `CANVAS_TO_WEBGL_CHECKLIST.md`
