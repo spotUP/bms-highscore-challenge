@@ -1191,7 +1191,7 @@ const Pong404: React.FC = () => {
 
   const [localTestMode, setLocalTestMode] = useState(false);
   // REMOVED: CRT effect state - pure canvas only, no shaders
-  // const [crtEffect, setCrtEffect] = useState(false);
+  // const [setCrtEffect] = useState(false);
   const [lanMode, setLanMode] = useState(false); // LAN mode - mute all clients, only spectator plays audio
   const [showAudioPrompt, setShowAudioPrompt] = useState(!isSpectatorMode); // Show audio interaction prompt on first load (skip for spectators)
   const audioPromptDismissedRef = useRef(isSpectatorMode); // Track if audio prompt was dismissed (auto-dismiss for spectators)
@@ -6815,7 +6815,7 @@ const Pong404: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [connectionStatus, multiplayerState.isConnected, gameState.gameMode, connectWebSocket, resetRoom, localTestMode, crtEffect]);
+  }, [connectionStatus, multiplayerState.isConnected, gameState.gameMode, connectWebSocket, resetRoom, localTestMode]);
 
   // Auto-initialize spectator mode
   useEffect(() => {
@@ -7320,7 +7320,7 @@ const Pong404: React.FC = () => {
       // Footer with CRT status
       const footerSize = Math.round(14 * scaleFactor);
       ctx.font = `${footerSize}px "Press Start 2P", monospace`;
-      ctx.fillText(`CRT EFFECT: ${crtEffect ? 'ON' : 'OFF'}`, canvasSize.width / 2, canvasSize.height / 2 + (200 * scaleFactor));
+      ctx.fillText(`CRT EFFECT: ${REMOVED}`, canvasSize.width / 2, canvasSize.height / 2 + (200 * scaleFactor));
       ctx.shadowBlur = 0;
 
       return; // Don't render game elements when showing start screen
@@ -8890,7 +8890,7 @@ const Pong404: React.FC = () => {
         ctx.fillStyle = currentColors.foreground; // Reset color for other text
         ctx.fillText(connectionMessage || 'Connecting to multiplayer server...', playFieldWidth / 2, playFieldHeight - (140 * scaleFactor));
         ctx.fillText('Press D for debug mode to see connection logs', playFieldWidth / 2, playFieldHeight - (120 * scaleFactor));
-        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
+        ctx.fillText(`Press C to toggle CRT effect (${REMOVED})`, playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
       } else if (connectionStatus === 'warming') {
         // Enhanced warming display with phase-specific feedback
         const elapsed = connectionStartTime > 0 ? Math.floor((Date.now() - connectionStartTime) / 1000) : 0;
@@ -8961,7 +8961,7 @@ const Pong404: React.FC = () => {
         ctx.font = `bold ${warmingHelpSize}px "Press Start 2P", monospace`;
         ctx.fillStyle = currentColors.foreground;
         ctx.fillText('Free servers take time to boot up - please be patient!', playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
-        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - (85 * scaleFactor));
+        ctx.fillText(`Press C to toggle CRT effect (${REMOVED})`, playFieldWidth / 2, playFieldHeight - (85 * scaleFactor));
       } else if (connectionStatus === 'retrying') {
         // Enhanced retry display with progress visualization
         const dots = '.'.repeat((Math.floor(Date.now() / 300) % 4) + 1);
@@ -8997,7 +8997,7 @@ const Pong404: React.FC = () => {
         const retryHelpSize = Math.round(10 * scaleFactor);
         ctx.font = `bold ${retryHelpSize}px "Press Start 2P", monospace`;
         ctx.fillText('Server may be sleeping - retrying automatically', playFieldWidth / 2, playFieldHeight - (115 * scaleFactor));
-        ctx.fillText(`Press C to toggle CRT effect (${crtEffect ? 'ON' : 'OFF'})`, playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
+        ctx.fillText(`Press C to toggle CRT effect (${REMOVED})`, playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
       } else if (connectionStatus === 'error') {
         ctx.fillStyle = '#ff0000'; // Red for error
         ctx.fillText('[X] CONNECTION FAILED', playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
@@ -9010,7 +9010,7 @@ const Pong404: React.FC = () => {
         ctx.fillText('Press ANY KEY to join online multiplayer', playFieldWidth / 2, playFieldHeight - (160 * scaleFactor));
         ctx.fillText('Move your paddle: W/S keys OR hover mouse', playFieldWidth / 2, playFieldHeight - (140 * scaleFactor));
         ctx.fillText('Press D for debug mode, C for CRT effect', playFieldWidth / 2, playFieldHeight - (120 * scaleFactor));
-        ctx.fillText(`CRT Effect: ${crtEffect ? 'ON' : 'OFF'}`, playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
+        ctx.fillText(`CRT Effect: ${REMOVED}`, playFieldWidth / 2, playFieldHeight - (100 * scaleFactor));
       }
     } else if (gameState.gameMode === 'multiplayer') {
       // Calculate fade out for ALL multiplayer info text
@@ -9315,7 +9315,7 @@ const Pong404: React.FC = () => {
     // 📐 Restore canvas state after dynamic playfield scaling (always restore since we always save)
     ctx.restore();
 
-  }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, crtEffect, applyCRTEffect, showAudioPrompt]);
+  }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, applyCRTEffect, showAudioPrompt]);
 
   // Update function refs when functions change (prevents game loop restart)
   useEffect(() => {
@@ -9590,7 +9590,7 @@ const Pong404: React.FC = () => {
 //         }
 //       }
 //     };
-//   }, [crtEffect, canvasSize.width, canvasSize.height]);
+//   }, [canvasSize.width, canvasSize.height]);
 // 
   // REMOVED: CRT filter toggle - no longer needed for pure canvas
   // useEffect(() => {
