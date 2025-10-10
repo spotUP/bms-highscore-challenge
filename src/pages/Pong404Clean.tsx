@@ -9304,15 +9304,15 @@ const Pong404: React.FC = () => {
       ctx.restore();
     }
 
-    // Draw playfield border - DISABLED for clean canvas
-    // const glowIntensity = musicDataRef.current?.volume || 0;
-    // const mainGlowSize = 15 + glowIntensity * 25;
-    // ctx.strokeStyle = currentColors.foreground;
-    // ctx.lineWidth = BORDER_THICKNESS;
-    // ctx.shadowBlur = mainGlowSize;
-    // ctx.shadowColor = currentColors.foreground;
-    // ctx.strokeRect(BORDER_THICKNESS/2, BORDER_THICKNESS/2, playFieldWidth - BORDER_THICKNESS, playFieldHeight - BORDER_THICKNESS);
-    // ctx.shadowBlur = 0;
+    // Draw playfield border (game boundary)
+    const glowIntensity = musicDataRef.current?.volume || 0;
+    const mainGlowSize = 15 + glowIntensity * 25;
+    ctx.strokeStyle = currentColors.foreground;
+    ctx.lineWidth = BORDER_THICKNESS;
+    ctx.shadowBlur = mainGlowSize;
+    ctx.shadowColor = currentColors.foreground;
+    ctx.strokeRect(BORDER_THICKNESS/2, BORDER_THICKNESS/2, playFieldWidth - BORDER_THICKNESS, playFieldHeight - BORDER_THICKNESS);
+    ctx.shadowBlur = 0;
 
     // 📐 Restore canvas state after dynamic playfield scaling (always restore since we always save)
     ctx.restore();
