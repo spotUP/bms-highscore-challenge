@@ -10337,6 +10337,7 @@ const Pong404: React.FC = () => {
       <GlobalAmbientMusic lanMode={lanMode} isSpectatorMode={isSpectatorMode} />
 
       </div>
+      </div>
     </div>
   );
 };
