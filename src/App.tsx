@@ -47,7 +47,7 @@ const Competition = lazy(() => import("./pages/Competition"));
 const RAWGGamesBrowser = lazy(() => import("./pages/RAWGGamesBrowser"));
 const GamesBrowser = lazy(() => import("./pages/GamesBrowser"));
 const ClearLogoTest = lazy(() => import("./components/ClearLogoTest"));
-const PongPureWebGL2 = lazy(() => import("./pages/PongPureWebGL2"));
+const Pong404WebGL = lazy(() => import("./pages/Pong404WebGL"));
 
 const queryClient = new QueryClient();
 
@@ -212,10 +212,10 @@ const App = () => (
                           <Route path="/t/:slug/statistics" element={<Layout topNavProps={{ hideStatistics: true }}><TournamentAccessGuard><Statistics /></TournamentAccessGuard></Layout>} />
                           <Route path="/t/:slug/achievements" element={<Layout><TournamentAccessGuard><Achievements /></TournamentAccessGuard></Layout>} />
                           <Route path="/t/:slug/mobile-entry" element={<Layout><TournamentAccessGuard><MobileEntry /></TournamentAccessGuard></Layout>} />
-                          {/* Pure WebGL2 Pong - Real Mega Bezel CRT - NO THREE.JS, NO PIXI.JS */}
-                          <Route path="/pong" element={<PongPureWebGL2 />} />
-                          {/* 404 Catch-all route - Pure WebGL2 */}
-                          <Route path="*" element={<PongPureWebGL2 />} />
+                          {/* Pure WebGL2D Pong - Full multiplayer game - NO THREE.JS, NO PIXI.JS */}
+                          <Route path="/pong" element={<Pong404WebGL />} />
+                          {/* 404 Catch-all route - Pure WebGL2D */}
+                          <Route path="*" element={<Pong404WebGL />} />
                         </Routes>
                       </Suspense>
                     </BrowserRouter>
