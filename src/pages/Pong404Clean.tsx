@@ -9592,16 +9592,15 @@ const Pong404: React.FC = () => {
 //     };
 //   }, [crtEffect, canvasSize.width, canvasSize.height]);
 // 
-  // Toggle CRT filter on/off
-  useEffect(() => {
-//     if (pixiAppRef.current && pixiAppRef.current.stage && crtFilterRef.current && pixiAppRef.current.stage.children.length > 0) {
-//       const sprite = pixiAppRef.current.stage.children[0] as Sprite;
-//       if (sprite) {
-//         sprite.filters = crtEffect ? [crtFilterRef.current] : [];
-//         // console.log('[CRT] Filter toggled:', crtEffect ? 'ON' : 'OFF');
-//       }
-    }
-  }, [crtEffect]);
+  // REMOVED: CRT filter toggle - no longer needed for pure canvas
+  // useEffect(() => {
+  //   if (pixiAppRef.current && pixiAppRef.current.stage && crtFilterRef.current && pixiAppRef.current.stage.children.length > 0) {
+  //     const sprite = pixiAppRef.current.stage.children[0] as Sprite;
+  //     if (sprite) {
+  //       sprite.filters = crtEffect ? [crtFilterRef.current] : [];
+  //     }
+  //   }
+  // }, [crtEffect]);
 
   // Listen for localStorage events from other tabs
   useEffect(() => {
@@ -9665,16 +9664,16 @@ const Pong404: React.FC = () => {
     return () => document.removeEventListener('click', handleGlobalClick);
   }, []);
 
-//   // Update PixiJS canvas cursor when cursorHidden changes
-//   useEffect(() => {
-//     try {
-//       if (pixiAppRef.current?.canvas?.style) {
-//         pixiAppRef.current.canvas.style.cursor = cursorHidden ? 'none' : 'default';
-//       }
-//     } catch (e) {
-      // Ignore canvas access errors during hot reload
-    }
-  }, [cursorHidden]);
+  // REMOVED: PixiJS canvas cursor update - no longer needed for pure canvas
+  // useEffect(() => {
+  //   try {
+  //     if (pixiAppRef.current?.canvas?.style) {
+  //       pixiAppRef.current.canvas.style.cursor = cursorHidden ? 'none' : 'default';
+  //     }
+  //   } catch (e) {
+  //     // Ignore canvas access errors during hot reload
+  //   }
+  // }, [cursorHidden]);
 
   // Track if we just dismissed audio prompt to prevent double-trigger
   const justDismissedAudioRef = useRef<number>(0);
