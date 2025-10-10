@@ -1714,7 +1714,7 @@ class PongWebSocketServer {
       labyrinthCoins: [],
       labyrinthStartTime: 0,
       arkanoidBricksHit: 0,
-      isDebugMode: true // Debug mode: disable automatic pickup spawning (use keys 1/2 to test)
+      isDebugMode: false // Debug mode disabled: enable automatic pickup spawning
     };
   }
 
