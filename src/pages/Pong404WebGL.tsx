@@ -5,6 +5,7 @@ import { getDynamicTauntSystem, GameContext, PlayerBehavior } from '../utils/bro
 import { CollisionManager, CollisionDetector, CollisionResult } from '../utils/CollisionDetection';
 import GlobalAmbientMusic from '../components/GlobalAmbientMusic';
 import { WebGL2D } from '../utils/WebGL2D';
+import { WebGL2DWithShaders } from '../utils/WebGL2DWithShaders';
 
 interface Pickup {
   x: number;
@@ -768,6 +769,7 @@ const PRECALC_PICKUP_PATTERNS = {
 const Pong404WebGL: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const webglCtxRef = useRef<WebGL2D | null>(null); // WebGL2D context - reused every frame
+  const webglWithShadersRef = useRef<WebGL2DWithShaders | null>(null); // WebGL2DWithShaders wrapper for Mega Bezel
   // REMOVED: PixiJS refs - pure canvas only
   // const pixiAppRef = useRef<Application | null>(null);
   // const pixiContainerRef = useRef<HTMLDivElement>(null);
@@ -6993,19 +6995,37 @@ const Pong404WebGL: React.FC = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Initialize WebGL2D context once and reuse (performance optimization)
+    // Initialize WebGL2DWithShaders context once and reuse (performance optimization)
     if (!webglCtxRef.current) {
       try {
-        webglCtxRef.current = new WebGL2D(canvas);
-        console.log('✅ WebGL2D context initialized');
+        console.log('[INIT] Creating WebGL2DWithShaders with Mega Bezel preset');
+
+        // Use WebGL2DWithShaders WITHOUT a preset - uses built-in passthrough shader
+        // This has scanlines, curvature, and vignette effects
+        const wrapper = new WebGL2DWithShaders(canvas, {
+          enabled: true,
+          bypassOnError: true,
+        });
+
+        webglWithShadersRef.current = wrapper;
+        webglCtxRef.current = wrapper.getWebGL2D();
+
+        console.log('✅ Mega Bezel shaders initialized');
       } catch (error) {
-        console.error('❌ Failed to initialize WebGL2D:', error);
-        return;
+        console.error('❌ Failed to initialize WebGL2DWithShaders:', error);
+        // Fallback to plain rendering
+        webglCtxRef.current = new WebGL2D(canvas);
+        console.log('⚠️ Using plain WebGL2D (no shaders)');
       }
     }
 
     const ctx = webglCtxRef.current;
     if (!ctx) return;
+
+    // CRITICAL: Begin shader frame (binds framebuffer for capture)
+    if (webglWithShadersRef.current) {
+      webglWithShadersRef.current.beginFrame();
+    }
 
     // DEBUG: Check if there's a transform or clip active
     if (!window.__ctxDebugLogged) {
@@ -9327,6 +9347,11 @@ const Pong404WebGL: React.FC = () => {
 
     // 📐 Restore canvas state after dynamic playfield scaling (always restore since we always save)
     ctx.restore();
+
+    // CRITICAL: Apply Mega Bezel shader post-processing
+    if (webglWithShadersRef.current) {
+      webglWithShadersRef.current.endFrame();
+    }
 
   }, [gameState, canvasSize, connectionStatus, multiplayerState.isConnected, multiplayerState.playerSide, infoTextFadeStart, localTestMode, applyCRTEffect, showAudioPrompt]);
 

@@ -6,7 +6,7 @@
  */
 
 import { PureWebGL2Renderer } from './PureWebGL2Renderer';
-import { SlangShaderCompiler, CompiledShader } from './SlangShaderCompiler';
+import { SlangShaderCompiler, CompiledShader } from '../shaders/SlangShaderCompiler';
 
 export interface ShaderPassConfig {
   name: string;
@@ -29,8 +29,8 @@ export class PureWebGL2MultiPassRenderer {
   private width: number;
   private height: number;
 
-  constructor(canvas: HTMLCanvasElement, width: number = 800, height: number = 600) {
-    this.renderer = new PureWebGL2Renderer(canvas);
+  constructor(canvasOrContext: HTMLCanvasElement | WebGL2RenderingContext, width: number = 800, height: number = 600) {
+    this.renderer = new PureWebGL2Renderer(canvasOrContext);
     this.width = width;
     this.height = height;
 
@@ -130,6 +130,9 @@ export class PureWebGL2MultiPassRenderer {
     const passes: ShaderPassConfig[] = [];
     let shaderCount = 0;
 
+    // Extract directory from preset path
+    const presetDir = basePath.substring(0, basePath.lastIndexOf('/'));
+
     // Find number of shaders
     for (const line of lines) {
       if (line.startsWith('shaders')) {
@@ -145,9 +148,11 @@ export class PureWebGL2MultiPassRenderer {
       const shaderLine = lines.find(l => l.startsWith(`shader${i}`));
       if (!shaderLine) continue;
 
-      const match = shaderLine.match(/shader\d+\s*=\s*"([^"]+)"/);
+      // Match both quoted and unquoted paths: shader0 = "path" OR shader0 = path
+      const match = shaderLine.match(/shader\d+\s*=\s*"?([^"\s]+)"?/);
       if (!match) continue;
 
+      // Keep path as-is - will be resolved relative to preset in loadPreset()
       passes.push({
         name: `pass_${i}`,
         shaderPath: match[1],
@@ -165,33 +170,81 @@ export class PureWebGL2MultiPassRenderer {
     const gl = this.renderer.getContext();
     this.frameCount++;
 
-    // Clear screen
+    // CRITICAL: Clear the screen before rendering to prevent double images
+    // Make sure we're rendering to the screen (not a framebuffer)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.clearColor(0, 0, 0, 1);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
-    // Execute the first loaded shader pass (for testing)
-    const firstPassName = this.passes.keys().next().value;
-    if (!firstPassName) {
-      console.warn('[PureWebGL2MultiPass] No shader pass loaded to render');
+    // Execute ALL shader passes in order
+    const passNames = Array.from(this.passes.keys());
+    if (passNames.length === 0) {
+      console.warn('[PureWebGL2MultiPass] No shader passes loaded to render');
       return;
     }
 
-    if (this.frameCount === 1) {
-      console.log(`[PureWebGL2MultiPass] Executing first frame with pass: ${firstPassName}, input: ${inputTextureName}`);
+    if (this.frameCount === 1 || this.frameCount % 60 === 0) {
+      console.log(`[PureWebGL2MultiPass] Frame ${this.frameCount}: Executing ${passNames.length} passes`);
     }
 
-    // Execute the shader pass
-    const success = this.renderer.executePass(
-      firstPassName,
-      { Source: inputTextureName },  // Input texture mapping
-      null,  // Render to screen (null framebuffer)
-      { FrameCount: this.frameCount }  // Custom uniforms
-    );
+    // Execute each pass in sequence
+    let currentInput = inputTextureName;
 
-    if (!success) {
-      console.error(`[PureWebGL2MultiPass] Failed to execute pass: ${firstPassName}`);
-    } else if (this.frameCount === 1) {
-      console.log(`[PureWebGL2MultiPass] ✅ First frame rendered successfully`);
+    for (let i = 0; i < passNames.length; i++) {
+      const passName = passNames[i];
+      const isLastPass = (i === passNames.length - 1);
+
+      if (this.frameCount === 1) {
+        console.log(`[PureWebGL2MultiPass] Executing pass ${i}: ${passName}, input: ${currentInput}, output: ${isLastPass ? 'screen' : passName + '_output'}`);
+      }
+
+      // For intermediate passes, render to a texture
+      // For the last pass, render to screen (null)
+      const outputTarget = isLastPass ? null : `${passName}_output`;
+
+      // Different passes need different textures
+      let inputTextures: Record<string, string> = { Source: currentInput };
+
+      // Special texture mappings for Mega Bezel passes
+      // Pass 1 might need DerezedPass from pass 0
+      if (passName === 'pass_1' && i > 0) {
+        inputTextures.DerezedPass = 'pass_0_output';
+      }
+
+      // Pass 2 - CRT shader needs game + cache-info
+      if (passName === 'pass_2' && i === 2) {
+        inputTextures.Source = 'pass_0_output'; // Game image from derez
+        inputTextures.InfoCachePass = 'pass_1_output'; // Coordinate data from cache-info
+        inputTextures.DerezedPass = 'pass_0_output';
+      }
+
+      // Pass 3 (bezel in 4-pass preset) needs game image + cache-info
+      if (passName === 'pass_3' && i === 3) {
+        inputTextures.Source = 'pass_2_output'; // Game image from pass 2 (stock)
+        inputTextures.InfoCachePass = 'pass_1_output'; // Coordinate data from pass 1 (cache-info)
+        inputTextures.DerezedPass = 'pass_0_output'; // Derezed image from pass 0
+      }
+
+      const success = this.renderer.executePass(
+        passName,
+        inputTextures,
+        outputTarget,  // Output target
+        { FrameCount: this.frameCount }  // Custom uniforms
+      );
+
+      if (!success) {
+        console.error(`[PureWebGL2MultiPass] Failed to execute pass ${i}: ${passName}`);
+        return;
+      }
+
+      // Next pass uses this pass's output as input
+      if (!isLastPass) {
+        currentInput = `${passName}_output`;
+      }
+    }
+
+    if (this.frameCount === 1) {
+      console.log(`[PureWebGL2MultiPass] ✅ All ${passNames.length} passes executed successfully`);
     }
   }
 
@@ -214,9 +267,12 @@ export class PureWebGL2MultiPassRenderer {
    * Register an existing WebGL texture
    */
   registerTexture(name: string, texture: WebGLTexture): void {
-    // Access the private textures map via the renderer
-    // For now, we'll use createRenderTarget which handles texture creation
-    console.log(`[PureWebGL2MultiPass] Registered texture: ${name}`);
+    // Only log on first registration to reduce console spam
+    if (this.frameCount === 1) {
+      console.log(`[PureWebGL2MultiPass] Registered texture: ${name}`);
+    }
+    // Actually register the texture with the renderer!
+    this.renderer.registerTexture(name, texture);
   }
 
   /**

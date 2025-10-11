@@ -133,9 +133,12 @@ function RoutePersistence() {
 
 // Global UI Components (no router dependency)
 const GlobalUIComponents = () => {
+  const location = useLocation();
+  const isPongPage = location.pathname === '/404' || location.pathname === '/pong';
+
   return (
     <>
-      <HyperspaceEffect />
+      {!isPongPage && <HyperspaceEffect />}
       <VHSOverlay />
       <Toaster />
       <Sonner />
@@ -173,13 +176,13 @@ const App = () => (
                 <PerformanceWrapper>
                   <TooltipProvider>
                     <HelpGuideProvider>
-                      <GlobalUIComponents />
                       <BrowserRouter
                         future={{
                           v7_startTransition: true,
                           v7_relativeSplatPath: true,
                         }}
                       >
+                        <GlobalUIComponents />
                         {/* Help Guide Renderer - inside router context */}
                         <HelpGuideRenderer />
                         {/* Persist and restore last visited route so reload returns to Admin if that was the last page */}

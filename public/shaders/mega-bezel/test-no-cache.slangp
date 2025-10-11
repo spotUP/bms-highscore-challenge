@@ -1,0 +1,15 @@
+shaders = 2
+
+# Test WITHOUT cache-info to see if that's the problem
+
+# Pass 0: Derez
+shader0 = shaders/guest/extras/hsm-drez-g-sharp_resampler.slang
+filter_linear0 = false
+scale_type0 = viewport
+scale0 = 1.0
+
+# Pass 1: Stock passthrough
+shader1 = shaders/base/stock.slang
+filter_linear1 = false
+scale_type1 = viewport
+scale1 = 1.0

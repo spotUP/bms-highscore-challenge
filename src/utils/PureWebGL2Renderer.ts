@@ -19,18 +19,28 @@ export class PureWebGL2Renderer {
   private textures: Map<string, WebGLTexture> = new Map();
   private quadVAO: WebGLVertexArrayObject | null = null;
 
-  constructor(canvas: HTMLCanvasElement) {
-    const gl = canvas.getContext('webgl2', {
-      antialias: false,
-      alpha: false,
-      depth: false,
-      stencil: false,
-      premultipliedAlpha: false,
-      preserveDrawingBuffer: true
-    });
+  constructor(canvasOrContext: HTMLCanvasElement | WebGL2RenderingContext) {
+    // Accept either a canvas or an existing WebGL context
+    let gl: WebGL2RenderingContext;
 
-    if (!gl) {
-      throw new Error('WebGL2 not supported');
+    if (canvasOrContext instanceof WebGL2RenderingContext) {
+      // Use existing context
+      gl = canvasOrContext;
+    } else {
+      // Create new context from canvas
+      const context = canvasOrContext.getContext('webgl2', {
+        antialias: false,
+        alpha: false,
+        depth: false,
+        stencil: false,
+        premultipliedAlpha: false,
+        preserveDrawingBuffer: true
+      });
+
+      if (!context) {
+        throw new Error('WebGL2 not supported');
+      }
+      gl = context;
     }
 
     this.gl = gl;
@@ -137,6 +147,70 @@ export class PureWebGL2Renderer {
     if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
       const log = gl.getShaderInfoLog(fragmentShader);
       console.error(`[PureWebGL2] Fragment shader compilation failed for ${name}:`, log);
+
+      // Debug: Show source around error line
+      const errorLineMatch = log?.match(/ERROR: 0:(\d+):/);
+      if (errorLineMatch) {
+        const errorLine = parseInt(errorLineMatch[1]);
+        const lines = fragmentSource.split('\n');
+        console.error(`=== Fragment shader source around line ${errorLine} (total lines: ${lines.length}) ===`);
+        const start = Math.max(0, errorLine - 6);
+        const end = Math.min(lines.length, errorLine + 4);
+        for (let i = start; i < end; i++) {
+          const marker = i === errorLine - 1 ? ' <-- ERROR HERE' : '';
+          console.error(`${i + 1}: ${lines[i]}${marker}`);
+        }
+        console.error('=== END ===');
+
+        // For Guest CRT shader, check if HSM_GetNoScanlineMode is defined
+        if (fragmentSource.includes('HSM_GetNoScanlineMode')) {
+          const funcDefMatches = fragmentSource.match(/float\s+HSM_GetNoScanlineMode\s*\(\s*\)/g);
+          if (funcDefMatches) {
+            console.error(`Found ${funcDefMatches.length} definition(s) of HSM_GetNoScanlineMode`);
+
+            // Find first definition
+            const defPos = fragmentSource.indexOf(funcDefMatches[0]);
+            const defLine = fragmentSource.substring(0, defPos).split('\n').length;
+
+            // Show the function definition with more context
+            const funcLines = fragmentSource.split('\n');
+            const funcStart = defLine - 1;
+            const funcEnd = Math.min(funcStart + 15, funcLines.length);
+            console.error(`=== Function definition at line ${defLine} (showing lines ${defLine-5} to ${defLine+10}) ===`);
+            // Show 5 lines BEFORE the function to see context
+            for (let i = Math.max(0, funcStart - 5); i < funcEnd; i++) {
+              const marker = i === funcStart ? ' <-- FUNCTION HERE' : '';
+              console.error(`${i + 1}: ${funcLines[i]}${marker}`);
+            }
+            console.error('=== END ===');
+
+            // Check if we're inside main() function
+            const textBeforeFunc = fragmentSource.substring(0, defPos);
+            const mainMatches = textBeforeFunc.match(/void\s+main\s*\(\s*\)\s*{/g);
+            const closingBracesBefore = (textBeforeFunc.match(/}/g) || []).length;
+            const openingBracesBefore = (textBeforeFunc.match(/{/g) || []).length;
+            const insideMain = mainMatches && openingBracesBefore > closingBracesBefore;
+            console.error(`Function scope check: main() found=${!!mainMatches}, insideMain=${insideMain}, braces: open=${openingBracesBefore}, close=${closingBracesBefore}`);
+
+            // Check for duplicates
+            if (funcDefMatches.length > 1) {
+              console.error(`⚠ WARNING: ${funcDefMatches.length} definitions found! Checking for duplicates...`);
+              let searchPos = defPos + 10;
+              for (let i = 1; i < funcDefMatches.length; i++) {
+                const nextPos = fragmentSource.indexOf(funcDefMatches[i], searchPos);
+                if (nextPos !== -1) {
+                  const nextLine = fragmentSource.substring(0, nextPos).split('\n').length;
+                  console.error(`  - Duplicate at line ${nextLine}`);
+                  searchPos = nextPos + 10;
+                }
+              }
+            }
+          } else {
+            console.error(`✗ HSM_GetNoScanlineMode NOT DEFINED (only called at line ${errorLine})`);
+          }
+        }
+      }
+
       gl.deleteShader(vertexShader);
       gl.deleteShader(fragmentShader);
       return false;
@@ -262,10 +336,19 @@ export class PureWebGL2Renderer {
     // Bind input textures
     let textureUnit = 0;
     for (const [uniformName, textureName] of Object.entries(inputTextures)) {
-      const texture = this.textures.get(textureName);
+      let texture = this.textures.get(textureName);
       if (!texture) {
-        console.warn(`[PureWebGL2] Texture not found: ${textureName}`);
-        continue;
+        console.warn(`[PureWebGL2] Texture not found: ${textureName}, creating dummy texture`);
+        // Create a 1x1 black texture as fallback
+        texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        const blackPixel = new Uint8Array([0, 0, 0, 255]);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, blackPixel);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        this.textures.set(textureName, texture);
       }
 
       gl.activeTexture(gl.TEXTURE0 + textureUnit);

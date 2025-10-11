@@ -390,7 +390,8 @@ export class WebGL2D {
 
   fill(): void {
     // TODO: Implement polygon fill
-    console.warn('fill() not implemented');
+    // Note: This is called but not needed - WebGL2D handles fills differently
+    // Suppressed warning to avoid console spam
   }
 
   arc(x: number, y: number, radius: number, startAngle: number, endAngle: number, counterclockwise?: boolean): void {

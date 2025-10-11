@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 
 // Store recent console logs for error reporting
 const consoleLogs: string[] = []
-const MAX_CONSOLE_LOGS = 10
+const MAX_CONSOLE_LOGS = 1000 // Increased for debugging
 
 // Override console methods to capture logs
 const originalConsole = {

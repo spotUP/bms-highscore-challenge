@@ -971,7 +971,7 @@ const GlobalAmbientMusic: React.FC<GlobalAmbientMusicProps> = ({ lanMode = false
     const memoryNotes = ['C5', 'E5', 'G5', 'B5', 'D5', 'A5', 'C6'];
     const memoryPattern = new Tone.Pattern((time, note) => {
       if (Math.random() > 0.3) { // 70% chance - frequent happy flashes
-        memoryBells.triggerAttackRelease('16n', time, 0.5);
+        memoryBells.triggerAttackRelease(note, '16n', time, 0.5);
       }
     }, memoryNotes, 'random');
     memoryPattern.interval = '8n';
@@ -1486,13 +1486,13 @@ const GlobalAmbientMusic: React.FC<GlobalAmbientMusicProps> = ({ lanMode = false
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.hidden) {
-        if (isInitializedRef.current && Tone.getContext().state === 'running') {
-          await Tone.getContext().suspend();
+        if (isInitializedRef.current && Tone.context.state === 'running') {
+          await Tone.context.suspend();
           // Audio context suspended
         }
       } else {
-        if (isInitializedRef.current && Tone.getContext().state === 'suspended') {
-          await Tone.getContext().resume();
+        if (isInitializedRef.current && Tone.context.state === 'suspended') {
+          await Tone.context.resume();
           // Audio context resumed
         }
       }
