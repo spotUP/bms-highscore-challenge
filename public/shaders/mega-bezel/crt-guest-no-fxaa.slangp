@@ -21,7 +21,7 @@ alias1 = "DeditherPass"
 HSM_NON_USER_INFO_PRE_CRT_CHAIN = 1
 
 shader2 = shaders/base/stock.slang
-alias2 = "PreCrtPass"
+alias2 = "PreCRTPass"
 
 shader3 = shaders/guest/hsm-afterglow0.slang
 filter_linear3 = true
