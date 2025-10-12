@@ -1615,8 +1615,25 @@ export class SlangShaderCompiler {
       const seenConsts = new Set<string>();
       const uniqueConsts: string[] = [];
 
+      // CRITICAL FIX: Check for push constant/UBO member names
+      // If a const has the same name as a push constant member, skip it
+      // because it will get a PARAM_-prefixed uniform + mutable global instead
+      const paramMemberNames = new Set<string>();
+      for (const binding of bindings) {
+        if (binding.type === 'push' || binding.type === 'ubo') {
+          binding.members?.forEach(m => paramMemberNames.add(m.name));
+        }
+      }
+
       for (const constDecl of globalDefs.consts) {
         const constName = constDecl.match(/const\s+\w+\s+(\w+)\s*=/)?.[1];
+
+        // Skip if this const name matches a push constant/UBO member (e.g., "lsmooth")
+        if (constName && paramMemberNames.has(constName)) {
+          console.log(`[SlangCompiler] Skipping const ${constName} (matches push constant/UBO member, will use mutable global instead)`);
+          continue;
+        }
+
         if (constName && !seenConsts.has(constName) && !definitionExists(constDecl)) {
           seenConsts.add(constName);
           uniqueConsts.push(constDecl);
