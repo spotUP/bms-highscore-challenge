@@ -1626,14 +1626,9 @@ export class SlangShaderCompiler {
       }
 
       for (const constDecl of globalDefs.consts) {
-        const constName = constDecl.match(/const\s+\w+\s+(\w+)\s*=/)?.[1];
+        const constName = constDecl.match(/const\s+\w+\s+(\w+)/)?.[1];
 
-        // Skip if this const name matches a push constant/UBO member (e.g., "lsmooth")
-        if (constName && paramMemberNames.has(constName)) {
-          console.log(`[SlangCompiler] Skipping const ${constName} (matches push constant/UBO member, will use mutable global instead)`);
-          continue;
-        }
-
+        // Don't skip - we'll convert const to mutable below
         if (constName && !seenConsts.has(constName) && !definitionExists(constDecl)) {
           seenConsts.add(constName);
           uniqueConsts.push(constDecl);
