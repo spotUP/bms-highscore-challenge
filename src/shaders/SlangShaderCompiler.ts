@@ -4969,19 +4969,10 @@ ${!hasMPI ? `#ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif` : ''}
 
-#ifndef CCONTR
-#define CCONTR 0.0
-#endif
-
-#ifndef CSHARPEN
-#define CSHARPEN 0.0
-#endif
-
-#ifndef CDETAILS
-#define CDETAILS 0.0
-#endif
-
-// Don't add shader parameter defaults - they're causing syntax errors when already defined
+// REMOVED: CSHARPEN, CCONTR, CDETAILS #defines - these are shader parameters
+// that get declared as uniforms. Adding #defines causes preprocessor to expand
+// "uniform float CSHARPEN;" -> "uniform float 0.0;" which is a syntax error.
+// These parameters are handled by the pragma parameter system.
 
 // CRITICAL: transpose() is NOT available in GLSL ES 1.0 (WebGL 1)!
 // Add polyfill for WebGL 1 compatibility (only if not already available)
