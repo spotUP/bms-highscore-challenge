@@ -1641,8 +1641,19 @@ export class SlangShaderCompiler {
       }
 
       if (uniqueConsts.length > 0) {
+        // CRITICAL FIX: Remove 'const' qualifier from any const that matches a push constant/UBO member
+        // These need to be mutable because they get assigned from PARAM_ uniforms
+        const mutableConsts = uniqueConsts.map(constDecl => {
+          const constMatch = constDecl.match(/const\s+(\w+)\s+(\w+)\s*=/);
+          if (constMatch && paramMemberNames.has(constMatch[2])) {
+            console.log(`[SlangCompiler] Converting const ${constMatch[2]} to mutable global (matches push constant/UBO member)`);
+            return constDecl.replace(/^const\s+/, ''); // Remove 'const' keyword
+          }
+          return constDecl;
+        });
+
         parts.push('// Global const declarations');
-        parts.push(...uniqueConsts);
+        parts.push(...mutableConsts);
         parts.push('');
       }
     }
