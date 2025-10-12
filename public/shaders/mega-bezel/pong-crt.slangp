@@ -10,8 +10,8 @@ scale_type0 = viewport
 scale0 = 1.0
 alias0 = "DerezedPass"
 
-# Pass 1: Guest CRT with scanlines
-shader1 = shaders/guest/advanced/crt-guest-advanced.slang
+# Pass 1: Guest CRT with scanlines (Mega Bezel HSM version)
+shader1 = shaders/guest/hsm-crt-guest-advanced-potato.slang
 filter_linear1 = true
 scale_type1 = viewport
 scale1 = 1.0

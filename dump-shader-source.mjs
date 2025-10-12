@@ -1,72 +1,84 @@
 import puppeteer from 'puppeteer';
-import fs from 'fs';
 
 (async () => {
   const browser = await puppeteer.launch({
-    headless: true,
-    args: ['--no-sandbox']
+    headless: false,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 
   const page = await browser.newPage();
 
-  let vertexShader = null;
-  let fragmentShader = null;
+  console.log('Loading game...');
+  await page.goto('http://localhost:8080/404', { waitUntil: 'networkidle0', timeout: 30000 });
 
-  page.on('console', async msg => {
-    const text = msg.text();
+  console.log('Waiting for shaders to load...');
+  await new Promise(resolve => setTimeout(resolve, 3000));
 
-    // Capture compiled shader source
-    if (text.includes('[SlangCompiler] Final compiled vertex shader')) {
-      // Next log will be the shader
-      const args = await msg.args();
-      if (args[1]) {
-        const shaderText = await args[1].jsonValue();
-        vertexShader = shaderText;
+  // Dump the compiled fragment shader source
+  const fragmentSource = await page.evaluate(() => {
+    const wrapper = window.webglShaderWrapper;
+    if (!wrapper || !wrapper.shaderRenderer) return { error: 'No renderer' };
+
+    // Get the PureWebGL2Renderer
+    const renderer = wrapper.shaderRenderer.renderer;
+    if (!renderer) return { error: 'No PureWebGL2Renderer' };
+
+    const gl = renderer.gl;
+
+    // Get the first compiled program
+    const programs = Array.from(renderer.programs.entries());
+    if (programs.length === 0) return { error: 'No programs' };
+
+    const [name, program] = programs[0];
+
+    // Get attached shaders
+    const shaders = gl.getAttachedShaders(program);
+    if (!shaders || shaders.length === 0) return { error: 'No shaders attached' };
+
+    // Find fragment shader
+    let fragmentShader = null;
+    for (const shader of shaders) {
+      if (gl.getShaderParameter(shader, gl.SHADER_TYPE) === gl.FRAGMENT_SHADER) {
+        fragmentShader = shader;
+        break;
       }
     }
 
-    if (text.includes('[SlangCompiler] Final compiled fragment shader')) {
-      const args = await msg.args();
-      if (args[1]) {
-        const shaderText = await args[1].jsonValue();
-        fragmentShader = shaderText;
+    if (!fragmentShader) return { error: 'No fragment shader found' };
+
+    // Get shader source
+    const source = gl.getShaderSource(fragmentShader);
+    return {
+      programName: name,
+      source: source,
+      lines: source ? source.split('\n').length : 0
+    };
+  });
+
+  console.log('='.repeat(80));
+  console.log('COMPILED FRAGMENT SHADER SOURCE');
+  console.log('='.repeat(80));
+
+  if (fragmentSource.error) {
+    console.log('Error:', fragmentSource.error);
+  } else {
+    console.log(`Program: ${fragmentSource.programName}`);
+    console.log(`Lines: ${fragmentSource.lines}`);
+    console.log('\nSource (first 100 lines):');
+    console.log('='.repeat(80));
+
+    if (fragmentSource.source) {
+      const lines = fragmentSource.source.split('\n');
+      lines.slice(0, 100).forEach((line, i) => {
+        console.log(`${String(i + 1).padStart(4)}: ${line}`);
+      });
+      if (lines.length > 100) {
+        console.log(`... ${lines.length - 100} more lines`);
       }
     }
-  });
-
-  console.log('Loading page to capture shader source...');
-
-  await page.goto('http://localhost:8080/webgl2-test', {
-    waitUntil: 'networkidle2',
-    timeout: 20000
-  });
-
-  await new Promise(r => setTimeout(r, 8000));
-
-  if (vertexShader) {
-    fs.writeFileSync('/tmp/compiled-vertex.glsl', vertexShader);
-    console.log('✅ Saved vertex shader to /tmp/compiled-vertex.glsl');
-
-    // Check for v_DEFAULT redefinitions
-    const lines = vertexShader.split('\n');
-    const defaultVars = lines.filter(l => l.includes('v_DEFAULT'));
-    console.log('\nv_DEFAULT declarations in vertex shader:');
-    defaultVars.forEach((line, idx) => {
-      console.log(`  ${idx + 1}: ${line.trim()}`);
-    });
   }
 
-  if (fragmentShader) {
-    fs.writeFileSync('/tmp/compiled-fragment.glsl', fragmentShader);
-    console.log('\n✅ Saved fragment shader to /tmp/compiled-fragment.glsl');
-
-    const lines = fragmentShader.split('\n');
-    const defaultVars = lines.filter(l => l.includes('v_DEFAULT'));
-    console.log('\nv_DEFAULT declarations in fragment shader:');
-    defaultVars.forEach((line, idx) => {
-      console.log(`  ${idx + 1}: ${line.trim()}`);
-    });
-  }
+  console.log('='.repeat(80));
 
   await browser.close();
 })();

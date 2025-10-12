@@ -36,9 +36,15 @@ layout(push_constant) uniform Push
 #pragma parameter PG                      "          Persistence Green -- PG"  0.32 0.0 0.50 0.01
 #pragma parameter PB                      "          Persistence Blue -- PB"  0.32 0.0 0.50 0.01
 
-#define PR params.PR
-#define PG params.PG
-#define PB params.PB
+// WEBGL FIX: Pragma parameters become uniform floats with PARAM_ prefix in WebGL
+// Reference them directly instead of through params struct
+uniform float PARAM_PR;
+uniform float PARAM_PG;
+uniform float PARAM_PB;
+
+#define PR PARAM_PR
+#define PG PARAM_PG
+#define PB PARAM_PB
 
 #define COMPAT_TEXTURE(c,d) texture(c,d)
 
@@ -61,7 +67,7 @@ void main()
 #pragma stage fragment
 layout(location = 0) in vec2 vTexCoord;
 layout(location = 0) out vec4 FragColor;
-layout(set = 0, binding = 2) uniform sampler2D PreCRTPass;
+layout(set = 0, binding = 2) uniform sampler2D PreCrtPass;
 layout(set = 0, binding = 3) uniform sampler2D AfterglowPassFeedback;
 
 #define TEX0 vTexCoord
@@ -72,11 +78,11 @@ void main()
 	vec2 dx = vec2(params.DerezedPassSize.z, 0.0);
 	vec2 dy = vec2(0.0, params.DerezedPassSize.w);
 	
-	vec3 color0  = COMPAT_TEXTURE(PreCRTPass, TEX0.xy).rgb;
-	vec3 color1  = COMPAT_TEXTURE(PreCRTPass, TEX0.xy - dx).rgb;
-	vec3 color2  = COMPAT_TEXTURE(PreCRTPass, TEX0.xy + dx).rgb;
-	vec3 color3  = COMPAT_TEXTURE(PreCRTPass, TEX0.xy - dy).rgb;
-	vec3 color4  = COMPAT_TEXTURE(PreCRTPass, TEX0.xy + dy).rgb;	
+	vec3 color0  = COMPAT_TEXTURE(PreCrtPass, TEX0.xy).rgb;
+	vec3 color1  = COMPAT_TEXTURE(PreCrtPass, TEX0.xy - dx).rgb;
+	vec3 color2  = COMPAT_TEXTURE(PreCrtPass, TEX0.xy + dx).rgb;
+	vec3 color3  = COMPAT_TEXTURE(PreCrtPass, TEX0.xy - dy).rgb;
+	vec3 color4  = COMPAT_TEXTURE(PreCrtPass, TEX0.xy + dy).rgb;	
 
 	vec3 color = (2.5 * color0 + color1 + color2 + color3 + color4)/6.5;
 	

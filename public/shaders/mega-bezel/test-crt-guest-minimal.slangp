@@ -1,0 +1,66 @@
+# Minimal CRT Guest Advanced test
+# Just the essential passes to get CRT Guest working
+
+shaders = 3
+
+# Pass 0: Stock passthrough
+shader0 = shaders/base/stock.slang
+filter_linear0 = false
+scale_type0 = source
+scale0 = 1.0
+alias0 = "PrePass"
+
+# Pass 1: CRT Guest Advanced (the main CRT shader)
+shader1 = shaders/guest/hsm-crt-guest-advanced-potato.slang
+filter_linear1 = true
+scale_type1 = viewport
+scale1 = 1.0
+float_framebuffer1 = true
+
+# Pass 2: Deconvergence (final composite)
+shader2 = shaders/guest/hsm-deconvergence-potato.slang
+filter_linear2 = true
+scale_type2 = viewport
+scale2 = 1.0
+
+# Textures for CRT mask
+textures = "SamplerLUT1;SamplerLUT2;SamplerLUT3;SamplerLUT4"
+SamplerLUT1 = shaders/guest/lut/trinitron-lut.png
+SamplerLUT1_linear = true
+SamplerLUT2 = shaders/guest/lut/inv-trinitron-lut.png
+SamplerLUT2_linear = true
+SamplerLUT3 = shaders/guest/lut/nec-lut.png
+SamplerLUT3_linear = true
+SamplerLUT4 = shaders/guest/lut/ntsc-lut.png
+SamplerLUT4_linear = true
+
+# CRT Guest Advanced parameters - ENABLE EVERYTHING
+TATE = 0.0
+IOS = 0.0
+OS = 1.0
+BLOOM = 0.0
+brightboost = 1.10
+gsl = 0.0
+scanline1 = 8.0
+scanline2 = 8.0
+beam_min = 1.35
+beam_max = 1.05
+beam_size = 0.65
+h_sharp = 5.20
+s_sharp = 0.0
+csize = 0.0
+bsize = 600.0
+warpX = 0.00
+warpY = 0.00
+glow = 0.08
+shadowMask = 5.0
+masksize = 1.0
+vertmask = 0.0
+slotmask = 0.0
+slotwidth = 2.0
+double_slot = 1.0
+mcut = 0.25
+maskDark = 0.50
+maskLight = 1.50
+CGWG = 0.30
+gamma_out = 2.40

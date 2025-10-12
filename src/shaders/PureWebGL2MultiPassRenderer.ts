@@ -28,6 +28,7 @@ export class PureWebGL2MultiPassRenderer {
   private frameCount: number = 0;
   private width: number;
   private height: number;
+  private presetParameters: Record<string, number> = {}; // Store parameters from preset
 
   constructor(canvas: HTMLCanvasElement, width: number = 800, height: number = 600) {
     this.renderer = new PureWebGL2Renderer(canvas);
@@ -72,6 +73,8 @@ export class PureWebGL2MultiPassRenderer {
       return true;
     } catch (error) {
       console.error(`[PureWebGL2MultiPass] Error loading shader pass ${name}:`, error);
+      console.error(`[PureWebGL2MultiPass] Error message: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(`[PureWebGL2MultiPass] Error stack:`, error instanceof Error ? error.stack : 'No stack trace');
       return false;
     }
   }
@@ -80,8 +83,10 @@ export class PureWebGL2MultiPassRenderer {
    * Load a preset (multiple passes)
    */
   async loadPreset(presetPath: string): Promise<boolean> {
+    throw new Error('🚨 TEST ERROR - loadPreset() WAS CALLED! 🚨');
+    console.log('AAAA-111-LOADPRESET-ENTRY');
     try {
-      console.log(`[PureWebGL2MultiPass] Loading preset: ${presetPath}`);
+      console.log(`XXXDELETED-THIS-LOG-ON-PURPOSE-XXX`);
 
       // Fetch preset file (.slangp)
       const response = await fetch(presetPath);
@@ -94,7 +99,10 @@ export class PureWebGL2MultiPassRenderer {
       // Parse preset (simple .slangp parser)
       const config = this.parseSlangPreset(presetContent, presetPath);
 
-      console.log(`[PureWebGL2MultiPass] Preset has ${config.passes.length} passes`);
+      // Store parameters for use during rendering
+      this.presetParameters = config.parameters || {};
+
+      console.log(`[PureWebGL2MultiPass] Preset has ${config.passes.length} passes and ${Object.keys(this.presetParameters).length} parameters`);
 
       // Load each shader pass
       for (const pass of config.passes) {
@@ -126,8 +134,11 @@ export class PureWebGL2MultiPassRenderer {
    * Parse .slangp preset file
    */
   private parseSlangPreset(content: string, basePath: string): PresetConfig {
+    throw new Error('🔥 parseSlangPreset() WAS CALLED! 🔥');
+    console.log('BBBB-222-PRESETPARSER-ENTRY');
     const lines = content.split('\n');
     const passes: ShaderPassConfig[] = [];
+    const parameters: Record<string, number> = {};
     let shaderCount = 0;
 
     // Find number of shaders
@@ -155,7 +166,32 @@ export class PureWebGL2MultiPassRenderer {
       });
     }
 
-    return { passes };
+    // Parse parameters - any line with "key = value" pattern
+    console.log('[PresetParser] Starting parameter extraction...');
+    for (const line of lines) {
+      // Skip comments and empty lines
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) continue;
+
+      // Skip shader/texture/filter/scale/alias definitions
+      if (trimmed.startsWith('shader') || trimmed.startsWith('texture') ||
+          trimmed.startsWith('filter') || trimmed.startsWith('scale') ||
+          trimmed.startsWith('alias') || trimmed.startsWith('Sampler')) continue;
+
+      // Match parameter lines: PARAM_NAME = value (handles integers and decimals)
+      const paramMatch = trimmed.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*([0-9]+\.?[0-9]*)/);
+      if (paramMatch) {
+        const paramName = paramMatch[1];
+        const paramValue = parseFloat(paramMatch[2]);
+        parameters[paramName] = paramValue;
+      }
+    }
+
+    console.log(`[PresetParser] ✅ Extracted ${Object.keys(parameters).length} parameters`);
+    if (Object.keys(parameters).length > 0) {
+      console.log('[PresetParser] Parameters:', JSON.stringify(parameters, null, 2));
+    }
+    return { passes, parameters };
   }
 
   /**
@@ -165,33 +201,51 @@ export class PureWebGL2MultiPassRenderer {
     const gl = this.renderer.getContext();
     this.frameCount++;
 
-    // Clear screen
-    gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    // DO NOT clear here - each pass will render to its own target
+    // Clearing here would clear the screen before the final pass renders to it!
 
-    // Execute the first loaded shader pass (for testing)
-    const firstPassName = this.passes.keys().next().value;
-    if (!firstPassName) {
-      console.warn('[PureWebGL2MultiPass] No shader pass loaded to render');
+    if (this.passes.size === 0) {
+      console.warn('[PureWebGL2MultiPass] No shader passes loaded to render');
       return;
     }
 
-    if (this.frameCount === 1) {
-      console.log(`[PureWebGL2MultiPass] Executing first frame with pass: ${firstPassName}, input: ${inputTextureName}`);
+    // Execute all passes in sequence
+    const passArray = Array.from(this.passes.entries());
+    let currentInput = inputTextureName;
+
+    for (let i = 0; i < passArray.length; i++) {
+      const [passName, passConfig] = passArray[i];
+      const isLastPass = i === passArray.length - 1;
+
+      // Last pass renders to screen, others to their framebuffer
+      const outputTarget = isLastPass ? null : passConfig.framebuffer;
+
+      // Execute the shader pass with preset parameters + frame uniforms
+      const success = this.renderer.executePass(
+        passName,
+        { Source: currentInput },
+        outputTarget,
+        { ...this.presetParameters, FrameCount: this.frameCount }
+      );
+
+      if (!success) {
+        console.error(`[PureWebGL2MultiPass] ❌ Failed to execute pass ${i + 1}/${passArray.length}: ${passName}`);
+        console.error(`   Input: ${currentInput}, Output: ${outputTarget || 'screen'}`);
+        throw new Error(`Pass ${passName} failed to execute`);
+      }
+
+      // Log successful pass execution occasionally
+      if (this.frameCount === 1 || this.frameCount === 60) {
+        console.log(`[PureWebGL2MultiPass] Executing pass ${i}: ${passName}, input: ${currentInput}, output: ${outputTarget || 'screen'}`);
+      }
+
+      // Next pass uses this pass's output
+      currentInput = passName;
     }
 
-    // Execute the shader pass
-    const success = this.renderer.executePass(
-      firstPassName,
-      { Source: inputTextureName },  // Input texture mapping
-      null,  // Render to screen (null framebuffer)
-      { FrameCount: this.frameCount }  // Custom uniforms
-    );
-
-    if (!success) {
-      console.error(`[PureWebGL2MultiPass] Failed to execute pass: ${firstPassName}`);
-    } else if (this.frameCount === 1) {
-      console.log(`[PureWebGL2MultiPass] ✅ First frame rendered successfully`);
+    // Log successful completion occasionally
+    if (this.frameCount === 1 || this.frameCount === 60 || this.frameCount % 300 === 0) {
+      console.log(`[PureWebGL2MultiPass] ✅ All ${passArray.length} passes executed successfully`);
     }
   }
 

@@ -363,12 +363,24 @@ export class PureWebGL2Renderer {
     }
 
     // Set custom uniforms
+    let paramSetCount = 0;
+    let paramMissingCount = 0;
     for (const [name, value] of Object.entries(uniforms)) {
       const location = gl.getUniformLocation(program, name);
-      if (location === null) continue;
+      if (location === null) {
+        // Uniform doesn't exist in this shader - this is normal, not all shaders use all parameters
+        if (name.startsWith('PARAM_')) paramMissingCount++;
+        continue;
+      }
 
       if (typeof value === 'number') {
         gl.uniform1f(location, value);
+        if (name.startsWith('PARAM_')) {
+          paramSetCount++;
+          if (paramSetCount <= 5) {
+            console.log(`[PureWebGL2] Set uniform ${name} = ${value} in ${programName}`);
+          }
+        }
       } else if (Array.isArray(value)) {
         if (value.length === 2) {
           gl.uniform2f(location, value[0], value[1]);
@@ -381,6 +393,9 @@ export class PureWebGL2Renderer {
           gl.uniformMatrix4fv(location, false, value);
         }
       }
+    }
+    if (paramSetCount > 0 || paramMissingCount > 0) {
+      console.log(`[PureWebGL2] ${programName}: Set ${paramSetCount} PARAM_ uniforms, ${paramMissingCount} not found in shader`);
     }
 
     // Draw fullscreen quad

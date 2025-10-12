@@ -51,7 +51,7 @@ layout(push_constant) uniform Push
 // 	float bloom_dist;
 // } global;
 
-// #pragma parameter hiscan "          High Resolution Scanlines (prepend a scaler...)" 0.0 0.0 1.0 1.0
+// #pragma parameter hiscan "       High Resolution Scanlines (GDV with ScaleFx or XBR Only)" 0.0 0.0 1.0 1.0
 // #define hiscan        params.hiscan
 
 #pragma parameter GDV_BRIGHTNESS_EMPTY_LINE							" " 0 0 0.001 0.001
@@ -158,10 +158,6 @@ layout(push_constant) uniform Push
 #define COMPAT_TEXTURE(c,d) HSM_GetCroppedTexSample(c,d)
 // End Addition
 
-/* HSM Removed
-#define TEX0 vTexCoord
-*/
-
 #define OutputSize global.OutputSize
 
 #pragma stage vertex
@@ -181,7 +177,7 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 0, binding = 2) uniform sampler2D LinearizePass;
 layout(set = 0, binding = 3) uniform sampler2D AvgLumPass;
 layout(set = 0, binding = 4) uniform sampler2D Pass1;
-layout(set = 0, binding = 6) uniform sampler2D InfoCachePass;
+layout(set = 0, binding = 6) uniform sampler2D CacheInfoPass;
 
 #define eps 1e-8
 
@@ -256,27 +252,9 @@ vec3 plant (vec3 tar, float r)
 void main()
 {
 	// HSM Added
-	vec2 viewportCoordTransformed = HSM_GetViewportCoordWithZoomAndPan(vTexCoord);
-	HSM_UpdateGlobalScreenValuesFromCache(InfoCachePass, vTexCoord);
+	HSM_UpdateGlobalScreenValuesFromCache(CacheInfoPass, vTexCoord);
 
-	vec2 cache_bounds_coord = SCREEN_COORD;
-
-// If it's the potato preset render the whole frame
-#ifndef IS_POTATO_PRESET
-#ifndef IS_NO_REFLECT_PRESET
-	vec2 bezel_outside_flat_coord;
-	vec2 frame_outside_flat_coord;
-	HSM_GetSimpleBezelCoords(TUBE_DIFFUSE_COORD, 
-							TUBE_DIFFUSE_SCALE, 
-							TUBE_SCALE, 
-							SCREEN_ASPECT,
-							bezel_outside_flat_coord, 
-							frame_outside_flat_coord);
-	cache_bounds_coord = (bezel_outside_flat_coord - 0.5) * 0.9 + 0.5;
-#endif
-#endif
-
-	if (HHLP_IsOutsideCoordSpace(cache_bounds_coord))
+	if (HSM_IsOutsideReflectionBoundary())
 	{
 			FragColor = vec4(0);
 			return;
@@ -384,7 +362,7 @@ void main()
 
 	vec3 color2 = COMPAT_TEXTURE(Pass1, pC4      ).rgb;
 	vec3 scolor2 = 	COMPAT_TEXTURE(Pass1, pC4      ).aaa;
-
+	
 	if(!interb) color2 = pow(color2, vec3(scangamma/gamma_in)); 
 
 	vec3 ctmp = color1; float w3 = 1.0; vec3 color = color1;

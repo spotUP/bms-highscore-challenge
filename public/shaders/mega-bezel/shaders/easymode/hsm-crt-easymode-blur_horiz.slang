@@ -15,7 +15,7 @@ layout(std140, set = 0, binding = 0) uniform UBO
 
 #include "hsm-crt-easymode-blur_params.inc"
 
-#define kernel(x) exp(-GLOW_FALLOFF * (x) * (x))
+#define kernel(x) exp(-GLOW_FALLOFF * float(x) * float(x))
 
 #pragma stage vertex
 layout(location = 0) in vec4 Position;

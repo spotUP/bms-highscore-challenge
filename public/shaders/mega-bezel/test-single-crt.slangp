@@ -1,0 +1,26 @@
+# Single REAL CRT pass test - use actual CRT shader with scanlines
+shaders = 1
+
+# Use the potato CRT shader with actual scanline effects
+shader0 = shaders/guest/hsm-crt-guest-advanced-potato.slang
+filter_linear0 = false
+scale_type0 = viewport
+scale0 = 1.0
+alias0 = "CRTPass"
+
+# Textures needed by guest-advanced
+textures = "SamplerLUT1;SamplerLUT2;SamplerLUT3;SamplerLUT4"
+SamplerLUT1 = shaders/guest/lut/trinitron-lut.png
+SamplerLUT1_linear = true
+SamplerLUT2 = shaders/guest/lut/inv-trinitron-lut.png
+SamplerLUT2_linear = true
+SamplerLUT3 = shaders/guest/lut/nec-lut.png
+SamplerLUT3_linear = true
+SamplerLUT4 = shaders/guest/lut/ntsc-lut.png
+SamplerLUT4_linear = true
+
+# Parameters - enable visible CRT effects
+HSM_CURVATURE_MODE = 1
+glow = 0.1
+brightboost = 1.2
+scanline = 8.0  # Strong scanlines so we can see them!

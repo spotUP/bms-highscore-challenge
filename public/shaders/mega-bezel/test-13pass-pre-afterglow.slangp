@@ -1,0 +1,116 @@
+# Test 13 Passes - Add pre-shaders-afterglow after afterglow
+
+shaders = 13
+
+# Pass 0: Derez
+shader0 = shaders/guest/extras/hsm-drez-g-sharp_resampler.slang
+filter_linear0 = false
+scale_type0 = source
+scale0 = 1.0
+alias0 = "DerezedPass"
+
+# Pass 1: Cache info
+shader1 = shaders/base/cache-info-potato-params.slang
+filter_linear1 = false
+scale_type1 = source
+scale1 = 1.0
+alias1 = "InfoCachePass"
+
+# Pass 2: Fetch derez output
+shader2 = shaders/guest/extras/hsm-fetch-drez-output.slang
+filter_linear2 = false
+srgb_framebuffer2 = true
+scale_type2 = source
+scale2 = 1.0
+
+# Pass 3: Stock
+shader3 = shaders/base/stock.slang
+filter_linear3 = false
+scale_type3 = source
+scale3 = 1.0
+alias3 = "PreCrtPass"
+
+# Pass 4: FXAA
+shader4 = shaders/fxaa/fxaa.slang
+filter_linear4 = true
+float_framebuffer4 = true
+scale_type4 = source
+scale4 = 1.0
+alias4 = "AntiAliasPass"
+
+# Pass 5: Afterglow (comes BEFORE pre-shaders in crt-guest-only)
+shader5 = shaders/guest/hsm-afterglow0.slang
+filter_linear5 = true
+scale_type5 = source
+scale5 = 1.0
+alias5 = "AfterglowPass"
+
+# Pass 6: Pre-shaders-afterglow (comes AFTER afterglow)
+shader6 = shaders/guest/hsm-pre-shaders-afterglow.slang
+filter_linear6 = true
+scale_type6 = source
+mipmap_input6 = true
+scale6 = 1.0
+
+# Pass 7: Color grading
+shader7 = shaders/dogway/hsm-grade.slang
+filter_linear7 = false
+scale_type7 = source
+scale7 = 1.0
+alias7 = "ColorCorrectPass"
+
+# Pass 8: Sharpening
+shader8 = shaders/guest/hsm-custom-fast-sharpen.slang
+filter_linear8 = true
+scale_type8 = source
+scale8 = 1.0
+alias8 = "SharpenPass"
+
+# Pass 9: Stock prepass
+shader9 = shaders/base/stock.slang
+filter_linear9 = true
+scale_type9 = source
+scale9 = 1.0
+alias9 = "PrePass"
+mipmap_input9 = true
+
+# Pass 10: Interlace and linearize
+shader10 = shaders/guest/hsm-interlace-and-linearize.slang
+filter_linear10 = true
+scale_type10 = source
+scale10 = 1.0
+float_framebuffer10 = true
+alias10 = "LinearizePass"
+
+# Pass 11: Do-nothing
+shader11 = shaders/base/do-nothing.slang
+mipmap_input11 = false
+filter_linear11 = true
+scale_type11 = absolute
+scale_x11 = 8
+scale_y11 = 8
+
+# Pass 12: Simple CRT (FINAL)
+shader12 = ../simple-crt.slang
+filter_linear12 = true
+scale_type12 = viewport
+scale12 = 1.0
+
+# Textures
+textures = "SamplerLUT1;SamplerLUT2;SamplerLUT3;SamplerLUT4"
+SamplerLUT1 = shaders/guest/lut/trinitron-lut.png
+SamplerLUT1_linear = true
+SamplerLUT2 = shaders/guest/lut/inv-trinitron-lut.png
+SamplerLUT2_linear = true
+SamplerLUT3 = shaders/guest/lut/nec-lut.png
+SamplerLUT3_linear = true
+SamplerLUT4 = shaders/guest/lut/ntsc-lut.png
+SamplerLUT4_linear = true
+
+# Parameters
+HSM_FXAA_ON = 1
+SHARPEN_ON = 1
+CSHARPEN = 0.7
+GRADE_ON = 1
+HSM_SCREEN_SCALE_GSHARP_MODE = 1
+HSM_ASPECT_RATIO_MODE = 1

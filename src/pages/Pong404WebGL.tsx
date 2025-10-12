@@ -6998,19 +6998,32 @@ const Pong404WebGL: React.FC = () => {
     // Initialize WebGL2DWithShaders context once and reuse (performance optimization)
     if (!webglCtxRef.current) {
       try {
-        console.log('[INIT] Creating WebGL2DWithShaders with Mega Bezel preset');
+        console.log('[INIT] Creating WebGL2DWithShaders with FULL Mega Bezel STD-MAXIMUM preset');
 
-        // Use WebGL2DWithShaders WITHOUT a preset - uses built-in passthrough shader
-        // This has scanlines, curvature, and vignette effects
+        // Use CRT GUEST ONLY preset (15 working passes)
+        // Testing first 15 passes that compile successfully
+        // Includes:
+        // - CRT Guest Advanced effects (scanlines, phosphor mask, interlacing, afterglow)
+        // - Color grading (Dogway's grade shader)
+        // - Sharpening filter
+        // - FXAA anti-aliasing
+        // - Luminance calculation
+        // - Linearization
+        // Full 17-pass CRT Guest Advanced (no FXAA) with scanlines, phosphor mask, glow, bloom
         const wrapper = new WebGL2DWithShaders(canvas, {
           enabled: true,
+          presetPath: '/shaders/mega-bezel/crt-guest-no-fxaa.slangp',
           bypassOnError: true,
         });
 
         webglWithShadersRef.current = wrapper;
         webglCtxRef.current = wrapper.getWebGL2D();
 
-        console.log('✅ Mega Bezel shaders initialized');
+        // Expose to window for debugging
+        (window as any).webglShaderWrapper = wrapper;
+
+        console.log('✅ Built-in CRT shaders initialized (scanlines + curvature + vignette)');
+        console.log('[INIT DEBUG] webglWithShadersRef.current set:', !!webglWithShadersRef.current);
       } catch (error) {
         console.error('❌ Failed to initialize WebGL2DWithShaders:', error);
         // Fallback to plain rendering
@@ -7022,9 +7035,19 @@ const Pong404WebGL: React.FC = () => {
     const ctx = webglCtxRef.current;
     if (!ctx) return;
 
+    // DEBUG: Log render execution
+    if (!window.__renderDebugCount) window.__renderDebugCount = 0;
+    window.__renderDebugCount++;
+
+    // Get current color scheme (needed for beginFrame clear)
+    const currentColors = COLOR_PALETTE[gameState.colorIndex];
+
     // CRITICAL: Begin shader frame (binds framebuffer for capture)
+    // Must be called BEFORE drawing anything to canvas (including audio/start screens)
+    // so that all canvas content is captured for shader processing
     if (webglWithShadersRef.current) {
       webglWithShadersRef.current.beginFrame();
+      // Canvas will be cleared below with ctx.fillRect() after setting up the context
     }
 
     // DEBUG: Check if there's a transform or clip active
@@ -7069,10 +7092,8 @@ const Pong404WebGL: React.FC = () => {
     (ctx as any).webkitFontSmoothing = 'none';
     (ctx as any).mozOsxFontSmoothing = 'unset';
 
-    // Get current color scheme
-    const currentColors = COLOR_PALETTE[gameState.colorIndex];
-
     // Clear canvas with color scheme background
+    // This must happen AFTER beginFrame() so it goes to the framebuffer
     ctx.fillStyle = currentColors.background;
     ctx.fillRect(0, 0, canvasSize.width, canvasSize.height);
 
@@ -7221,7 +7242,12 @@ const Pong404WebGL: React.FC = () => {
     }
 
     // [AUDIO] AUDIO INTERACTION PROMPT (first load only)
-    if (showAudioPrompt) {
+    // TEMPORARY DEBUG: Skip audio prompt to test shaders directly in gameplay
+    const SKIP_TO_GAMEPLAY = true; // Enabled to test CRT shaders in gameplay
+    if (showAudioPrompt && !SKIP_TO_GAMEPLAY) {
+      if (window.__renderDebugCount <= 5) {
+        console.log('[EARLY RETURN] Audio prompt active, skipping shader rendering');
+      }
       // Draw playfield borders - same as gameplay area
       ctx.strokeStyle = currentColors.foreground;
       const audioBorderWidth = 12 * scaleFactor;
@@ -7270,11 +7296,20 @@ const Pong404WebGL: React.FC = () => {
       ctx.fillText('Required for browser audio policy compliance', canvasSize.width / 2, canvasSize.height / 2 + (120 * scaleFactor));
       ctx.shadowBlur = 0;
 
+      // Apply shader post-processing before returning
+      if (webglWithShadersRef.current) {
+        (webglWithShadersRef.current as any)._callSite = 'AUDIO_PROMPT';
+        webglWithShadersRef.current.endFrame();
+      }
       return; // Don't render anything else when showing audio prompt
     }
 
     // [ROCKET] START SCREEN
-    if (gameState.showStartScreen) {
+    // TEMPORARY DEBUG: Skip start screen to test shaders directly in gameplay
+    if (gameState.showStartScreen && !SKIP_TO_GAMEPLAY) {
+      if (window.__renderDebugCount <= 5) {
+        console.log('[EARLY RETURN] Start screen active, skipping shader rendering');
+      }
       // Draw playfield borders - same as gameplay area
       ctx.strokeStyle = currentColors.foreground;
       const startBorderWidth = 12 * scaleFactor;
@@ -7356,6 +7391,11 @@ const Pong404WebGL: React.FC = () => {
       ctx.fillText(`CRT EFFECT: "REMOVED"`, canvasSize.width / 2, canvasSize.height / 2 + (200 * scaleFactor));
       ctx.shadowBlur = 0;
 
+      // Apply shader post-processing before returning
+      if (webglWithShadersRef.current) {
+        (webglWithShadersRef.current as any)._callSite = 'START_SCREEN';
+        webglWithShadersRef.current.endFrame();
+      }
       return; // Don't render game elements when showing start screen
     }
 
@@ -9350,6 +9390,7 @@ const Pong404WebGL: React.FC = () => {
 
     // CRITICAL: Apply Mega Bezel shader post-processing
     if (webglWithShadersRef.current) {
+      (webglWithShadersRef.current as any)._callSite = 'MAIN_RENDER';
       webglWithShadersRef.current.endFrame();
     }
 
@@ -9373,6 +9414,13 @@ const Pong404WebGL: React.FC = () => {
 
     const gameLoop = (currentTime: number) => {
       lastTime = currentTime;
+
+      // DEBUG: Log game loop execution
+      if (!window.__gameLoopDebugCount) window.__gameLoopDebugCount = 0;
+      window.__gameLoopDebugCount++;
+      if (window.__gameLoopDebugCount <= 5) {
+        console.log(`[GAME LOOP] Iteration ${window.__gameLoopDebugCount}`);
+      }
 
       // Get music analysis data for reactive visual effects
       const musicData = (window as any).generativeMusic?.getAnalysisData?.() || { volume: 0, disharmonic: 0, beat: 0 };

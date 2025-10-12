@@ -169,3 +169,4 @@ killall -9 node && sleep 1 && npm run dev
 - remember the mega bezel reflection shader should never be implemented in the canvas, it should be implemented directly into the crt shader
 - remember the playfield border belongs to the playfield
 - don't screenshot the images gets to big
+- don't use stubs unless you HAVE to

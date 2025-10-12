@@ -249,15 +249,35 @@ export class PureWebGL2Renderer {
         return false;
       }
       gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+
+      // Set viewport to framebuffer size (all framebuffers are canvas-sized)
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
     } else {
+      // Rendering to screen - set viewport to full canvas
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
     }
 
     // Use program
     gl.useProgram(program);
 
+    // Check for errors after useProgram
+    let error = gl.getError();
+    if (error !== gl.NO_ERROR) {
+      console.error(`❌ [PureWebGL2] WebGL error after useProgram(${programName}): ${error}`);
+      return false;
+    }
+
     // Set standard RetroArch uniforms (required by Mega Bezel shaders)
     this.setStandardUniforms(program, uniforms);
+
+    // Check for errors after setting uniforms
+    error = gl.getError();
+    if (error !== gl.NO_ERROR) {
+      console.error(`❌ [PureWebGL2] WebGL error after setStandardUniforms(${programName}): ${error}`);
+      return false;
+    }
 
     // Bind input textures
     let textureUnit = 0;
@@ -308,7 +328,17 @@ export class PureWebGL2Renderer {
     // Check for WebGL errors
     const error = gl.getError();
     if (error !== gl.NO_ERROR) {
-      console.error(`[PureWebGL2] WebGL error after drawing: ${error}`);
+      const errorName = {
+        [gl.INVALID_ENUM]: 'INVALID_ENUM',
+        [gl.INVALID_VALUE]: 'INVALID_VALUE',
+        [gl.INVALID_OPERATION]: 'INVALID_OPERATION',
+        [gl.INVALID_FRAMEBUFFER_OPERATION]: 'INVALID_FRAMEBUFFER_OPERATION',
+        [gl.OUT_OF_MEMORY]: 'OUT_OF_MEMORY',
+        [gl.CONTEXT_LOST_WEBGL]: 'CONTEXT_LOST_WEBGL'
+      }[error] || 'UNKNOWN';
+      console.error(`❌ [PureWebGL2] WebGL error after drawing pass ${programName}: ${error} (${errorName})`);
+      console.error(`   Output target: ${outputTarget || 'screen'}`);
+      console.error(`   Input textures:`, Object.keys(inputTextures));
       return false;
     }
 

@@ -23,7 +23,6 @@
 layout(push_constant) uniform Push
 {
 	vec4 SourceSize;
-	vec4 OriginalSize;
 	vec4 OutputSize;
 	float brightboost;
 	float saturation;
@@ -109,7 +108,7 @@ layout(location = 1) in float maskFade;
 layout(location = 0) out vec4 FragColor;
 layout(set = 0, binding = 1) uniform sampler2D Source;
 
-layout(set = 0, binding = 2) uniform sampler2D InfoCachePass;
+layout(set = 0, binding = 2) uniform sampler2D CacheInfoPass;
 
 float sw(float x, float l)
 {
@@ -346,27 +345,9 @@ vec3 saturationFunction (vec3 textureColor)
 void main()
 {
     // HSM Added
-	vec2 viewportCoordTransformed = HSM_GetViewportCoordWithZoomAndPan(vTexCoord);
-	HSM_UpdateGlobalScreenValuesFromCache(InfoCachePass, vTexCoord);
+	HSM_UpdateGlobalScreenValuesFromCache(CacheInfoPass, vTexCoord);
 
-	vec2 cache_bounds_coord = SCREEN_COORD;
-
-// If it's the potato preset render the whole frame
-#ifndef IS_POTATO_PRESET
-#ifndef IS_NO_REFLECT_PRESET
-	vec2 bezel_outside_flat_coord;
-	vec2 frame_outside_flat_coord;
-	HSM_GetSimpleBezelCoords(TUBE_DIFFUSE_COORD, 
-							TUBE_DIFFUSE_SCALE, 
-							TUBE_SCALE, 
-							SCREEN_ASPECT,
-							bezel_outside_flat_coord, 
-							frame_outside_flat_coord);
-	cache_bounds_coord = (bezel_outside_flat_coord - 0.5) * 0.9 + 0.5;
-#endif
-#endif
-
-	if (HHLP_IsOutsideCoordSpace(cache_bounds_coord))
+	if (HSM_IsOutsideReflectionBoundary())
 	{
 			FragColor = vec4(0);
 			return;

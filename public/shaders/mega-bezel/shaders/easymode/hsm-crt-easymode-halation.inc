@@ -167,7 +167,7 @@ layout(location = 0) in vec2 vTexCoord;
 layout(location = 0) out vec4 FragColor;
 layout(set = 0, binding = 1) uniform sampler2D Source;
 
-layout(set = 0, binding = 2) uniform sampler2D InfoCachePass;
+layout(set = 0, binding = 2) uniform sampler2D CacheInfoPass;
 layout(set = 0, binding = 4) uniform sampler2D LinearizePass;
 layout(set = 0, binding = 5) uniform sampler2D AvgLumPass;
 
@@ -179,29 +179,13 @@ void main()
 
     // TODO implement Cropping
     // HSM Added
-	vec2 viewportCoordTransformed = HSM_GetViewportCoordWithZoomAndPan(vTexCoord);
-	HSM_UpdateGlobalScreenValuesFromCache(InfoCachePass, vTexCoord);
+	HSM_UpdateGlobalScreenValuesFromCache(CacheInfoPass, vTexCoord);
     vec2 tex_size = CROPPED_ROTATED_SIZE_WITH_RES_MULT;
     // End Addition
 
 	vec2 cache_bounds_coord = SCREEN_COORD;
 
-// // If it's the potato preset render the whole frame
-// #ifndef IS_POTATO_PRESET
-// #ifndef IS_NO_REFLECT_PRESET
-// 	vec2 bezel_outside_flat_coord;
-// 	vec2 frame_outside_flat_coord;
-// 	HSM_GetSimpleBezelCoords(TUBE_DIFFUSE_COORD, 
-// 							TUBE_DIFFUSE_SCALE, 
-// 							TUBE_SCALE, 
-// 							SCREEN_ASPECT,
-// 							bezel_outside_flat_coord, 
-// 							frame_outside_flat_coord);
-// 	cache_bounds_coord = (frame_outside_flat_coord - 0.5) * 0.9 + 0.5;
-// #endif
-// #endif
-
-// 	if (HHLP_IsOutsideCoordSpace(cache_bounds_coord))
+// 	if (HSM_IsOutsideReflectionBoundary())
 // 	{
 // 			FragColor = vec4(0);
 // 			return;
@@ -335,7 +319,7 @@ void main()
     vec2 mod_fac = floor(SCREEN_COORD * global.OutputSize.xy * SCREEN_SCALE * tex_size.xy / (tex_size.xy * vec2(final_mask_size, mask_dot_height * final_mask_size)));
     // End Addition
 
-    int dot_no = int(mod((mod_fac.x + mod(mod_fac.y, 2.0) * mask_stagger) / mask_dot_width, mask_colors));
+    float dot_no = floor(mod((mod_fac.x + mod(mod_fac.y, 2.0) * mask_stagger) / mask_dot_width, mask_colors));
     float dither = mod(mod_fac.y + mod(floor(mod_fac.x / mask_colors), 2.0), 2.0);
 
     float mask_strength = mix(params.ESM_MASK_STRENGTH_MAX, params.ESM_MASK_STRENGTH_MIN, rgb_max);
@@ -345,8 +329,8 @@ void main()
     mask_dark = 1.0 - mask_strength;
     mask_bright = 1.0 + mask_strength * 2.0;
 
-    if (dot_no == 0) mask_weight = mix(vec3(mask_bright, mask_bright, mask_bright), vec3(mask_bright, mask_dark, mask_dark), mask_colors - 2.0);
-    else if (dot_no == 1) mask_weight = mix(vec3(mask_dark, mask_dark, mask_dark), vec3(mask_dark, mask_bright, mask_dark), mask_colors - 2.0);
+    if (dot_no < 0.5) mask_weight = mix(vec3(mask_bright, mask_bright, mask_bright), vec3(mask_bright, mask_dark, mask_dark), mask_colors - 2.0);
+    else if (dot_no < 1.5) mask_weight = mix(vec3(mask_dark, mask_dark, mask_dark), vec3(mask_dark, mask_bright, mask_dark), mask_colors - 2.0);
     else mask_weight = vec3(mask_dark, mask_dark, mask_bright);
 
     if (dither > 0.9) mask_mul = mask_dark;

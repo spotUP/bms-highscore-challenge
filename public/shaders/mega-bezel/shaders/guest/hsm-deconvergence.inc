@@ -22,8 +22,12 @@
    
 */
 
-#pragma parameter hiscan "          High Resolution Scanlines (ScaleFx or XBR Only)" 0.0 0.0 1.0 1.0
-#define hiscan        global.hiscan
+#include "../base/common/globals-and-bezel-params.inc"
+#include "../base/common/common-functions.inc"
+#include "../base/common/common-functions-bezel.inc"
+
+// #pragma parameter hiscan "       High Resolution Scanlines (GDV with ScaleFx or XBR Only)" 0.0 0.0 1.0 1.0
+// #define hiscan        global.hiscan
 
 #pragma parameter GDV_BRIGHTNESS_EMPTY_LINE							" " 0 0 0.001 0.001
 #pragma parameter bogus_brightness "[ BRIGHTNESS SETTINGS ]:" 0.0 0.0 1.0 1.0
@@ -257,7 +261,8 @@ layout(set = 0, binding = 6) uniform sampler2D PrePass;
 layout(set = 0, binding = 7) uniform sampler2D Source;
 
 // HSM Added
-layout(set = 0, binding = 8) uniform sampler2D InfoCachePass;
+layout(set = 0, binding = 8) uniform sampler2D CacheInfoPass;
+layout(set = 0, binding = 9) uniform sampler2D TubeFxPass;
 
 #define eps 1e-10 
 
@@ -636,35 +641,17 @@ void main()
 	*/
 
 	// HSM Added
-	vec2 viewportCoordTransformed = HSM_GetViewportCoordWithZoomAndPan(vTexCoord);
-	HSM_UpdateGlobalScreenValuesFromCache(InfoCachePass, vTexCoord);
-	vec2 SourceSize = CROPPED_ROTATED_SIZE_WITH_RES_MULT;
-	float TATE = USE_VERTICAL_SCANLINES;
-
-	vec2 cache_bounds_coord = SCREEN_COORD;
-
-// If it's the potato preset render the whole frame
-#ifndef IS_POTATO_PRESET
-#ifndef IS_NO_REFLECT_PRESET
-	// Have to get the scale of the coordinates so we can figure out the size of the onscreen rectangle of the area 
-	HSM_GetBezelCoords(TUBE_DIFFUSE_COORD, 
-						TUBE_DIFFUSE_SCALE, 
-						TUBE_SCALE, 
-						SCREEN_ASPECT, 
-						false,
-						BEZEL_OUTSIDE_SCALE,
-						BEZEL_OUTSIDE_COORD, 
-						BEZEL_OUTSIDE_CURVED_COORD, 
-						FRAME_OUTSIDE_CURVED_COORD);
-	cache_bounds_coord = (BEZEL_OUTSIDE_COORD - 0.5) * 0.9 + 0.5;
-#endif
-#endif
-
-	if (HHLP_IsOutsideCoordSpace(cache_bounds_coord))
+	HSM_UpdateGlobalScreenValuesFromCache(CacheInfoPass, vTexCoord);
+	
+	if (HSM_IsOutsideReflectionBoundary())
 	{
 		FragColor = vec4(0);
 		return;
 	}
+
+	vec2 SourceSize = CROPPED_ROTATED_SIZE_WITH_RES_MULT;
+	float TATE = USE_VERTICAL_SCANLINES;
+
 
 	/* HSM Removed
 	float lum = COMPAT_TEXTURE(AvgLumPass, vec2(0.5,0.5)).a;
@@ -931,5 +918,16 @@ else{
 	float adjusted_bardir = global.bardir < 0 ? TATE : global.bardir;
 	color.rgb *= humbar(mix(pos.y, pos.x, adjusted_bardir));
 
-	FragColor = HSM_Linearize(vec4(color, 1.0), DEFAULT_SRGB_GAMMA);
+	vec4 crt_color = vec4(color, 1);
+	crt_color = HSM_Linearize(crt_color, DEFAULT_SRGB_GAMMA);
+
+	// // Do AB Compare
+	// if (HSM_AB_COMPARE_SHOW_MODE == 1 && HSM_GetIsInABCompareArea(vTexCoord))
+	// {
+	// 	vec4 drezzed_color = HSM_GetCroppedTexSample(DerezedPass, crt_coord);
+	// 	crt_color = HSM_Linearize(drezzed_color, GAMMA_INPUT);
+	// }
+
+	vec4 image_layers_packed = texture(TubeFxPass, vTexCoord);
+	FragColor = HSM_ApplyPackedTubeLayers(crt_color, image_layers_packed);
 }

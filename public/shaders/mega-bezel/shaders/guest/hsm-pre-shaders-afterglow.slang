@@ -29,7 +29,7 @@ layout(push_constant) uniform Push
    uint FrameCount;
    float TNTC;
    float LS;
-   float LUTLOW, LUTBR;   
+   float LUTLOW, LUTBR;
    float CP, CS;
    float WP;
    float wp_saturation;
@@ -319,7 +319,7 @@ void main()
 	mat3 m_out;
 	
 	if (CS == 0.0) { p = 2.2; m_out =  ToSRGB;   } else
-	if (CS == 1.0) { p = 2.2; m_out =  ToModern; } else	
+	if (CS == 1.0) { p = 2.2; m_out =  ToModern; } else
 	if (CS == 2.0) { p = 2.6; m_out =  ToDCI;    } else
 	if (CS == 3.0) { p = 2.2; m_out =  ToAdobe;  } else
 	if (CS == 4.0) { p = 2.4; m_out =  ToREC;    }
@@ -328,20 +328,20 @@ void main()
 	
 	mat3 m_in = Profile0;
 
-	if (CP == 0.0) { m_in = Profile0; } else	
+	if (CP == 0.0) { m_in = Profile0; } else
 	if (CP == 1.0) { m_in = Profile1; } else
 	if (CP == 2.0) { m_in = Profile2; } else
 	if (CP == 3.0) { m_in = Profile3; } else
 	if (CP == 4.0) { m_in = Profile4; } else
 	if (CP == 5.0) { m_in = Profile5; }
-	
+
 	color = m_in*color;
 	color = m_out*color;
 
 	color = clamp(color, 0.0, 1.0);
 
-	color = pow(color, vec3(1.0/p));	
-	
+	color = pow(color, vec3(1.0/p));
+
 	if (CP == -1.0) color = c;
 	
 	vec3 scolor1 = plant(pow(color, vec3(wp_saturation)), max(max(color.r,color.g),color.b));

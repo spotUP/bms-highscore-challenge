@@ -1,0 +1,59 @@
+# TEST: 6 passes (skip FXAA to test PARAM_ fix)
+shaders = 6
+
+shader0 = shaders/base/drez-none.slang
+filter_linear0 = false
+srgb_framebuffer0 = true
+scale_type0 = source
+scale0 = 1.0
+
+shader1 = shaders/base/fetch-drez-output.slang
+filter_linear1 = false
+srgb_framebuffer1 = true
+scale_type1 = source
+scale1 = 1.0
+
+shader2 = shaders/base/stock.slang
+alias2 = "PreCrtPass"
+
+shader3 = shaders/guest/hsm-afterglow0.slang
+filter_linear3 = true
+scale_type3 = source
+scale3 = 1.0
+alias3 = "AfterglowPass"
+
+shader4 = shaders/guest/hsm-pre-shaders-afterglow.slang
+filter_linear4 = true
+scale_type4 = source
+mipmap_input4 = true
+scale4 = 1.0
+
+# Pass 5: Final output to screen
+shader5 = shaders/base/stock.slang
+filter_linear5 = true
+scale_type5 = viewport
+scale5 = 1.0
+
+# LUT Textures required by hsm-pre-shaders-afterglow
+textures = "SamplerLUT1;SamplerLUT2;SamplerLUT3;SamplerLUT4"
+SamplerLUT1 = shaders/guest/lut/trinitron-lut.png
+SamplerLUT1_linear = true
+SamplerLUT2 = shaders/guest/lut/inv-trinitron-lut.png
+SamplerLUT2_linear = true
+SamplerLUT3 = shaders/guest/lut/nec-lut.png
+SamplerLUT3_linear = true
+SamplerLUT4 = shaders/guest/lut/ntsc-lut.png
+SamplerLUT4_linear = true
+
+# Parameters with explicit default values
+pre_bb = 1.0
+contr = 0.0
+AS = 0.20
+sat = 0.50
+BP = 0.0
+WP = 0.0
+wp_saturation = 1.0
+TNTC = 0.0
+LS = 32.0
+CS = 0.0
+CP = 0.0

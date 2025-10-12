@@ -6,8 +6,7 @@
 
 layout(push_constant) uniform Push
 {
-   vec4 OutputSize;
-   vec4 OriginalSize;
+   vec4 DerezedPassSize;
    vec4 SourceSize;
    uint FrameCount;
    float quality, ntsc_sat, cust_fringing, cust_artifacting, ntsc_bright, ntsc_scale, ntsc_fields, ntsc_phase, ntsc_gamma;
@@ -56,10 +55,10 @@ layout(location = 8) out float MERGE;
 void main()
 {
 	float res = min(params.ntsc_scale, 1.0);
-	float OriginalSize = params.OriginalSize.x;
+	float OriginalSize = params.DerezedPassSize.x;
 	gl_Position = global.MVP * Position;
 	vTexCoord = TexCoord;
-	pix_no = TexCoord * params.OriginalSize.xy * res * vec2(4.0,1.0);
+	pix_no = TexCoord * params.DerezedPassSize.xy * res * vec2(4.0,1.0);
 	phase = (params.ntsc_phase < 1.5) ? ((OriginalSize > 300.0) ? 2.0 : 3.0) : ((params.ntsc_phase > 2.5) ? 3.0 : 2.0);
 	if (params.ntsc_phase == 4.0) phase = 3.0;
 	
@@ -123,7 +122,7 @@ void main()
 
 if (params.ntsc_phase == 4.0) 
 {
-   vec2 dx = vec2(params.OriginalSize.z, 0.0);
+   vec2 dx = vec2(params.DerezedPassSize.z, 0.0);
    vec3 c1 = texture(Source, vTexCoord - dx).rgb;
    vec3 c2 = texture(Source, vTexCoord + dx).rgb;
    c1 = rgb2yiq(c1); c1.x = pow(c1.x, params.ntsc_gamma);

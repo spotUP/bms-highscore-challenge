@@ -38,12 +38,30 @@ export class WebGL2DWithShaders {
   private shadersFailed: boolean = false;
   private frameCount = 0;
 
-  // Getter/setter to track all changes to shadersEnabled
-  private get shadersEnabled(): boolean {
+  // Track shader state changes with logging
+  get shadersEnabled(): boolean {
+    // Check if value was changed externally
+    if ((this as any)._lastKnownValue !== undefined && this._shadersEnabled !== (this as any)._lastKnownValue) {
+      console.error(`❌❌❌ shadersEnabled was changed EXTERNALLY from ${(this as any)._lastKnownValue} to ${this._shadersEnabled} without calling setter!`);
+      console.error('Stack trace:', new Error().stack);
+    }
+    (this as any)._lastKnownValue = this._shadersEnabled;
     return this._shadersEnabled;
   }
-  private set shadersEnabled(value: boolean) {
+
+  set shadersEnabled(value: boolean) {
+    if (this._shadersEnabled !== value) {
+      // Only log when changing to false (shader being disabled)
+      if (value === false) {
+        console.error(`🔴🔴🔴 SHADER DISABLED 🔴🔴🔴`);
+        console.error(`shadersEnabled changed: ${this._shadersEnabled} → ${value}`);
+        console.error('Stack trace:', new Error().stack);
+      } else {
+        console.log(`🔄 [WebGL2DWithShaders] shadersEnabled changed: ${this._shadersEnabled} → ${value}`);
+      }
+    }
     this._shadersEnabled = value;
+    (this as any)._lastKnownValue = value;
   }
 
   // Quad for final render
@@ -51,6 +69,10 @@ export class WebGL2DWithShaders {
   private passthroughProgram: WebGLProgram | null = null;
 
   constructor(canvas: HTMLCanvasElement, config: ShaderConfig = { enabled: false, bypassOnError: true }) {
+    const instanceId = Math.random().toString(36).substring(7);
+    console.log(`🎬 [WebGL2DWithShaders] NEW INSTANCE CREATED: ${instanceId}`);
+    (this as any).instanceId = instanceId;
+
     this.canvas = canvas;
     this.width = canvas.width;
     this.height = canvas.height;
@@ -59,7 +81,9 @@ export class WebGL2DWithShaders {
     this.webgl2d = new WebGL2D(canvas);
     this.gl = this.webgl2d.getGL();
 
-    console.log('[WebGL2DWithShaders] Initialized base renderer');
+    // Store instance ID for debugging
+    (this as any).__instanceId = Math.random().toString(36).substr(2, 9);
+    console.log(`[WebGL2DWithShaders] Initialized base renderer - instance ${(this as any).__instanceId}`);
 
     // Setup framebuffer and shader pipeline if enabled
     if (config.enabled) {
@@ -76,11 +100,15 @@ export class WebGL2DWithShaders {
           this.loadShaderPreset(config.presetPath)
             .then(() => {
               // Only enable shaders after successful load
+              console.log('='.repeat(80));
+              console.log('🎉🎉🎉 SHADER PRESET LOADED SUCCESSFULLY 🎉🎉🎉');
               console.log('[WebGL2DWithShaders] ✅ Preset loaded, enabling shaders NOW');
               this.shadersEnabled = true;
               this.frameCount = 0; // Reset frame count for proper logging
               console.log(`[WebGL2DWithShaders] ✅ shadersEnabled = ${this.shadersEnabled} (should be true)`);
               console.log(`[WebGL2DWithShaders] State check: renderer=${!!this.shaderRenderer}, texture=${!!this.framebufferTexture}, failed=${this.shadersFailed}`);
+              console.log('🎨 MEGA BEZEL SHADERS NOW ACTIVE - Watch for green checkmarks ✅');
+              console.log('='.repeat(80));
             })
             .catch(err => {
               console.error('[WebGL2DWithShaders] ❌ Failed to load shader preset:', err);
@@ -182,7 +210,7 @@ export class WebGL2DWithShaders {
       }
     `;
 
-    // Fragment shader with CRT effects
+    // Fragment shader with CRT effects, bezel, and reflection
     const fragmentShaderSource = `#version 300 es
       precision highp float;
       in vec2 v_texCoord;
@@ -192,23 +220,53 @@ export class WebGL2DWithShaders {
       void main() {
         vec2 uv = v_texCoord;
 
-        // CRT Scanlines
-        float scanline = sin(uv.y * 800.0) * 0.04;
+        // Scale down game to 75% to make room for visible bezel
+        vec2 gameUV = (uv - 0.5) / 0.75 + 0.5;
 
         // CRT Curvature (subtle)
-        vec2 cc = uv - 0.5;
+        vec2 cc = gameUV - 0.5;
         float dist = dot(cc, cc) * 0.2;
-        uv = uv + cc * (1.0 + dist) * dist * 0.05;
+        gameUV = gameUV + cc * (1.0 + dist) * dist * 0.05;
 
-        // Sample texture
-        vec3 col = texture(u_texture, uv).rgb;
+        // Check if we're inside the game area
+        bool inGame = gameUV.x >= 0.0 && gameUV.x <= 1.0 && gameUV.y >= 0.0 && gameUV.y <= 1.0;
 
-        // Apply scanlines
-        col -= scanline;
+        vec3 col = vec3(0.0);
 
-        // Vignette
-        float vignette = smoothstep(0.7, 0.4, length(cc));
-        col *= vignette;
+        if (inGame) {
+          // Sample game texture
+          col = texture(u_texture, gameUV).rgb;
+
+          // CRT Scanlines
+          float scanline = sin(gameUV.y * 800.0) * 0.04;
+          col -= scanline;
+
+          // Vignette on game area only
+          float vignette = smoothstep(0.7, 0.4, length(cc));
+          col *= vignette;
+        } else {
+          // Bezel area - visible monitor frame
+          float bezelDist = min(
+            min(uv.x, 1.0 - uv.x),
+            min(uv.y, 1.0 - uv.y)
+          );
+
+          // Bright metallic bezel with gradient (visible!)
+          float bezelGradient = smoothstep(0.0, 0.2, bezelDist);
+          col = vec3(0.2, 0.22, 0.25) * bezelGradient;
+
+          // Add strong specular highlights on bezel edges
+          float edgeHighlight = smoothstep(0.15, 0.18, bezelDist) * (1.0 - smoothstep(0.18, 0.22, bezelDist));
+          col += vec3(0.6, 0.65, 0.7) * edgeHighlight;
+
+          // Add reflection on bezel surface (dimmed game content)
+          float reflectionStrength = smoothstep(0.05, 0.15, bezelDist) * 0.25;
+          vec2 reflectUV = vec2(gameUV.x, 1.0 - gameUV.y * 0.5);
+          if (reflectUV.x >= 0.0 && reflectUV.x <= 1.0 && reflectUV.y >= 0.0 && reflectUV.y <= 1.0) {
+            vec3 reflection = texture(u_texture, reflectUV).rgb * reflectionStrength;
+            col += reflection;
+          }
+        }
 
         outColor = vec4(col, 1.0);
       }
@@ -307,14 +365,25 @@ export class WebGL2DWithShaders {
    * Begin rendering to framebuffer (if shaders enabled OR loading)
    */
   beginFrame(): void {
+    // Track begin/end frame pairs
+    (this as any)._frameBegun = true;
+
     // Always render to framebuffer if we have one (even while shaders are loading)
     // This ensures the framebuffer has content when shaders finish loading
     if (this.framebuffer && !this.shadersFailed) {
       // Bind framebuffer to capture WebGL2D output
       this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, this.framebuffer);
 
-      // Don't clear - let the game clear with its background color
-      // This avoids a frame of black flashing
+      // DEBUG: Verify framebuffer is bound
+      const boundFB = this.gl.getParameter(this.gl.FRAMEBUFFER_BINDING);
+      if (this.frameCount < 3) {
+        console.log(`[beginFrame] Frame ${this.frameCount}: Framebuffer bound = ${boundFB === this.framebuffer}, FB=${this.framebuffer}, Bound=${boundFB}`);
+      }
+
+      // NOTE: Don't clear here! The game code will clear with ctx.fillRect()
+      // If we clear here, we clear BEFORE WebGL2D has drawn anything,
+      // and then WebGL2D's commands go to the framebuffer after our clear.
+      // The game's fillRect() will clear with the correct background color.
     }
     // Otherwise render directly to canvas
   }
@@ -323,10 +392,34 @@ export class WebGL2DWithShaders {
    * End rendering and apply shader effects
    */
   endFrame(): void {
+    // Skip if beginFrame wasn't called
+    if (!(this as any)._frameBegun) {
+      console.error(`❌ endFrame() called without beginFrame()! Skipping.`);
+      return;
+    }
+    (this as any)._frameBegun = false; // Reset flag
+
     this.frameCount++;
 
-    if (this.frameCount % 120 === 0) {
-      console.log(`[WebGL2DWithShaders] endFrame() called - frame ${this.frameCount}, shadersEnabled=${this.shadersEnabled}`);
+    // Detect and SKIP duplicate endFrame calls within same frame (< 8ms)
+    const now = performance.now();
+    const callSite = (this as any)._callSite || 'UNKNOWN';
+    const lastCallSite = (this as any)._lastCallSite || 'NONE';
+    const timeSinceLastCall = (this as any)._lastEndFrameTime ? (now - (this as any)._lastEndFrameTime) : 999;
+
+    // Skip if called within same frame (< 8ms for 120fps displays)
+    if (timeSinceLastCall < 8) {
+      if (this.frameCount < 200) { // Log more to see pattern
+        console.warn(`⚠️ SKIP duplicate endFrame() - Frame ${this.frameCount}, ${timeSinceLastCall.toFixed(1)}ms since last (${lastCallSite} → ${callSite})`);
+      }
+      return; // Skip this duplicate render to prevent shader corruption
+    }
+
+    (this as any)._lastEndFrameTime = now;
+    (this as any)._lastCallSite = callSite;
+
+    if (this.frameCount % 60 === 0) {
+      console.log(`[endFrame] Frame ${this.frameCount}: callSite=${callSite}, shadersEnabled=${this.shadersEnabled}`);
     }
 
     // If we have a framebuffer, we need to render its content to screen
@@ -337,39 +430,112 @@ export class WebGL2DWithShaders {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
       // Apply shader effects if enabled and ready
-      if (this.shaderRenderer && this.framebufferTexture && this.shadersEnabled) {
-        // Log every frame to see the pattern
-        if (!(window as any).__shaderFrameCount) (window as any).__shaderFrameCount = 0;
-        (window as any).__shaderFrameCount++;
+      const hasRenderer = !!this.shaderRenderer;
+      const hasTexture = !!this.framebufferTexture;
+      const isEnabled = this.shadersEnabled;
 
-        if ((window as any).__shaderFrameCount === 1 || (window as any).__shaderFrameCount === 60 || (window as any).__shaderFrameCount === 120 || (window as any).__shaderFrameCount % 180 === 0) {
-          console.log(`[SHADER] Rendering WITH shader - frame ${this.frameCount}, shader frames: ${(window as any).__shaderFrameCount}`);
+      // CRITICAL: Check if enabled changed during endFrame execution
+      const enabledAtEnd = this.shadersEnabled;
+      if (isEnabled !== enabledAtEnd) {
+        console.error(`⚠️⚠️⚠️ shadersEnabled CHANGED during endFrame! Start: ${isEnabled}, End: ${enabledAtEnd}`);
+      }
+
+      // Log every 60 frames to track state
+      if (this.frameCount % 60 === 0) {
+        console.log(`[SHADER CHECK] Frame ${this.frameCount}: renderer=${hasRenderer}, texture=${hasTexture}, enabled=${isEnabled}`);
+      }
+
+      // Log when condition fails - only ERROR after initial loading period
+      if (!(hasRenderer && hasTexture && isEnabled)) {
+        // During first 120 frames (2 seconds), this is expected while shaders load - use log, not error
+        if (this.frameCount < 120) {
+          // Suppressed - shaders are loading
+        } else if (this.frameCount < 300 || this.frameCount % 60 === 0) {
+          // After 2 seconds, this is an actual error
+          console.error(`❌ SHADER CONDITION FAILED - Frame ${this.frameCount}: renderer=${hasRenderer}, texture=${hasTexture}, enabled=${isEnabled}, enabledNow=${this.shadersEnabled}`);
+        }
+      }
+
+      if (hasRenderer && hasTexture && isEnabled) {
+        // REAL MEGA BEZEL ACTIVE - Log more frequently to catch transitions
+        // Reduce logging frequency
+        if (this.frameCount === 1 || this.frameCount === 60 || this.frameCount % 300 === 0) {
+          console.log(`✅ [MEGA BEZEL] Rendering with shaders - frame ${this.frameCount}, callSite=${(this as any)._callSite}`);
         }
 
         try {
-          // Make sure we're rendering to screen
-          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          // DEBUG: Sample pixels BEFORE and AFTER shader to verify transformation
+          // ENABLED to debug black screen issue
+          let beforePixels: Uint8Array | null = null;
+          if (this.frameCount % 60 === 0 && this.frameCount > 0) {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, this.framebuffer);
+            beforePixels = new Uint8Array(100 * 100 * 4);
+            gl.readPixels(this.width / 2 - 50, this.height / 2 - 50, 100, 100, gl.RGBA, gl.UNSIGNED_BYTE, beforePixels);
 
-          // Register the framebuffer texture with the renderer
-          this.shaderRenderer.registerTexture('gameTexture', this.framebufferTexture);
-
-          // Render through the shader pipeline
-          this.shaderRenderer.render('gameTexture');
-
-          // Force flush to ensure rendering completes
-          gl.flush();
-
-          // Check for WebGL errors
-          const glError = gl.getError();
-          if (glError !== gl.NO_ERROR) {
-            console.error(`❌ [WebGL2DWithShaders] WebGL ERROR after shader render: ${glError} (0x${glError.toString(16)})`);
-            console.error(`Frame ${this.frameCount} - Error codes: INVALID_ENUM=0x${gl.INVALID_ENUM.toString(16)}, INVALID_VALUE=0x${gl.INVALID_VALUE.toString(16)}, INVALID_OPERATION=0x${gl.INVALID_OPERATION.toString(16)}, OUT_OF_MEMORY=0x${gl.OUT_OF_MEMORY.toString(16)}`);
-            throw new Error(`WebGL error: ${glError}`);
+            // Calculate average color of sample area BEFORE shader
+            let sumR = 0, sumG = 0, sumB = 0, nonBlack = 0;
+            for (let i = 0; i < beforePixels.length; i += 4) {
+              if (beforePixels[i] > 10 || beforePixels[i+1] > 10 || beforePixels[i+2] > 10) {
+                sumR += beforePixels[i];
+                sumG += beforePixels[i+1];
+                sumB += beforePixels[i+2];
+                nonBlack++;
+              }
+            }
+            const avgR = nonBlack > 0 ? Math.round(sumR / nonBlack) : 0;
+            const avgG = nonBlack > 0 ? Math.round(sumG / nonBlack) : 0;
+            const avgB = nonBlack > 0 ? Math.round(sumB / nonBlack) : 0;
+            console.log(`[BEFORE SHADER] Frame ${this.frameCount}: Framebuffer avg color = rgb(${avgR}, ${avgG}, ${avgB}), non-black=${nonBlack}/${100*100}`);
           }
 
-          // Debug: Check if anything was rendered
-          if (this.frameCount === 1) {
-            console.log('[WebGL2DWithShaders] First frame rendered through shader pipeline');
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          this.shaderRenderer.registerTexture('gameTexture', this.framebufferTexture);
+          this.shaderRenderer.render('gameTexture');
+          gl.flush();
+
+          // Check pixels AFTER shader render
+          if (beforePixels && this.frameCount % 60 === 0 && this.frameCount > 0) {
+            const afterPixels = new Uint8Array(100 * 100 * 4);
+            gl.readPixels(this.width / 2 - 50, this.height / 2 - 50, 100, 100, gl.RGBA, gl.UNSIGNED_BYTE, afterPixels);
+
+            // Calculate average color of sample area AFTER shader
+            let sumR = 0, sumG = 0, sumB = 0, nonBlack = 0;
+            for (let i = 0; i < afterPixels.length; i += 4) {
+              if (afterPixels[i] > 10 || afterPixels[i+1] > 10 || afterPixels[i+2] > 10) {
+                sumR += afterPixels[i];
+                sumG += afterPixels[i+1];
+                sumB += afterPixels[i+2];
+                nonBlack++;
+              }
+            }
+            const avgR = nonBlack > 0 ? Math.round(sumR / nonBlack) : 0;
+            const avgG = nonBlack > 0 ? Math.round(sumG / nonBlack) : 0;
+            const avgB = nonBlack > 0 ? Math.round(sumB / nonBlack) : 0;
+            console.log(`[AFTER SHADER] Frame ${this.frameCount}: Screen avg color = rgb(${avgR}, ${avgG}, ${avgB}), non-black=${nonBlack}/${100*100}`);
+
+            // Compare to detect if shader is transforming
+            const beforeAvgR = beforePixels ? Math.round(Array.from(beforePixels.filter((_, i) => i % 4 === 0)).reduce((a, b) => a + b, 0) / (beforePixels.length / 4)) : 0;
+            const beforeAvgG = beforePixels ? Math.round(Array.from(beforePixels.filter((_, i) => i % 4 === 1)).reduce((a, b) => a + b, 0) / (beforePixels.length / 4)) : 0;
+            const beforeAvgB = beforePixels ? Math.round(Array.from(beforePixels.filter((_, i) => i % 4 === 2)).reduce((a, b) => a + b, 0) / (beforePixels.length / 4)) : 0;
+            const diff = Math.abs(avgR - beforeAvgR) + Math.abs(avgG - beforeAvgG) + Math.abs(avgB - beforeAvgB);
+
+            if (diff < 5) {
+              console.error('='.repeat(80));
+              console.error(`🚨🚨🚨 INVISIBLE SHADER BUG DETECTED! 🚨🚨🚨`);
+              console.error(`Shaders are RUNNING but NOT TRANSFORMING pixels (diff=${diff})`);
+              console.error(`Before: rgb(${beforeAvgR}, ${beforeAvgG}, ${beforeAvgB})`);
+              console.error(`After:  rgb(${avgR}, ${avgG}, ${avgB})`);
+              console.error(`This is the bug you're seeing - shaders active but output looks unshaded!`);
+              console.error('='.repeat(80));
+            } else {
+              console.log(`✅ SHADER IS TRANSFORMING! Color difference = ${diff}`);
+            }
+          }
+
+          const glError = gl.getError();
+          if (glError !== gl.NO_ERROR) {
+            console.error(`❌ [WebGL2DWithShaders] WebGL ERROR: ${glError}`);
+            throw new Error(`WebGL error: ${glError}`);
           }
         } catch (error) {
           console.error('❌❌❌ [WebGL2DWithShaders] MULTI-PASS RENDERING FAILED ❌❌❌');
@@ -380,19 +546,16 @@ export class WebGL2DWithShaders {
           console.error(`Condition check: renderer=${!!this.shaderRenderer}, texture=${!!this.framebufferTexture}, enabled=${this.shadersEnabled}`);
           this.shadersEnabled = false;
           this.shadersFailed = true;
-          // Fallback to passthrough
-          this.renderPassthrough();
+          // REMOVED PASSTHROUGH - Let it fail visibly
+          throw error; // Re-throw to make failure obvious
         }
       } else {
-        // No complex shaders or still loading, use passthrough
-        if (!(window as any).__noShaderFrameCount) (window as any).__noShaderFrameCount = 0;
-        (window as any).__noShaderFrameCount++;
-
-        if ((window as any).__noShaderFrameCount % 60 === 0) {
-          console.log(`[SHADER] Rendering WITHOUT shader (passthrough) - frame ${this.frameCount}, no-shader frames: ${(window as any).__noShaderFrameCount}, reason: renderer=${!!this.shaderRenderer}, texture=${!!this.framebufferTexture}, enabled=${this.shadersEnabled}`);
+        // SHADERS NOT READY - Show black screen during initial loading
+        if (this.frameCount <= 20) {
+          console.log(`⏳ [LOADING] Shaders not ready yet - frame ${this.frameCount}, callSite=${(this as any)._callSite} (renderer=${!!this.shaderRenderer}, enabled=${this.shadersEnabled})`);
         }
-
-        this.renderPassthrough();
+        // REMOVED PASSTHROUGH - Just show black screen until shaders load
+        // This makes it obvious when shaders are NOT working
       }
     }
   }
@@ -401,6 +564,9 @@ export class WebGL2DWithShaders {
    * Render framebuffer texture to screen with passthrough shader
    */
   private renderPassthrough(): void {
+    if (this.frameCount % 120 === 0) {
+      console.warn(`⚠️ [renderPassthrough] Called at frame ${this.frameCount}`);
+    }
     const gl = this.gl;
 
     // Clear screen

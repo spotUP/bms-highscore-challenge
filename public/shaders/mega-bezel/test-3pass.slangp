@@ -1,0 +1,20 @@
+# TEST: First 3 passes only
+shaders = 3
+
+shader0 = shaders/base/drez-none.slang
+filter_linear0 = false
+srgb_framebuffer0 = true
+scale_type0 = source
+scale0 = 1.0
+
+shader1 = shaders/base/fetch-drez-output.slang
+filter_linear1 = false
+srgb_framebuffer1 = true
+scale_type1 = source
+scale1 = 1.0
+
+# Pass 2: Final output to screen
+shader2 = shaders/base/stock.slang
+filter_linear2 = true
+scale_type2 = viewport
+scale2 = 1.0

@@ -1,0 +1,32 @@
+# TEST: First 6 passes (0-5)
+shaders = 6
+
+shader0 = shaders/base/drez-none.slang
+filter_linear0 = false
+srgb_framebuffer0 = true
+scale_type0 = source
+scale0 = 1.0
+
+shader1 = shaders/base/fetch-drez-output.slang
+filter_linear1 = false
+srgb_framebuffer1 = true
+scale_type1 = source
+scale1 = 1.0
+
+shader2 = shaders/fxaa/fxaa.slang
+filter_linear2 = true
+float_framebuffer2 = true
+
+shader3 = shaders/base/stock.slang
+alias3 = "PreCrtPass"
+
+shader4 = shaders/guest/hsm-afterglow0.slang
+filter_linear4 = true
+scale_type4 = source
+scale4 = 1.0
+
+# Pass 5: Final output to screen
+shader5 = shaders/base/stock.slang
+filter_linear5 = true
+scale_type5 = viewport
+scale5 = 1.0

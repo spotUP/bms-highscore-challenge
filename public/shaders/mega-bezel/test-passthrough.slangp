@@ -1,0 +1,55 @@
+# Testing first 7 passes (0-6)
+shaders = 7
+
+shader0 = shaders/base/drez-none.slang
+filter_linear0 = false
+srgb_framebuffer0 = true
+scale_type0 = source
+scale_x0 = 1
+scale_y0 = 1
+
+shader1 = shaders/base/fetch-drez-output.slang
+filter_linear1 = false
+srgb_framebuffer1 = true
+scale_type1 = source
+scale_x1 = 1
+scale_y1 = 1
+
+shader2 = shaders/fxaa/fxaa.slang
+filter_linear2 = true
+float_framebuffer2 = true
+alias2 = "DeditherPass"
+
+HSM_NON_USER_INFO_PRE_CRT_CHAIN = 2
+
+shader3 = shaders/base/intro.slang
+filter_linear3 = false
+float_framebuffer3 = true
+scale_type3 = source
+scale3 = 1.0
+
+shader4 = shaders/base/stock.slang
+alias4 = "PreCrtPass"
+
+shader5 = shaders/guest/hsm-afterglow0.slang
+filter_linear5 = true
+scale_type5 = source
+scale5 = 1.0
+alias5 = "AfterglowPass"
+
+shader6 = shaders/guest/hsm-pre-shaders-afterglow.slang
+filter_linear6 = true
+scale_type6 = viewport
+scale_x6 = 1.0
+scale_y6 = 1.0
+
+textures = "SamplerLUT1;SamplerLUT2;SamplerLUT3;SamplerLUT4"
+
+SamplerLUT1 = shaders/guest/lut/trinitron-lut.png
+SamplerLUT1_linear = true
+SamplerLUT2 = shaders/guest/lut/inv-trinitron-lut.png
+SamplerLUT2_linear = true
+SamplerLUT3 = shaders/guest/lut/nec-lut.png
+SamplerLUT3_linear = true
+SamplerLUT4 = shaders/guest/lut/ntsc-lut.png
+SamplerLUT4_linear = true

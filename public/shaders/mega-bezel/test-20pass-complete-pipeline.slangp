@@ -1,0 +1,161 @@
+# Testing 20 Passes - Complete Pipeline for CRT Guest Advanced
+# Include blur/bloom even if they output black - CRT Guest needs them
+
+shaders = 20
+
+# Pass 0-11: Working preprocessing (same as 14-pass)
+shader0 = shaders/guest/extras/hsm-drez-g-sharp_resampler.slang
+filter_linear0 = false
+scale_type0 = source
+scale0 = 1.0
+alias0 = "DerezedPass"
+
+shader1 = shaders/base/cache-info-potato-params.slang
+filter_linear1 = false
+scale_type1 = source
+scale1 = 1.0
+alias1 = "InfoCachePass"
+
+shader2 = shaders/guest/extras/hsm-fetch-drez-output.slang
+filter_linear2 = false
+srgb_framebuffer2 = true
+scale_type2 = source
+scale2 = 1.0
+
+shader3 = shaders/fxaa/fxaa.slang
+filter_linear3 = true
+float_framebuffer3 = true
+scale_type3 = source
+scale3 = 1.0
+alias3 = "AntiAliasPass"
+
+shader4 = shaders/base/stock.slang
+filter_linear4 = false
+scale_type4 = source
+scale4 = 1.0
+alias4 = "PreCrtPass"
+
+shader5 = shaders/dogway/hsm-grade.slang
+filter_linear5 = false
+scale_type5 = source
+scale5 = 1.0
+alias5 = "ColorCorrectPass"
+
+shader6 = shaders/guest/hsm-custom-fast-sharpen.slang
+filter_linear6 = true
+scale_type6 = source
+scale6 = 1.0
+alias6 = "SharpenPass"
+
+shader7 = shaders/base/stock.slang
+filter_linear7 = true
+scale_type7 = source
+scale7 = 1.0
+alias7 = "PrePass"
+mipmap_input7 = true
+
+shader8 = shaders/base/stock.slang
+filter_linear8 = false
+scale_type8 = source
+scale8 = 1.0
+alias8 = "PassThrough3"
+
+shader9 = shaders/guest/extras/hsm-sharpsmoother.slang
+filter_linear9 = true
+scale_type9 = source
+scale9 = 1.0
+alias9 = "SharpSmootherPass"
+
+shader10 = shaders/guest/hsm-afterglow0.slang
+filter_linear10 = true
+scale_type10 = source
+scale10 = 1.0
+alias10 = "AfterglowPass"
+
+shader11 = shaders/guest/hsm-interlace-and-linearize.slang
+filter_linear11 = true
+scale_type11 = source
+scale11 = 1.0
+float_framebuffer11 = true
+alias11 = "LinearizePass"
+
+# Pass 12: Upscale before glow
+shader12 = shaders/base/do-nothing.slang
+mipmap_input12 = false
+filter_linear12 = true
+scale_type12 = absolute
+scale_x12 = 8
+scale_y12 = 8
+
+# Pass 13-14: Glow (gaussian blur) - CRT Guest needs GlowPass alias
+shader13 = shaders/guest/hsm-gaussian_horizontal.slang
+filter_linear13 = true
+scale_type_x13 = absolute
+scale_x13 = 570.0
+scale_type_y13 = absolute
+scale_y13 = 570.0
+float_framebuffer13 = true
+
+shader14 = shaders/guest/hsm-gaussian_vertical.slang
+filter_linear14 = true
+scale_type_x14 = absolute
+scale_x14 = 570.0
+scale_type_y14 = absolute
+scale_y14 = 570.0
+float_framebuffer14 = true
+alias14 = "GlowPass"
+
+# Pass 15-16: Bloom - CRT Guest needs BloomPass alias
+shader15 = shaders/guest/hsm-bloom_horizontal.slang
+filter_linear15 = true
+scale_type_x15 = absolute
+scale_x15 = 570.0
+scale_type_y15 = absolute
+scale_y15 = 570.0
+float_framebuffer15 = true
+
+shader16 = shaders/guest/hsm-bloom_vertical.slang
+filter_linear16 = true
+scale_type_x16 = source
+scale_x16 = 1.0
+scale_type_y16 = source
+scale_y16 = 1.0
+float_framebuffer16 = true
+alias16 = "BloomPass"
+
+# Pass 17: Stock before CRT Guest
+shader17 = shaders/base/stock.slang
+filter_linear17 = true
+scale_type17 = source
+scale17 = 1.0
+
+# Pass 18: CRT Guest Advanced (NOW has LinearizePass, GlowPass, BloomPass!)
+shader18 = shaders/guest/hsm-crt-guest-advanced.slang
+filter_linear18 = true
+scale_type18 = source
+scale18 = 1.0
+float_framebuffer18 = true
+
+# Pass 19: Deconvergence with TubeFX (FINAL)
+shader19 = shaders/guest/hsm-deconvergence-with-tubefx.slang
+filter_linear19 = true
+scale_type19 = viewport
+
+# Textures
+textures = "SamplerLUT1;SamplerLUT2;SamplerLUT3;SamplerLUT4"
+SamplerLUT1 = shaders/guest/lut/trinitron-lut.png
+SamplerLUT1_linear = true
+SamplerLUT2 = shaders/guest/lut/inv-trinitron-lut.png
+SamplerLUT2_linear = true
+SamplerLUT3 = shaders/guest/lut/nec-lut.png
+SamplerLUT3_linear = true
+SamplerLUT4 = shaders/guest/lut/ntsc-lut.png
+SamplerLUT4_linear = true
+
+# Parameters
+HSM_FXAA_ON = 1
+SHARPEN_ON = 1
+CSHARPEN = 0.7
+GRADE_ON = 1
+HSM_SCREEN_SCALE_GSHARP_MODE = 1
+HSM_ASPECT_RATIO_MODE = 1

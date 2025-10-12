@@ -6,8 +6,7 @@
 
 layout(push_constant) uniform Push
 {
-   vec4 OutputSize;
-   vec4 OriginalSize;
+   vec4 DerezedPassSize;
    vec4 SourceSize;
    float ntsc_scale;
    float ntsc_phase;
@@ -34,7 +33,7 @@ layout(location = 0) out vec2 vTexCoord;
 void main()
 {
    gl_Position = global.MVP * Position;
-   vTexCoord = TexCoord - vec2(0.25 * params.OriginalSize.z/4.0, 0.0); // Compensate for decimate-by-2.
+   vTexCoord = TexCoord - vec2(0.25 * params.DerezedPassSize.z/4.0, 0.0); // Compensate for decimate-by-2.
 }
 
 #pragma stage fragment
@@ -240,8 +239,8 @@ float chroma_filter_2_phase[33] = float[33](
    0.031517031);
 
    float res = params.ntsc_scale;
-   float OriginalSize = params.OriginalSize.x; 
-   vec2 one_x = 0.25*params.OriginalSize.zz / res;
+   float OriginalSize = params.DerezedPassSize.x; 
+   vec2 one_x = 0.25*params.DerezedPassSize.zz / res;
    vec3 signal = vec3(0.0);
    float phase = (params.ntsc_phase < 1.5) ? ((OriginalSize > 300.0) ? 2.0 : 3.0) : ((params.ntsc_phase > 2.5) ? 3.0 : 2.0);
    if (params.ntsc_phase == 4.0) { phase = 2.0; chroma_filter_2_phase = chroma_filter_4_phase; }
@@ -334,7 +333,7 @@ float chroma_filter_2_phase[33] = float[33](
 
    if (params.ntsc_ring > 0.05)
    {
-      vec2 dx = vec2(params.OriginalSize.z / min(res, 1.0), 0.0);
+      vec2 dx = vec2(params.DerezedPassSize.z / min(res, 1.0), 0.0);
 	  float a = texture(Source, vTexCoord - 1.5*dx).a;
 	  float b = texture(Source, vTexCoord - 0.5*dx).a;
 	  float c = texture(Source, vTexCoord + 1.5*dx).a;

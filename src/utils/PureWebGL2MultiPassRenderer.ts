@@ -28,6 +28,9 @@ export class PureWebGL2MultiPassRenderer {
   private frameCount: number = 0;
   private width: number;
   private height: number;
+  private presetParameters: Record<string, number> = {}; // Store parameters from preset
+  private passAliases: Map<string, string> = new Map(); // Maps alias name to pass output texture name (e.g., "LinearizePass" -> "pass_11_output")
+  private passConfigs: ShaderPassConfig[] = []; // Store pass configurations for alias lookup
 
   constructor(canvasOrContext: HTMLCanvasElement | WebGL2RenderingContext, width: number = 800, height: number = 600) {
     this.renderer = new PureWebGL2Renderer(canvasOrContext);
@@ -46,7 +49,12 @@ export class PureWebGL2MultiPassRenderer {
 
       // Use loadFromURL which processes #include directives AND compiles
       // This is CRITICAL - it processes globals.inc which contains the UBO!
-      const compiled = await SlangShaderCompiler.loadFromURL(shaderPath, true); // webgl2 = true
+      // IMPORTANT: Pass preset parameters to compiler for compile-time injection
+      const compiled = await SlangShaderCompiler.loadFromURL(
+        shaderPath,
+        true, // webgl2 = true
+        this.presetParameters // Pass parameters for compile-time injection
+      );
 
       console.log(`[PureWebGL2MultiPass] Compiled ${name}:`, {
         vertexLength: compiled.vertex.length,
@@ -94,7 +102,23 @@ export class PureWebGL2MultiPassRenderer {
       // Parse preset (simple .slangp parser)
       const config = this.parseSlangPreset(presetContent, presetPath);
 
-      console.log(`[PureWebGL2MultiPass] Preset has ${config.passes.length} passes`);
+      // Store parameters for use during rendering
+      this.presetParameters = config.parameters || {};
+
+      // Store pass configurations for alias lookup
+      this.passConfigs = config.passes;
+
+      console.log(`[PureWebGL2MultiPass] Preset has ${config.passes.length} passes and ${Object.keys(this.presetParameters).length} parameters`);
+
+      // Build alias map: alias name → pass output texture name
+      for (let i = 0; i < config.passes.length; i++) {
+        const pass = config.passes[i];
+        if (pass.alias) {
+          // Map alias to the pass's output texture (e.g., "LinearizePass" → "pass_11_output")
+          this.passAliases.set(pass.alias, `${pass.name}_output`);
+          console.log(`[PureWebGL2MultiPass] Registered alias: ${pass.alias} → ${pass.name}_output`);
+        }
+      }
 
       // Load each shader pass
       for (const pass of config.passes) {
@@ -128,6 +152,7 @@ export class PureWebGL2MultiPassRenderer {
   private parseSlangPreset(content: string, basePath: string): PresetConfig {
     const lines = content.split('\n');
     const passes: ShaderPassConfig[] = [];
+    const parameters: Record<string, number> = {};
     let shaderCount = 0;
 
     // Extract directory from preset path
@@ -143,7 +168,7 @@ export class PureWebGL2MultiPassRenderer {
       }
     }
 
-    // Parse each shader
+    // Parse each shader and its alias
     for (let i = 0; i < shaderCount; i++) {
       const shaderLine = lines.find(l => l.startsWith(`shader${i}`));
       if (!shaderLine) continue;
@@ -152,15 +177,48 @@ export class PureWebGL2MultiPassRenderer {
       const match = shaderLine.match(/shader\d+\s*=\s*"?([^"\s]+)"?/);
       if (!match) continue;
 
+      // Look for alias directive: alias0 = "AliasName" or alias0 = AliasName
+      const aliasLine = lines.find(l => l.startsWith(`alias${i}`));
+      let alias: string | undefined;
+      if (aliasLine) {
+        const aliasMatch = aliasLine.match(/alias\d+\s*=\s*"?([^"\s]+)"?/);
+        if (aliasMatch) {
+          alias = aliasMatch[1];
+        }
+      }
+
       // Keep path as-is - will be resolved relative to preset in loadPreset()
       passes.push({
         name: `pass_${i}`,
         shaderPath: match[1],
-        filter: 'linear'
+        filter: 'linear',
+        alias: alias
       });
     }
 
-    return { passes };
+    // Parse parameters - any line with "PARAM_NAME = value" pattern
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('//')) continue;
+
+      // Skip shader/texture/filter/scale/alias definitions
+      if (trimmed.startsWith('shader') || trimmed.startsWith('texture') ||
+          trimmed.startsWith('filter') || trimmed.startsWith('scale') ||
+          trimmed.startsWith('alias') || trimmed.startsWith('Sampler')) continue;
+
+      // Match parameter lines: PARAM_NAME = value
+      const paramMatch = trimmed.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*([0-9]+\.?[0-9]*)/);
+      if (paramMatch) {
+        parameters[paramMatch[1]] = parseFloat(paramMatch[2]);
+      }
+    }
+
+    console.log(`[PresetParser] Extracted ${Object.keys(parameters).length} parameters from preset`);
+    if (Object.keys(parameters).length > 0) {
+      console.log('[PresetParser] Parameters:', parameters);
+    }
+
+    return { passes, parameters };
   }
 
   /**
@@ -202,10 +260,24 @@ export class PureWebGL2MultiPassRenderer {
       // For the last pass, render to screen (null)
       const outputTarget = isLastPass ? null : `${passName}_output`;
 
-      // Different passes need different textures
+      // Start with Source (previous pass output or initial input)
       let inputTextures: Record<string, string> = { Source: currentInput };
 
-      // Special texture mappings for Mega Bezel passes
+      // AUTOMATICALLY ADD ALL ALIASED TEXTURES
+      // This allows any pass to reference any previous pass by its alias
+      // Example: Gaussian blur can reference "LinearizePass" even if it's not the previous pass
+      for (const [aliasName, textureName] of this.passAliases.entries()) {
+        // Only add if the aliased pass has already executed (i.e., its index is less than current)
+        const aliasPassIndex = this.passConfigs.findIndex(p => `${p.name}_output` === textureName);
+        if (aliasPassIndex >= 0 && aliasPassIndex < i) {
+          inputTextures[aliasName] = textureName;
+          if (this.frameCount === 1) {
+            console.log(`[PureWebGL2MultiPass] Pass ${i} (${passName}) can access aliased texture: ${aliasName} → ${textureName}`);
+          }
+        }
+      }
+
+      // Legacy hardcoded texture mappings (kept for compatibility, but aliases handle most of this now)
       // Pass 1 might need DerezedPass from pass 0
       if (passName === 'pass_1' && i > 0) {
         inputTextures.DerezedPass = 'pass_0_output';
@@ -225,11 +297,17 @@ export class PureWebGL2MultiPassRenderer {
         inputTextures.DerezedPass = 'pass_0_output'; // Derezed image from pass 0
       }
 
+      // Prefix preset parameters with PARAM_ to match shader uniform names
+      const paramUniforms: Record<string, number> = {};
+      for (const [key, value] of Object.entries(this.presetParameters)) {
+        paramUniforms[`PARAM_${key}`] = value;
+      }
+
       const success = this.renderer.executePass(
         passName,
         inputTextures,
         outputTarget,  // Output target
-        { FrameCount: this.frameCount }  // Custom uniforms
+        { ...paramUniforms, FrameCount: this.frameCount }  // Preset parameters with PARAM_ prefix + frame uniforms
       );
 
       if (!success) {

@@ -93,7 +93,7 @@ layout(std140, set = 0, binding = 0) uniform UBO
 // #pragma parameter vga_mode "          VGA Single/Double Scan mode" 0.0 0.0 1.0 1.0
 // #define vga_mode        global.vga_mode     // interlace saturation
 
-#pragma parameter hiscan "          High Resolution Scanlines (ScaleFx or XBR Only)" 0.0 0.0 1.0 1.0
+#pragma parameter hiscan "       High Resolution Scanlines (GDV with ScaleFx or XBR Only)" 0.0 0.0 1.0 1.0
 #define hiscan        global.hiscan
 
 
@@ -113,7 +113,7 @@ void main()
 layout(location = 0) in vec2 vTexCoord;
 layout(location = 0) out vec4 FragColor;
 layout(set = 0, binding = 2) uniform sampler2D PrePass;
-layout(set = 0, binding = 3) uniform sampler2D InfoCachePass;
+layout(set = 0, binding = 3) uniform sampler2D CacheInfoPass;
 layout(set = 0, binding = 4) uniform sampler2D DerezedPass;
 
 #define COMPAT_TEXTURE(c,d) texture(c,d)
@@ -179,7 +179,7 @@ void main()
 	vec3  c2 = vec3(0);
 	
 	// HSM Added
-	HSM_UpdateGlobalScreenValuesFromCache(InfoCachePass, vTexCoord);
+	HSM_UpdateGlobalScreenValuesFromCache(CacheInfoPass, vTexCoord);
 
 	use_vert_scanlines_bool = (USE_VERTICAL_SCANLINES > 0.5);
 
@@ -263,10 +263,17 @@ void main()
 		if (hscan) c = c1;	
 	}
 
-	#ifndef DO_NOT_LINEARIZE
-	// Linearize Color
-	c = pow(c, vec3(gamma_in));
+	// WEBGL FIX: HSM_NON_USER_LINEARIZE_INTERLACE_PASS may not be defined in all presets, default to 1.0 (linearize enabled)
+	float linearize_interlace_value = 1.0;
+	#ifdef PARAM_HSM_NON_USER_LINEARIZE_INTERLACE_PASS
+		linearize_interlace_value = PARAM_HSM_NON_USER_LINEARIZE_INTERLACE_PASS;
 	#endif
+
+	if (linearize_interlace_value > 0.5)
+	{
+		// Linearize Color
+		c = pow(c, vec3(gamma_in));
+	}
 
 	// HSM Added Noise based on Guest.r's noise from deconvergence pass
 	if (HSM_SIGNAL_NOISE_ON > 0.5)

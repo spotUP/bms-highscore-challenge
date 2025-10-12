@@ -9,6 +9,7 @@ export class WebGL2D {
   private gl: WebGL2RenderingContext;
   private width: number;
   private height: number;
+  private _fillRectCount: number = 0; // DEBUG counter
 
   // Shader programs
   private solidProgram: WebGLProgram | null = null;
@@ -179,7 +180,14 @@ export class WebGL2D {
   // ============================================================================
 
   get fillStyle(): string { return this.currentFillStyle; }
-  set fillStyle(value: string) { this.currentFillStyle = value; }
+  set fillStyle(value: string | any) {
+    // If it's a gradient object, use its primary color or ignore it
+    if (typeof value === 'object' && value !== null) {
+      this.currentFillStyle = value._primaryColor || 'rgba(0, 0, 0, 1)';
+    } else {
+      this.currentFillStyle = value;
+    }
+  }
 
   get strokeStyle(): string { return this.currentStrokeStyle; }
   set strokeStyle(value: string) { this.currentStrokeStyle = value; }
@@ -211,6 +219,14 @@ export class WebGL2D {
 
   fillRect(x: number, y: number, width: number, height: number): void {
     const gl = this.gl;
+
+    // DEBUG: Log first few fillRect calls
+    if (!this._fillRectCount) this._fillRectCount = 0;
+    this._fillRectCount++;
+    if (this._fillRectCount <= 3) {
+      const boundFB = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+      console.log(`[WebGL2D.fillRect #${this._fillRectCount}] pos=(${x},${y}) size=(${width}x${height}) color=${this._fillStyle} boundFB=${boundFB}`);
+    }
 
     // TEMPORARY: Disabled gl.clear optimization to debug rendering issue
     // If filling the entire canvas, use gl.clear for efficiency (background clear)
@@ -463,6 +479,32 @@ export class WebGL2D {
 
   getLineDash(): number[] {
     return [];
+  }
+
+  // Gradient stubs - return mock objects that store primary color
+  createRadialGradient(x0: number, y0: number, r0: number, x1: number, y1: number, r1: number): any {
+    const gradient = {
+      _primaryColor: undefined as string | undefined,
+      addColorStop(offset: number, color: string) {
+        // Use the first color stop as the primary color
+        if (!this._primaryColor) {
+          this._primaryColor = color;
+        }
+      }
+    };
+    return gradient;
+  }
+
+  createLinearGradient(x0: number, y0: number, x1: number, y1: number): any {
+    const gradient = {
+      _primaryColor: undefined as string | undefined,
+      addColorStop(offset: number, color: string) {
+        if (!this._primaryColor) {
+          this._primaryColor = color;
+        }
+      }
+    };
+    return gradient;
   }
 
   // ============================================================================

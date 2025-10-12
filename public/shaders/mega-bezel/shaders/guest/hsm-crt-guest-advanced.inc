@@ -25,8 +25,8 @@
 // All parameter uniform values are in globals.inc 
 
 
-#pragma parameter hiscan "          High Resolution Scanlines (ScaleFx or XBR Only)" 0.0 0.0 1.0 1.0
-#define hiscan        global.hiscan
+// #pragma parameter hiscan "       High Resolution Scanlines (GDV with ScaleFx or XBR Only)" 0.0 0.0 1.0 1.0
+// #define hiscan        global.hiscan
 
 #pragma parameter GDV_BRIGHTNESS_EMPTY_LINE							" " 0 0 0.001 0.001
 #pragma parameter bogus_brightness "[ BRIGHTNESS SETTINGS ]:" 0.0 0.0 1.0 1.0
@@ -182,7 +182,7 @@ layout(location = 0) out vec4 FragColor;
 layout(set = 0, binding = 2) uniform sampler2D LinearizePass;
 layout(set = 0, binding = 3) uniform sampler2D AvgLumPass;
 layout(set = 0, binding = 4) uniform sampler2D PrePass;
-layout(set = 0, binding = 6) uniform sampler2D InfoCachePass;
+layout(set = 0, binding = 6) uniform sampler2D CacheInfoPass;
 
 #define eps 1e-10 
 
@@ -257,27 +257,9 @@ vec3 plant (vec3 tar, float r)
 void main()
 {
 	// HSM Added
-	vec2 viewportCoordTransformed = HSM_GetViewportCoordWithZoomAndPan(vTexCoord);
-	HSM_UpdateGlobalScreenValuesFromCache(InfoCachePass, vTexCoord);
+	HSM_UpdateGlobalScreenValuesFromCache(CacheInfoPass, vTexCoord);
 
-	vec2 cache_bounds_coord = SCREEN_COORD;
-
-// If it's the potato preset render the whole frame
-#ifndef IS_POTATO_PRESET
-#ifndef IS_NO_REFLECT_PRESET
-	vec2 bezel_outside_flat_coord;
-	vec2 frame_outside_flat_coord;
-	HSM_GetSimpleBezelCoords(TUBE_DIFFUSE_COORD, 
-							TUBE_DIFFUSE_SCALE, 
-							TUBE_SCALE, 
-							SCREEN_ASPECT,
-							bezel_outside_flat_coord, 
-							frame_outside_flat_coord);
-	cache_bounds_coord = (bezel_outside_flat_coord - 0.5) * 0.9 + 0.5;
-#endif
-#endif
-
-	if (HHLP_IsOutsideCoordSpace(cache_bounds_coord))
+	if (HSM_IsOutsideReflectionBoundary())
 	{
 			FragColor = vec4(0);
 			return;
@@ -600,17 +582,7 @@ if (!interb)
 
 	if (HSM_GetUseFakeScanlines())
 	{
-		vec2 tube_curved_coord = HSM_GetTubeCurvedCoord(TUBE_DIFFUSE_COORD, 
-														1, 
-														TUBE_DIFFUSE_SCALE, 
-														TUBE_SCALE, 
-														TUBE_DIFFUSE_ASPECT, 
-														1);
-		FragColor = HSM_ApplyScanlineMask(FragColor, 
-											screen_scale_with_overscan, 
-											screen_coord_with_overscan, 
-											screen_curved_coord_with_overscan, 
-											tube_curved_coord, 
-											HSM_FAKE_SCANLINE_OPACITY);
+		vec2 tube_curved_coord = HSM_GetTubeCurvedCoord(TUBE_DIFFUSE_COORD, 1, TUBE_DIFFUSE_SCALE, TUBE_SCALE, TUBE_DIFFUSE_ASPECT, 1);
+		FragColor = HSM_ApplyScanlineMask(FragColor, screen_scale_with_overscan, screen_coord_with_overscan, screen_curved_coord_with_overscan, tube_curved_coord, HSM_FAKE_SCANLINE_OPACITY);
 	}
 }

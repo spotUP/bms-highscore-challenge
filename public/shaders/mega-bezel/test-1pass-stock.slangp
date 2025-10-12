@@ -1,0 +1,7 @@
+# MINIMAL TEST - Just one stock passthrough shader
+shaders = 1
+
+shader0 = shaders/base/stock.slang
+filter_linear0 = true
+scale_type0 = viewport
+scale0 = 1.0

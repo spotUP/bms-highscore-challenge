@@ -6,8 +6,7 @@
 
 layout(push_constant) uniform Push
 {
-   vec4 OutputSize;
-   vec4 OriginalSize;
+   vec4 DerezedPassSize;
    vec4 SourceSize;
    float auto_res;
    float ntsc_sharp;
@@ -34,7 +33,7 @@ layout(location = 0) out vec2 vTexCoord;
 void main()
 {
    gl_Position = global.MVP * Position;
-   vTexCoord = TexCoord - vec2(0.25 * params.OriginalSize.z/4.0, 0.0); // Compensate for decimate-by-2.
+   vTexCoord = TexCoord - vec2(0.25 * params.DerezedPassSize.z/4.0, 0.0); // Compensate for decimate-by-2.
 }
 
 #pragma stage fragment
@@ -68,8 +67,8 @@ vec3 rgb2yiq(vec3 col)
 
 void main()
 {
-   vec2 offsetx = vec2(0.5 * params.OriginalSize.z, 0.0);
-   vec2 dx = vec2(0.25 * params.OriginalSize.z, 0.0)/4.0;
+   vec2 offsetx = vec2(0.5 * params.DerezedPassSize.z, 0.0);
+   vec2 dx = vec2(0.25 * params.DerezedPassSize.z, 0.0)/4.0;
    vec2 texcoord = vTexCoord + dx;
    
    vec3 l1  = texture(Source, texcoord +      offsetx).xyz;

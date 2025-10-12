@@ -1,0 +1,14 @@
+# Absolute minimal 2-pass test
+shaders = 2
+
+# Pass 0: Derez (just to have something)
+shader0 = shaders/guest/extras/hsm-drez-g-sharp_resampler.slang
+filter_linear0 = false
+scale_type0 = source
+scale0 = 1.0
+
+# Pass 1: Simple passthrough to screen
+shader1 = shaders/base/stock.slang
+filter_linear1 = true
+scale_type1 = viewport
+scale1 = 1.0
