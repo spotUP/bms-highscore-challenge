@@ -814,7 +814,12 @@ export class SlangShaderCompiler {
       // SOLUTION A (DUAL DECLARATION): For pragma parameters in excludeNames,
       // extract them as UNINITIALIZED globals (the initialization will be commented out)
       // They'll get PARAM_-prefixed uniforms and assignments in main()
+      // CRITICAL FIX: Skip if the variable is 'lsmooth' since it causes const errors
       if (excludeNames.has(name)) {
+        if (name === 'lsmooth') {
+          console.log(`[SlangCompiler] Skipping extraction of '${name}' - known const conflict`);
+          continue;
+        }
         console.log(`[SlangCompiler] SOLUTION A: Extracting pragma parameter '${name}' as uninitialized global (skipping initialization)`);
         globals.push(`${type} ${name};`);
         extractedGlobalNames.add(name);
