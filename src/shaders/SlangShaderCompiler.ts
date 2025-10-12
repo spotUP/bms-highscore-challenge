@@ -814,12 +814,7 @@ export class SlangShaderCompiler {
       // SOLUTION A (DUAL DECLARATION): For pragma parameters in excludeNames,
       // extract them as UNINITIALIZED globals (the initialization will be commented out)
       // They'll get PARAM_-prefixed uniforms and assignments in main()
-      // CRITICAL FIX: Skip if the variable is 'lsmooth' since it causes const errors
       if (excludeNames.has(name)) {
-        if (name === 'lsmooth') {
-          console.log(`[SlangCompiler] Skipping extraction of '${name}' - known const conflict`);
-          continue;
-        }
         console.log(`[SlangCompiler] SOLUTION A: Extracting pragma parameter '${name}' as uninitialized global (skipping initialization)`);
         globals.push(`${type} ${name};`);
         extractedGlobalNames.add(name);
@@ -1569,7 +1564,7 @@ export class SlangShaderCompiler {
 
       // Also check bindings for completeness (though most will be in globals already)
       for (const binding of bindings) {
-        if (binding.type === 'ubo' || binding.type === 'push') {
+        if (binding.type === 'ubo' || binding.type === 'pushConstant') {
           binding.members?.forEach(m => globalVarNames.add(m.name));
         }
       }
@@ -1625,7 +1620,7 @@ export class SlangShaderCompiler {
       // because it will get a PARAM_-prefixed uniform + mutable global instead
       const paramMemberNames = new Set<string>();
       for (const binding of bindings) {
-        if (binding.type === 'push' || binding.type === 'ubo') {
+        if (binding.type === 'pushConstant' || binding.type === 'ubo') {
           binding.members?.forEach(m => paramMemberNames.add(m.name));
         }
       }
@@ -1932,7 +1927,7 @@ export class SlangShaderCompiler {
     // Extract all UBO/push constant member names from bindings
     const conflictingDefineNames = new Set<string>();
     for (const binding of bindings) {
-      if (binding.type === 'ubo' || binding.type === 'push') {
+      if (binding.type === 'ubo' || binding.type === 'pushConstant') {
         binding.members?.forEach(m => conflictingDefineNames.add(m.name));
       }
     }
