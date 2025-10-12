@@ -315,6 +315,40 @@ export class PureWebGL2MultiPassRenderer {
         return;
       }
 
+      // DEBUG: Check output of this pass (every 60 frames)
+      if (this.frameCount % 60 === 0) {
+        const gl = this.renderer.getContext();
+        const checkOutput = () => {
+          // Bind the output target to read from it
+          if (!isLastPass) {
+            const fb = this.renderer['framebuffers'].get(outputTarget!);
+            if (fb) {
+              gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+            }
+          } else {
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          }
+
+          const pixels = new Uint8Array(100 * 100 * 4);
+          gl.readPixels(Math.floor(gl.canvas.width / 2) - 50, Math.floor(gl.canvas.height / 2) - 50, 100, 100, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+          let sumR = 0, sumG = 0, sumB = 0, nonBlack = 0;
+          for (let j = 0; j < pixels.length; j += 4) {
+            if (pixels[j] > 10 || pixels[j+1] > 10 || pixels[j+2] > 10) {
+              sumR += pixels[j];
+              sumG += pixels[j+1];
+              sumB += pixels[j+2];
+              nonBlack++;
+            }
+          }
+          const avgR = nonBlack > 0 ? Math.round(sumR / nonBlack) : 0;
+          const avgG = nonBlack > 0 ? Math.round(sumG / nonBlack) : 0;
+          const avgB = nonBlack > 0 ? Math.round(sumB / nonBlack) : 0;
+          console.log(`[PASS OUTPUT] ${passName} (pass ${i}): avg=rgb(${avgR},${avgG},${avgB}), non-black=${nonBlack}/10000`);
+        };
+        checkOutput();
+      }
+
       // Next pass uses this pass's output as input
       if (!isLastPass) {
         currentInput = `${passName}_output`;
