@@ -4262,11 +4262,23 @@ ${batchAssignments.join('\n')}
         }
 
         // Replace instanceName.member with just member (e.g., params.curvature -> curvature)
+        // CRITICAL: If member also exists as global variable, it got PARAM_ prefix
         if (binding.instanceName) {
           binding.members.forEach(member => {
+            // Check if this member is also a global (pragma parameter)
+            const isAlsoGlobal = globalDefs.globals.some(g => {
+              const match = g.match(/^\s*(?:float|int|uint|vec[2-4]|mat[2-4]|bool)\s+(\w+)\s*;/);
+              return match && match[1] === member.name;
+            });
+
             // Use word boundaries to match whole words only
             const pattern = new RegExp(`\\b${binding.instanceName}\\.${member.name}\\b`, 'g');
-            output = output.replace(pattern, member.name);
+            // If it's also a global, use PARAM_ prefix, otherwise just the name
+            const replacement = isAlsoGlobal ? `PARAM_${member.name}` : member.name;
+            output = output.replace(pattern, replacement);
+            if (isAlsoGlobal) {
+              console.log(`[SlangCompiler] Replaced ${binding.instanceName}.${member.name} with PARAM_${member.name} (is also global)`);
+            }
           });
         }
 
