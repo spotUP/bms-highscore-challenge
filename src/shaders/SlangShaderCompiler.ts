@@ -3979,11 +3979,21 @@ ${globalInits.map(g => `  ${g.name} = ${g.init};`).join('\n')}
     console.log(`[SlangCompiler] SOLUTION A: Found ${usedGlobals.size} used globals out of ${globalVarNames.length} total`);
 
     // Find which ones have corresponding PARAM_ uniforms (from UBO members or push constants)
-    // But ONLY create assignments for variables that are actually used
+    // But ONLY create assignments for variables that are actually used AND are mutable
     const paramAssignments: string[] = [];
+    const constNames = new Set(
+      globalDefs.consts.map(c => c.match(/const\s+\w+\s+(\w+)/)?.[1]).filter(Boolean)
+    );
+
     for (const binding of bindings) {
       if ((binding.type === 'ubo' || binding.type === 'pushConstant') && binding.members) {
         for (const member of binding.members) {
+          // Skip if this variable is declared as const (can't assign to it)
+          if (constNames.has(member.name)) {
+            console.log(`[SlangCompiler] Skipping assignment for const ${member.name}`);
+            continue;
+          }
+
           if (globalVarNames.includes(member.name) && usedGlobals.has(member.name)) {
             paramAssignments.push(`  ${member.name} = PARAM_${member.name};`);
           }
