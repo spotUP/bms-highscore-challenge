@@ -31,6 +31,7 @@ export class PureWebGL2MultiPassRenderer {
   private presetParameters: Record<string, number> = {}; // Store parameters from preset
   private passAliases: Map<string, string> = new Map(); // Maps alias name to pass output texture name (e.g., "LinearizePass" -> "pass_11_output")
   private passConfigs: ShaderPassConfig[] = []; // Store pass configurations for alias lookup
+  private pragmaDefaults: Record<string, number> = {}; // AUTO-EXTRACTED defaults from #pragma parameter lines
 
   constructor(canvasOrContext: HTMLCanvasElement | WebGL2RenderingContext, width: number = 800, height: number = 600) {
     this.renderer = new PureWebGL2Renderer(canvasOrContext);
@@ -64,6 +65,18 @@ export class PureWebGL2MultiPassRenderer {
 
       // Store compiled shader
       this.passes.set(name, compiled);
+
+      // AUTO-EXTRACT pragma parameter defaults from compiled shader
+      // These defaults come from #pragma parameter lines in the shader source
+      if (compiled.parameters && compiled.parameters.length > 0) {
+        for (const param of compiled.parameters) {
+          // Only add if not already set (first shader to define a parameter wins)
+          if (!(param.name in this.pragmaDefaults)) {
+            this.pragmaDefaults[param.name] = param.default;
+            console.log(`[PragmaDefaults] Extracted: ${param.name} = ${param.default}`);
+          }
+        }
+      }
 
       // Compile WebGL program
       const success = this.renderer.compileProgram(
@@ -303,16 +316,10 @@ export class PureWebGL2MultiPassRenderer {
         paramUniforms[`PARAM_${key}`] = value;
       }
 
-      // CRITICAL FIX: Add default values for pragma parameters not in preset
-      // These parameters have defaults in #pragma parameter lines but aren't in the preset
-      // Without defaults, they get 0.0 in WebGL, causing visual issues (e.g., pre_bb=0 → black output)
-      const pragmaDefaults: Record<string, number> = {
-        pre_bb: 1.0,    // Brightness adjustment (from hsm-pre-shaders-afterglow.slang)
-        contr: 0.0,     // Contrast adjustment (from hsm-pre-shaders-afterglow.slang)
-      };
-
-      // Apply defaults only if not already set by preset
-      for (const [key, defaultValue] of Object.entries(pragmaDefaults)) {
+      // AUTO-APPLY pragma parameter defaults for any parameters not in preset
+      // These defaults were automatically extracted from #pragma parameter lines during shader compilation
+      // Without defaults, parameters get 0.0 in WebGL, causing visual issues (e.g., pre_bb=0 → black output)
+      for (const [key, defaultValue] of Object.entries(this.pragmaDefaults)) {
         const paramKey = `PARAM_${key}`;
         if (!(paramKey in paramUniforms)) {
           paramUniforms[paramKey] = defaultValue;
