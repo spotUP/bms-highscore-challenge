@@ -438,6 +438,7 @@ export class SlangShaderCompiler {
         });
         console.log(`[DEBUG AFTERGLOW END]`);
       }
+
     } catch (error) {
       console.error('[SlangCompiler] FATAL ERROR during fragment shader conversion:', error);
       console.error('[SlangCompiler] Error type:', typeof error);
@@ -4282,17 +4283,10 @@ ${batchAssignments.join('\n')}
           });
         }
 
-        // Also handle params.X references where X is not in the members array
-        // This fixes cases like params.MVP where MVP is a separate uniform
-        // Apply to ANY binding with instanceName 'params' (not just pushConstant)
-        if (binding.instanceName === 'params') {
-          const beforeReplacement = output.match(/\bparams\.(\w+)\b/g);
-          console.log(`[SlangCompiler] Found params. references to replace (binding type: ${binding.type}):`, beforeReplacement ? beforeReplacement.slice(0, 10) : 'none');
-          // Replace any remaining params.X with just X
-          output = output.replace(/\bparams\.(\w+)\b/g, '$1');
-          const afterReplacement = output.match(/\bparams\.(\w+)\b/g);
-          console.log(`[SlangCompiler] After params. replacement:`, afterReplacement ? afterReplacement.slice(0, 10) : 'none');
-        }
+        // NOTE: Do NOT do generic params.X replacement here!
+        // Must wait until ALL bindings have processed their specific members
+        // Otherwise early binding with instanceName='params' will replace params.X with X
+        // before later binding has chance to replace params.X with PARAM_X
       }
     }
 

@@ -303,6 +303,22 @@ export class PureWebGL2MultiPassRenderer {
         paramUniforms[`PARAM_${key}`] = value;
       }
 
+      // CRITICAL FIX: Add default values for pragma parameters not in preset
+      // These parameters have defaults in #pragma parameter lines but aren't in the preset
+      // Without defaults, they get 0.0 in WebGL, causing visual issues (e.g., pre_bb=0 → black output)
+      const pragmaDefaults: Record<string, number> = {
+        pre_bb: 1.0,    // Brightness adjustment (from hsm-pre-shaders-afterglow.slang)
+        contr: 0.0,     // Contrast adjustment (from hsm-pre-shaders-afterglow.slang)
+      };
+
+      // Apply defaults only if not already set by preset
+      for (const [key, defaultValue] of Object.entries(pragmaDefaults)) {
+        const paramKey = `PARAM_${key}`;
+        if (!(paramKey in paramUniforms)) {
+          paramUniforms[paramKey] = defaultValue;
+        }
+      }
+
       const success = this.renderer.executePass(
         passName,
         inputTextures,
