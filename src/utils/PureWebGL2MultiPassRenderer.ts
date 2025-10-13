@@ -319,10 +319,17 @@ export class PureWebGL2MultiPassRenderer {
       // AUTO-APPLY pragma parameter defaults for any parameters not in preset
       // These defaults were automatically extracted from #pragma parameter lines during shader compilation
       // Without defaults, parameters get 0.0 in WebGL, causing visual issues (e.g., pre_bb=0 → black output)
+      // IMPORTANT: Apply BOTH prefixed (PARAM_) and non-prefixed names because:
+      // - Push constant members that are ALSO globals → PARAM_membername uniforms
+      // - Push constant members that are NOT globals → membername uniforms (no PARAM_)
       for (const [key, defaultValue] of Object.entries(this.pragmaDefaults)) {
         const paramKey = `PARAM_${key}`;
         if (!(paramKey in paramUniforms)) {
           paramUniforms[paramKey] = defaultValue;
+        }
+        // Also set non-prefixed name for push constant members that aren't globals
+        if (!(key in paramUniforms)) {
+          paramUniforms[key] = defaultValue;
         }
       }
 
