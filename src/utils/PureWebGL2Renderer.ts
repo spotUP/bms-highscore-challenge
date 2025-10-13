@@ -264,10 +264,13 @@ export class PureWebGL2Renderer {
 
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    // Use LINEAR_MIPMAP_LINEAR to support shaders that require mipmaps (e.g., pass_4 with mipmap_input4=true)
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    // Generate mipmaps for the empty texture
+    gl.generateMipmap(gl.TEXTURE_2D);
 
     this.textures.set(name, texture);
 
@@ -365,6 +368,7 @@ export class PureWebGL2Renderer {
     // Set custom uniforms
     let paramSetCount = 0;
     let paramMissingCount = 0;
+    let nonParamSetCount = 0;
     for (const [name, value] of Object.entries(uniforms)) {
       const location = gl.getUniformLocation(program, name);
       if (location === null) {
@@ -378,6 +382,11 @@ export class PureWebGL2Renderer {
         if (name.startsWith('PARAM_')) {
           paramSetCount++;
           if (paramSetCount <= 5) {
+            console.log(`[PureWebGL2] Set uniform ${name} = ${value} in ${programName}`);
+          }
+        } else {
+          nonParamSetCount++;
+          if (nonParamSetCount <= 15) {
             console.log(`[PureWebGL2] Set uniform ${name} = ${value} in ${programName}`);
           }
         }
@@ -394,14 +403,24 @@ export class PureWebGL2Renderer {
         }
       }
     }
-    if (paramSetCount > 0 || paramMissingCount > 0) {
-      console.log(`[PureWebGL2] ${programName}: Set ${paramSetCount} PARAM_ uniforms, ${paramMissingCount} not found in shader`);
+    if (paramSetCount > 0 || paramMissingCount > 0 || nonParamSetCount > 0) {
+      console.log(`[PureWebGL2] ${programName}: Set ${paramSetCount} PARAM_ uniforms + ${nonParamSetCount} other uniforms, ${paramMissingCount} PARAM_ not found in shader`);
     }
 
     // Draw fullscreen quad
     gl.bindVertexArray(this.quadVAO);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
+
+    // Generate mipmaps for the output texture (if rendering to a framebuffer, not screen)
+    if (outputTarget) {
+      const outputTexture = this.textures.get(outputTarget);
+      if (outputTexture) {
+        gl.bindTexture(gl.TEXTURE_2D, outputTexture);
+        gl.generateMipmap(gl.TEXTURE_2D);
+        gl.bindTexture(gl.TEXTURE_2D, null);
+      }
+    }
 
     // Check for WebGL errors
     const error = gl.getError();
