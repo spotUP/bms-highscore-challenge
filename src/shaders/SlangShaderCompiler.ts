@@ -2126,10 +2126,14 @@ uniform float FrameDirection;
     console.log(`[SlangCompiler] Stage conversion - found ${existingDefines.size} existing #defines`);
     console.log(`[SlangCompiler] Stage conversion - processing ${parameters.length} shader parameters`);
 
-    // Build parameter uniforms (skip if already in UBO/push constant OR duplicate in parameters array OR already a #define)
+    // Build parameter uniforms (skip if duplicate in parameters array OR already a #define)
+    // CRITICAL FIX: DON'T skip parameters that are in UBO/push constants!
+    // After params. replacement (params.pre_bb → pre_bb), the shader needs a uniform named pre_bb
+    // Even though pre_bb is a push constant member, we still need to create the uniform
     const seenParams = new Set<string>();
     const filtered = parameters.filter(param => {
-      if (existingMembers.has(param.name)) return false; // Already in UBO/push constant
+      // DON'T filter out if already in UBO/push constant - we still need the uniform!
+      // The params. replacement converts params.X to X, so we need uniform X
       if (existingDefines.has(param.name)) return false; // Already a #define
       if (seenParams.has(param.name)) {
         console.log(`[SlangCompiler] Skipping duplicate parameter: ${param.name}`);
@@ -2139,9 +2143,10 @@ uniform float FrameDirection;
       return true;
     });
 
-    const skippedInBindings = parameters.filter(param => existingMembers.has(param.name));
-    if (skippedInBindings.length > 0) {
-      console.log(`[SlangCompiler] Skipping ${skippedInBindings.length} parameters already in bindings:`, skippedInBindings.map(p => p.name).slice(0, 20).join(', '), '...');
+    // Log how many push constant parameters are being converted to uniforms
+    const pushConstantParams = parameters.filter(param => existingMembers.has(param.name));
+    if (pushConstantParams.length > 0) {
+      console.log(`[SlangCompiler] Creating uniforms for ${pushConstantParams.length} push constant parameters (after params. replacement):`, pushConstantParams.map(p => p.name).slice(0, 20).join(', '));
     }
 
     const paramUniforms = filtered
@@ -4037,6 +4042,11 @@ ${batchAssignments.join('\n')}
       return source;
     }
 
+    // DEBUG: Log which assignments are being injected
+    if (paramAssignments.length > 0 && paramAssignments.length <= 3) {
+      console.log(`[SlangCompiler] SOLUTION A: Injecting these ${paramAssignments.length} assignments:`, paramAssignments);
+    }
+
     const mainStart = source.indexOf(mainMatch[0]);
     const mainBodyStart = mainStart + mainMatch[0].length;
     const mainCallsCode = '\n' + initCalls.join('\n') + ' // Initialize all PARAM_ global variables\n';
@@ -4263,7 +4273,8 @@ ${batchAssignments.join('\n')}
         }
 
         // Replace instanceName.member with just member (e.g., params.curvature -> curvature)
-        // CRITICAL: If member also exists as global variable, it got PARAM_ prefix
+        // CRITICAL FIX: Even if member is also a global, use the GLOBAL name (not PARAM_)
+        // The global will be assigned from PARAM_ uniform in main() via _initParamGlobals functions
         if (binding.instanceName) {
           binding.members.forEach(member => {
             // Check if this member is also a global (pragma parameter)
@@ -4274,11 +4285,12 @@ ${batchAssignments.join('\n')}
 
             // Use word boundaries to match whole words only
             const pattern = new RegExp(`\\b${binding.instanceName}\\.${member.name}\\b`, 'g');
-            // If it's also a global, use PARAM_ prefix, otherwise just the name
-            const replacement = isAlsoGlobal ? `PARAM_${member.name}` : member.name;
+            // ALWAYS use just the member name (global variable), not PARAM_ prefix
+            // If it's a global, the assignment (var = PARAM_var) will happen in main()
+            const replacement = member.name;
             output = output.replace(pattern, replacement);
             if (isAlsoGlobal) {
-              console.log(`[SlangCompiler] Replaced ${binding.instanceName}.${member.name} with PARAM_${member.name} (is also global)`);
+              console.log(`[SlangCompiler] Replaced ${binding.instanceName}.${member.name} with ${member.name} (is also global, will be assigned from PARAM_${member.name})`);
             }
           });
         }

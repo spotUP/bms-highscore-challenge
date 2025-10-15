@@ -182,8 +182,9 @@ export class MegaBezelCompiler {
 
     // Load and compile all shaders
     const passes: ShaderPass[] = [];
-    for (let i = 0; i < Math.min(presetData.shaders.length, opts.maxPasses); i++) {
-      const pass = await this.compileShaderPass(presetData, i, opts);
+    const totalPassesToCompile = Math.min(presetData.shaders.length, opts.maxPasses);
+    for (let i = 0; i < totalPassesToCompile; i++) {
+      const pass = await this.compileShaderPass(presetData, i, opts, totalPassesToCompile);
       passes.push(pass);
 
       if (opts.debug) {
@@ -384,7 +385,8 @@ export class MegaBezelCompiler {
   private async compileShaderPass(
     presetData: any,
     passIndex: number,
-    options: CompilationOptions
+    options: CompilationOptions,
+    totalPasses: number
   ): Promise<ShaderPass> {
     const shaderData = presetData.shaders[passIndex];
     if (!shaderData) {
@@ -405,7 +407,7 @@ export class MegaBezelCompiler {
     const material = this.createShaderMaterial(compiledShader, shaderData, passIndex);
 
     // Create render target (null for final pass)
-    const renderTarget = passIndex < presetData.shaders.length - 1
+    const renderTarget = passIndex < totalPasses - 1
       ? this.createRenderTarget(shaderData, 800, 600) // Use viewport size
       : null;
 
@@ -463,10 +465,21 @@ export class MegaBezelCompiler {
       });
     }
 
+    // Strip #version directive from shaders since THREE.js adds it automatically with glslVersion: THREE.GLSL3
+    let vertexShader = compiledShader.vertex.replace(/#version\s+[\d.]+\s*(?:es)?[\r\n]+/g, '');
+    let fragmentShader = compiledShader.fragment.replace(/#version\s+[\d.]+\s*(?:es)?[\r\n]+/g, '');
+
+    // Strip conflicting THREE.js attribute declarations (THREE.js provides these)
+    // Remove: in vec4 Position; / in vec2 TexCoord; / in vec4 position; / in vec2 uv;
+    vertexShader = vertexShader.replace(/^\s*in\s+vec[234]\s+(Position|position)\s*;.*$/gm, '');
+    vertexShader = vertexShader.replace(/^\s*in\s+vec2\s+(TexCoord|uv)\s*;.*$/gm, '');
+
+    // No FXAA injection needed - preprocessor handles it correctly
+
     const material = new THREE.ShaderMaterial({
       uniforms,
-      vertexShader: compiledShader.vertex,
-      fragmentShader: compiledShader.fragment,
+      vertexShader,
+      fragmentShader,
       glslVersion: THREE.GLSL3,  // CRITICAL: Enable GLSL ES 3.0 / WebGL2
       depthTest: false,
       depthWrite: false

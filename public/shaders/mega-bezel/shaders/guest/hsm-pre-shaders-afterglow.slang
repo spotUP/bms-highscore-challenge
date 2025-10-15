@@ -252,16 +252,16 @@ void main()
 {
    vec4 imgColor = COMPAT_TEXTURE(PreCRTPass, vTexCoord.xy);
    vec4 aftglow = COMPAT_TEXTURE(AfterglowPass, vTexCoord.xy);
-   
+
    float w = 1.0-aftglow.w;
 
    float l = length(aftglow.rgb);
    aftglow.rgb = AS*w*normalize(pow(aftglow.rgb + 0.01, vec3(sat)))*l;
    float bp = w * BP/255.0;
-   
+
    // Retro Sega Systems: Genesis, 32x, CD and Saturn 2D had color palettes designed in TV levels to save on transformations.
    if (SEGA_FIX > 0.5) imgColor.rgb = imgColor.rgb * (255.0 / 239.0);
-   
+
    imgColor.rgb = min(imgColor.rgb, 1.0);
    
    vec3 color = imgColor.rgb;
@@ -376,9 +376,9 @@ void main()
 	color = min(color * params.pre_bb, 1.0);
 
    /* HSM Removed
-	FragColor = vec4(color, vignette(vTexCoord.xy)); 
+	FragColor = vec4(color, vignette(vTexCoord.xy));
    */
 
    // HSM Added (Vignette added in post crt processing)
-	FragColor = vec4(color, 0); 
+	FragColor = vec4(color, 0);
 } 

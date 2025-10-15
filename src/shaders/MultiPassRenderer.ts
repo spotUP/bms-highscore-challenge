@@ -255,6 +255,13 @@ export class MultiPassRenderer {
   private updatePassUniforms(pass: ShaderPass): void {
     const uniforms = pass.uniforms;
 
+    // Log uniform update (only once per pass on first frame)
+    if (this.frameCount === 0) {
+      console.log(`[MultiPassRenderer] Updating uniforms for pass ${pass.index} (${pass.name})`);
+      console.log(`  - Total uniforms: ${Object.keys(uniforms).length}`);
+      console.log(`  - Parameters to update: ${pass.parameters.length}`);
+    }
+
     // Update parameter uniforms
     if (this.parameterManager) {
       for (const paramName of pass.parameters) {
@@ -267,6 +274,18 @@ export class MultiPassRenderer {
 
     // Update standard uniforms
     this.updateStandardUniforms(pass, uniforms);
+
+    // Log critical uniforms on first frame
+    if (this.frameCount === 0) {
+      const criticalUniforms = ['Source', 'MVP', 'SourceSize', 'OutputSize'];
+      criticalUniforms.forEach(name => {
+        if (uniforms[name]) {
+          console.log(`  - ${name}: ${uniforms[name].value ? 'SET' : 'NULL'}`);
+        } else {
+          console.log(`  - ${name}: MISSING`);
+        }
+      });
+    }
   }
 
   /**
@@ -352,6 +371,25 @@ export class MultiPassRenderer {
     const startTime = performance.now();
     this.frameCount++;
 
+    // Log input texture status on first frame
+    if (this.frameCount === 1) {
+      console.log('[MultiPassRenderer] renderPipeline called');
+      console.log(`  - inputTexture: ${context.inputTexture ? 'PROVIDED' : 'NULL'}`);
+      if (context.inputTexture) {
+        console.log(`  - inputTexture size: ${context.inputTexture.image?.width}x${context.inputTexture.image?.height}`);
+        console.log(`  - inputTexture type: ${context.inputTexture.type}`);
+        console.log(`  - inputTexture needsUpdate: ${context.inputTexture.needsUpdate}`);
+        console.log(`  - inputTexture minFilter: ${context.inputTexture.minFilter}, magFilter: ${context.inputTexture.magFilter}`);
+        console.log(`  - inputTexture format: ${context.inputTexture.format}, internalFormat: ${context.inputTexture.internalFormat}`);
+
+        // Force texture upload if needed
+        if (context.inputTexture.image && !context.inputTexture.needsUpdate) {
+          console.log('  - WARNING: Texture has image but needsUpdate=false, forcing upload');
+          context.inputTexture.needsUpdate = true;
+        }
+      }
+    }
+
     // Update frame history
     this.updateFrameHistory(context.inputTexture);
 
@@ -369,6 +407,13 @@ export class MultiPassRenderer {
       // Set input texture
       if (pass.uniforms['Source']) {
         pass.uniforms['Source'].value = currentInput;
+        if (this.frameCount === 1) {
+          console.log(`  - Pass ${pass.index}: Source texture SET (${currentInput ? 'valid' : 'NULL'})`);
+        }
+      } else {
+        if (this.frameCount === 1) {
+          console.log(`  - Pass ${pass.index}: No Source uniform`);
+        }
       }
 
       // Execute pass
@@ -414,6 +459,14 @@ export class MultiPassRenderer {
     // Set material on quad
     this.quad.material = pass.material;
 
+    // Log shader code on first frame for first pass to check bindings
+    if (this.frameCount === 1 && pass.index === 0) {
+      console.log('[MultiPassRenderer] Pass 0 fragment shader snippet:');
+      const fragShader = (pass.material as any).fragmentShader || '';
+      const sourceLines = fragShader.split('\n').filter((line: string) => line.includes('Source') || line.includes('texture'));
+      console.log(sourceLines.slice(0, 10).join('\n'));
+    }
+
     // Determine output target
     const outputTarget = pass.renderTarget || context.outputTarget || null;
 
@@ -427,6 +480,21 @@ export class MultiPassRenderer {
 
     // Render
     this.renderer.render(this.scene, this.camera);
+
+    // Sample center pixel on first frame to check output
+    if (this.frameCount === 1 && outputTarget) {
+      const gl = this.renderer.getContext();
+      const pixel = new Uint8Array(4);
+      gl.readPixels(
+        Math.floor(outputTarget.width / 2),
+        Math.floor(outputTarget.height / 2),
+        1, 1,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        pixel
+      );
+      console.log(`  → Pass ${pass.index} center pixel: rgb(${pixel[0]},${pixel[1]},${pixel[2]}) alpha=${pixel[3]}`);
+    }
 
     // Reset render target
     this.renderer.setRenderTarget(null);

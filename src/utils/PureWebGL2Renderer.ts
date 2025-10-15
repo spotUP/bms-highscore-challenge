@@ -264,13 +264,14 @@ export class PureWebGL2Renderer {
 
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    // Use LINEAR_MIPMAP_LINEAR to support shaders that require mipmaps (e.g., pass_4 with mipmap_input4=true)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+    // FIXED: Use LINEAR filter without mipmaps - mipmap generation was causing texture corruption
+    // OLD: gl.LINEAR_MIPMAP_LINEAR required mipmaps to be regenerated after each render
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    // Generate mipmaps for the empty texture
-    gl.generateMipmap(gl.TEXTURE_2D);
+    // REMOVED: Mipmap generation - not needed with LINEAR filter
+    // gl.generateMipmap(gl.TEXTURE_2D);
 
     this.textures.set(name, texture);
 
@@ -298,6 +299,40 @@ export class PureWebGL2Renderer {
     this.framebuffers.set(name, framebuffer);
 
     console.log(`✅ [PureWebGL2] Render target ${name} created (${width}x${height})`);
+    return true;
+  }
+
+  /**
+   * Create a texture from an HTMLImageElement (for LUTs, etc.)
+   */
+  createTextureFromImage(name: string, image: HTMLImageElement, linear: boolean = true): boolean {
+    const gl = this.gl;
+
+    const texture = gl.createTexture();
+    if (!texture) {
+      console.error(`[PureWebGL2] Failed to create texture for ${name}`);
+      return false;
+    }
+
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+    // Set filtering based on parameter
+    if (linear) {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    } else {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    }
+
+    // LUTs typically use CLAMP_TO_EDGE
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    this.textures.set(name, texture);
+
+    console.log(`✅ [PureWebGL2] Texture ${name} created from image (${image.width}x${image.height})`);
     return true;
   }
 
@@ -338,7 +373,48 @@ export class PureWebGL2Renderer {
 
     // Bind input textures
     let textureUnit = 0;
+    // DEBUG: Log ALL textures being bound to pass_4 (every 60 frames)
+    const frameCount = uniforms.FrameCount || 0;
+    if (programName === 'pass_4' && frameCount % 60 === 0) {
+      console.log(`[DEBUG pass_4 FRAME ${frameCount}] Input textures:`, Object.keys(inputTextures).length, 'textures');
+      for (const [name, texName] of Object.entries(inputTextures)) {
+        console.log(`  - ${name} → ${texName} (exists: ${this.textures.has(texName)})`);
+
+        // DEBUG: Read a pixel from PreCRTPass texture to verify its contents
+        if (name === 'PreCRTPass') {
+          const texture = this.textures.get(texName);
+          if (texture) {
+            // Create a temporary framebuffer to read from the texture
+            const tempFB = gl.createFramebuffer();
+            gl.bindFramebuffer(gl.FRAMEBUFFER, tempFB);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+
+            const pixel = new Uint8Array(4);
+            gl.readPixels(285, 285, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+            console.log(`  → PreCRTPass pixel at (285,285): rgb(${pixel[0]},${pixel[1]},${pixel[2]})`);
+
+            gl.deleteFramebuffer(tempFB);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          }
+        }
+      }
+    }
+
     for (const [uniformName, textureName] of Object.entries(inputTextures)) {
+      // CRITICAL FIX: Check if this sampler uniform exists in the shader FIRST
+      // This prevents binding textures that the shader doesn't use, which would
+      // cause texture unit mismatches (e.g., PreCRTPass bound to unit 2 but shader expects unit 0)
+      const location = gl.getUniformLocation(program, uniformName);
+      if (location === null) {
+        // Sampler doesn't exist in this shader - skip binding this texture
+        continue;
+      }
+
+      // DEBUG: Log ALL texture bindings for pass_4 (every 60 frames)
+      if (programName === 'pass_4' && frameCount % 60 === 0) {
+        console.log(`[DEBUG pass_4] Binding ${uniformName} → texture ${textureName} at unit ${textureUnit}`);
+      }
+
       let texture = this.textures.get(textureName);
       if (!texture) {
         console.warn(`[PureWebGL2] Texture not found: ${textureName}, creating dummy texture`);
@@ -356,11 +432,7 @@ export class PureWebGL2Renderer {
 
       gl.activeTexture(gl.TEXTURE0 + textureUnit);
       gl.bindTexture(gl.TEXTURE_2D, texture);
-
-      const location = gl.getUniformLocation(program, uniformName);
-      if (location !== null) {
-        gl.uniform1i(location, textureUnit);
-      }
+      gl.uniform1i(location, textureUnit);
 
       textureUnit++;
     }
@@ -412,15 +484,8 @@ export class PureWebGL2Renderer {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     gl.bindVertexArray(null);
 
-    // Generate mipmaps for the output texture (if rendering to a framebuffer, not screen)
-    if (outputTarget) {
-      const outputTexture = this.textures.get(outputTarget);
-      if (outputTexture) {
-        gl.bindTexture(gl.TEXTURE_2D, outputTexture);
-        gl.generateMipmap(gl.TEXTURE_2D);
-        gl.bindTexture(gl.TEXTURE_2D, null);
-      }
-    }
+    // DISABLED: Mipmap generation removed - textures now use LINEAR filter without mipmaps
+    // This prevents texture corruption that was causing white output in pass_4
 
     // Check for WebGL errors
     const error = gl.getError();

@@ -32,6 +32,7 @@ export class PureWebGL2MultiPassRenderer {
   private passAliases: Map<string, string> = new Map(); // Maps alias name to pass output texture name (e.g., "LinearizePass" -> "pass_11_output")
   private passConfigs: ShaderPassConfig[] = []; // Store pass configurations for alias lookup
   private pragmaDefaults: Record<string, number> = {}; // AUTO-EXTRACTED defaults from #pragma parameter lines
+  private lutTextures: Map<string, string> = new Map(); // Maps LUT name to texture name (e.g., "SamplerLUT1" -> "lut_texture_1")
 
   constructor(canvasOrContext: HTMLCanvasElement | WebGL2RenderingContext, width: number = 800, height: number = 600) {
     this.renderer = new PureWebGL2Renderer(canvasOrContext);
@@ -145,6 +146,9 @@ export class PureWebGL2MultiPassRenderer {
         }
       }
 
+      // Load LUT textures defined in preset
+      await this.loadLUTTextures(presetContent, presetPath);
+
       // Create render targets for passes
       for (let i = 0; i < config.passes.length - 1; i++) {
         const passName = config.passes[i].name;
@@ -235,6 +239,59 @@ export class PureWebGL2MultiPassRenderer {
   }
 
   /**
+   * Load LUT textures from preset
+   */
+  private async loadLUTTextures(presetContent: string, presetPath: string): Promise<void> {
+    const lines = presetContent.split('\n');
+    const basePath = presetPath.substring(0, presetPath.lastIndexOf('/'));
+
+    // Find all LUT definitions (e.g., "SamplerLUT1 = shaders/guest/lut/trinitron-lut.png")
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+
+      // Match: SamplerLUTN = path/to/lut.png
+      const match = trimmed.match(/^(SamplerLUT\d+)\s*=\s*(.+)$/);
+      if (match) {
+        const lutName = match[1];
+        const lutPath = match[2].trim().replace(/["']/g, ''); // Remove quotes
+        const fullPath = `${basePath}/${lutPath}`;
+
+        try {
+          // Load the LUT image
+          const img = await this.loadImage(fullPath);
+
+          // Create WebGL texture for this LUT
+          const textureName = `lut_texture_${lutName}`;
+          this.renderer.createTextureFromImage(textureName, img, true); // true = linear filtering for LUTs
+
+          // Store mapping
+          this.lutTextures.set(lutName, textureName);
+          console.log(`[PureWebGL2MultiPass] Loaded LUT: ${lutName} → ${textureName} (${img.width}x${img.height})`);
+        } catch (error) {
+          console.error(`[PureWebGL2MultiPass] Failed to load LUT ${lutName} from ${fullPath}:`, error);
+        }
+      }
+    }
+
+    if (this.lutTextures.size > 0) {
+      console.log(`✅ [PureWebGL2MultiPass] Loaded ${this.lutTextures.size} LUT textures`);
+    }
+  }
+
+  /**
+   * Load an image from URL
+   */
+  private loadImage(url: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+      img.src = url;
+    });
+  }
+
+  /**
    * Render a frame through the shader pipeline
    */
   render(inputTextureName: string): void {
@@ -287,6 +344,14 @@ export class PureWebGL2MultiPassRenderer {
           if (this.frameCount === 1) {
             console.log(`[PureWebGL2MultiPass] Pass ${i} (${passName}) can access aliased texture: ${aliasName} → ${textureName}`);
           }
+        }
+      }
+
+      // ADD ALL LUT TEXTURES (available to all passes)
+      for (const [lutName, textureName] of this.lutTextures.entries()) {
+        inputTextures[lutName] = textureName;
+        if (this.frameCount === 1) {
+          console.log(`[PureWebGL2MultiPass] Pass ${i} (${passName}) has LUT texture: ${lutName} → ${textureName}`);
         }
       }
 

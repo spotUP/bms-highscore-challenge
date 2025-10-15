@@ -207,7 +207,9 @@ export class MegaBezelPresetLoader {
       this.specularReflectionsRenderer!.setReflectionMask(reflectionMaskTexture);
     }
 
-    const reflectionResults = this.specularReflectionsRenderer!.renderAllReflections(processedTexture);
+    // Render specular reflections using the SpecularReflectionsRenderer
+    this.specularReflectionsRenderer!.renderSpecular(processedTexture);
+    this.specularReflectionsRenderer!.renderReflections(processedTexture);
 
     // Step 4: Composite with bezel graphics, lighting, and reflections
     const lightingTexture = this.ambientLightingRenderer!.getLightingTexture();

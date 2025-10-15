@@ -130,6 +130,7 @@ export class SpecularReflectionsRenderer {
          screenScale: { value: new THREE.Vector2(0.8, 0.8) },
          specularPower: { value: this.materialProps.specularPower },
          roughness: { value: this.materialProps.roughness },
+         specularIntensity: { value: 0.8 },
          blurSamples: { value: 12 },
          blurMin: { value: 0.0 },
          blurMax: { value: 0.95 },
@@ -152,6 +153,7 @@ export class SpecularReflectionsRenderer {
          uniform vec2 screenScale;
          uniform float specularPower;
          uniform float roughness;
+         uniform float specularIntensity;
          uniform float blurSamples;
          uniform float blurMin;
          uniform float blurMax;
@@ -223,7 +225,7 @@ export class SpecularReflectionsRenderer {
 
            // Calculate specular based on screen brightness
            float luminance = dot(screenColor, vec3(0.299, 0.587, 0.114));
-           float specular = pow(luminance, specularPower) * reflectionFalloff;
+           float specular = pow(luminance, specularPower) * reflectionFalloff * specularIntensity;
 
            // Apply roughness (more spread out highlights)
            specular *= (1.0 - roughness * 0.5);
@@ -511,30 +513,39 @@ export class SpecularReflectionsRenderer {
        this.specularMaterial.uniforms.screenTexture.value = screenTexture;
      }
 
-    // Get screen placement from parameters (same as BezelCompositionRenderer)
-    const screenPosX = this.parameterManager.getValue('HSM_SCREEN_POSITION_X') || 0;
-    const screenPosY = this.parameterManager.getValue('HSM_SCREEN_POSITION_Y') || 0;
-    const screenScale = this.parameterManager.getValue('HSM_NON_INTEGER_SCALE') || 0.8;
+     // Get screen placement from parameters (same as BezelCompositionRenderer)
+     const screenPosX = this.parameterManager.getValue('HSM_SCREEN_POSITION_X') || 0;
+     const screenPosY = this.parameterManager.getValue('HSM_SCREEN_POSITION_Y') || 0;
+     const screenScale = this.parameterManager.getValue('HSM_NON_INTEGER_SCALE') || 0.8;
 
-    const screenPosition = [0.5 + screenPosX / 1000, 0.5 + screenPosY / 1000];
-    const screenScaleVec = [screenScale, screenScale];
+     const screenPosition = [0.5 + screenPosX / 1000, 0.5 + screenPosY / 1000];
+     const screenScaleVec = [screenScale, screenScale];
 
-    this.specularMaterial.uniforms.screenPosition.value.set(
-      screenPosition[0],
-      screenPosition[1]
-    );
-    this.specularMaterial.uniforms.screenScale.value.set(
-      screenScaleVec[0],
-      screenScaleVec[1]
-    );
+     this.specularMaterial.uniforms.screenPosition.value.set(
+       screenPosition[0],
+       screenPosition[1]
+     );
+     this.specularMaterial.uniforms.screenScale.value.set(
+       screenScaleVec[0],
+       screenScaleVec[1]
+     );
 
-    // Render to specular target
-    this.renderer.setRenderTarget(this.specularRenderTarget);
-    this.renderer.clear();
-    this.renderer.render(this.scene, this.camera);
+     // Update specular intensity based on Mega Bezel parameters
+     const globalAmount = this.parameterManager.getValue('HSM_REFLECT_GLOBAL_AMOUNT') || 0.5;
+     const bezelInnerEdgeAmount = this.parameterManager.getValue('HSM_REFLECT_BEZEL_INNER_EDGE_AMOUNT') || 1.3;
+     const frameInnerEdgeAmount = this.parameterManager.getValue('HSM_REFLECT_FRAME_INNER_EDGE_AMOUNT') || 0.5;
 
-    return this.specularRenderTarget;
-  }
+     // Calculate specular intensity from Mega Bezel parameters
+     const specularIntensity = globalAmount * bezelInnerEdgeAmount * 0.01;
+     this.specularMaterial.uniforms.specularIntensity = { value: specularIntensity };
+
+     // Render to specular target
+     this.renderer.setRenderTarget(this.specularRenderTarget);
+     this.renderer.clear();
+     this.renderer.render(this.scene, this.camera);
+
+     return this.specularRenderTarget;
+   }
 
   /**
    * Render environment reflections

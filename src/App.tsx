@@ -48,6 +48,7 @@ const RAWGGamesBrowser = lazy(() => import("./pages/RAWGGamesBrowser"));
 const GamesBrowser = lazy(() => import("./pages/GamesBrowser"));
 const ClearLogoTest = lazy(() => import("./components/ClearLogoTest"));
 const Pong404WebGL = lazy(() => import("./pages/Pong404WebGL"));
+const ShaderTest = lazy(() => import("./pages/ShaderTest"));
 
 const queryClient = new QueryClient();
 
@@ -217,6 +218,8 @@ const App = () => (
                           <Route path="/t/:slug/mobile-entry" element={<Layout><TournamentAccessGuard><MobileEntry /></TournamentAccessGuard></Layout>} />
                           {/* Pure WebGL2D Pong - Full multiplayer game - NO THREE.JS, NO PIXI.JS */}
                           <Route path="/pong" element={<Pong404WebGL />} />
+                          {/* Shader Test Page - 18-pass Mega Bezel CRT shader */}
+                          <Route path="/shader-test" element={<ShaderTest />} />
                           {/* 404 Catch-all route - Pure WebGL2D */}
                           <Route path="*" element={<Pong404WebGL />} />
                         </Routes>
