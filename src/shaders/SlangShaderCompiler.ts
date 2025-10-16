@@ -822,12 +822,10 @@ export class SlangShaderCompiler {
 
       // Skip if this name conflicts with a shader parameter or common uniform
       // SOLUTION A (DUAL DECLARATION): For pragma parameters in excludeNames,
-      // extract them as UNINITIALIZED globals (the initialization will be commented out)
-      // They'll get PARAM_-prefixed uniforms and assignments in main()
+      // they ALL become PARAM_-prefixed uniforms, so skip them entirely
+      // We'll provide default values when setting uniforms instead
       if (excludeNames.has(name)) {
-        console.log(`[SlangCompiler] SOLUTION A: Extracting pragma parameter '${name}' as uninitialized global (skipping initialization)`);
-        globals.push(`${type} ${name};`);
-        extractedGlobalNames.add(name);
+        console.log(`[SlangCompiler] SOLUTION A: Skipping pragma parameter '${name}' (will become PARAM_ uniform)`);
         continue;
       }
 
