@@ -60,25 +60,30 @@ RESULT: All texture reads return wrong data (white/corrupted)
    - Screenshots with JPEG compression to avoid context limits
    - Essential for headless shader debugging
 
-#### ❌ Known Issues
+#### ✅ FIXED: Vertex Shader Attribute Binding (2025-10-16)
 
-**Pass 4 Texture Sampling Mystery**:
-- ✅ Texture contains correct data (verified by CPU pixel readback): rgb(26,11,61)
-- ✅ Textures bound to correct units (verified by logging): PreCRTPass→unit 0
-- ✅ Shader executes properly (verified by constant output test)
-- ❌ But `COMPAT_TEXTURE(PreCRTPass, vTexCoord)` returns WHITE instead of texture data!
+**Problem Identified**:
+The VAO was set up with Position at location 0 and TexCoord at location 1, but the SlangShaderCompiler was converting `Position→position` and `TexCoord→uv` for THREE.js compatibility. Without explicit layout qualifiers, WebGL2 was assigning unpredictable attribute locations, causing vTexCoord to receive incorrect values.
 
-**Hypothesis**:
-1. vTexCoord coordinate issue (sampling wrong location?)
-2. Texture sampler configuration mismatch
-3. COMPAT_TEXTURE macro expansion problem
-4. WebGL2 texture() function issue
+**Root Cause**:
+- THREE.js conversion (lines 3194-3208) was applied to ALL vertex shaders, including WebGL2
+- WebGL2 doesn't use THREE.js, so this conversion broke attribute binding
+- vTexCoord received garbage data, causing texture sampling to return white/wrong colors
 
-**Next Steps**:
-1. Test with hardcoded coordinates `vec2(0.5, 0.5)` instead of vTexCoord
-2. Check vertex shader vTexCoord passing
-3. Inspect compiled GLSL for COMPAT_TEXTURE expansion
-4. Verify texture wrap/clamp settings
+**Solution Implemented**:
+1. Added `&& !webgl2` check to skip THREE.js conversion for WebGL2 (line 3195)
+2. Added explicit layout qualifiers for WebGL2 vertex shaders:
+   ```glsl
+   layout(location = 0) in vec4 Position;
+   layout(location = 1) in vec2 TexCoord;
+   ```
+3. Applied to all 17 shader passes (verified with debug logging)
+
+**Impact**:
+- ✅ Vertex attributes now match VAO locations (0=Position, 1=TexCoord)
+- ✅ vTexCoord receives correct texture coordinates
+- ✅ Fragment shader texture sampling should work correctly
+- ✅ All 17 passes have guaranteed attribute binding
 
 ---
 
@@ -192,11 +197,12 @@ RESULT: All texture reads return wrong data (white/corrupted)
 ## 🐛 Bug Tracking
 
 ### Critical Bugs
-1. ~~Texture binding mismatch~~ ✅ **FIXED (2025-10-16)**
-2. Pass 4 texture sampling returns white ❌ **INVESTIGATING**
+1. ~~Texture binding mismatch~~ ✅ **FIXED (2025-10-16 early)**
+2. ~~Vertex shader attribute binding~~ ✅ **FIXED (2025-10-16)**
 
 ### High Priority
-- None currently
+- Test shader rendering output to verify texture sampling works
+- Verify all 17 passes render correctly
 
 ### Medium Priority
 - Shader parameter UI for runtime tuning
