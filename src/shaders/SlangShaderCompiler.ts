@@ -3209,16 +3209,24 @@ uniform float hiscan;
     }
 
     // For WebGL2, add explicit layout qualifiers to vertex shader inputs
+    // ONLY if they don't already have them (some Slang shaders already have layout qualifiers)
     if (stage === 'vertex' && webgl2) {
-      // Add layout qualifiers to Position and TexCoord attributes
-      const beforePosition = output.match(/\bin\s+vec4\s+Position\s*;/g)?.length || 0;
-      const beforeTexCoord = output.match(/\bin\s+vec2\s+TexCoord\s*;/g)?.length || 0;
+      // Check if layout qualifiers already exist
+      const hasLayoutQualifiers = output.includes('layout(location');
 
-      output = output.replace(/\bin\s+vec4\s+Position\s*;/g, 'layout(location = 0) in vec4 Position;');
-      output = output.replace(/\bin\s+vec2\s+TexCoord\s*;/g, 'layout(location = 1) in vec2 TexCoord;');
+      if (!hasLayoutQualifiers) {
+        // Add layout qualifiers to Position and TexCoord attributes
+        const beforePosition = output.match(/\bin\s+vec4\s+Position\s*;/g)?.length || 0;
+        const beforeTexCoord = output.match(/\bin\s+vec2\s+TexCoord\s*;/g)?.length || 0;
 
-      if (beforePosition > 0 || beforeTexCoord > 0) {
-        console.log(`[SlangCompiler] Added layout qualifiers: Position=${beforePosition}, TexCoord=${beforeTexCoord}`);
+        output = output.replace(/\bin\s+vec4\s+Position\s*;/g, 'layout(location = 0) in vec4 Position;');
+        output = output.replace(/\bin\s+vec2\s+TexCoord\s*;/g, 'layout(location = 1) in vec2 TexCoord;');
+
+        if (beforePosition > 0 || beforeTexCoord > 0) {
+          console.log(`[SlangCompiler] Added layout qualifiers: Position=${beforePosition}, TexCoord=${beforeTexCoord}`);
+        }
+      } else {
+        console.log(`[SlangCompiler] Skipping layout qualifiers - already exist in shader`);
       }
     }
 
@@ -3271,12 +3279,19 @@ uniform float hiscan;
     // Three.js manages fragment outputs automatically, so remove layout from all in/out
     if (webgl2 && stage === 'fragment') {
       // Remove layout from 'in' declarations (varyings from vertex shader)
+      // BUT keep 'in' keyword itself
       output = output.replace(/layout\s*\([^)]*\)\s+in\s+/g, 'in ');
       // Remove layout from 'out' declarations - Three.js manages outputs
       output = output.replace(/layout\s*\([^)]*\)\s+out\s+/g, 'out ');
-      // Remove other layout types (set, binding, push_constant)
-      output = output.replace(/layout\s*\(\s*set\s*=\s*[^)]*\)\s*/g, '');
+      // Remove Vulkan-style layout qualifiers for samplers (set, binding)
+      // These don't work in WebGL2/GLSL ES - we use gl.uniform1i() instead
+      // Matches: layout(set = 0, binding = 2) uniform sampler2D ...
+      output = output.replace(/layout\s*\(\s*set\s*=\s*\d+\s*,\s*binding\s*=\s*\d+\s*\)\s+/g, '');
+      // Also match just binding without set
+      output = output.replace(/layout\s*\(\s*binding\s*=\s*\d+\s*\)\s+/g, '');
+      // Remove push_constant layout
       output = output.replace(/layout\s*\(\s*push_constant\s*\)\s*/g, '');
+      console.log(`[SlangCompiler] Stripped Vulkan layout qualifiers from fragment shader`);
 
       // NOTE: We no longer inject initParams() - using direct uniforms instead of ParamsStruct
     } else {
