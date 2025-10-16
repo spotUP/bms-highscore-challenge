@@ -85,6 +85,58 @@ The VAO was set up with Position at location 0 and TexCoord at location 1, but t
 - ✅ Fragment shader texture sampling should work correctly
 - ✅ All 17 passes have guaranteed attribute binding
 
+#### ✅ FIXED: Duplicate Layout Qualifiers & Vulkan Bindings (2025-10-16)
+
+**Additional Problems Found**:
+1. Some Slang shaders already contain `layout(location = X)` qualifiers
+2. Shaders contain Vulkan-specific `layout(set=X, binding=Y)` that WebGL2 doesn't support
+3. Pass 3 was rendering black due to layout qualifier conflicts
+
+**Solutions Implemented**:
+1. **Prevent Duplicate Layout Qualifiers** (SlangShaderCompiler.ts:3213-3231)
+   - Check if qualifiers exist before adding them
+   - Skip addition if `layout(location` found in shader source
+   - Prevents compilation errors from duplicate declarations
+
+2. **Enhanced Vulkan Binding Stripping** (SlangShaderCompiler.ts:3286-3294)
+   - Improved regex to strip `layout(set = X, binding = Y)` from samplers
+   - Added pattern for `layout(binding = X)` without set
+   - WebGL2 uses `gl.uniform1i()` instead of binding qualifiers
+
+**Impact**:
+- ✅ Pass 3 now renders correctly (was black, now shows correct colors)
+- ✅ No shader compilation errors from duplicate qualifiers
+- ✅ Full WebGL2 compatibility (Vulkan syntax removed)
+- ⚠️  Pass 4+ still output white (requires further investigation)
+
+#### ❌ REMAINING ISSUE: Pass 4 White Output
+
+**Current Status**:
+- **Passes 0-3**: ✅ Rendering correctly with proper colors
+- **Pass 4+**: ❌ Output white/corrupted
+
+**Verified Working**:
+- ✅ Input texture contains correct data: rgb(26,11,61)
+- ✅ Texture bound to correct unit (0)
+- ✅ No compilation errors
+- ✅ No WebGL errors
+- ✅ Vulkan bindings stripped
+- ✅ Layout qualifiers correct
+
+**Still Investigating**:
+- Pass 4 shader logic (`hsm-pre-shaders-afterglow.slang`)
+- LUT texture processing
+- Color correction calculations
+- Possible shader-level vTexCoord issues
+
+**Next Steps**:
+1. Add shader-level debug instrumentation
+2. Inspect pass_4 fragment shader main() function
+3. Test with hardcoded texture coordinates
+4. Verify LUT texture sampling
+
+See `SHADER_DEBUG_REPORT.md` for complete debugging session details.
+
 ---
 
 ## 📊 Project Components Status
@@ -198,13 +250,22 @@ The VAO was set up with Position at location 0 and TexCoord at location 1, but t
 
 ### Critical Bugs
 1. ~~Texture binding mismatch~~ ✅ **FIXED (2025-10-16 early)**
-2. ~~Vertex shader attribute binding~~ ✅ **FIXED (2025-10-16)**
+2. ~~Vertex shader attribute binding~~ ✅ **FIXED (2025-10-16 mid)**
+3. ~~Duplicate layout qualifiers~~ ✅ **FIXED (2025-10-16 mid)**
+4. ~~Vulkan binding syntax in WebGL2~~ ✅ **FIXED (2025-10-16 mid)**
+5. **Pass 4 white output** ❌ **INVESTIGATING**
+   - First 3 passes work correctly
+   - Input texture verified correct
+   - Shader logic issue suspected
+   - See SHADER_DEBUG_REPORT.md
 
 ### High Priority
-- Test shader rendering output to verify texture sampling works
-- Verify all 17 passes render correctly
+- Fix pass_4 shader logic / texture sampling
+- Investigate LUT texture processing
+- Add shader-level debug instrumentation
 
 ### Medium Priority
+- Implement proper mipmap generation per-pass
 - Shader parameter UI for runtime tuning
 - Performance optimization for mobile
 
