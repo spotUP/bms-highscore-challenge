@@ -3191,7 +3191,8 @@ uniform float hiscan;
     output = output.replace(/\binitParams\s*\(\s*\)\s*;?/g, '/* initParams() removed */');
 
     // Convert Three.js standard attribute names (vertex stage only)
-    if (stage === 'vertex') {
+    // IMPORTANT: ONLY do this for WebGL1/Three.js - Pure WebGL2 uses Position/TexCoord directly
+    if (stage === 'vertex' && !webgl2) {
       // Convert Slang attribute declarations to Three.js declarations
       // Position (vec4 in Slang) → position (vec3 in Three.js)
       output = output.replace(/\battribute\s+vec4\s+Position\s*;/g, 'attribute vec3 position;');
@@ -3205,6 +3206,20 @@ uniform float hiscan;
       output = output.replace(/\bPosition\b/g, 'vec4(position, 1.0)');
       // TexCoord → uv (both are vec2)
       output = output.replace(/\bTexCoord\b/g, 'uv');
+    }
+
+    // For WebGL2, add explicit layout qualifiers to vertex shader inputs
+    if (stage === 'vertex' && webgl2) {
+      // Add layout qualifiers to Position and TexCoord attributes
+      const beforePosition = output.match(/\bin\s+vec4\s+Position\s*;/g)?.length || 0;
+      const beforeTexCoord = output.match(/\bin\s+vec2\s+TexCoord\s*;/g)?.length || 0;
+
+      output = output.replace(/\bin\s+vec4\s+Position\s*;/g, 'layout(location = 0) in vec4 Position;');
+      output = output.replace(/\bin\s+vec2\s+TexCoord\s*;/g, 'layout(location = 1) in vec2 TexCoord;');
+
+      if (beforePosition > 0 || beforeTexCoord > 0) {
+        console.log(`[SlangCompiler] Added layout qualifiers: Position=${beforePosition}, TexCoord=${beforeTexCoord}`);
+      }
     }
 
     // Convert varying/in/out keywords
@@ -4353,8 +4368,8 @@ ${batchAssignments.join('\n')}
 
 uniform mat4 MVP;
 
-in vec4 Position;
-in vec2 TexCoord;
+layout(location = 0) in vec4 Position;
+layout(location = 1) in vec2 TexCoord;
 
 out vec2 vTexCoord;
 
