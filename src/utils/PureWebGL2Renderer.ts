@@ -110,22 +110,56 @@ export class PureWebGL2Renderer {
       return false;
     }
 
+    // DEBUG: Dump vertex shader for pass_3 (working) and pass_4 (broken) to compare
+    if (name === 'pass_3' || name === 'pass_4') {
+      // Find the section with layout(location) and void main()
+      const layoutIdx = vertexSource.indexOf('layout(location');
+      const mainIdx = vertexSource.indexOf('void main()');
+
+      console.log(`[PureWebGL2] === ${name.toUpperCase()} VERTEX SHADER ATTRIBUTES ===`);
+      if (layoutIdx !== -1 && mainIdx !== -1) {
+        // Show from first layout to 500 chars after main()
+        const start = Math.max(0, layoutIdx - 200);
+        const end = Math.min(vertexSource.length, mainIdx + 500);
+        console.log(vertexSource.substring(start, end));
+      } else {
+        console.log('❌ Could not find layout(location) or void main()');
+        console.log('Showing last 800 chars instead:');
+        console.log(vertexSource.substring(vertexSource.length - 800));
+      }
+      console.log(`[PureWebGL2] === END ${name.toUpperCase()} VERTEX SHADER ===`);
+    }
+
     gl.shaderSource(vertexShader, vertexSource);
     gl.compileShader(vertexShader);
 
     if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
       const log = gl.getShaderInfoLog(vertexShader);
-      console.error(`[PureWebGL2] Vertex shader compilation failed for ${name}:`, log);
+      console.log(`[PureWebGL2] Vertex shader compilation failed for ${name}:`, log);
 
       // Extract line number from error and show context
       const lineMatch = log?.match(/ERROR: \d+:(\d+):/);
       if (lineMatch) {
         const errorLine = parseInt(lineMatch[1]);
         const lines = vertexSource.split('\n');
-        console.error(`[PureWebGL2] Context around line ${errorLine}:`);
+        console.log(`[PureWebGL2] Context around line ${errorLine}:`);
         for (let i = Math.max(0, errorLine - 5); i < Math.min(lines.length, errorLine + 5); i++) {
           const marker = i === errorLine - 1 ? '>>>' : '   ';
-          console.error(`${marker} ${i + 1}: ${lines[i]}`);
+          console.log(`${marker} ${i + 1}: ${lines[i]}`);
+        }
+
+        // CRITICAL: Dump full shader to console for debugging
+        if (name === 'pass_0') {
+          console.log(`[PureWebGL2] pass_0 vertex shader has ${lines.length} lines total`);
+          console.log(`[PureWebGL2] Showing lines 1460-1475 (error at ${errorLine}):`);
+          for (let i = 1459; i < Math.min(1475, lines.length); i++) {
+            const marker = i === errorLine - 1 ? '>>>' : '   ';
+            console.log(`${marker} ${i + 1}: ${lines[i]}`);
+          }
+
+          // Expose shader source on window for debugging
+          (window as any).debugPass0VertexSource = vertexSource;
+          (window as any).debugPass0ErrorLine = errorLine;
         }
       }
 
@@ -373,9 +407,10 @@ export class PureWebGL2Renderer {
 
     // Bind input textures
     let textureUnit = 0;
-    // DEBUG: Log ALL textures being bound to pass_4 (every 60 frames)
+    // DEBUG: Log ALL textures being bound to pass_4 (always log when pass_4 is executed)
     const frameCount = uniforms.FrameCount || 0;
-    if (programName === 'pass_4' && frameCount % 60 === 0) {
+    const shouldLog = (programName === 'pass_4') && (frameCount % 60 === 0 || frameCount <= 5);
+    if (shouldLog) {
       console.log(`[DEBUG pass_4 FRAME ${frameCount}] Input textures:`, Object.keys(inputTextures).length, 'textures');
       for (const [name, texName] of Object.entries(inputTextures)) {
         console.log(`  - ${name} → ${texName} (exists: ${this.textures.has(texName)})`);
@@ -410,10 +445,10 @@ export class PureWebGL2Renderer {
         continue;
       }
 
-      // DEBUG: Log ALL texture bindings for pass_4 (every 60 frames)
-      if (programName === 'pass_4' && frameCount % 60 === 0) {
-        console.log(`[DEBUG pass_4] Binding ${uniformName} → texture ${textureName} at unit ${textureUnit}`);
-      }
+      // DEBUG: Texture bindings (disabled)
+      // if (shouldLog) {
+      //   console.log(`[DEBUG ${programName}] Binding ${uniformName} → ${textureName} at unit ${textureUnit}`);
+      // }
 
       let texture = this.textures.get(textureName);
       if (!texture) {
@@ -429,6 +464,11 @@ export class PureWebGL2Renderer {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
         this.textures.set(textureName, texture);
       }
+
+      // DEBUG: Texture binding (disabled - enable if needed for debugging)
+      // if (programName === 'pass_0' && uniformName === 'Source') {
+      //   console.log(`[DEBUG pass_0] Binding Source sampler: ${textureName} -> unit ${textureUnit}`);
+      // }
 
       gl.activeTexture(gl.TEXTURE0 + textureUnit);
       gl.bindTexture(gl.TEXTURE_2D, texture);

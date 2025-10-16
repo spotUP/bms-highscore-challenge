@@ -21,6 +21,25 @@ export interface IncludeDirective {
 
 export class IncludePreprocessor {
   /**
+   * Normalize a URL path to a canonical form for duplicate detection
+   */
+  private static normalizePath(path: string): string {
+    // Split into segments and resolve .. and .
+    const segments = path.split('/').filter(s => s);
+    const normalized: string[] = [];
+
+    for (const segment of segments) {
+      if (segment === '..') {
+        normalized.pop();
+      } else if (segment !== '.') {
+        normalized.push(segment);
+      }
+    }
+
+    return '/' + normalized.join('/');
+  }
+
+  /**
    * Enhanced GLSL preprocessor for Mega Bezel complex #include handling
    */
   public static async preprocessIncludes(
@@ -38,12 +57,15 @@ export class IncludePreprocessor {
     // Extract base directory from URL
     const baseDir = baseUrl.substring(0, baseUrl.lastIndexOf('/') + 1);
 
-    // Track this file to prevent circular includes
-    if (processedFiles.has(baseUrl)) {
-      console.warn(`[IncludePreprocessor] Circular include detected: ${baseUrl}`);
-      return `// Circular include prevented: ${baseUrl}`;
+    // Normalize the URL for duplicate detection
+    const normalizedUrl = this.normalizePath(baseUrl);
+
+    // Track this file to prevent circular includes AND duplicate includes
+    if (processedFiles.has(normalizedUrl)) {
+      console.log(`[IncludePreprocessor] Skipping already-processed file: ${baseUrl} (normalized: ${normalizedUrl})`);
+      return `// Already included: ${baseUrl}`;
     }
-    processedFiles.add(baseUrl);
+    processedFiles.add(normalizedUrl);
     includeStack.push(baseUrl);
 
     // Extract all #define macros from this file to track what's defined
@@ -87,13 +109,13 @@ export class IncludePreprocessor {
 
       if (includePath.startsWith('/')) {
         // Absolute path from shader root
-        includeUrl = includePath;
+        includeUrl = this.normalizePath(includePath);
       } else if (includePath.startsWith('./') || includePath.startsWith('../')) {
         // Explicit relative path
-        includeUrl = this.resolveRelativePath(baseDir, includePath);
+        includeUrl = this.normalizePath(this.resolveRelativePath(baseDir, includePath));
       } else {
         // Relative to current file directory
-        includeUrl = this.resolveRelativePath(baseDir, includePath);
+        includeUrl = this.normalizePath(this.resolveRelativePath(baseDir, includePath));
       }
 
       // Load included file with enhanced error handling

@@ -29,7 +29,7 @@ scale_type3 = source
 scale3 = 1.0
 alias3 = "AfterglowPass"
 
-shader4 = shaders/guest/hsm-pre-shaders-afterglow.slang
+shader4 = shaders/guest/hsm-pre-shaders-afterglow-minimal.slang
 filter_linear4 = true
 scale_type4 = source
 mipmap_input4 = true

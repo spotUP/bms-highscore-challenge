@@ -471,7 +471,16 @@ export class SlangShaderCompiler {
     }
 
     // Fix WebGL incompatibilities based on target version
+    // DEBUG: Check if layout qualifiers exist BEFORE fixWebGLIncompatibilities
+    const hasLayoutBeforeFix = /layout\s*\(\s*location\s*=\s*\d+\s*\)\s*in\s+vec[24]\s+(Position|TexCoord)/.test(vertexShader);
+    console.log(`[SlangCompiler DEBUG] Before fixWebGLIncompatibilities: layout qualifiers present = ${hasLayoutBeforeFix}`);
+
     const fixedVertex = this.fixWebGLIncompatibilities(vertexShader, webgl2);
+
+    // DEBUG: Check if layout qualifiers exist AFTER fixWebGLIncompatibilities
+    const hasLayoutAfterFix = /layout\s*\(\s*location\s*=\s*\d+\s*\)\s*in\s+vec[24]\s+(Position|TexCoord)/.test(fixedVertex);
+    console.log(`[SlangCompiler DEBUG] After fixWebGLIncompatibilities: layout qualifiers present = ${hasLayoutAfterFix}`);
+
     let fixedFragment = this.fixWebGLIncompatibilities(fragmentShader, webgl2);
 
     // Fix float/int comparison issues (mainly in fragment shader for layer comparisons)
@@ -1667,6 +1676,48 @@ export class SlangShaderCompiler {
         // Skip cache variables (already declared explicitly above)
         const cacheVars = new Set(['CROPPED_ROTATED_SIZE', 'CROPPED_ROTATED_SIZE_WITH_RES_MULT', 'SAMPLE_AREA_START_PIXEL_COORD']);
 
+        // CRITICAL FIX: Check if a global name conflicts with a #define
+        // If there's a conflict, REMOVE the #define and KEEP the mutable global
+        // This allows shaders to assign to the variable
+        // Example: "#define lsmooth 0.7" conflicts with "float lsmooth;" -> remove the #define, keep the global
+        const conflictingDefineNames = new Set<string>();
+        const globalNames = new Set<string>();
+
+        // First, collect all global variable names
+        for (const globalDecl of globalDefs.globals) {
+          const globalMatch = globalDecl.match(/(?:float|int|vec\d|mat\d|bool)\s+(\w+)/);
+          if (globalMatch) {
+            globalNames.add(globalMatch[1]);
+          }
+        }
+
+        // Check which #defines conflict with globals
+        for (const define of globalDefs.defines) {
+          const macroMatch = define.match(/#define\s+(\w+)\s+([^(])/);
+          if (macroMatch && globalNames.has(macroMatch[1])) {
+            // This #define conflicts with a global variable
+            // Check if it's a simple constant (not a function-like macro or uniform mapping)
+            const value = define.substring(define.indexOf(macroMatch[1]) + macroMatch[1].length).trim();
+            const isSimpleConstant = !value.startsWith('PARAM_') && !value.includes('(');
+
+            if (isSimpleConstant) {
+              conflictingDefineNames.add(macroMatch[1]);
+              console.log(`[SlangCompiler] Removing conflicting #define ${macroMatch[1]} (global variable needs to be mutable)`);
+            }
+          }
+        }
+
+        // Remove conflicting #defines from globalDefs
+        globalDefs.defines = globalDefs.defines.filter(define => {
+          const macroMatch = define.match(/#define\s+(\w+)/);
+          return !macroMatch || !conflictingDefineNames.has(macroMatch[1]);
+        });
+
+        console.log(`[SlangCompiler] Removed ${conflictingDefineNames.size} conflicting #defines to preserve mutable globals`);
+        if (stage === 'vertex' && conflictingDefineNames.size > 0) {
+          console.log(`[SlangCompiler] Removed defines:`, Array.from(conflictingDefineNames).join(', '));
+        }
+
         for (const globalDecl of globalDefs.globals) {
           const globalMatch = globalDecl.match(/(?:float|int|vec\d|mat\d|bool)\s+(\w+)/);
           const globalName = globalMatch?.[1];
@@ -1717,6 +1768,9 @@ export class SlangShaderCompiler {
 
           // Skip cache variables (already declared explicitly above)
           const cacheVars = new Set(['CROPPED_ROTATED_SIZE', 'CROPPED_ROTATED_SIZE_WITH_RES_MULT', 'SAMPLE_AREA_START_PIXEL_COORD']);
+
+          // CRITICAL FIX: Same as vertex - remove conflicting #defines, keep mutable globals
+          // (The defines were already filtered in vertex shader processing, but check again for fragment)
 
           // Same as vertex: split initialized globals
           for (const globalDecl of globalDefs.globals) {
@@ -2004,6 +2058,33 @@ uniform float FrameDirection;
       console.log(`[SlangCompiler] ${stage} stage: Added precision + critical uniforms at beginning`);
     }
 
+    // CRITICAL: Extract layout-qualified input/output declarations and move them early
+    // WebGL requires these to appear near the top, not after thousands of lines of globals
+    // IMPORTANT: Only keep layout qualifiers on vertex shader 'in' (not 'out')
+    // GLSL ES 300 doesn't allow layout qualifiers on varyings (vertex out)
+    const layoutDeclsPattern = /^\s*layout\s*\([^)]*\)\s+(?:in|out)\s+[^;]+;/gm;
+    const layoutDecls: string[] = [];
+    let match;
+    while ((match = layoutDeclsPattern.exec(output)) !== null) {
+      let decl = match[0].trim();
+
+      // For vertex shader: remove layout qualifier from 'out' declarations (varyings)
+      // but keep it for 'in' declarations (attributes)
+      if (stage === 'vertex' && decl.includes(' out ')) {
+        // Strip layout qualifier from vertex shader outputs
+        decl = decl.replace(/layout\s*\([^)]*\)\s+/, '');
+        console.log(`[SlangCompiler] Removed layout qualifier from vertex shader output: ${decl}`);
+      }
+
+      layoutDecls.push(decl);
+    }
+
+    // Remove layout declarations from their current position
+    if (layoutDecls.length > 0) {
+      output = output.replace(layoutDeclsPattern, '');
+      console.log(`[SlangCompiler] Extracted ${layoutDecls.length} layout-qualified declarations to move earlier`);
+    }
+
     // Inject global definitions after precision declarations
     // IMPORTANT: With the self-referential #define cleanup (lines 156-174), we can now safely
     // inject ALL defines into BOTH vertex and fragment shaders without redefinition errors
@@ -2030,22 +2111,40 @@ uniform float FrameDirection;
         const nextDoubleNewline = output.indexOf('\n\n', searchStart);
         if (nextDoubleNewline !== -1) {
           const insertPos = nextDoubleNewline + 2; // After the blank line
-          output = output.substring(0, insertPos) + globalDefsCode + '\n' + output.substring(insertPos);
-          console.log(`[SlangCompiler] Injected globalDefs after critical uniforms at position ${insertPos}`);
+
+          // CRITICAL: Insert layout declarations FIRST, then global definitions
+          let injectionCode = '';
+          if (layoutDecls.length > 0) {
+            injectionCode += '// Vertex shader inputs and outputs (moved early for WebGL compatibility)\n';
+            injectionCode += layoutDecls.join('\n') + '\n\n';
+          }
+          injectionCode += globalDefsCode + '\n';
+
+          output = output.substring(0, insertPos) + injectionCode + output.substring(insertPos);
+          console.log(`[SlangCompiler] Injected ${layoutDecls.length} layout decls + globalDefs after critical uniforms at position ${insertPos}`);
         }
       } else {
         // Fallback: Find insertion point after ALL precision declarations (last one)
         const precisionRegex = /precision\s+\w+\s+\w+\s*;\s*\n/g;
         let lastMatch;
-        let match;
-        while ((match = precisionRegex.exec(output)) !== null) {
-          lastMatch = match;
+        let precisionMatch;
+        while ((precisionMatch = precisionRegex.exec(output)) !== null) {
+          lastMatch = precisionMatch;
         }
 
         if (lastMatch) {
           const insertPos = lastMatch.index + lastMatch[0].length;
-          output = output.substring(0, insertPos) + '\n' + globalDefsCode + '\n' + output.substring(insertPos);
-          console.log(`[SlangCompiler] Injected globalDefs after last precision at position ${insertPos}`);
+
+          // Insert layout declarations + global definitions
+          let injectionCode = '';
+          if (layoutDecls.length > 0) {
+            injectionCode += '// Vertex shader inputs and outputs (moved early for WebGL compatibility)\n';
+            injectionCode += layoutDecls.join('\n') + '\n\n';
+          }
+          injectionCode += globalDefsCode + '\n';
+
+          output = output.substring(0, insertPos) + '\n' + injectionCode + output.substring(insertPos);
+          console.log(`[SlangCompiler] Injected ${layoutDecls.length} layout decls + globalDefs after last precision at position ${insertPos}`);
         } else {
           // No precision found, insert after #version
           const versionEnd = output.search(/#version.*?\n/);
@@ -2053,8 +2152,17 @@ uniform float FrameDirection;
             const versionMatch3 = output.match(/#version.*?\n/);
             if (versionMatch3) {
               const insertPos = versionEnd + versionMatch3[0].length;
-              output = output.substring(0, insertPos) + '\n' + globalDefsCode + '\n' + output.substring(insertPos);
-              console.log(`[SlangCompiler] Injected globalDefs after #version at position ${insertPos}`);
+
+              // Insert layout declarations + global definitions
+              let injectionCode = '';
+              if (layoutDecls.length > 0) {
+                injectionCode += '// Vertex shader inputs and outputs (moved early for WebGL compatibility)\n';
+                injectionCode += layoutDecls.join('\n') + '\n\n';
+              }
+              injectionCode += globalDefsCode + '\n';
+
+              output = output.substring(0, insertPos) + '\n' + injectionCode + output.substring(insertPos);
+              console.log(`[SlangCompiler] Injected ${layoutDecls.length} layout decls + globalDefs after #version at position ${insertPos}`);
             }
           }
         }
@@ -3211,22 +3319,47 @@ uniform float hiscan;
     // For WebGL2, add explicit layout qualifiers to vertex shader inputs
     // ONLY if they don't already have them (some Slang shaders already have layout qualifiers)
     if (stage === 'vertex' && webgl2) {
-      // Check if layout qualifiers already exist
-      const hasLayoutQualifiers = output.includes('layout(location');
+      // DEBUG: Check what's actually in the shader
+      const hasInPosition = /in\s+vec4\s+Position/.test(output);
+      const hasInTexCoord = /in\s+vec2\s+TexCoord/.test(output);
+      const hasAttributePosition = /attribute\s+vec4\s+Position/.test(output);
+      const hasAttributeTexCoord = /attribute\s+vec2\s+TexCoord/.test(output);
 
-      if (!hasLayoutQualifiers) {
-        // Add layout qualifiers to Position and TexCoord attributes
+      console.log(`[SlangCompiler DEBUG] Vertex shader attributes found:
+        - in vec4 Position: ${hasInPosition}
+        - in vec2 TexCoord: ${hasInTexCoord}
+        - attribute vec4 Position: ${hasAttributePosition}
+        - attribute vec2 TexCoord: ${hasAttributeTexCoord}`);
+
+      // Check if Position and TexCoord already have layout qualifiers (check specific attributes, not globally)
+      const hasPositionLayout = /layout\s*\(\s*location\s*=\s*\d+\s*\)\s*in\s+vec4\s+Position/.test(output);
+      const hasTexCoordLayout = /layout\s*\(\s*location\s*=\s*\d+\s*\)\s*in\s+vec2\s+TexCoord/.test(output);
+
+      console.log(`[SlangCompiler DEBUG] Existing layout qualifiers:
+        - Position has layout: ${hasPositionLayout}
+        - TexCoord has layout: ${hasTexCoordLayout}`);
+
+      // Add layout qualifiers if they don't exist for each attribute
+      if (!hasPositionLayout) {
         const beforePosition = output.match(/\bin\s+vec4\s+Position\s*;/g)?.length || 0;
-        const beforeTexCoord = output.match(/\bin\s+vec2\s+TexCoord\s*;/g)?.length || 0;
-
+        console.log(`[SlangCompiler DEBUG] Found ${beforePosition} instances of 'in vec4 Position;'`);
         output = output.replace(/\bin\s+vec4\s+Position\s*;/g, 'layout(location = 0) in vec4 Position;');
-        output = output.replace(/\bin\s+vec2\s+TexCoord\s*;/g, 'layout(location = 1) in vec2 TexCoord;');
-
-        if (beforePosition > 0 || beforeTexCoord > 0) {
-          console.log(`[SlangCompiler] Added layout qualifiers: Position=${beforePosition}, TexCoord=${beforeTexCoord}`);
+        const afterPosition = output.match(/layout\s*\(\s*location\s*=\s*0\s*\)\s*in\s+vec4\s+Position\s*;/g)?.length || 0;
+        console.log(`[SlangCompiler DEBUG] After replacement: ${afterPosition} instances of 'layout(location = 0) in vec4 Position;'`);
+        if (beforePosition > 0) {
+          console.log(`[SlangCompiler] Added layout(location = 0) for Position`);
         }
-      } else {
-        console.log(`[SlangCompiler] Skipping layout qualifiers - already exist in shader`);
+      }
+
+      if (!hasTexCoordLayout) {
+        const beforeTexCoord = output.match(/\bin\s+vec2\s+TexCoord\s*;/g)?.length || 0;
+        console.log(`[SlangCompiler DEBUG] Found ${beforeTexCoord} instances of 'in vec2 TexCoord;'`);
+        output = output.replace(/\bin\s+vec2\s+TexCoord\s*;/g, 'layout(location = 1) in vec2 TexCoord;');
+        const afterTexCoord = output.match(/layout\s*\(\s*location\s*=\s*1\s*\)\s*in\s+vec2\s+TexCoord\s*;/g)?.length || 0;
+        console.log(`[SlangCompiler DEBUG] After replacement: ${afterTexCoord} instances of 'layout(location = 1) in vec2 TexCoord;'`);
+        if (beforeTexCoord > 0) {
+          console.log(`[SlangCompiler] Added layout(location = 1) for TexCoord`);
+        }
       }
     }
 
@@ -3295,14 +3428,64 @@ uniform float hiscan;
 
       // NOTE: We no longer inject initParams() - using direct uniforms instead of ParamsStruct
     } else {
-      // Remove all layout declarations for other stages or WebGL 1.0
-      output = output.replace(/layout\s*\([^)]*\)\s*/g, '');
+      // For vertex shaders: preserve layout(location = N) for vertex attributes, remove others
+      if (stage === 'vertex' && webgl2) {
+        // Remove Vulkan-style layout qualifiers (set, binding, push_constant) but KEEP location
+        output = output.replace(/layout\s*\(\s*set\s*=\s*\d+\s*,\s*binding\s*=\s*\d+\s*\)\s+/g, '');
+        output = output.replace(/layout\s*\(\s*binding\s*=\s*\d+\s*\)\s+/g, '');
+        output = output.replace(/layout\s*\(\s*push_constant\s*\)\s*/g, '');
+        console.log(`[SlangCompiler] Preserved layout(location) for vertex attributes, stripped other layouts`);
+      } else {
+        // Remove all layout declarations for WebGL 1.0 or other stages
+        output = output.replace(/layout\s*\([^)]*\)\s*/g, '');
+      }
     }
 
     // DEBUG: Log final compiled shader
     console.log(`[SlangCompiler] Final compiled ${stage} shader (first 3000 chars):`);
     console.log(output.substring(0, 3000));
     if (VERBOSE_SHADER_LOGS) console.log('[SlangCompiler] ... (truncated, check for initParams and duplicate uniforms above)');
+
+    // DEBUG: For vertex shaders, show lines around 1485-1495 to diagnose pass_0 error
+    if (stage === 'vertex') {
+      const lines = output.split('\n');
+      if (lines.length >= 1490) {
+        console.log(`[SlangCompiler DEBUG] Vertex shader lines 1485-1495 (total ${lines.length} lines):`);
+        for (let i = 1484; i < Math.min(1495, lines.length); i++) {
+          console.log(`  ${i + 1}: ${lines[i]}`);
+        }
+      }
+    }
+
+    // CRITICAL DEBUG: Check for samplers in compiled output
+    if (stage === 'fragment' && output.includes('PreCRTPass')) {
+      console.log('[SlangCompiler] ✅ PreCRTPass found in compiled fragment shader');
+      const samplerMatch = output.match(/uniform\s+sampler2D\s+PreCRTPass/);
+      if (samplerMatch) {
+        console.log('[SlangCompiler] ✅ PreCRTPass sampler declaration found:', samplerMatch[0]);
+      } else {
+        console.log('[SlangCompiler] ❌ PreCRTPass sampler declaration NOT FOUND - only text reference exists');
+      }
+    }
+
+    // CRITICAL DEBUG: Check vertex shader attributes for pass_4
+    if (stage === 'vertex' && (output.includes('TexCoord') || output.includes('vTexCoord'))) {
+      console.log('[SlangCompiler DEBUG VERTEX] Checking attributes...');
+      const posMatch = output.match(/layout\s*\(\s*location\s*=\s*0\s*\)\s*in\s+vec4\s+Position/);
+      const texMatch = output.match(/layout\s*\(\s*location\s*=\s*1\s*\)\s*in\s+vec2\s+TexCoord/);
+      const varyingMatch = output.match(/out\s+vec2\s+vTexCoord/);
+      const assignMatch = output.match(/vTexCoord\s*=\s*TexCoord/);
+      console.log('[SlangCompiler DEBUG] Position layout:', posMatch ? '✅ FOUND' : '❌ MISSING');
+      console.log('[SlangCompiler DEBUG] TexCoord layout:', texMatch ? '✅ FOUND' : '❌ MISSING');
+      console.log('[SlangCompiler DEBUG] vTexCoord varying:', varyingMatch ? '✅ FOUND' : '❌ MISSING');
+      console.log('[SlangCompiler DEBUG] Assignment:', assignMatch ? '✅ FOUND' : '❌ MISSING');
+
+      // Dump first 1000 chars of vertex shader to see structure
+      if (output.includes('afterglow') || output.includes('AFTERGLOW')) {
+        console.log('[SlangCompiler DEBUG] Dumping pass_4-like vertex shader (first 1000 chars):');
+        console.log(output.substring(0, 1000));
+      }
+    }
 
     // Debug: Check if hrg functions are in output
     if (output.includes('hrg_get_ideal_global_eye_pos_for_points')) {
@@ -3431,13 +3614,25 @@ ${globalInits.map(g => `  ${g.name} = ${g.init};`).join('\n')}
 
     let output = processedLines.join('\n');
 
-    // CRITICAL FIX: Protect #version directive from int-to-float conversion
+    // CRITICAL FIX: Protect #version directive and layout qualifiers from int-to-float conversion
     // Save and replace #version line temporarily
     const versionDirective = output.match(/#version\s+[\d.]+\s*(?:es)?\s*\n/);
     const versionPlaceholder = '__VERSION_DIRECTIVE_PROTECTED__';
     if (versionDirective) {
       output = output.replace(/#version\s+[\d.]+\s*(?:es)?\s*\n/, versionPlaceholder + '\n');
     }
+
+    // CRITICAL: Protect layout(location = N) qualifiers from int-to-float conversion
+    // Store them with placeholders, restore after conversions
+    const layoutQualifiers: Map<string, string> = new Map();
+    let layoutIndex = 0;
+    output = output.replace(/layout\s*\([^)]*\)/g, (match) => {
+      const placeholder = `__LAYOUT_QUALIFIER_${layoutIndex}__`;
+      layoutQualifiers.set(placeholder, match);
+      layoutIndex++;
+      return placeholder;
+    });
+    console.log(`[convertIntLiterals] Protected ${layoutQualifiers.size} layout qualifiers from conversion`);
 
     // Extract all int/uint uniform names from BOTH bindings AND source
     const intUniforms = new Set<string>();
@@ -3950,6 +4145,12 @@ ${globalInits.map(g => `  ${g.name} = ${g.init};`).join('\n')}
       output = output.replace(placeholder, original);
     });
     console.log(`[convertIntLiterals] Restored ${protectedLines.size} protected lines with int casts`);
+
+    // CRITICAL: Restore layout qualifiers that were protected earlier
+    layoutQualifiers.forEach((original, placeholder) => {
+      output = output.replace(placeholder, original);
+    });
+    console.log(`[convertIntLiterals] Restored ${layoutQualifiers.size} layout qualifiers`);
 
     return output;
   }
@@ -5075,34 +5276,11 @@ ${!hasMPI ? `#ifndef M_PI
 // Mega Bezel shader parameters are injected as uniforms in megaBezelVariables (lines 1488+)
 // DO NOT add fallback definitions here - they cause redefinition errors with the uniforms!
 
-// Color and gamut constants
-float RW = 0.0;
-float crtgamut = 0.0;
-float SPC = 0.0;
-float beamr = 0.0;
-float beamg = 0.0;
-float beamb = 0.0;
-float satr = 0.0;
-float satg = 0.0;
-float satb = 0.0;
-float vibr = 0.0;
-float wp_temp = 0.0;
-float lum_fix = 0.0;
-float SMS_bl = 0.0;
-float MD_Palette = 0.0;
-float hue_degrees = 0.0;
-float U_SHIFT = 0.0;
-float U_MUL = 0.0;
-float V_SHIFT = 0.0;
-float V_MUL = 0.0;
-float signal = 0.0;
-float CRT_l = 0.0;
-float GCompress = 0.0;
-float cntrst = 0.0;
-float mid = 0.0;
-float lum = 0.0;
-float lift = 0.0;
-vec3 c = vec3(0.0);
+// REMOVED: Guest CRT color and gamut variable fallbacks (lines 5163-5189)
+// These variables (RW, crtgamut, SPC, beamr, satr, satg, satb, etc.) are #defined in dogway shaders
+// Adding "float RW = 0.0;" when RW is #defined as vec3(...) causes:
+// "float vec3(0.95...) = 0.0;" → syntax error!
+// These variables should come from #defines or be declared in the actual shader source.
 `;
 
     // Find the position after version and precision statements
