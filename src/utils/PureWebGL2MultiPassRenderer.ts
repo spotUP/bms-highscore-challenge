@@ -14,7 +14,12 @@ export interface ShaderPassConfig {
   filter: 'linear' | 'nearest';
   scale?: number;
   scaleType?: 'source' | 'viewport' | 'absolute';
+  scaleX?: number;
+  scaleY?: number;
+  scaleTypeX?: 'source' | 'viewport' | 'absolute';
+  scaleTypeY?: 'source' | 'viewport' | 'absolute';
   alias?: string;
+  floatFramebuffer?: boolean;
 }
 
 export interface PresetConfig {
@@ -149,10 +154,17 @@ export class PureWebGL2MultiPassRenderer {
       // Load LUT textures defined in preset
       await this.loadLUTTextures(presetContent, presetPath);
 
-      // Create render targets for passes
+      // Create render targets for passes with proper sizing
       for (let i = 0; i < config.passes.length - 1; i++) {
-        const passName = config.passes[i].name;
-        this.renderer.createRenderTarget(`${passName}_output`, this.width, this.height);
+        const pass = config.passes[i];
+        const passName = pass.name;
+        const useFloatFramebuffer = pass.floatFramebuffer || false;
+
+        // Calculate dimensions based on scale parameters
+        const { width, height } = this.calculatePassDimensions(pass, this.width, this.height);
+        console.log(`[PureWebGL2MultiPass] Creating ${passName}_output (${width}x${height}) float=${useFloatFramebuffer}`);
+
+        this.renderer.createRenderTarget(`${passName}_output`, width, height, useFloatFramebuffer);
       }
 
       console.log(`✅ [PureWebGL2MultiPass] Preset loaded successfully`);
@@ -204,13 +216,74 @@ export class PureWebGL2MultiPassRenderer {
         }
       }
 
+      // Look for float_framebuffer directive: float_framebuffer0 = "true"
+      // IMPORTANT: Use word boundary to match EXACT number (e.g., float_framebuffer1 should NOT match float_framebuffer11)
+      const floatFbRegex = new RegExp(`^float_framebuffer${i}\\s*=\\s*"?(true|false|1|0)"?`, 'i');
+      let floatFramebuffer: boolean = false;
+      for (const line of lines) {
+        const match = line.match(floatFbRegex);
+        if (match) {
+          floatFramebuffer = match[1] === 'true' || match[1] === '1';
+          console.log(`[PresetParser] Pass ${i} has float_framebuffer=${floatFramebuffer} (line: ${line.trim()})`);
+          break;
+        }
+      }
+
+      // Parse scale parameters
+      const parseScaleValue = (str: string | undefined) => str ? parseFloat(str) : undefined;
+      const scaleTypeRegex = new RegExp(`^scale_type${i}\\s*=\\s*"?([^"\\s]+)"?`);
+      const scaleTypeXRegex = new RegExp(`^scale_type_x${i}\\s*=\\s*"?([^"\\s]+)"?`);
+      const scaleTypeYRegex = new RegExp(`^scale_type_y${i}\\s*=\\s*"?([^"\\s]+)"?`);
+      const scaleRegex = new RegExp(`^scale${i}\\s*=\\s*"?([\\d.]+)"?`);
+      const scaleXRegex = new RegExp(`^scale_x${i}\\s*=\\s*"?([\\d.]+)"?`);
+      const scaleYRegex = new RegExp(`^scale_y${i}\\s*=\\s*"?([\\d.]+)"?`);
+
+      let scaleType: string | undefined;
+      let scaleTypeX: string | undefined;
+      let scaleTypeY: string | undefined;
+      let scale: number | undefined;
+      let scaleX: number | undefined;
+      let scaleY: number | undefined;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        const stMatch = trimmed.match(scaleTypeRegex);
+        if (stMatch) scaleType = stMatch[1];
+        const stxMatch = trimmed.match(scaleTypeXRegex);
+        if (stxMatch) scaleTypeX = stxMatch[1];
+        const styMatch = trimmed.match(scaleTypeYRegex);
+        if (styMatch) scaleTypeY = styMatch[1];
+        const sMatch = trimmed.match(scaleRegex);
+        if (sMatch) scale = parseScaleValue(sMatch[1]);
+        const sxMatch = trimmed.match(scaleXRegex);
+        if (sxMatch) scaleX = parseScaleValue(sxMatch[1]);
+        const syMatch = trimmed.match(scaleYRegex);
+        if (syMatch) scaleY = parseScaleValue(syMatch[1]);
+      }
+
       // Keep path as-is - will be resolved relative to preset in loadPreset()
-      passes.push({
+      const passConfig = {
         name: `pass_${i}`,
         shaderPath: match[1],
         filter: 'linear',
-        alias: alias
-      });
+        alias: alias,
+        floatFramebuffer: floatFramebuffer,
+        scaleType: scaleType as any,
+        scaleTypeX: scaleTypeX as any,
+        scaleTypeY: scaleTypeY as any,
+        scale: scale,
+        scaleX: scaleX,
+        scaleY: scaleY
+      };
+
+      // Debug log for pass 10 to verify scale parsing
+      if (i === 10) {
+        console.log(`[PresetParser] Pass 10 scale params:`, {
+          scaleType, scaleTypeX, scaleTypeY, scale, scaleX, scaleY
+        });
+      }
+
+      passes.push(passConfig);
     }
 
     // Parse parameters - any line with "PARAM_NAME = value" pattern
@@ -236,6 +309,54 @@ export class PureWebGL2MultiPassRenderer {
     }
 
     return { passes, parameters };
+  }
+
+  /**
+   * Calculate framebuffer dimensions for a shader pass based on scale parameters
+   */
+  private calculatePassDimensions(pass: ShaderPassConfig, sourceWidth: number, sourceHeight: number): { width: number; height: number } {
+    let width = sourceWidth;
+    let height = sourceHeight;
+
+    // Handle unified scale (scale + scaleType)
+    if (pass.scale !== undefined && pass.scaleType) {
+      if (pass.scaleType === 'absolute') {
+        width = Math.floor(pass.scale);
+        height = Math.floor(pass.scale);
+      } else if (pass.scaleType === 'source') {
+        width = Math.floor(sourceWidth * pass.scale);
+        height = Math.floor(sourceHeight * pass.scale);
+      }
+      // viewport: would use viewport dimensions, but we treat as source for now
+    }
+
+    // Handle separate X scale
+    // Use scaleTypeX if available, otherwise fall back to scaleType
+    const effectiveScaleTypeX = pass.scaleTypeX || pass.scaleType;
+    if (pass.scaleX !== undefined && effectiveScaleTypeX) {
+      if (effectiveScaleTypeX === 'absolute') {
+        width = Math.floor(pass.scaleX);
+      } else if (effectiveScaleTypeX === 'source') {
+        width = Math.floor(sourceWidth * pass.scaleX);
+      }
+    }
+
+    // Handle separate Y scale
+    // Use scaleTypeY if available, otherwise fall back to scaleType
+    const effectiveScaleTypeY = pass.scaleTypeY || pass.scaleType;
+    if (pass.scaleY !== undefined && effectiveScaleTypeY) {
+      if (effectiveScaleTypeY === 'absolute') {
+        height = Math.floor(pass.scaleY);
+      } else if (effectiveScaleTypeY === 'source') {
+        height = Math.floor(sourceHeight * pass.scaleY);
+      }
+    }
+
+    // Ensure minimum dimensions
+    width = Math.max(1, width);
+    height = Math.max(1, height);
+
+    return { width, height };
   }
 
   /**
@@ -410,8 +531,9 @@ export class PureWebGL2MultiPassRenderer {
         return;
       }
 
-      // DEBUG: Check output of this pass (every 60 frames)
-      if (this.frameCount % 60 === 0) {
+      // DEBUG: Check output of this pass (DISABLED - was causing rendering artifacts)
+      const shouldCheck = false; // DISABLED: (this.frameCount % 60 === 0) || (i === 4 && this.frameCount <= 5) || (i === 5 && this.frameCount <= 5);
+      if (shouldCheck) {
         const gl = this.renderer.getContext();
         const checkOutput = () => {
           // Bind the output target to read from it

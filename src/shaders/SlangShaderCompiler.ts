@@ -1498,8 +1498,10 @@ export class SlangShaderCompiler {
     }
 
     // Add stub functions for missing Mega Bezel functions (used but not defined anywhere)
+    // These functions are called by shaders but don't exist in the source files
+    // Verified by searching entire shader directory - no definitions found
     if (!currentCode.includes('HSM_IsOutsideReflectionBoundary')) {
-      parts.push('// Stub function for reflection boundary check');
+      parts.push('// Stub function for reflection boundary check (function not defined in shader sources)');
       parts.push('bool HSM_IsOutsideReflectionBoundary() { return false; }');
     }
 
@@ -5403,6 +5405,16 @@ ${!hasMPI ? `#ifndef M_PI
     // Debug: Log preprocessed source for specific shaders
     const shaderName = url.split('/').pop() || 'unknown';
     console.log(`[SlangCompiler] Loading shader: ${shaderName}`);
+
+    // DEBUG: For hsm-grade, check global. references before and after compilation
+    if (shaderName.includes('grade')) {
+      const globalsBefore = (source.match(/\bglobal\.\w+/g) || []).length;
+      console.log(`[SlangCompiler] [hsm-grade] global. references BEFORE compile: ${globalsBefore}`);
+      if (globalsBefore > 0 && globalsBefore < 20) {
+        const refs = source.match(/\bglobal\.\w+/g) || [];
+        console.log(`[SlangCompiler] [hsm-grade] Sample refs: ${refs.slice(0, 10).join(', ')}`);
+      }
+    }
     if (url.includes('hsm-crt-guest-advanced-potato')) {
       console.log(`[SlangCompiler] === Preprocessing Guest CRT shader ===`);
       console.log(`[SlangCompiler] Total preprocessed length: ${source.length}`);

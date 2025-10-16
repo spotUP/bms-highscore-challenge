@@ -46,6 +46,22 @@ export class PureWebGL2Renderer {
     this.gl = gl;
     console.log('✅ Pure WebGL2 context created');
 
+    // Enable float texture extensions for RGBA16F/RGBA32F framebuffers
+    const floatExt = gl.getExtension('EXT_color_buffer_float');
+    if (floatExt) {
+      console.log('✅ EXT_color_buffer_float extension enabled');
+    } else {
+      console.warn('⚠️  EXT_color_buffer_float not supported - float framebuffers will fail');
+    }
+
+    // Enable linear filtering for float textures
+    const floatLinearExt = gl.getExtension('OES_texture_float_linear');
+    if (floatLinearExt) {
+      console.log('✅ OES_texture_float_linear extension enabled');
+    } else {
+      console.warn('⚠️  OES_texture_float_linear not supported - float textures will use NEAREST filtering');
+    }
+
     // Create fullscreen quad
     this.createFullscreenQuad();
   }
@@ -286,7 +302,7 @@ export class PureWebGL2Renderer {
   /**
    * Create a render target (framebuffer + texture)
    */
-  createRenderTarget(name: string, width: number, height: number): boolean {
+  createRenderTarget(name: string, width: number, height: number, useFloatFramebuffer: boolean = false): boolean {
     const gl = this.gl;
 
     // Create texture
@@ -297,7 +313,14 @@ export class PureWebGL2Renderer {
     }
 
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+    // Use floating-point framebuffer if requested (for color precision in intermediate passes)
+    if (useFloatFramebuffer) {
+      console.log(`✨ [PureWebGL2] Creating FLOAT framebuffer for ${name}`);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.FLOAT, null);
+    } else {
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    }
     // FIXED: Use LINEAR filter without mipmaps - mipmap generation was causing texture corruption
     // OLD: gl.LINEAR_MIPMAP_LINEAR required mipmaps to be regenerated after each render
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -397,6 +420,14 @@ export class PureWebGL2Renderer {
       gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
     } else {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
+    // CRITICAL: Clear framebuffers (textures) before rendering
+    // Without this, intermediate framebuffers contain uninitialized data
+    // ONLY clear when rendering to texture (not screen), as screen clearing should be handled by the game
+    if (outputTarget) {
+      gl.clearColor(0.0, 0.0, 0.0, 0.0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
     }
 
     // Use program

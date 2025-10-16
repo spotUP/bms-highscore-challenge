@@ -147,12 +147,13 @@ const MobileEntry = () => {
     try {
       console.log('MobileEntry: Starting score submission for', name, 'score:', scoreValue);
 
-      // First check if player already has a score for this game
+      // First check if player already has a score for this game in the current tournament
       const { data: existingScore, error: fetchError } = await supabase
         .from('scores')
         .select('*')
         .eq('player_name', name.toUpperCase())
         .eq('game_id', game.id)
+        .eq('tournament_id', currentTournament.id)
         .maybeSingle();
 
       if (fetchError) {

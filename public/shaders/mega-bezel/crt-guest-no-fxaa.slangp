@@ -1,7 +1,7 @@
-# CRT GUEST ONLY - NO FXAA (17 passes)
+# CRT GUEST ONLY - NO FXAA (18 passes)
 # Full CRT Guest Advanced without the problematic FXAA shader
 
-shaders = 17
+shaders = 18
 
 shader0 = shaders/base/drez-none.slang
 filter_linear0 = false
@@ -29,13 +29,16 @@ scale_type3 = source
 scale3 = 1.0
 alias3 = "AfterglowPass"
 
-shader4 = shaders/guest/hsm-pre-shaders-afterglow-minimal.slang
+shader4 = shaders/guest/hsm-pre-shaders-afterglow.slang
 filter_linear4 = true
 scale_type4 = source
 mipmap_input4 = true
 scale4 = 1.0
 
-shader5 = shaders/dogway/hsm-grade.slang
+# DISABLED: hsm-grade.slang has issues with complex color transformations causing white output
+# Using simple passthrough instead
+shader5 = shaders/base/stock.slang
+# shader5 = shaders/dogway/hsm-grade.slang
 filter_linear5 = false
 scale_type5 = source
 scale5 = 1.0
@@ -120,13 +123,21 @@ scale_x15 = 1.0
 scale_y15 = 1.0
 float_framebuffer15 = true
 
-# Deconvergence with tube effects - FINAL PASS
+# Deconvergence with tube effects
 shader16 = shaders/guest/hsm-deconvergence-with-tubefx.slang
 filter_linear16 = true
 scale_type16 = viewport
 scale_x16 = 1.0
 scale_y16 = 1.0
 alias16 = "CrtPass"
+
+# Final pass - simple passthrough to verify 18 passes work
+shader17 = shaders/base/stock.slang
+filter_linear17 = true
+scale_type17 = viewport
+scale_x17 = 1.0
+scale_y17 = 1.0
+alias17 = "FinalPass"
 
 # Textures
 textures = "SamplerLUT1;SamplerLUT2;SamplerLUT3;SamplerLUT4"
