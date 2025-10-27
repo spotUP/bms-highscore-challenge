@@ -125,14 +125,14 @@ jobs:
 
       - name: Upload artifact if any
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: rls-disabled-report-prod
           path: rls_disabled.txt
 
       - name: Upload artifact if any
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: rls-disabled-report
           path: rls_disabled.txt
