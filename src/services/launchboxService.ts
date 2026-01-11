@@ -1,0 +1,506 @@
+// LaunchBox Games Database service for fetching clear logos
+// https://gamesdb.launchbox-app.com/
+
+export interface LaunchBoxGame {
+  id: number;
+  name: string;
+  releaseDate?: string;
+  platform?: string;
+  clearLogoUrl?: string;
+}
+
+export interface LaunchBoxSearchResult {
+  games: LaunchBoxGame[];
+  totalCount: number;
+}
+
+class LaunchBoxService {
+  private baseUrl = 'https://gamesdb.launchbox-app.com';
+  private imagesUrl = 'https://images.launchbox-app.com';
+
+  // Use CORS proxy for all browser requests since LaunchBox doesn't allow direct CORS
+  private isDevelopment = typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' ||
+     window.location.hostname === '127.0.0.1' ||
+     window.location.hostname.includes('localhost'));
+
+  // Always use CORS proxy in browser environments since LaunchBox API doesn't support CORS
+  private corsProxy = typeof window !== 'undefined' ? 'https://api.allorigins.win/get?url=' : '';
+
+  // Cache to avoid repeated requests for the same game
+  private logoCache = new Map<string, string | null>();
+  private pendingRequests = new Map<string, Promise<string | null>>();
+
+  constructor() {
+  }
+
+  // Priority-based rate limiting system
+  private priorityQueue: Array<{ fn: () => Promise<void>; priority: 'high' | 'low' }> = [];
+  private lowPriorityQueue: Array<() => Promise<void>> = [];
+  private isProcessingPriorityQueue = false;
+  private isProcessingLowPriorityQueue = false;
+  private lastRequestTime = 0;
+  private priorityRequestInterval = 25; // Very fast for visible games
+  private lowPriorityRequestInterval = 100; // Normal speed for off-screen games
+  private maxConcurrentPriorityRequests = 4; // Allow parallel processing
+  private activePriorityRequests = 0;
+
+  // Circuit breaker to stop making requests when API is overloaded
+  private circuitBreakerFailures = 0;
+  private circuitBreakerThreshold = 5; // Allow more failures before opening (increased from 2)
+  private circuitBreakerResetTime = 120000; // Reset after 2 minutes (reduced from 3)
+  private circuitBreakerOpenTime = 0;
+  private isCircuitBreakerOpen = false;
+
+  /**
+   * Check if circuit breaker should be reset
+   */
+  private checkCircuitBreaker(): boolean {
+    if (this.isCircuitBreakerOpen) {
+      const now = Date.now();
+      if (now - this.circuitBreakerOpenTime > this.circuitBreakerResetTime) {
+        this.isCircuitBreakerOpen = false;
+        this.circuitBreakerFailures = 0;
+        return false;
+      }
+      return true; // Still open
+    }
+    return false; // Not open
+  }
+
+  /**
+   * Record success/failure for circuit breaker
+   */
+  private recordResult(success: boolean, errorType?: string) {
+    if (success) {
+      // Reset failure count on any success
+      if (this.circuitBreakerFailures > 0) {
+        this.circuitBreakerFailures = 0;
+      }
+    } else {
+      this.circuitBreakerFailures++;
+      if (this.circuitBreakerFailures >= this.circuitBreakerThreshold) {
+        this.isCircuitBreakerOpen = true;
+        this.circuitBreakerOpenTime = Date.now();
+      }
+    }
+  }
+
+  /**
+   * Add a request to the priority queue with parallel processing for high priority
+   */
+  private async queueRequest<T>(requestFn: () => Promise<T>, priority: 'high' | 'low' = 'low'): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const wrappedFn = async () => {
+        if (priority === 'high') {
+          this.activePriorityRequests++;
+        }
+        try {
+          const result = await requestFn();
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        } finally {
+          if (priority === 'high') {
+            this.activePriorityRequests--;
+            this.processPriorityQueue(); // Try to process next high priority item
+          }
+        }
+      };
+
+      if (priority === 'high') {
+        this.priorityQueue.push({ fn: wrappedFn, priority });
+        this.processPriorityQueue();
+      } else {
+        this.lowPriorityQueue.push(wrappedFn);
+        this.processLowPriorityQueue();
+      }
+    });
+  }
+
+  /**
+   * Process high priority requests with parallel processing
+   */
+  private async processPriorityQueue(): Promise<void> {
+    // Allow multiple concurrent high priority requests
+    while (this.priorityQueue.length > 0 && this.activePriorityRequests < this.maxConcurrentPriorityRequests) {
+      const item = this.priorityQueue.shift();
+      if (item) {
+        // Minimal delay for priority requests
+        const now = Date.now();
+        const timeSinceLastRequest = now - this.lastRequestTime;
+
+        if (timeSinceLastRequest < this.priorityRequestInterval) {
+          await new Promise(resolve => setTimeout(resolve, this.priorityRequestInterval - timeSinceLastRequest));
+        }
+
+        this.lastRequestTime = Date.now();
+        // Execute without awaiting to allow parallel processing
+        item.fn();
+      }
+    }
+  }
+
+  /**
+   * Process low priority requests sequentially
+   */
+  private async processLowPriorityQueue(): Promise<void> {
+    if (this.isProcessingLowPriorityQueue || this.lowPriorityQueue.length === 0) {
+      return;
+    }
+
+    this.isProcessingLowPriorityQueue = true;
+
+    while (this.lowPriorityQueue.length > 0) {
+      // Give priority to high priority requests
+      if (this.priorityQueue.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 50)); // Brief pause to let priority requests process
+        continue;
+      }
+
+      const now = Date.now();
+      const timeSinceLastRequest = now - this.lastRequestTime;
+
+      if (timeSinceLastRequest < this.lowPriorityRequestInterval) {
+        await new Promise(resolve => setTimeout(resolve, this.lowPriorityRequestInterval - timeSinceLastRequest));
+      }
+
+      const request = this.lowPriorityQueue.shift();
+      if (request) {
+        this.lastRequestTime = Date.now();
+        await request();
+      }
+    }
+
+    this.isProcessingLowPriorityQueue = false;
+  }
+
+  /**
+   * Make a rate-limited fetch request with retry logic
+   */
+  private async makeRequest(url: string, retries = 1, priority: 'high' | 'low' = 'low'): Promise<Response> { // Added priority parameter
+    // Check circuit breaker first
+    if (this.checkCircuitBreaker()) {
+      throw new Error('Circuit breaker is open - API temporarily unavailable');
+    }
+
+    return this.queueRequest(async () => {
+      let lastError: Error | null = null;
+
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          // Add timeout to fetch request
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout for better UX
+
+          const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; GamesBrowser/1.0)'
+            }
+          });
+
+          clearTimeout(timeoutId);
+
+          if (response.ok) {
+            this.recordResult(true); // Success
+            return response;
+          }
+
+          if (response.status === 429 || response.status === 408) {
+            // Rate limited or timeout, wait longer before retry
+            if (attempt < retries) {
+              await new Promise(resolve => setTimeout(resolve, 2000 * (attempt + 1)));
+              continue;
+            }
+          }
+
+          lastError = new Error(`HTTP ${response.status}`);
+        } catch (error) {
+          lastError = error instanceof Error ? error : new Error('Unknown error');
+          if (attempt < retries) {
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+            continue;
+          }
+        }
+      }
+
+      // All retries failed
+      const errorType = lastError?.message.includes('408') ? 'Timeout' :
+                       lastError?.message.includes('429') ? 'Rate Limit' :
+                       'Network Error';
+      this.recordResult(false, errorType);
+      throw lastError || new Error('Max retries exceeded');
+    }, priority);
+  }
+
+  /**
+   * Search for games on LaunchBox and extract clear logos
+   */
+  async searchGames(gameName: string, limit: number = 10, priority: 'high' | 'low' = 'low'): Promise<LaunchBoxSearchResult> {
+    try {
+      // Search for the game using the correct URL structure
+      const searchUrl = `${this.baseUrl}/games/results/${encodeURIComponent(gameName)}`;
+      const finalUrl = this.corsProxy ? `${this.corsProxy}${encodeURIComponent(searchUrl)}` : searchUrl;
+
+
+      const response = await this.makeRequest(finalUrl, 1, priority);
+      if (!response.ok) {
+        throw new Error(`LaunchBox search failed: ${response.status}`);
+      }
+
+      // Handle response differently for proxied vs direct requests
+      let html: string;
+      if (this.corsProxy && this.corsProxy.includes('allorigins')) {
+        // AllOrigins proxy - extract from JSON
+        const data = await response.json();
+        html = data.contents;
+      } else {
+        // Direct response or corsproxy.io - use HTML directly
+        html = await response.text();
+      }
+
+      // Parse the search results page to extract game links
+      const gameMatches = this.parseSearchResults(html);
+
+      // Limit results and fetch clear logos for each game
+      const limitedGames = gameMatches.slice(0, limit);
+
+      // Process games in optimized batches for faster loading
+      const batchSize = 5; // Increased batch size for faster loading
+      const gamesWithLogos: (PromiseSettledResult<LaunchBoxGame | null>)[] = [];
+
+      for (let i = 0; i < limitedGames.length; i += batchSize) {
+        const batch = limitedGames.slice(i, i + batchSize);
+        const batchResults = await Promise.allSettled(
+          batch.map(game => this.fetchGameClearLogo(game, priority))
+        );
+        gamesWithLogos.push(...batchResults);
+      }
+
+      const successfulGames = gamesWithLogos
+        .filter(result => result.status === 'fulfilled' && result.value !== null)
+        .map(result => (result as PromiseFulfilledResult<LaunchBoxGame | null>).value) as LaunchBoxGame[];
+
+      return {
+        games: successfulGames,
+        totalCount: gameMatches.length
+      };
+
+    } catch (error) {
+      console.error('LaunchBox search error:', error);
+      return {
+        games: [],
+        totalCount: 0
+      };
+    }
+  }
+
+  /**
+   * Parse search results HTML to extract game information
+   */
+  private parseSearchResults(html: string): Partial<LaunchBoxGame>[] {
+    const games: Partial<LaunchBoxGame>[] = [];
+
+    // Look for game links in the HTML
+    // Pattern: /games/details/[id]-[slug]
+    const gameUrlRegex = /\/games\/details\/(\d+)-([^"]+)/g;
+    let match;
+
+    while ((match = gameUrlRegex.exec(html)) !== null) {
+      const id = parseInt(match[1]);
+      const slug = match[2];
+      const name = slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+
+      games.push({
+        id,
+        name
+      });
+    }
+
+    // Remove duplicates
+    const uniqueGames = games.filter((game, index, self) =>
+      index === self.findIndex(g => g.id === game.id)
+    );
+
+    return uniqueGames;
+  }
+
+  /**
+   * Fetch clear logo for a specific game
+   */
+  private async fetchGameClearLogo(game: Partial<LaunchBoxGame>, priority: 'high' | 'low' = 'low'): Promise<LaunchBoxGame | null> {
+    if (!game.id || !game.name) return null;
+
+    try {
+      const gameUrl = `${this.baseUrl}/games/details/${game.id}`;
+      const finalUrl = this.corsProxy ? `${this.corsProxy}${encodeURIComponent(gameUrl)}` : gameUrl;
+
+      const response = await this.makeRequest(finalUrl, 1, priority);
+      if (!response.ok) {
+        return null;
+      }
+
+      // Handle response differently for proxied vs direct requests
+      let html: string;
+      if (this.corsProxy && this.corsProxy.includes('allorigins')) {
+        // AllOrigins proxy - extract from JSON
+        const data = await response.json();
+        html = data.contents;
+      } else {
+        // Direct response or corsproxy.io - use HTML directly
+        html = await response.text();
+      }
+
+      // Look for clear logo in the HTML
+      const clearLogoUrl = this.extractClearLogoUrl(html);
+
+      return {
+        id: game.id,
+        name: game.name,
+        clearLogoUrl,
+        releaseDate: this.extractReleaseDate(html),
+        platform: this.extractPlatform(html)
+      };
+
+    } catch (error) {
+      console.error(`Error fetching clear logo for ${game.name}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Extract clear logo URL from game page HTML
+   */
+  private extractClearLogoUrl(html: string): string | undefined {
+    // Try multiple approaches to find clear logos
+
+    // Method 1: Look for "Clear Logo" text and find images after it
+    const clearLogoIndex = html.indexOf('Clear Logo');
+    if (clearLogoIndex !== -1) {
+      const afterClearLogo = html.substring(clearLogoIndex, clearLogoIndex + 2000);
+      const imageMatch = afterClearLogo.match(/https:\/\/images\.launchbox-app\.com\/[^"'\s]+\.png/);
+      if (imageMatch) {
+        return imageMatch[0];
+      }
+    }
+
+    // Method 2: Look for any clear logo images in the entire page
+    const clearLogoPatterns = [
+      /https:\/\/images\.launchbox-app\.com\/[^"'\s]*clear[^"'\s]*\.png/gi,
+      /https:\/\/images\.launchbox-app\.com\/[^"'\s]*logo[^"'\s]*\.png/gi,
+      /https:\/\/images\.launchbox-app\.com\/[^"'\s]+\.png/g
+    ];
+
+    for (const pattern of clearLogoPatterns) {
+      const matches = html.match(pattern);
+      if (matches && matches.length > 0) {
+        // Filter for likely clear logo URLs (avoid fanart, screenshots, etc.)
+        const clearLogos = matches.filter(url => {
+          const urlLower = url.toLowerCase();
+          return (urlLower.includes('clear') || urlLower.includes('logo')) &&
+                 !urlLower.includes('fanart') &&
+                 !urlLower.includes('screenshot') &&
+                 !urlLower.includes('banner');
+        });
+
+        if (clearLogos.length > 0) {
+          return clearLogos[0];
+        }
+
+        // If no specific clear logos found, try the first PNG that might be a logo
+        if (matches.length > 0) {
+          return matches[0];
+        }
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Extract release date from game page HTML
+   */
+  private extractReleaseDate(html: string): string | undefined {
+    const releaseDateRegex = /Release Date["\s]*:["\s]*([^"<]+)/i;
+    const match = releaseDateRegex.exec(html);
+    return match ? match[1].trim() : undefined;
+  }
+
+  /**
+   * Extract platform from game page HTML
+   */
+  private extractPlatform(html: string): string | undefined {
+    const platformRegex = /Platform["\s]*:["\s]*([^"<]+)/i;
+    const match = platformRegex.exec(html);
+    return match ? match[1].trim() : undefined;
+  }
+
+  /**
+   * Check if a game name is likely to cause API issues
+   */
+  private isProblematicGameName(gameName: string): boolean {
+    const cleanName = gameName.trim();
+
+    // Skip very short names or names with special characters that cause timeouts
+    if (cleanName.length <= 2) return true;
+    if (cleanName.startsWith('-') && cleanName.length <= 10) return true;
+    if (cleanName.includes('_'.repeat(5))) return true; // Skip names like "_________"
+
+    return false;
+  }
+
+  /**
+   * Get clear logo for a specific game by name (simplified interface)
+   */
+  async getClearLogo(gameName: string, priority: 'high' | 'low' = 'low'): Promise<string | null> {
+    try {
+      // Check cache first
+      const cacheKey = gameName.toLowerCase();
+      if (this.logoCache.has(cacheKey)) {
+        return this.logoCache.get(cacheKey) || null;
+      }
+
+      // Check if request is already pending to avoid duplicate requests
+      if (this.pendingRequests.has(cacheKey)) {
+        return await this.pendingRequests.get(cacheKey)!;
+      }
+
+      // Skip problematic game names that are likely to cause timeouts
+      if (this.isProblematicGameName(gameName)) {
+        this.logoCache.set(cacheKey, null);
+        return null;
+      }
+
+      // Create and store the pending request
+      const requestPromise = this.fetchLogoFromAPI(gameName, cacheKey, priority);
+      this.pendingRequests.set(cacheKey, requestPromise);
+
+      const logoUrl = await requestPromise;
+
+      // Clean up pending request
+      this.pendingRequests.delete(cacheKey);
+
+      return logoUrl;
+    } catch (error) {
+      console.error('Error getting clear logo:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Internal method to fetch logo from API
+   */
+  private async fetchLogoFromAPI(gameName: string, cacheKey: string, priority: 'high' | 'low' = 'low'): Promise<string | null> {
+    const results = await this.searchGames(gameName, 1, priority);
+    const logoUrl = results.games[0]?.clearLogoUrl || null;
+
+    // Cache the result
+    this.logoCache.set(cacheKey, logoUrl);
+
+    return logoUrl;
+  }
+}
+
+export const launchBoxService = new LaunchBoxService();

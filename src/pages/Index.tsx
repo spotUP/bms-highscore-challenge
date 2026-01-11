@@ -1,0 +1,377 @@
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useTournamentGameData } from "@/hooks/useTournamentGameData";
+import { getGameLogoUrl } from "@/lib/utils";
+import StorageImage from "@/components/StorageImage";
+import { parseStorageObjectUrl } from "@/lib/storage";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import LeaderboardEntry from "@/components/LeaderboardEntry";
+import QRCodeDisplay from "@/components/QRCodeDisplay";
+import DynamicOverallLeaderboard from "@/components/DynamicOverallLeaderboard";
+import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
+import TournamentDropdown from "@/components/TournamentDropdown";
+import { useTournament } from "@/contexts/TournamentContext";
+import { dlog } from "@/lib/debug";
+import { supabase } from "@/integrations/supabase/client";
+// import pacmanLogo from "@/assets/pacman-logo.png";
+// import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
+// import tetrisLogo from "@/assets/tetris-logo.png";
+// import donkeyKongLogo from "@/assets/donkey-kong-logo.png";
+
+interface Game {
+  id: string;
+  name: string;
+  logo_url: string | null;
+}
+
+interface Score {
+  id: string;
+  player_name: string;
+  score: number;
+  game_id: string;
+  created_at: string;
+  isNew?: boolean;
+}
+
+interface IndexProps {
+  isExiting?: boolean;
+}
+
+const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
+  // Clean index page with single navigation via Layout component
+  const { currentTournament, loading: tournamentLoading } = useTournament();
+
+  // Check if animations should be suppressed (during tests)
+  const [suppressAnimations, setSuppressAnimations] = useState(
+    window.localStorage.getItem('suppressAnimations') === 'true'
+  );
+  const navigate = useNavigate();
+  const isMobile = useIsMobile();
+  const { activeGames: games, gameScores, loading: gamesLoading, refetch } = useTournamentGameData();
+
+
+
+
+
+
+
+
+  // Temporarily allow overflow during animations
+  useEffect(() => {
+    if (!isExiting && !gamesLoading && !suppressAnimations) {
+      document.body.classList.add('loading-animations');
+      const timer = setTimeout(() => {
+        document.body.classList.remove('loading-animations');
+      }, 3000); // Remove after all animations complete
+      return () => {
+        clearTimeout(timer);
+        document.body.classList.remove('loading-animations');
+      };
+    }
+  }, [isExiting, gamesLoading, suppressAnimations]);
+
+  // Monitor localStorage for animation suppression changes
+  useEffect(() => {
+    const checkSuppression = () => {
+      const newValue = window.localStorage.getItem('suppressAnimations') === 'true';
+      // Only update state if the value has actually changed
+      setSuppressAnimations(prev => prev !== newValue ? newValue : prev);
+    };
+
+    // Listen for storage events
+    window.addEventListener('storage', checkSuppression);
+    // Also check periodically in case the flag is set from the same tab (reduced frequency)
+    const interval = setInterval(checkSuppression, 2000); // Reduced from 500ms to 2s
+
+    return () => {
+      window.removeEventListener('storage', checkSuppression);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const [selectedGameForSubmission, setSelectedGameForSubmission] = useState<any>(null);
+  const [isSubmissionDialogOpen, setIsSubmissionDialogOpen] = useState(false);
+
+  const handleGameLogoClick = useCallback((game: Game) => {
+    setSelectedGameForSubmission(game);
+    setIsSubmissionDialogOpen(true);
+  }, []);
+
+  const handleScoreSubmitted = useCallback(() => {
+    console.log('🚀 Score submitted! Dispatching scoreSubmitted event');
+    refetch(); // Reload all data after submission
+
+    // Check if we're in the help guide tour and advance to congratulations step
+    const helpGuideEvent = new CustomEvent('scoreSubmitted');
+    window.dispatchEvent(helpGuideEvent);
+    console.log('🚀 scoreSubmitted event dispatched');
+  }, [refetch]);
+
+
+
+  // Enhanced realtime with fallback polling for Raspberry Pi/Firefox
+  useEffect(() => {
+    if (!currentTournament?.id) return;
+
+    let channel: any;
+    let fallbackInterval: NodeJS.Timeout;
+    let lastUpdateTime = Date.now();
+
+    // Check if we're on a potentially problematic setup (enhanced Pi 5 detection)
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isFirefoxLinux = userAgent.includes('firefox') && userAgent.includes('linux');
+    const isARM = userAgent.includes('aarch64') || userAgent.includes('armv');
+    const isPi5 = isARM && userAgent.includes('linux');
+    const needsFallback = isFirefoxLinux || isARM || isPi5;
+
+    const handleUpdate = () => {
+      // Skip updates during tests to prevent animations
+      if (window.localStorage.getItem('suppressAnimations') === 'true') {
+        return;
+      }
+      lastUpdateTime = Date.now();
+      refetch();
+    };
+
+
+    // For Pi5 or any ARM Linux device, skip WebSocket entirely and rely on usePi5Polling hook
+    if (isPi5 || (isARM && userAgent.includes('linux'))) {
+      // Pi5 polling is now handled by usePi5Polling hook in useTournamentGameData
+      // This prevents duplicate polling timers that cause layout jumps
+      return () => {}; // No-op cleanup
+    }
+
+    try {
+      channel = supabase
+        .channel('index-score-subscriptions')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'score_submissions',
+            filter: `tournament_id=eq.${currentTournament.id}`,
+          },
+          handleUpdate
+        )
+        .subscribe((status) => {
+          console.log('Score subscription status:', status);
+
+          // If subscription fails or we're on a problematic setup, use fallback polling
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || needsFallback) {
+            const pollInterval = 15000; // Standard 15 second fallback (Pi5 polling handled elsewhere)
+            console.log(`🔧 Setting up fallback polling every ${pollInterval/1000}s for score updates`);
+            if (fallbackInterval) clearInterval(fallbackInterval);
+            fallbackInterval = setInterval(() => {
+              const recentUpdateThreshold = 20000; // Allow 20s before fallback polling
+              if (Date.now() - lastUpdateTime > recentUpdateThreshold) {
+                handleUpdate();
+              }
+            }, pollInterval);
+          }
+        });
+    } catch (error) {
+      console.error('Error setting up real-time subscription:', error);
+      // Fallback to polling if subscription completely fails (Pi5 polling handled elsewhere)
+      const fallbackPollInterval = 20000; // Conservative fallback
+      console.log(`🚨 Subscription failed, using emergency fallback polling every ${fallbackPollInterval/1000}s`);
+      fallbackInterval = setInterval(handleUpdate, fallbackPollInterval);
+    }
+
+    // Safety net polling (Pi5 has dedicated polling via usePi5Polling hook)
+    const safetyPollInterval = 45000; // Conservative 45 second safety net
+    const safetyThreshold = 60000; // 1 minute threshold
+    const safetyInterval = setInterval(() => {
+      if (Date.now() - lastUpdateTime > safetyThreshold) {
+        console.log('🛡️ Safety net polling triggered');
+        handleUpdate();
+      }
+    }, safetyPollInterval);
+
+    return () => {
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch (error) {
+          console.error('Error removing channel:', error);
+        }
+      }
+      if (fallbackInterval) clearInterval(fallbackInterval);
+      if (safetyInterval) clearInterval(safetyInterval);
+    };
+  }, [currentTournament?.id]); // Removed refetch from dependency to prevent constant re-creation
+
+  // Deterministic style for Tron edge runner per card
+  const getRunnerStyle = (seed: string) => {
+    let h = 0;
+    for (let i = 0; i < seed.length; i++) {
+      h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+    }
+    const delay = (h % 2000) / 1000; // 0-2s
+    const duration = 7 + ((h >> 3) % 4000) / 1000; // 7-11s
+    return {
+      ['--runner-delay' as any]: `${delay}s`,
+      ['--runner-duration' as any]: `${duration}s`,
+    } as React.CSSProperties;
+  };
+
+  // Show tournament selection if no current tournament (but only after loading is complete)
+  if (!tournamentLoading && !currentTournament) {
+    return (
+      <div className="min-h-screen flex items-center justify-center relative z-10"
+           style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
+        <div className="text-center text-white">
+          <div className="text-6xl mb-4">🏆</div>
+          <h1 className="text-4xl font-bold mb-4">Welcome to Retro Ranks!</h1>
+          <p className="text-xl text-gray-300 mb-8">
+            Create your first tournament or join an existing one to get started.
+          </p>
+          <TournamentDropdown />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-3 md:p-4 overflow-visible">
+
+
+      <div className="w-full space-y-4 overflow-visible">
+        <div className={`grid gap-3 ${isMobile ? 'min-h-screen' : 'h-[calc(100vh-12rem)] grid-cols-1 lg:grid-cols-6'} overflow-visible`}>
+          {/* Left column - Overall Leaderboard (narrower) */}
+          <div className={`${isMobile ? 'order-1' : 'h-full lg:col-span-1'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-left' : 'animate-slide-in-left animation-delay-200')}`} data-testid="overall-leaderboard">
+            <DynamicOverallLeaderboard />
+          </div>
+
+          {/* Right column - Game content (5 games) */}
+          <div className={`${isMobile ? 'order-2' : 'h-full lg:col-span-5 flex flex-col'} overflow-visible`}>
+
+            {(() => {
+              const filteredGames = games.filter(game => {
+                const logoUrl = getGameLogoUrl(game.logo_url);
+                return !!logoUrl;
+              });
+
+              return (
+                <div className={`${isMobile ? 'flex flex-col space-y-6' : 'grid gap-2 flex-1 min-h-0'}`} style={{
+                  overflow: 'visible',
+                  position: 'relative',
+                  gridTemplateColumns: isMobile ? 'none' : `repeat(${filteredGames.length || 1}, 1fr)`
+                }}>
+                  {filteredGames.map((game) => {
+                    // Get logo URL from tournament game logo_url only
+                    const logoUrl = getGameLogoUrl(game.logo_url);
+                    const storageRef = logoUrl && logoUrl.includes('supabase.co/storage/') ? parseStorageObjectUrl(logoUrl) : null;
+                    const isPublicObject = !!(logoUrl && logoUrl.includes('/storage/v1/object/public/'));
+
+                    const filtered = gameScores[game.id] || [];
+
+                    // Debug logging for joust specifically
+                    if (game.name.toLowerCase().includes('joust')) {
+                      dlog('🎮 Joust Debug Info:', {
+                        gameName: game.name,
+                        gameId: game.id,
+                        scoresForThisGame: filtered,
+                        allGameScores: gameScores,
+                        totalGames: games.length
+                      });
+                    }
+
+                    return (
+                      <section key={game.id} data-game-id={game.id} className={`flex flex-col ${isMobile ? 'min-h-[400px]' : 'h-full min-h-0'} ${suppressAnimations ? '' : (isExiting ? 'animate-slide-out-right' : 'animate-slide-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? `${(filteredGames.length - 1 - filteredGames.findIndex(g => g.id === game.id)) * 50}ms` : `${filteredGames.findIndex(g => g.id === game.id) * 200}ms`)}}>
+                    {/* Card containing logo, scores and QR code */}
+                    <Card
+                      className="bg-black/30 border-white/20 theme-card flex-1 flex flex-col cursor-pointer transition-transform duration-200 min-h-0"
+                      style={getRunnerStyle(game.id)}
+                      onClick={() => handleGameLogoClick(game)}
+                      title={`Click to submit score for ${game.name}`}
+                    >
+                      <CardHeader className="px-3 py-2 pb-4">
+                        {/* Game logo inside card header */}
+                        <div className="flex flex-col items-center space-y-2">
+                          {logoUrl ? (
+                            <>
+                              <div className="flex justify-center">
+                                {storageRef && !isPublicObject ? (
+                                  <StorageImage
+                                    bucket={storageRef.bucket}
+                                    path={storageRef.path}
+                                    alt={game.name}
+                                    className="h-20 md:h-24 w-auto object-contain max-w-full"
+                                    expiresIn={300}
+                                  />
+                                ) : (
+                                  <img
+                                    src={logoUrl}
+                                    alt={game.name}
+                                    className="h-20 md:h-24 w-auto object-contain max-w-full"
+                                  />
+                                )}
+                              </div>
+                              <div className="text-center">
+                                <span className="text-white font-semibold text-sm md:text-base leading-tight">{game.name}</span>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="h-20 md:h-24 flex items-center justify-center bg-black/30 rounded-lg px-4 min-w-[180px]">
+                              <span className="text-white font-bold text-center text-base">{game.name}</span>
+                            </div>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="flex-1 flex flex-col pt-0 min-h-0">
+                        {/* Scores section - scrollable with constrained height */}
+                        <div className="flex-1 overflow-y-auto min-h-0">
+                          <div className="space-y-1 leaderboard-gradient-scope">
+                            {filtered.map((score, index) => (
+                              <LeaderboardEntry
+                                key={score.id}
+                                rank={index + 1}
+                                name={score.player_name}
+                                score={score.score}
+                                isNewScore={false}
+                              />
+                            ))}
+                            {filtered.length === 0 && (
+                              <div className="text-center py-8 text-gray-400">
+                                No scores yet. Be the first to submit!
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* QR Code - pinned to bottom - hidden on mobile */}
+                        <div className="mt-auto hidden md:block">
+                          <QRCodeDisplay gameId={game.id} gameName={game.name} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </section>
+                );
+                        })}
+                        {!gamesLoading && games.length === 0 && (
+                          <div className={`col-span-4 text-center py-8 text-gray-400 ${suppressAnimations ? '' : (isExiting ? 'animate-wave-out-right' : 'animate-wave-in-right')}`} style={{animationDelay: suppressAnimations ? '0ms' : (isExiting ? '0ms' : '600ms')}}>
+                            No active games found. Please contact an administrator.
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+          </div>
+        </div>
+
+        <ScoreSubmissionDialog
+          game={selectedGameForSubmission}
+          isOpen={isSubmissionDialogOpen}
+          onClose={() => setIsSubmissionDialogOpen(false)}
+          onScoreSubmitted={handleScoreSubmitted}
+        />
+
+      </div>
+    </div>
+  );
+};
+
+export default Index;
