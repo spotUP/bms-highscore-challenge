@@ -901,7 +901,7 @@ app.post('/api/functions/:name', async (req, res) => {
 const distDir = path.join(process.cwd(), 'dist');
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
-  app.get('*', (_req, res) => {
+  app.get('{*path}', (_req, res) => {
     res.sendFile(path.join(distDir, 'index.html'));
   });
 }
