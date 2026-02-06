@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: retroranks
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: retroranks
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U retroranks"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_WS_URL: ${VITE_WS_URL}
+        VITE_MEDIA_BASE_URL: ${VITE_MEDIA_BASE_URL}
+        VITE_CLOUDFLARE_R2_DOMAIN: ${VITE_CLOUDFLARE_R2_DOMAIN}
+        VITE_RAWG_API_KEY: ${VITE_RAWG_API_KEY}
+        VITE_IGDB_CLIENT_ID: ${VITE_IGDB_CLIENT_ID}
+        VITE_IGDB_ACCESS_TOKEN: ${VITE_IGDB_ACCESS_TOKEN}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://retroranks:${POSTGRES_PASSWORD}@db:5432/retroranks
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: "3001"
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://retroranks.com}
+      CLOUDFLARE_R2_DOMAIN: ${VITE_CLOUDFLARE_R2_DOMAIN}
+    volumes:
+      - media:/app/media
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  media:
+  caddy_data:
+  caddy_config:
