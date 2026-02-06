@@ -107,6 +107,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
 
     try {
       // First check if player already has a score for this game
+      console.log('[ScoreSubmit] Checking for existing score:', { player: truncatedName.toUpperCase(), game: game.id });
       const { data: existingScore, error: fetchError } = await api
         .from('scores')
         .select('*')
@@ -114,11 +115,14 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         .eq('game_id', game.id)
         .maybeSingle();
 
+      console.log('[ScoreSubmit] Existing score check result:', { existingScore, fetchError });
       if (fetchError) throw fetchError;
 
       if (existingScore) {
         // Player already has a score for this game
+        console.log('[ScoreSubmit] Found existing score:', existingScore.score, 'vs new:', scoreValue);
         if (scoreValue <= existingScore.score) {
+          console.log('[ScoreSubmit] New score not higher, returning early');
           toast({
             title: "Score Not Improved",
             description: `Your current best score for ${game.name} is ${existingScore.score.toLocaleString()}. Submit a higher score to improve your record.`,
@@ -127,7 +131,8 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           setIsSubmitting(false);
           return;
         }
-        
+
+        console.log('[ScoreSubmit] New score is higher, updating...');
         // Update existing score with higher score
         const updateData = {
           score: scoreValue,
@@ -136,12 +141,14 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           user_id: user?.id || null
         };
         
+        console.log('[ScoreSubmit] Sending UPDATE request:', updateData);
         const { data: updatedData, error } = await api
           .from('scores')
           .update(updateData)
           .eq('id', existingScore.id)
           .select();
 
+        console.log('[ScoreSubmit] UPDATE response:', { updatedData, error });
         if (error) throw error;
 
         // Post to webhook via edge function for score improvement
@@ -199,6 +206,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         // Congratulations now handled by global ScoreNotificationsListener
       } else {
         // Insert new score for this player/game combination
+        console.log('[ScoreSubmit] No existing score, inserting new...');
         const scoreData = {
           player_name: truncatedName.toUpperCase(),
           score: scoreValue,
@@ -206,12 +214,14 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           tournament_id: currentTournament?.id,
           user_id: user?.id || null
         };
-        
+
+        console.log('[ScoreSubmit] Sending INSERT request:', scoreData);
         const { data: insertedData, error } = await api
           .from('scores')
           .insert(scoreData)
           .select();
 
+        console.log('[ScoreSubmit] INSERT response:', { insertedData, error });
         if (error) throw error;
         
         // Post to webhook via edge function for new score
