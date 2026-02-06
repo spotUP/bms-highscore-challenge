@@ -1,6 +1,10 @@
 -- Functions for fetching recent achievements after score submission
 -- Called by useAchievements.ts to show achievement toast notifications
 
+-- Drop old signatures so CREATE OR REPLACE can change the return type
+DROP FUNCTION IF EXISTS public.get_recent_achievements_for_user(uuid, uuid, integer);
+DROP FUNCTION IF EXISTS public.get_recent_achievements_by_tournament(uuid, text, integer);
+
 -- For authenticated users: fetch recent achievements by user_id
 CREATE OR REPLACE FUNCTION public.get_recent_achievements_for_user(
   p_user_id uuid,
