@@ -603,6 +603,7 @@ app.post('/api/db', async (req, res) => {
     }
 
     if (action === 'insert' || action === 'upsert') {
+      console.log(`[/api/db] ${action.toUpperCase()} ${table}:`, JSON.stringify(data).substring(0, 200));
       const rows = Array.isArray(data) ? data : [data];
       const columns = Object.keys(rows[0] || {});
       if (!columns.length || !columns.every(isIdentifier)) {
@@ -619,7 +620,10 @@ app.post('/api/db', async (req, res) => {
         ? ` ON CONFLICT (${onConflict}) DO UPDATE SET ${columns.map(col => `${col} = EXCLUDED.${col}`).join(', ')}`
         : '';
       const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${valuesSql}${conflictSql} RETURNING *`;
+      console.log(`[/api/db] SQL:`, sql);
+      console.log(`[/api/db] Params:`, valueParams);
       const result = await pool.query(sql, valueParams);
+      console.log(`[/api/db] Result rows:`, result.rows.length);
       if (action === 'insert') {
         result.rows.forEach(row => broadcastChange(table, 'INSERT', { new: row }));
       } else {
@@ -630,6 +634,7 @@ app.post('/api/db', async (req, res) => {
     }
 
     if (action === 'update') {
+      console.log(`[/api/db] UPDATE ${table}:`, JSON.stringify(data).substring(0, 200));
       if (!data || typeof data !== 'object') {
         res.status(400).json({ error: 'Invalid update data' });
         return;
@@ -645,7 +650,10 @@ app.post('/api/db', async (req, res) => {
       const offset = columns.length;
       const offsetWhere = whereSql.replace(/\$(\d+)/g, (_, n) => `$${Number(n) + offset}`);
       const sql = `UPDATE ${table} SET ${setSql}${offsetWhere} RETURNING *`;
+      console.log(`[/api/db] SQL:`, sql);
+      console.log(`[/api/db] Params:`, [...valueParams, ...params]);
       const result = await pool.query(sql, [...valueParams, ...params]);
+      console.log(`[/api/db] Result rows:`, result.rows.length);
       result.rows.forEach(row => broadcastChange(table, 'UPDATE', { new: row }));
       res.json({ data: result.rows, error: null });
       return;
