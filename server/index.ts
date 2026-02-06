@@ -536,7 +536,9 @@ app.post('/api/db', async (req, res) => {
       const columns = baseColumns.length ? baseColumns : ['*'];
       const safeColumns = columns.every(col => col === '*' || isIdentifier(col));
       if (!safeColumns) {
-        res.status(400).json({ error: 'Invalid select columns' });
+        const bad = columns.filter(col => col !== '*' && !isIdentifier(col));
+        console.error('[/api/db] Invalid select columns:', bad, '| raw select:', select);
+        res.status(400).json({ error: 'Invalid select columns', detail: bad });
         return;
       }
       const orderSql = order?.column && isIdentifier(order.column)
