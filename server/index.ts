@@ -682,7 +682,7 @@ app.post('/api/rpc/:fn', async (req, res) => {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        await client.query('SET LOCAL request.jwt.claim.sub = $1', [authUser.id]);
+        await client.query(`SELECT set_config('request.jwt.claim.sub', $1, true)`, [authUser.id]);
         const result = await client.query(`SELECT * FROM ${fn}(${sqlArgs})`, params);
         await client.query('COMMIT');
         res.json({ data: result.rows, error: null });
