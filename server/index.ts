@@ -688,6 +688,7 @@ app.post('/api/rpc/:fn', async (req, res) => {
         res.json({ data: result.rows, error: null });
       } catch (error: any) {
         await client.query('ROLLBACK');
+        console.error(`[/api/rpc/${fn}] Auth path error:`, error?.message);
         res.status(500).json({ error: error?.message || 'RPC error' });
       } finally {
         client.release();
