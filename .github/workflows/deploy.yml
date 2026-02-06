@@ -15,4 +15,12 @@ jobs:
           host: ${{ secrets.HETZNER_HOST }}
           username: root
           key: ${{ secrets.HETZNER_SSH_KEY }}
-          script: /app/retroranks/scripts/deploy.sh
+          script: |
+            /app/retroranks/scripts/deploy.sh
+            echo "Running migrations..."
+            cd /app/retroranks
+            for f in db/migrations/*.sql; do
+              echo "Applying $f"
+              docker compose exec -T db psql -U retroranks -d retroranks -f "/dev/stdin" < "$f" 2>&1 || true
+            done
+            echo "Migrations complete"
