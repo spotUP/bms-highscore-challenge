@@ -128,7 +128,7 @@ const buildClause = (filter: DbFilter | OrFilter, params: any[]) => {
 
 const parseSelect = (rawSelect: string) => {
   const joins: Array<{ table: string; columns: string[] }> = [];
-  const joinRegex = /([a-zA-Z_][a-zA-Z0-9_]*)!inner\\s*\\(([^)]*)\\)/g;
+  const joinRegex = /([a-zA-Z_][a-zA-Z0-9_]*)!inner\s*\(([^)]*)\)/g;
   let cleaned = rawSelect;
   let match: RegExpExecArray | null;
   while ((match = joinRegex.exec(rawSelect)) !== null) {
