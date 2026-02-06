@@ -898,7 +898,7 @@ app.post('/api/functions/:name', async (req, res) => {
 });
 
 // ── Serve static frontend (production) ──
-const distDir = path.join(__dirname, '..', 'dist');
+const distDir = path.join(process.cwd(), 'dist');
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
   app.get('*', (_req, res) => {
