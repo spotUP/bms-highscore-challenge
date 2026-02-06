@@ -9,6 +9,11 @@ dotenv.config();
 async function buildDatabaseForVercel() {
   console.log('🏗️ Building SQLite database for Vercel deployment...');
 
+  if (!process.env.DATABASE_URL) {
+    console.log('⏭️  Skipping database build (DATABASE_URL not set)');
+    return;
+  }
+
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
   // Create public directory if it doesn't exist
