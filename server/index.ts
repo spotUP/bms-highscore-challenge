@@ -641,7 +641,10 @@ app.post('/api/db', async (req, res) => {
       }
       const setSql = columns.map((col, idx) => `${col} = $${idx + 1}`).join(', ');
       const valueParams = columns.map(col => data[col]);
-      const sql = `UPDATE ${table} SET ${setSql}${whereSql} RETURNING *`;
+      // Re-number WHERE clause placeholders to account for SET params offset
+      const offset = columns.length;
+      const offsetWhere = whereSql.replace(/\$(\d+)/g, (_, n) => `$${Number(n) + offset}`);
+      const sql = `UPDATE ${table} SET ${setSql}${offsetWhere} RETURNING *`;
       const result = await pool.query(sql, [...valueParams, ...params]);
       result.rows.forEach(row => broadcastChange(table, 'UPDATE', { new: row }));
       res.json({ data: result.rows, error: null });
