@@ -480,6 +480,11 @@ app.post('/api/db', async (req, res) => {
     maybeSingle
   } = req.body || {};
 
+  // Log all requests to track score submission flow
+  if (table === 'scores' || table === 'score_submissions') {
+    console.log(`[/api/db] ${action?.toUpperCase()} ${table} | filters:`, JSON.stringify(filters).substring(0, 100));
+  }
+
   if (!table || !isIdentifier(table)) {
     res.status(400).json({ error: 'Invalid table name' });
     return;
