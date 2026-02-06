@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { useCompetitionWebhooks } from '@/hooks/useCompetitionWebhooks';
 import { Play, Square, Calendar, Clock, Trophy, Settings } from 'lucide-react';
@@ -44,7 +44,7 @@ const CompetitionManager: React.FC = () => {
   const loadCurrentCompetition = async () => {
     try {
       // For now, we'll check if there are active games as a proxy for an active competition
-      const { data: games, error } = await supabase
+      const { data: games, error } = await api
         .from('games')
         .select('*');
 
@@ -75,7 +75,7 @@ const CompetitionManager: React.FC = () => {
     setIsLoading(true);
     try {
       // Check if there are games available
-      const { data: games, error: gamesError } = await supabase
+      const { data: games, error: gamesError } = await api
         .from('games')
         .select('*');
 
@@ -139,13 +139,13 @@ const CompetitionManager: React.FC = () => {
     try {
       // Get competition results
       const [gamesResult, scoresResult, winnerResult] = await Promise.all([
-        supabase
+        api
           .from('games')
           .select('id, name, logo_url'),
-        supabase
+        api
           .from('scores')
           .select('player_name, score'),
-        supabase
+        api
           .from('scores')
           .select('player_name, score')
           .order('score', { ascending: false })

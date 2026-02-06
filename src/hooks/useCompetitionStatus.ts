@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useTournament } from '@/contexts/TournamentContext';
 
 interface Competition {
@@ -42,7 +42,7 @@ export function useCompetitionStatus(): CompetitionStatus {
         // Get current active competition
         let competitionData = null;
         try {
-          const { data: compData, error: compError } = await supabase
+          const { data: compData, error: compError } = await api
             .from('competitions')
             .select('*')
             .eq('status', 'active')
@@ -84,7 +84,7 @@ export function useCompetitionStatus(): CompetitionStatus {
         // Get tournament lock status
         let tournamentLocked = false;
         if (currentTournament?.id) {
-          const { data: tournamentData, error: tournamentError } = await supabase
+          const { data: tournamentData, error: tournamentError } = await api
             .from('tournaments')
             .select('scores_locked')
             .eq('id', currentTournament.id)

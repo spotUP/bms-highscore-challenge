@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -79,7 +79,7 @@ const AchievementManager = () => {
   const loadGames = async () => {
     if (!currentTournament) return [];
     
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('games')
       .select('id, name, logo_url')
       .eq('tournament_id', currentTournament.id)
@@ -115,7 +115,7 @@ const AchievementManager = () => {
       setExpandedGames(initialExpandedState);
       
       // Load all achievements
-      const { data, error } = await supabase.rpc('get_tournament_achievements' as any, {
+      const { data, error } = await api.rpc('get_tournament_achievements' as any, {
         p_tournament_id: currentTournament.id
       });
 
@@ -293,7 +293,7 @@ const AchievementManager = () => {
     try {
       if (editingAchievement) {
         // Update existing achievement
-        const { error } = await supabase.rpc('update_tournament_achievement' as any, {
+        const { error } = await api.rpc('update_tournament_achievement' as any, {
           p_achievement_id: editingAchievement.id,
           p_name: formData.name,
           p_description: formData.description,
@@ -312,7 +312,7 @@ const AchievementManager = () => {
         });
       } else {
         // Create new achievement
-        const { error } = await supabase.rpc('create_tournament_achievement' as any, {
+        const { error } = await api.rpc('create_tournament_achievement' as any, {
           p_tournament_id: currentTournament.id,
           p_name: formData.name,
           p_description: formData.description,
@@ -352,7 +352,7 @@ const AchievementManager = () => {
   const confirmDeleteAchievement = async () => {
     if (!deleteDialog.id) return;
     try {
-      const { error } = await supabase.rpc('delete_tournament_achievement' as any, {
+      const { error } = await api.rpc('delete_tournament_achievement' as any, {
         p_achievement_id: deleteDialog.id
       });
 

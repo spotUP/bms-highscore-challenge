@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import AchievementBadge from './AchievementBadge';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/contexts/TournamentContext';
@@ -133,7 +133,7 @@ const PlayerAchievements: React.FC<PlayerAchievementsProps> = ({ playerName }) =
       console.log('Loading achievements for player:', playerName, 'in tournaments:', userTournamentIds);
 
       // Load all achievements from user's tournaments
-      const { data: achievementsData, error: achievementsError } = await supabase
+      const { data: achievementsData, error: achievementsError } = await api
         .from('achievements')
         .select('*')
         .in('tournament_id', userTournamentIds)
@@ -148,7 +148,7 @@ const PlayerAchievements: React.FC<PlayerAchievementsProps> = ({ playerName }) =
       }
 
       // Load player's achievements from user's tournaments
-      const { data: playerAchievementsData, error: playerAchievementsError } = await supabase
+      const { data: playerAchievementsData, error: playerAchievementsError } = await api
         .from('player_achievements')
         .select(`
           *,
@@ -168,7 +168,7 @@ const PlayerAchievements: React.FC<PlayerAchievementsProps> = ({ playerName }) =
       // Try to load player stats from user's tournaments
       let statsData = null;
       try {
-        const { data, error: statsError } = await supabase
+        const { data, error: statsError } = await api
           .from('player_stats')
           .select('*')
           .eq('player_name', playerName.toUpperCase())

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 
 export interface Tournament {
   id: string;
@@ -62,7 +62,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
   const refresh = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('bracket_tournaments')
         .select('*')
         .order('created_at', { ascending: false });
@@ -82,12 +82,12 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
 
   const createTournament = async (name: string, bracketType: 'single' | 'double' = 'single'): Promise<Tournament | null> => {
     try {
-      const { data: userRes, error: userErr } = await supabase.auth.getUser();
+      const { data: userRes, error: userErr } = await api.auth.getUser();
       if (userErr) throw userErr;
       const uid = userRes?.user?.id;
       if (!uid) throw new Error('Not authenticated');
 
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('bracket_tournaments')
         .insert({
           name: name.trim(),
@@ -119,7 +119,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       
       if (playerRows.length === 0) return true;
       
-      const { error } = await supabase
+      const { error } = await api
         .from('bracket_players')
         .insert(playerRows);
       
@@ -137,7 +137,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
   ): Promise<boolean> => {
     try {
       // Get tournament info to determine bracket type
-      const { data: tournament, error: tournamentErr } = await supabase
+      const { data: tournament, error: tournamentErr } = await api
         .from('bracket_tournaments')
         .select('bracket_type')
         .eq('id', tournamentId)
@@ -147,14 +147,14 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       if (!tournament) return false;
 
       // Clear existing matches first
-      const { error: clearErr } = await supabase
+      const { error: clearErr } = await api
         .from('bracket_matches')
         .delete()
         .eq('tournament_id', tournamentId);
       if (clearErr) throw clearErr;
 
       // Get players
-      const { data: players, error: playersErr } = await supabase
+      const { data: players, error: playersErr } = await api
         .from('bracket_players')
         .select('*')
         .eq('tournament_id', tournamentId)
@@ -176,11 +176,11 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
         }
       }
       if (duplicates.length > 0) {
-        await supabase.from('bracket_players').delete().in('id', duplicates);
+        await api.from('bracket_players').delete().in('id', duplicates);
       }
 
       // Re-load players after cleanup
-      const { data: playersClean } = await supabase
+      const { data: playersClean } = await api
         .from('bracket_players')
         .select('*')
         .eq('tournament_id', tournamentId)
@@ -261,14 +261,14 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    const { error: insertErr } = await supabase
+    const { error: insertErr } = await api
       .from('bracket_matches')
       .insert(matches);
 
     if (insertErr) throw insertErr;
 
     // Update tournament status to active
-    await supabase
+    await api
       .from('bracket_tournaments')
       .update({ status: 'active' })
       .eq('id', tournamentId);
@@ -298,7 +298,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
 
     // Clear any existing matches for this tournament to prevent conflicts
     console.log('Clearing existing matches...');
-    await supabase
+    await api
       .from('bracket_matches')
       .delete()
       .eq('tournament_id', tournamentId);
@@ -644,7 +644,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       console.log(`  R${m.round}P${m.position}: p1=${m.participant1_id}, p2=${m.participant2_id}`);
     });
 
-    const { error: insertErr } = await supabase
+    const { error: insertErr } = await api
       .from('bracket_matches')
       .insert(matches);
 
@@ -656,7 +656,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
     console.log('✅ Double elimination bracket created successfully');
 
     // Update tournament status to active
-    await supabase
+    await api
       .from('bracket_tournaments')
       .update({ status: 'active' })
       .eq('id', tournamentId);
@@ -668,7 +668,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
   const validateMatchAdvancement = async (match: TournamentMatch): Promise<string | null> => {
     try {
       // Get all matches in the tournament
-      const { data: allMatches, error: matchesErr } = await supabase
+      const { data: allMatches, error: matchesErr } = await api
         .from('bracket_matches')
         .select('*')
         .eq('tournament_id', match.tournament_id)
@@ -763,14 +763,18 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
   // Auto-advance single participant matches
   const autoAdvanceSingleParticipantMatches = async (tournamentId: string): Promise<void> => {
     try {
-      const { data: singleParticipantMatches, error } = await supabase
+      const { data: candidateMatches, error } = await api
         .from('bracket_matches')
         .select('*')
         .eq('tournament_id', tournamentId)
-        .is('winner_participant_id', null)
-        .or('and(participant1_id.not.is.null,participant2_id.is.null),and(participant1_id.is.null,participant2_id.not.is.null)');
+        .is('winner_participant_id', null);
 
       if (error) throw error;
+
+      const singleParticipantMatches = (candidateMatches || []).filter((match: any) => (
+        (!!match.participant1_id && !match.participant2_id) ||
+        (!match.participant1_id && !!match.participant2_id)
+      ));
 
       console.log(`🔄 Found ${singleParticipantMatches?.length || 0} single-participant matches to auto-advance`);
 
@@ -780,7 +784,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
           console.log(`🤖 Auto-advancing ${winnerId} in ${match.round >= 100 ? `L${match.round - 99}` : `R${match.round}`}P${match.position}`);
 
           // Set the winner for this match
-          await supabase
+          await api
             .from('bracket_matches')
             .update({
               winner_participant_id: winnerId,
@@ -801,7 +805,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
   const reportWinner = async (matchId: string, winnerId: string): Promise<boolean> => {
     try {
       // Get tournament type first to determine advancement logic
-      const { data: matchWithTournament, error: matchErr } = await supabase
+      const { data: matchWithTournament, error: matchErr } = await api
         .from('bracket_matches')
         .select(`
           *,
@@ -825,7 +829,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       };
 
       // Update the match with winner
-      const { data: updatedMatch, error: updateErr } = await supabase
+      const { data: updatedMatch, error: updateErr } = await api
         .from('bracket_matches')
         .update({
           winner_participant_id: winnerId,
@@ -855,7 +859,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
   const reportWinnerSingleElimination = async (match: TournamentMatch, winnerId: string): Promise<boolean> => {
     try {
       // Check if this is the final match
-      const { data: allMatches, error: allMatchesErr } = await supabase
+      const { data: allMatches, error: allMatchesErr } = await api
         .from('bracket_matches')
         .select('round')
         .eq('tournament_id', match.tournament_id)
@@ -868,7 +872,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
 
       if (match.round === finalRound) {
         // Tournament is complete
-        await supabase
+        await api
           .from('bracket_tournaments')
           .update({
             status: 'completed',
@@ -884,7 +888,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       const nextPosition = Math.ceil(match.position / 2);
       const isLeftSide = (match.position % 2) === 1;
 
-      const { data: nextMatch, error: nextErr } = await supabase
+      const { data: nextMatch, error: nextErr } = await api
         .from('bracket_matches')
         .select('*')
         .eq('tournament_id', match.tournament_id)
@@ -896,7 +900,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
 
       if (nextMatch) {
         const updateField = isLeftSide ? 'participant1_id' : 'participant2_id';
-        await supabase
+        await api
           .from('bracket_matches')
           .update({ [updateField]: winnerId })
           .eq('id', nextMatch.id);
@@ -919,7 +923,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       if (round === 1000) {
         // Grand final match - whoever wins is the tournament champion
         // Complete the tournament regardless of who wins
-        await supabase
+        await api
           .from('bracket_tournaments')
           .update({
             status: 'completed',
@@ -937,7 +941,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
         const isLeftSide = (position % 2) === 1;
 
         // Check if this is winners bracket final (advances to grand final)
-        const { data: nextWinnersMatch, error: nextWinnersErr } = await supabase
+        const { data: nextWinnersMatch, error: nextWinnersErr } = await api
           .from('bracket_matches')
           .select('*')
           .eq('tournament_id', match.tournament_id)
@@ -951,13 +955,13 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
         if (nextWinnersMatch) {
           // Advance to next winners bracket round
           const updateField = isLeftSide ? 'participant1_id' : 'participant2_id';
-          await supabase
+          await api
             .from('bracket_matches')
             .update({ [updateField]: winnerId })
             .eq('id', nextWinnersMatch.id);
         } else {
           // This was winners bracket final - advance to grand final
-          await supabase
+          await api
             .from('bracket_matches')
             .update({ participant1_id: winnerId })
             .eq('tournament_id', match.tournament_id)
@@ -995,7 +999,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
         // Check if this is losers bracket final (advances to grand final)
         console.log(`🔍 LOSERS BRACKET: L${losersRound} → L${nextLosersRound}, looking for round ${nextRound} position ${nextPosition}`);
 
-        const { data: nextLosersMatch, error: nextLosersErr } = await supabase
+        const { data: nextLosersMatch, error: nextLosersErr } = await api
           .from('bracket_matches')
           .select('*')
           .eq('tournament_id', match.tournament_id)
@@ -1021,14 +1025,14 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
             updateField = isLeftSide ? 'participant1_id' : 'participant2_id';
           }
 
-          await supabase
+          await api
             .from('bracket_matches')
             .update({ [updateField]: winnerId })
             .eq('id', nextLosersMatch.id);
         } else {
           // This was losers bracket final - advance to grand final
           console.log(`🏆 LOSERS BRACKET FINAL: Advancing winner ${winnerId} to Grand Final`);
-          const { data: grandFinalUpdate, error: grandFinalErr } = await supabase
+          const { data: grandFinalUpdate, error: grandFinalErr } = await api
             .from('bracket_matches')
             .update({ participant2_id: winnerId })
             .eq('tournament_id', match.tournament_id)
@@ -1067,7 +1071,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
   ): Promise<void> => {
     try {
       // Get tournament info to determine total winners rounds
-      const { data: matches } = await supabase
+      const { data: matches } = await api
         .from('bracket_matches')
         .select('round')
         .eq('tournament_id', tournamentId)
@@ -1189,7 +1193,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Find the target losers bracket match
-      const { data: losersMatch, error: losersMatchErr } = await supabase
+      const { data: losersMatch, error: losersMatchErr } = await api
         .from('bracket_matches')
         .select('*')
         .eq('tournament_id', tournamentId)
@@ -1201,7 +1205,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
 
       if (losersMatch) {
         // Use the calculated target slot
-        await supabase
+        await api
           .from('bracket_matches')
           .update({ [targetSlot]: loserId })
           .eq('id', losersMatch.id);
@@ -1218,7 +1222,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
     
     try {
       // Get players
-      const { data: players, error: playersError } = await supabase
+      const { data: players, error: playersError } = await api
         .from('bracket_players')
         .select('*')
         .eq('tournament_id', tournamentId);
@@ -1226,7 +1230,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       if (playersError) throw playersError;
       
       // Get matches
-      const { data: matches, error: matchesError } = await supabase
+      const { data: matches, error: matchesError } = await api
         .from('bracket_matches')
         .select('*')
         .eq('tournament_id', tournamentId)
@@ -1254,7 +1258,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
 
   const renameTournament = async (tournamentId: string, newName: string): Promise<boolean> => {
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('bracket_tournaments')
         .update({
           name: newName.trim(),
@@ -1276,11 +1280,11 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
   const deleteTournament = async (tournamentId: string): Promise<boolean> => {
     try {
       // First delete all related records
-      await supabase.from('bracket_matches').delete().eq('tournament_id', tournamentId);
-      await supabase.from('bracket_players').delete().eq('tournament_id', tournamentId);
+      await api.from('bracket_matches').delete().eq('tournament_id', tournamentId);
+      await api.from('bracket_players').delete().eq('tournament_id', tournamentId);
 
       // Then delete the tournament itself
-      const { error } = await supabase
+      const { error } = await api
         .from('bracket_tournaments')
         .delete()
         .eq('id', tournamentId);

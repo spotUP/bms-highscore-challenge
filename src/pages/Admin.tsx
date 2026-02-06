@@ -4,7 +4,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -119,7 +119,7 @@ const AddGameModal = ({ isOpen, onClose, onGameAdded }: { isOpen: boolean; onClo
         }
       }
 
-      const { error } = await supabase
+      const { error } = await api
         .from('games')
         .insert({
           name: newGame.name,
@@ -260,7 +260,7 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('tournaments')
         .select('id')
         .eq('slug', slug.trim().toLowerCase())
@@ -359,7 +359,7 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
             }
           }
 
-          const { error } = await supabase
+          const { error } = await api
             .from('games')
             .insert({
               name: game.name,
@@ -757,7 +757,7 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
         tournament_id: currentTournament.id,
       }));
 
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('games')
         .insert(gamesToAdd)
         .select();
@@ -1361,7 +1361,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
   const triggerWebhook = async (eventType: string, payload: any) => {
     try {
       // Call the webhook edge function
-      const { error } = await supabase.functions.invoke('webhook-trigger', {
+      const { error } = await api.functions.invoke('webhook-trigger', {
         body: {
           event_type: eventType,
           ...payload
@@ -1540,7 +1540,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       }
 
       // Load games from all relevant tournaments
-      const { data: gamesInTournaments, error: gamesError } = await supabase
+      const { data: gamesInTournaments, error: gamesError } = await api
         .from('games')
         .select('*')
         .in('tournament_id', tournamentIds)
@@ -1549,7 +1549,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       if (gamesError) throw gamesError;
 
       // Also include legacy/unassigned games (tournament_id null)
-      const { data: legacyGames, error: legacyGamesError } = await supabase
+      const { data: legacyGames, error: legacyGamesError } = await api
         .from('games')
         .select('*')
         .is('tournament_id', null)
@@ -1565,7 +1565,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       setGames(gamesCombined as any[]);
 
       // Load scores for all games from all tournaments
-      const { data: scoresInTournaments, error: scoresError } = await supabase
+      const { data: scoresInTournaments, error: scoresError } = await api
         .from('scores')
         .select('*')
         .in('tournament_id', tournamentIds)
@@ -1574,7 +1574,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       if (scoresError) throw scoresError;
 
       // Include legacy/unassigned scores (tournament_id null)
-      const { data: legacyScores, error: legacyScoresError } = await supabase
+      const { data: legacyScores, error: legacyScoresError } = await api
         .from('scores')
         .select('*')
         .is('tournament_id', null)
@@ -1677,7 +1677,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
 
   const confirmDeleteGame = async () => {
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('games')
         .delete()
         .eq('id', deleteGameDialog.gameId);
@@ -1742,7 +1742,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     try {
       if (editingScore) {
         // Update existing score
-        const { error } = await supabase
+        const { error } = await api
           .from('scores')
           .update({
             player_name: pname.toUpperCase(),
@@ -1760,7 +1760,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
         }
         const game = games.find(g => g.id === newScoreGameId);
         const tournamentId = game?.tournament_id || currentTournament?.id || null;
-        const { error } = await supabase
+        const { error } = await api
           .from('scores')
           .insert({
             player_name: pname.toUpperCase(),
@@ -1835,7 +1835,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       return;
     }
     try {
-      const { error } = await supabase.from('games').update({ name: newName }).eq('id', gameId);
+      const { error } = await api.from('games').update({ name: newName }).eq('id', gameId);
       if (error) throw error;
       toast({ title: 'Saved', description: 'Game name updated' });
       setInlineGameNames(prev => { const c = { ...prev }; delete c[gameId]; return c; });
@@ -1856,7 +1856,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       return;
     }
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('scores')
         .update({ player_name: pname.toUpperCase(), score: Number(sval) })
         .eq('id', scoreId);
@@ -1901,7 +1901,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       return;
     }
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('scores')
         .insert({ player_name: pname.toUpperCase(), score: scoreVal, game_id: gameId, tournament_id: tournamentId });
       if (error) throw error;
@@ -1946,7 +1946,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
   // Change game tournament
   const changeGameTournament = async (gameId: string, newTournamentId: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('games')
         .update({ tournament_id: newTournamentId })
         .eq('id', gameId);

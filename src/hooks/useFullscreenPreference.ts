@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 
 const GUEST_FULLSCREEN_KEY = 'retro-ranks-guest-fullscreen';
 
@@ -16,7 +16,7 @@ export const useFullscreenPreference = () => {
       if (user) {
         // Logged in user - load from database (profile should auto-create via trigger)
         try {
-          const { data: profile, error } = await supabase
+          const { data: profile, error } = await api
             .from('profiles')
             .select('fullscreen_enabled')
             .eq('user_id', user.id)
@@ -73,7 +73,7 @@ export const useFullscreenPreference = () => {
       if (user) {
         // Logged in user - save to database
         try {
-          const { error } = await supabase
+          const { error } = await api
             .from('profiles')
             .update({ fullscreen_enabled: enabled })
             .eq('user_id', user.id);

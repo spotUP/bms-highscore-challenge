@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, RotateCcw, AlertTriangle } from "lucide-react";
 import { getCardStyle, getButtonStyle, getTypographyStyle } from "@/utils/designSystem";
@@ -24,7 +24,7 @@ const ResetFunctions = () => {
     try {
       console.log('🗑️ Resetting all achievements...');
       
-      const { data, error } = await supabase.functions.invoke('reset-achievements');
+      const { data, error } = await api.functions.invoke('reset-achievements');
       
       if (error) {
         console.error('❌ Reset achievements error:', error);
@@ -61,7 +61,7 @@ const ResetFunctions = () => {
     try {
       console.log('🔄 Resetting competition scores...');
       
-      const { data, error } = await supabase.functions.invoke('reset-competition-scores');
+      const { data, error } = await api.functions.invoke('reset-competition-scores');
       
       if (error) {
         console.error('❌ Reset competition error:', error);

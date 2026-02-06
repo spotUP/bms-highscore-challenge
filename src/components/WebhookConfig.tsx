@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { Settings, TestTube, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
 
@@ -43,7 +43,7 @@ const WebhookConfig: React.FC = () => {
       setLoading(true);
       
       // First, try to load existing webhook configs for this user
-      const { data: userWebhooks, error } = await supabase
+      const { data: userWebhooks, error } = await api
         .from('webhook_config')
         .select('*')
         .eq('user_id', user.id);
@@ -142,7 +142,7 @@ const WebhookConfig: React.FC = () => {
 
     try {
       // Call the database function to initialize user webhooks
-      const { error } = await supabase.rpc('initialize_user_webhooks', {
+      const { error } = await api.rpc('initialize_user_webhooks', {
         p_user_id: user.id
       });
 
@@ -170,7 +170,7 @@ const WebhookConfig: React.FC = () => {
 
     try {
       // Save to database - we need to call our RPC function
-      const { error } = await supabase.rpc('update_user_webhook_config_with_events', {
+      const { error } = await api.rpc('update_user_webhook_config_with_events', {
         p_user_id: user.id,
         p_platform: id,
         p_webhook_url: updates.url,
@@ -181,7 +181,7 @@ const WebhookConfig: React.FC = () => {
       if (error) {
         // If the new function doesn't exist, fall back to the old one
         if (error.message.includes('Could not find the function')) {
-          const { error: fallbackError } = await supabase.rpc('update_user_webhook_config', {
+          const { error: fallbackError } = await api.rpc('update_user_webhook_config', {
             p_user_id: user.id,
             p_platform: id,
             p_webhook_url: updates.url,

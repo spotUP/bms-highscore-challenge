@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Navigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament, Tournament } from '@/contexts/TournamentContext';
 
@@ -26,7 +26,7 @@ const TournamentAccessGuard: React.FC<TournamentAccessGuardProps> = ({ children 
 
       try {
         // First, get the tournament by slug
-        const { data: tournamentData, error: tournamentError } = await supabase
+        const { data: tournamentData, error: tournamentError } = await api
           .from('tournaments')
           .select('*')
           .eq('slug', slug)
@@ -92,7 +92,7 @@ const TournamentAccessGuard: React.FC<TournamentAccessGuardProps> = ({ children 
         }
 
         // Check if user is a member
-        const { data: membershipData, error: membershipError } = await supabase
+        const { data: membershipData, error: membershipError } = await api
           .from('tournament_members')
           .select('id, role, is_active')
           .eq('tournament_id', tournament.id)

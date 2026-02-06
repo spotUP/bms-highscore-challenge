@@ -403,11 +403,11 @@ class GameMediaService {
       logos.push(existingMedia.logo_url);
     }
 
-    // Add existing video from Supabase if available (prioritize first)
+    // Add existing video from database if available (prioritize first)
     if (existingMedia?.video_url) {
       const embedId = this.extractYouTubeId(existingMedia.video_url);
       videos.unshift({  // Use unshift to add at beginning
-        id: 'supabase-video',
+        id: 'db-video',
         url: existingMedia.video_url,
         thumbnailUrl: embedId ? `https://img.youtube.com/vi/${embedId}/hqdefault.jpg` : undefined,
         source: 'launchbox',
@@ -415,7 +415,7 @@ class GameMediaService {
         title: `${gameName} Video`,
         embedId
       });
-      console.log(`🎬 Added Supabase video for "${gameName}" (prioritized):`, existingMedia.video_url);
+      console.log(`🎬 Added database video for "${gameName}" (prioritized):`, existingMedia.video_url);
     }
 
     // Get identifiers for external APIs

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -45,7 +45,7 @@ export default function AuthVerify() {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
+      const { data, error } = await api.auth.verifyOtp({
         email,
         token: code,
         type,
@@ -60,7 +60,7 @@ export default function AuthVerify() {
           setLoading(false);
           return;
         }
-        const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+        const { error: updateError } = await api.auth.updateUser({ password: newPassword });
         if (updateError) throw updateError;
         toast.success("Your password has been updated. You're now signed in.");
         navigate("/", { replace: true });
@@ -83,8 +83,7 @@ export default function AuthVerify() {
       toast.error("Enter your email to resend the reset link");
       return;
     }
-    const redirectTo = `${window.location.origin}/auth`;
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    const { error } = await api.auth.resetPasswordForEmail(email);
     if (error) {
       toast.error(error.message);
     } else {

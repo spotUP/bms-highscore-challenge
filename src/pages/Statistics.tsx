@@ -1,7 +1,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { usePageTransitions } from '@/hooks/usePageTransitions';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -150,7 +150,7 @@ const Statistics: React.FC<StatisticsProps> = ({ isExiting = false }) => {
 
   const loadCompetitions = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('competition_history')
         .select('*')
         .order('end_date', { ascending: false });
@@ -174,7 +174,7 @@ const Statistics: React.FC<StatisticsProps> = ({ isExiting = false }) => {
     setScoresLoading(true);
     try {
       // Load players
-      const { data: playersData, error: playersError } = await supabase
+      const { data: playersData, error: playersError } = await api
         .from('competition_players')
         .select('*')
         .eq('competition_id', competitionId)
@@ -184,7 +184,7 @@ const Statistics: React.FC<StatisticsProps> = ({ isExiting = false }) => {
       setPlayers(playersData || []);
 
       // Load scores
-      const { data: scoresData, error: scoresError } = await supabase
+      const { data: scoresData, error: scoresError } = await api
         .from('competition_scores')
         .select('*')
         .eq('competition_id', competitionId)

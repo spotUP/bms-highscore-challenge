@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { TestTube, CheckCircle, AlertCircle, Clock, Mail, Send, Settings, Trophy, GamepadIcon, User, Database, Smartphone, BarChart3 } from 'lucide-react';
 import { getCardStyle, getTypographyStyle } from '@/utils/designSystem';
 
@@ -77,7 +77,7 @@ const FunctionTests: React.FC = () => {
     setEmailTestResults(null);
 
     try {
-      const { data: sess } = await supabase.auth.getSession();
+      const { data: sess } = await api.auth.getSession();
       const accessToken = sess?.session?.access_token;
 
       if (!accessToken) {
@@ -91,7 +91,7 @@ const FunctionTests: React.FC = () => {
 
 
       // Test the invite-user function with actual email delivery
-      const { data, error } = await supabase.functions.invoke('invite-user', {
+      const { data, error } = await api.functions.invoke('invite-user', {
         body: { email, role: 'user' },
         headers: { Authorization: `Bearer ${accessToken}` }
       });
@@ -170,7 +170,7 @@ const FunctionTests: React.FC = () => {
     setSmtpTestResults(null);
 
     try {
-      const { data: sess } = await supabase.auth.getSession();
+      const { data: sess } = await api.auth.getSession();
       const accessToken = sess?.session?.access_token;
 
       if (!accessToken) {
@@ -186,7 +186,7 @@ const FunctionTests: React.FC = () => {
       // Test with a very specific diagnostic approach
       const diagnosticEmail = 'smtp-test-' + Date.now() + '@example.com';
 
-      const { data, error } = await supabase.functions.invoke('invite-user', {
+      const { data, error } = await api.functions.invoke('invite-user', {
         body: { email: diagnosticEmail, role: 'user' },
         headers: { Authorization: `Bearer ${accessToken}` }
       });
@@ -197,7 +197,7 @@ const FunctionTests: React.FC = () => {
         testEmail: diagnosticEmail,
         functionSuccess: !error && data?.success,
         fallbackDetected: !!(data?.action_link),
-        supabaseError: error,
+        serverError: error,
         responseData: data,
 
         // Analysis
@@ -271,7 +271,7 @@ const FunctionTests: React.FC = () => {
 
   const checkFunctionHealth = async (opts?: { silent?: boolean }) => {
     try {
-      const { data: sess } = await supabase.auth.getSession();
+      const { data: sess } = await api.auth.getSession();
       const accessToken = sess?.session?.access_token;
       if (!accessToken) {
         toast({
@@ -282,7 +282,7 @@ const FunctionTests: React.FC = () => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('manage-users', {
+      const { data, error } = await api.functions.invoke('manage-users', {
         body: { action: 'health' },
         headers: { Authorization: `Bearer ${accessToken}` }
       });
@@ -299,7 +299,7 @@ const FunctionTests: React.FC = () => {
         if (!opts?.silent) {
           toast({
             title: "Manage-Users Function Healthy",
-            description: `Secrets present: URL=${data.hasSupabaseUrl ? 'yes' : 'no'}, ServiceKey=${data.hasServiceKey ? 'yes' : 'no'}`,
+            description: `Secrets present: URL=${data.hasApiUrl ? 'yes' : 'no'}, ServiceKey=${data.hasServiceKey ? 'yes' : 'no'}`,
           });
         }
       } else {
@@ -308,7 +308,7 @@ const FunctionTests: React.FC = () => {
         if (!opts?.silent) {
           toast({
             title: "Function Not Configured",
-            description: `Missing secrets. URL=${data?.hasSupabaseUrl ? 'yes' : 'no'}, ServiceKey=${data?.hasServiceKey ? 'yes' : 'no'}`,
+            description: `Missing secrets. URL=${data?.hasApiUrl ? 'yes' : 'no'}, ServiceKey=${data?.hasServiceKey ? 'yes' : 'no'}`,
             variant: "destructive",
             action: (
               <ToastAction altText="View details" onClick={() => setIsHealthDialogOpen(true)}>
@@ -337,7 +337,7 @@ const FunctionTests: React.FC = () => {
 
   const checkInviteFunctionHealth = async (opts?: { silent?: boolean }) => {
     try {
-      const { data: sess } = await supabase.auth.getSession();
+      const { data: sess } = await api.auth.getSession();
       const accessToken = sess?.session?.access_token;
       if (!accessToken) {
         toast({
@@ -348,7 +348,7 @@ const FunctionTests: React.FC = () => {
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke('invite-user', {
+      const { data, error } = await api.functions.invoke('invite-user', {
         body: { action: 'health' },
         headers: { Authorization: `Bearer ${accessToken}` }
       });
@@ -365,7 +365,7 @@ const FunctionTests: React.FC = () => {
         if (!opts?.silent) {
           toast({
             title: "Invite-User Function Healthy",
-            description: `Secrets present: URL=${data.hasSupabaseUrl ? 'yes' : 'no'}, ServiceKey=${data.hasServiceKey ? 'yes' : 'no'}`,
+            description: `Secrets present: URL=${data.hasApiUrl ? 'yes' : 'no'}, ServiceKey=${data.hasServiceKey ? 'yes' : 'no'}`,
           });
         }
       } else {
@@ -374,7 +374,7 @@ const FunctionTests: React.FC = () => {
         if (!opts?.silent) {
           toast({
             title: "Function Not Configured",
-            description: `Missing secrets. URL=${data?.hasSupabaseUrl ? 'yes' : 'no'}, ServiceKey=${data?.hasServiceKey ? 'yes' : 'no'}`,
+            description: `Missing secrets. URL=${data?.hasApiUrl ? 'yes' : 'no'}, ServiceKey=${data?.hasServiceKey ? 'yes' : 'no'}`,
             variant: "destructive",
             action: (
               <ToastAction altText="View details" onClick={() => setIsHealthDialogOpen(true)}>
@@ -403,7 +403,7 @@ const FunctionTests: React.FC = () => {
 
   const checkAllFunctionsHealth = async (opts?: { silent?: boolean }) => {
     try {
-      const { data: sess } = await supabase.auth.getSession();
+      const { data: sess } = await api.auth.getSession();
       const accessToken = sess?.session?.access_token;
       if (!accessToken) {
         toast({
@@ -416,8 +416,8 @@ const FunctionTests: React.FC = () => {
 
       const headers = { Authorization: `Bearer ${accessToken}` } as Record<string, string>;
       const [manageRes, inviteRes] = await Promise.allSettled([
-        supabase.functions.invoke('manage-users', { body: { action: 'health' }, headers }),
-        supabase.functions.invoke('invite-user', { body: { action: 'health' }, headers }),
+        api.functions.invoke('manage-users', { body: { action: 'health' }, headers }),
+        api.functions.invoke('invite-user', { body: { action: 'health' }, headers }),
       ]);
 
       const manageOk = manageRes.status === 'fulfilled' && (manageRes.value.data?.configured === true);
@@ -477,8 +477,8 @@ const FunctionTests: React.FC = () => {
     window.localStorage.setItem('suppressAnimations', 'true');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: games } = await supabase.from('games').select('*').limit(1);
+      const { data: { user } } = await api.auth.getUser();
+      const { data: games } = await api.from('games').select('*').limit(1);
 
       if (!games || games.length === 0) {
         throw new Error('No games available for testing');
@@ -489,7 +489,7 @@ const FunctionTests: React.FC = () => {
       const testScore = 50000;
 
       // Test score submission
-      const { data: scoreData, error: scoreError } = await supabase
+      const { data: scoreData, error: scoreError } = await api
         .from('scores')
         .insert({
           player_name: testPlayerName,
@@ -506,15 +506,15 @@ const FunctionTests: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Check if score was inserted
-      const { data: insertedScore } = await supabase
+      const { data: insertedScore } = await api
         .from('scores')
         .select('*')
         .eq('player_name', testPlayerName)
         .single();
 
       // Clean up
-      await supabase.from('scores').delete().eq('player_name', testPlayerName);
-      await supabase.from('player_achievements').delete().eq('player_name', testPlayerName);
+      await api.from('scores').delete().eq('player_name', testPlayerName);
+      await api.from('player_achievements').delete().eq('player_name', testPlayerName);
 
       const results = {
         timestamp: new Date().toISOString(),
@@ -565,8 +565,8 @@ const FunctionTests: React.FC = () => {
     window.localStorage.setItem('suppressAnimations', 'true');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: games } = await supabase.from('games').select('*').limit(1);
+      const { data: { user } } = await api.auth.getUser();
+      const { data: games } = await api.from('games').select('*').limit(1);
 
       if (!games || games.length === 0) {
         throw new Error('No games available for testing');
@@ -577,7 +577,7 @@ const FunctionTests: React.FC = () => {
       const testScore = 50000; // High enough to trigger multiple achievements
 
       // Submit score to trigger achievements
-      const { error: scoreError } = await supabase
+      const { error: scoreError } = await api
         .from('scores')
         .insert({
           player_name: testPlayerName,
@@ -593,7 +593,7 @@ const FunctionTests: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Check achievements awarded
-      const { data: achievements } = await supabase
+      const { data: achievements } = await api
         .from('player_achievements')
         .select(`
           *,
@@ -609,30 +609,8 @@ const FunctionTests: React.FC = () => {
         try {
           const achievementToDelete = achievements[0];
 
-          // Use admin client with service role key for deletion (same as the component)
-          const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-          if (!serviceRoleKey) {
-            throw new Error('Service role key not configured for deletion test');
-          }
-
-          const { createClient } = await import('@supabase/supabase-js');
-          const adminSupabase = createClient(
-            import.meta.env.VITE_SUPABASE_URL,
-            serviceRoleKey,
-            {
-              auth: {
-                persistSession: false,
-                storage: {
-                  getItem: () => null,
-                  setItem: () => {},
-                  removeItem: () => {}
-                }
-              }
-            }
-          );
-
           // Verify record exists before deletion
-          const { data: beforeRecord, error: beforeError } = await adminSupabase
+          const { data: beforeRecord, error: beforeError } = await api
             .from('player_achievements')
             .select('id')
             .eq('id', achievementToDelete.id)
@@ -643,28 +621,24 @@ const FunctionTests: React.FC = () => {
           }
 
           // Perform deletion
-          const { error: deleteError, count } = await adminSupabase
+          const { error: deleteError } = await api
             .from('player_achievements')
-            .delete({ count: 'exact' })
+            .delete()
             .eq('id', achievementToDelete.id);
 
           if (deleteError) {
             throw deleteError;
           }
 
-          if (count === 0) {
-            throw new Error('No records were deleted');
-          }
-
           // Verify deletion was successful
-          const { data: afterRecord, error: afterError } = await adminSupabase
+          const { data: afterRecord, error: afterError } = await api
             .from('player_achievements')
             .select('id')
             .eq('id', achievementToDelete.id)
-            .single();
+            .maybeSingle();
 
           // Should get no data or PGRST116 error (record not found)
-          if (afterRecord || (afterError && afterError.code !== 'PGRST116')) {
+          if (afterRecord || afterError) {
             throw new Error('Record still exists after deletion or unexpected error');
           }
 
@@ -676,8 +650,8 @@ const FunctionTests: React.FC = () => {
       }
 
       // Clean up remaining test data
-      await supabase.from('scores').delete().eq('player_name', testPlayerName);
-      await supabase.from('player_achievements').delete().eq('player_name', testPlayerName);
+      await api.from('scores').delete().eq('player_name', testPlayerName);
+      await api.from('player_achievements').delete().eq('player_name', testPlayerName);
 
       const results = {
         timestamp: new Date().toISOString(),
@@ -732,8 +706,8 @@ const FunctionTests: React.FC = () => {
     window.localStorage.setItem('suppressAnimations', 'true');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: games } = await supabase.from('games').select('*').limit(1);
+      const { data: { user } } = await api.auth.getUser();
+      const { data: games } = await api.from('games').select('*').limit(1);
 
       if (!games || games.length === 0) {
         throw new Error('No games available for testing');
@@ -744,7 +718,7 @@ const FunctionTests: React.FC = () => {
       const name17 = '12345678901234567'; // 17 chars
 
       // Test 16 character name (should work)
-      const { data: data16, error: error16 } = await supabase
+      const { data: data16, error: error16 } = await api
         .from('scores')
         .insert({
           player_name: name16,
@@ -756,7 +730,7 @@ const FunctionTests: React.FC = () => {
         .select();
 
       // Test 17 character name (should fail)
-      const { data: data17, error: error17 } = await supabase
+      const { data: data17, error: error17 } = await api
         .from('scores')
         .insert({
           player_name: name17,
@@ -769,12 +743,12 @@ const FunctionTests: React.FC = () => {
 
       // Clean up successful insertions
       if (!error16) {
-        await supabase.from('scores').delete().eq('player_name', name16);
-        await supabase.from('player_achievements').delete().eq('player_name', name16);
+        await api.from('scores').delete().eq('player_name', name16);
+        await api.from('player_achievements').delete().eq('player_name', name16);
       }
       if (!error17) {
-        await supabase.from('scores').delete().eq('player_name', name17);
-        await supabase.from('player_achievements').delete().eq('player_name', name17);
+        await api.from('scores').delete().eq('player_name', name17);
+        await api.from('player_achievements').delete().eq('player_name', name17);
       }
 
       const results = {
@@ -825,22 +799,22 @@ const FunctionTests: React.FC = () => {
 
     try {
       // Test table access
-      const { data: scoresAccess, error: scoresError } = await supabase
+      const { data: scoresAccess, error: scoresError } = await api
         .from('scores')
         .select('id')
         .limit(1);
 
-      const { data: achievementsAccess, error: achievementsError } = await supabase
+      const { data: achievementsAccess, error: achievementsError } = await api
         .from('achievements')
         .select('id')
         .limit(1);
 
-      const { data: playerAchievementsAccess, error: playerAchievementsError } = await supabase
+      const { data: playerAchievementsAccess, error: playerAchievementsError } = await api
         .from('player_achievements')
         .select('id')
         .limit(1);
 
-      const { data: gamesAccess, error: gamesError } = await supabase
+      const { data: gamesAccess, error: gamesError } = await api
         .from('games')
         .select('id')
         .limit(1);
@@ -898,8 +872,8 @@ const FunctionTests: React.FC = () => {
     window.localStorage.setItem('suppressAnimations', 'true');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: games } = await supabase.from('games').select('*').limit(1);
+      const { data: { user } } = await api.auth.getUser();
+      const { data: games } = await api.from('games').select('*').limit(1);
 
       if (!games || games.length === 0) {
         throw new Error('No games available for testing');
@@ -910,7 +884,7 @@ const FunctionTests: React.FC = () => {
       const testScore = 65000;
 
       // Simulate mobile/QR submission (same as desktop but tests the flow)
-      const { data: scoreData, error: scoreError } = await supabase
+      const { data: scoreData, error: scoreError } = await api
         .from('scores')
         .insert({
           player_name: testPlayerName,
@@ -927,8 +901,8 @@ const FunctionTests: React.FC = () => {
       // but we can test that the basic mobile submission flow works
 
       // Clean up
-      await supabase.from('scores').delete().eq('player_name', testPlayerName);
-      await supabase.from('player_achievements').delete().eq('player_name', testPlayerName);
+      await api.from('scores').delete().eq('player_name', testPlayerName);
+      await api.from('player_achievements').delete().eq('player_name', testPlayerName);
 
       const results = {
         timestamp: new Date().toISOString(),
@@ -981,8 +955,8 @@ const FunctionTests: React.FC = () => {
 
     try {
       // Test 1: Submit scores for multiple players to populate leaderboards
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: games } = await supabase.from('games').select('*');
+      const { data: { user } } = await api.auth.getUser();
+      const { data: games } = await api.from('games').select('*');
 
       if (!games || games.length === 0) {
         throw new Error('No games available for testing');
@@ -998,7 +972,7 @@ const FunctionTests: React.FC = () => {
       const insertedScores = [];
       for (const player of testPlayers) {
         for (let i = 0; i < Math.min(2, games.length); i++) {
-          const { data } = await supabase
+          const { data } = await api
             .from('scores')
             .insert({
               player_name: player.name,
@@ -1016,7 +990,7 @@ const FunctionTests: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 3000));
 
       // Test 2: Check achievement data aggregation (calculated client-side)
-      const { data: playerAchievements, error: ahError } = await supabase
+      const { data: playerAchievements, error: ahError } = await api
         .from('player_achievements')
         .select('*, achievements(name, points)')
         .in('player_name', testPlayers.map(p => p.name));
@@ -1032,7 +1006,7 @@ const FunctionTests: React.FC = () => {
       });
 
       // Test 3: Check overall leaders data (calculated from scores)
-      const { data: allScores, error: olError } = await supabase
+      const { data: allScores, error: olError } = await api
         .from('scores')
         .select('*')
         .in('player_name', testPlayers.map(p => p.name));
@@ -1049,8 +1023,8 @@ const FunctionTests: React.FC = () => {
 
       // Clean up
       for (const player of testPlayers) {
-        await supabase.from('scores').delete().eq('player_name', player.name);
-        await supabase.from('player_achievements').delete().eq('player_name', player.name);
+        await api.from('scores').delete().eq('player_name', player.name);
+        await api.from('player_achievements').delete().eq('player_name', player.name);
       }
 
       const results = {
@@ -1111,7 +1085,7 @@ const FunctionTests: React.FC = () => {
     window.localStorage.setItem('suppressAnimations', 'true');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await api.auth.getUser();
       if (!user) {
         throw new Error('User must be authenticated to test brackets');
       }
@@ -1127,15 +1101,15 @@ const FunctionTests: React.FC = () => {
 
       // Test 1: Database Schema Verification
       const schemaTests = await Promise.allSettled([
-        supabase.from('bracket_tournaments').select('id').limit(1),
-        supabase.from('bracket_players').select('id').limit(1),
-        supabase.from('bracket_matches').select('id').limit(1)
+        api.from('bracket_tournaments').select('id').limit(1),
+        api.from('bracket_players').select('id').limit(1),
+        api.from('bracket_matches').select('id').limit(1)
       ]);
       testResults.databaseSchema = schemaTests.every(test => test.status === 'fulfilled');
 
       // Test 2: Tournament Creation
       const testTournamentName = 'TEST_TOURNAMENT_' + Date.now().toString().slice(-4);
-      const { data: tournament, error: tournamentError } = await supabase
+      const { data: tournament, error: tournamentError } = await api
         .from('bracket_tournaments')
         .insert({
           name: testTournamentName,
@@ -1158,7 +1132,7 @@ const FunctionTests: React.FC = () => {
           'PLAYER_D_' + Date.now().toString().slice(-4)
         ];
 
-        const { data: players, error: playersError } = await supabase
+        const { data: players, error: playersError } = await api
           .from('bracket_players')
           .insert(testPlayers.map((name, index) => ({
             tournament_id: tournament.id,
@@ -1190,7 +1164,7 @@ const FunctionTests: React.FC = () => {
             }
           ];
 
-          const { data: createdMatches, error: matchesError } = await supabase
+          const { data: createdMatches, error: matchesError } = await api
             .from('bracket_matches')
             .insert(matches)
             .select();
@@ -1199,7 +1173,7 @@ const FunctionTests: React.FC = () => {
 
           if (createdMatches && createdMatches.length > 0) {
             // Test 5: Match Reporting
-            const { data: updatedMatch, error: reportError } = await supabase
+            const { data: updatedMatch, error: reportError } = await api
               .from('bracket_matches')
               .update({
                 winner_participant_id: players[0].id,
@@ -1216,7 +1190,7 @@ const FunctionTests: React.FC = () => {
         }
 
         // Test 6: RLS Policies (try to access as another user would)
-        const { data: publicCheck } = await supabase
+        const { data: publicCheck } = await api
           .from('bracket_tournaments')
           .select('*')
           .eq('id', tournament.id)
@@ -1225,7 +1199,7 @@ const FunctionTests: React.FC = () => {
         testResults.rlsPolicies = !!publicCheck; // Should be accessible since user is creator
 
         // Cleanup test data
-        await supabase.from('bracket_tournaments').delete().eq('id', tournament.id);
+        await api.from('bracket_tournaments').delete().eq('id', tournament.id);
       }
 
       const allPassed = Object.values(testResults).every(result => result === true);
@@ -1263,19 +1237,19 @@ const FunctionTests: React.FC = () => {
       try {
 
         // Clean up test tournaments and related data
-        await supabase.from('bracket_tournaments').delete().like('name', 'BRACKETS_TEST_%');
-        await supabase.from('bracket_tournaments').delete().like('name', 'TEST_TOURNAMENT_%');
+        await api.from('bracket_tournaments').delete().like('name', 'BRACKETS_TEST_%');
+        await api.from('bracket_tournaments').delete().like('name', 'TEST_TOURNAMENT_%');
 
         // Clean up test players
-        const { data: testTournaments } = await supabase
+        const { data: testTournaments } = await api
           .from('bracket_tournaments')
           .select('id')
           .or('name.like.BRACKETS_TEST_%,name.like.TEST_TOURNAMENT_%');
 
         if (testTournaments && testTournaments.length > 0) {
           for (const tournament of testTournaments) {
-            await supabase.from('bracket_players').delete().eq('tournament_id', tournament.id);
-            await supabase.from('bracket_matches').delete().eq('tournament_id', tournament.id);
+            await api.from('bracket_players').delete().eq('tournament_id', tournament.id);
+            await api.from('bracket_matches').delete().eq('tournament_id', tournament.id);
           }
         }
 
@@ -1296,8 +1270,8 @@ const FunctionTests: React.FC = () => {
     window.localStorage.setItem('suppressAnimations', 'true');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: games } = await supabase.from('games').select('*');
+      const { data: { user } } = await api.auth.getUser();
+      const { data: games } = await api.from('games').select('*');
 
       if (!games || games.length === 0) {
         throw new Error('No games available for security testing');
@@ -1309,7 +1283,7 @@ const FunctionTests: React.FC = () => {
       try {
         // Test accessing scores from different tournament without proper access
         const unauthorizedTournamentId = 'unauthorized-tournament-id';
-        const { data: unauthorizedScores, error: rlsError } = await supabase
+        const { data: unauthorizedScores, error: rlsError } = await api
           .from('scores')
           .select('*')
           .eq('tournament_id', unauthorizedTournamentId);
@@ -1323,7 +1297,7 @@ const FunctionTests: React.FC = () => {
       // Test 2: Admin Privilege Testing
       try {
         // Test user management function access
-        const { error: adminError } = await supabase.functions.invoke('manage-users', {
+        const { error: adminError } = await api.functions.invoke('manage-users', {
           body: { action: 'test-access-only' }
         });
 
@@ -1337,7 +1311,7 @@ const FunctionTests: React.FC = () => {
         const testTournamentName = 'SECURITY_TEST_' + Date.now().toString().slice(-6);
 
         // Test creating tournament with current user
-        const { data: tournament, error: tournamentError } = await supabase
+        const { data: tournament, error: tournamentError } = await api
           .from('tournaments')
           .insert({
             name: testTournamentName,
@@ -1349,7 +1323,7 @@ const FunctionTests: React.FC = () => {
 
         if (!tournamentError && tournament) {
           // Test accessing tournament as different user context
-          const { data: accessTest } = await supabase
+          const { data: accessTest } = await api
             .from('tournaments')
             .select('*')
             .eq('id', tournament.id);
@@ -1357,7 +1331,7 @@ const FunctionTests: React.FC = () => {
           testResults.tournamentAccess = accessTest && accessTest.length > 0;
 
           // Cleanup
-          await supabase.from('tournaments').delete().eq('id', tournament.id);
+          await api.from('tournaments').delete().eq('id', tournament.id);
         } else {
           testResults.tournamentAccess = false;
         }
@@ -1370,7 +1344,7 @@ const FunctionTests: React.FC = () => {
         const testPlayerName = 'SEC_TEST_' + Date.now().toString().slice(-6);
 
         // Test negative score submission
-        const { error: negativeScoreError } = await supabase
+        const { error: negativeScoreError } = await api
           .from('scores')
           .insert({
             player_name: testPlayerName,
@@ -1381,7 +1355,7 @@ const FunctionTests: React.FC = () => {
           });
 
         // Test extremely large score submission
-        const { error: largeScoreError } = await supabase
+        const { error: largeScoreError } = await api
           .from('scores')
           .insert({
             player_name: testPlayerName + '_2',
@@ -1394,8 +1368,8 @@ const FunctionTests: React.FC = () => {
         testResults.scoreValidation = !negativeScoreError && !largeScoreError;
 
         // Cleanup any successful insertions
-        await supabase.from('scores').delete().match({ player_name: testPlayerName });
-        await supabase.from('scores').delete().match({ player_name: testPlayerName + '_2' });
+        await api.from('scores').delete().match({ player_name: testPlayerName });
+        await api.from('scores').delete().match({ player_name: testPlayerName + '_2' });
       } catch (e) {
         testResults.scoreValidation = false;
       }
@@ -1405,7 +1379,7 @@ const FunctionTests: React.FC = () => {
         const longName = 'A'.repeat(17); // Exceeds 16 char limit
         const sqlInjectionName = "'; DROP TABLE scores; --";
 
-        const { error: longNameError } = await supabase
+        const { error: longNameError } = await api
           .from('scores')
           .insert({
             player_name: longName,
@@ -1415,7 +1389,7 @@ const FunctionTests: React.FC = () => {
             user_id: user?.id || null
           });
 
-        const { error: injectionError } = await supabase
+        const { error: injectionError } = await api
           .from('scores')
           .insert({
             player_name: sqlInjectionName,
@@ -1428,15 +1402,15 @@ const FunctionTests: React.FC = () => {
         testResults.nameConstraints = !!longNameError && !!injectionError;
 
         // Cleanup any successful insertions (unlikely but thorough)
-        await supabase.from('scores').delete().match({ player_name: longName });
-        await supabase.from('scores').delete().match({ player_name: sqlInjectionName });
+        await api.from('scores').delete().match({ player_name: longName });
+        await api.from('scores').delete().match({ player_name: sqlInjectionName });
       } catch (e) {
         testResults.nameConstraints = true;
       }
 
       // Test 6: Session Management
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
+        const { data: sessionData } = await api.auth.getSession();
         testResults.sessionManagement = !!sessionData.session;
       } catch (e) {
         testResults.sessionManagement = false;
@@ -1480,14 +1454,14 @@ const FunctionTests: React.FC = () => {
         const sqlInjectionName = "'; DROP TABLE scores; --";
 
         // Clean up any test scores that might have been created
-        await supabase.from('scores').delete().like('player_name', 'SEC_TEST_%');
-        await supabase.from('scores').delete().match({ player_name: testPlayerName });
-        await supabase.from('scores').delete().match({ player_name: testPlayerName + '_2' });
-        await supabase.from('scores').delete().match({ player_name: longName });
-        await supabase.from('scores').delete().match({ player_name: sqlInjectionName });
+        await api.from('scores').delete().like('player_name', 'SEC_TEST_%');
+        await api.from('scores').delete().match({ player_name: testPlayerName });
+        await api.from('scores').delete().match({ player_name: testPlayerName + '_2' });
+        await api.from('scores').delete().match({ player_name: longName });
+        await api.from('scores').delete().match({ player_name: sqlInjectionName });
 
         // Clean up any test tournaments
-        await supabase.from('tournaments').delete().like('name', 'SECURITY_TEST_%');
+        await api.from('tournaments').delete().like('name', 'SECURITY_TEST_%');
 
       } catch (cleanupError) {
       }
@@ -1504,13 +1478,13 @@ const FunctionTests: React.FC = () => {
     window.localStorage.setItem('suppressAnimations', 'true');
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await api.auth.getUser();
       const testResults: any = {};
 
       // Test 1: Tournament Creation and State Management
       const testTournamentName = 'MGMT_TEST_' + Date.now().toString().slice(-6);
 
-      const { data: tournament, error: createError } = await supabase
+      const { data: tournament, error: createError } = await api
         .from('tournaments')
         .insert({
           name: testTournamentName,
@@ -1525,7 +1499,7 @@ const FunctionTests: React.FC = () => {
 
       if (tournament) {
         // Test 2: Tournament State Transitions
-        const { error: stateError } = await supabase
+        const { error: stateError } = await api
           .from('tournaments')
           .update({ status: 'active' })
           .eq('id', tournament.id);
@@ -1534,7 +1508,7 @@ const FunctionTests: React.FC = () => {
 
         // Test 3: Tournament Member Management
         if (user) {
-          const { error: memberError } = await supabase
+          const { error: memberError } = await api
             .from('tournament_members')
             .insert({
               tournament_id: tournament.id,
@@ -1548,7 +1522,7 @@ const FunctionTests: React.FC = () => {
         }
 
         // Test 4: Tournament Lock Mechanism
-        const { error: lockError } = await supabase
+        const { error: lockError } = await api
           .from('tournaments')
           .update({ scores_locked: true })
           .eq('id', tournament.id);
@@ -1556,7 +1530,7 @@ const FunctionTests: React.FC = () => {
         testResults.lockMechanism = !lockError;
 
         // Test 5: Tournament Data Isolation
-        const { data: scores, error: isolationError } = await supabase
+        const { data: scores, error: isolationError } = await api
           .from('scores')
           .select('*')
           .eq('tournament_id', tournament.id);
@@ -1564,8 +1538,8 @@ const FunctionTests: React.FC = () => {
         testResults.dataIsolation = !isolationError;
 
         // Cleanup
-        await supabase.from('tournament_members').delete().eq('tournament_id', tournament.id);
-        await supabase.from('tournaments').delete().eq('id', tournament.id);
+        await api.from('tournament_members').delete().eq('tournament_id', tournament.id);
+        await api.from('tournaments').delete().eq('id', tournament.id);
       } else {
         testResults.stateTransitions = false;
         testResults.memberManagement = false;
@@ -1608,17 +1582,17 @@ const FunctionTests: React.FC = () => {
       try {
 
         // Clean up any test tournaments
-        await supabase.from('tournaments').delete().like('name', 'MGMT_TEST_%');
+        await api.from('tournaments').delete().like('name', 'MGMT_TEST_%');
 
         // Clean up any test tournament members
-        const { data: testTournaments } = await supabase
+        const { data: testTournaments } = await api
           .from('tournaments')
           .select('id')
           .like('name', 'MGMT_TEST_%');
 
         if (testTournaments && testTournaments.length > 0) {
           for (const tournament of testTournaments) {
-            await supabase.from('tournament_members').delete().eq('tournament_id', tournament.id);
+            await api.from('tournament_members').delete().eq('tournament_id', tournament.id);
           }
         }
 
@@ -1640,7 +1614,7 @@ const FunctionTests: React.FC = () => {
       const testResults: any = {};
 
       // Test 1: Real-time Connection
-      const channel = supabase.channel('test-channel-' + Date.now());
+      const channel = api.channel('test-channel-' + Date.now());
 
       let connectionEstablished = false;
       const connectionPromise = new Promise((resolve) => {
@@ -1657,12 +1631,12 @@ const FunctionTests: React.FC = () => {
       testResults.realtimeConnection = connectionEstablished;
 
       // Test 2: Real-time Score Notifications
-      const { data: games } = await supabase.from('games').select('*').limit(1);
+      const { data: games } = await api.from('games').select('*').limit(1);
 
       if (games && games.length > 0) {
         let notificationReceived = false;
 
-        const scoreChannel = supabase
+        const scoreChannel = api
           .channel('score-test-' + Date.now())
           .on('postgres_changes', {
             event: 'INSERT',
@@ -1677,7 +1651,7 @@ const FunctionTests: React.FC = () => {
 
         // Insert a test score
         const testPlayerName = 'REALTIME_TEST_' + Date.now().toString().slice(-6);
-        const { error: insertError } = await supabase
+        const { error: insertError } = await api
           .from('scores')
           .insert({
             player_name: testPlayerName,
@@ -1692,17 +1666,17 @@ const FunctionTests: React.FC = () => {
         testResults.realtimeNotifications = !insertError && notificationReceived;
 
         // Cleanup
-        await supabase.from('scores').delete().eq('player_name', testPlayerName);
+        await api.from('scores').delete().eq('player_name', testPlayerName);
         await scoreChannel.unsubscribe();
       } else {
         testResults.realtimeNotifications = false;
       }
 
       // Test 3: WebSocket Health
-      testResults.websocketHealth = supabase.realtime.isConnected();
+      testResults.websocketHealth = api.realtime.isConnected();
 
       // Test 4: Subscription Cleanup
-      const tempChannel = supabase.channel('temp-test-' + Date.now());
+      const tempChannel = api.channel('temp-test-' + Date.now());
       tempChannel.subscribe();
       const unsubscribeResult = await tempChannel.unsubscribe();
       testResults.subscriptionCleanup = unsubscribeResult === 'ok';
@@ -1745,7 +1719,7 @@ const FunctionTests: React.FC = () => {
       try {
 
         // Clean up any test scores created during real-time testing
-        await supabase.from('scores').delete().like('player_name', 'REALTIME_TEST_%');
+        await api.from('scores').delete().like('player_name', 'REALTIME_TEST_%');
 
       } catch (cleanupError) {
       }
@@ -1834,27 +1808,27 @@ const FunctionTests: React.FC = () => {
       try {
 
         // Clean up any remaining test data patterns
-        await supabase.from('scores').delete().like('player_name', 'TEST_%');
-        await supabase.from('scores').delete().like('player_name', 'DEPLOY%');
-        await supabase.from('scores').delete().like('player_name', 'SEC_TEST_%');
-        await supabase.from('scores').delete().like('player_name', 'REALTIME_TEST_%');
-        await supabase.from('scores').delete().like('player_name', 'MOBILE_TEST_%');
+        await api.from('scores').delete().like('player_name', 'TEST_%');
+        await api.from('scores').delete().like('player_name', 'DEPLOY%');
+        await api.from('scores').delete().like('player_name', 'SEC_TEST_%');
+        await api.from('scores').delete().like('player_name', 'REALTIME_TEST_%');
+        await api.from('scores').delete().like('player_name', 'MOBILE_TEST_%');
 
         // Clean up test achievements
-        await supabase.from('player_achievements').delete().like('player_name', 'TEST_%');
-        await supabase.from('player_achievements').delete().like('player_name', 'DEPLOY%');
-        await supabase.from('player_achievements').delete().like('player_name', 'SEC_TEST_%');
-        await supabase.from('player_achievements').delete().like('player_name', 'REALTIME_TEST_%');
-        await supabase.from('player_achievements').delete().like('player_name', 'MOBILE_TEST_%');
+        await api.from('player_achievements').delete().like('player_name', 'TEST_%');
+        await api.from('player_achievements').delete().like('player_name', 'DEPLOY%');
+        await api.from('player_achievements').delete().like('player_name', 'SEC_TEST_%');
+        await api.from('player_achievements').delete().like('player_name', 'REALTIME_TEST_%');
+        await api.from('player_achievements').delete().like('player_name', 'MOBILE_TEST_%');
 
         // Clean up test tournaments
-        await supabase.from('tournaments').delete().like('name', 'TEST_%');
-        await supabase.from('tournaments').delete().like('name', 'MGMT_TEST_%');
-        await supabase.from('tournaments').delete().like('name', 'SECURITY_TEST_%');
+        await api.from('tournaments').delete().like('name', 'TEST_%');
+        await api.from('tournaments').delete().like('name', 'MGMT_TEST_%');
+        await api.from('tournaments').delete().like('name', 'SECURITY_TEST_%');
 
         // Clean up bracket test data
-        await supabase.from('bracket_tournaments').delete().like('name', 'TEST_%');
-        await supabase.from('bracket_tournaments').delete().like('name', 'BRACKETS_TEST_%');
+        await api.from('bracket_tournaments').delete().like('name', 'TEST_%');
+        await api.from('bracket_tournaments').delete().like('name', 'BRACKETS_TEST_%');
 
       } catch (cleanupError) {
       }
@@ -1887,7 +1861,7 @@ const FunctionTests: React.FC = () => {
       };
 
       // Send email via edge function
-      await supabase.functions.invoke('send-test-failure-report', {
+      await api.functions.invoke('send-test-failure-report', {
         body: {
           to: 'spotup@gmail.com',
           subject: `🚨 Score System Test Failures - ${failedTests.length} tests failed`,
@@ -2156,8 +2130,8 @@ const FunctionTests: React.FC = () => {
               <div>
                 <p className="font-medium mb-1">Email Troubleshooting</p>
                 <ul className="space-y-1 text-blue-300/80">
-                  <li>• If fallback is used, Supabase SMTP is not configured correctly</li>
-                  <li>• Check Auth → Settings → SMTP in Supabase dashboard</li>
+                  <li>• If fallback is used, SMTP is not configured correctly</li>
+                  <li>• Check Auth → Settings → SMTP in dashboard</li>
                   <li>• Verify SMTP credentials and test connection</li>
                   <li>• Use "Diagnose SMTP Issue" button for detailed analysis</li>
                 </ul>
@@ -2637,11 +2611,11 @@ const FunctionTests: React.FC = () => {
             <div className="bg-gray-800 p-3 rounded">
               <div className="font-semibold mb-2">Setup Instructions:</div>
               <p className="text-sm text-gray-300">
-                To configure these functions, set the following secrets in your Supabase project:
+                To configure these functions, set the following environment variables:
               </p>
               <ul className="text-sm text-gray-300 mt-2 space-y-1">
-                <li>• <code>SUPABASE_URL</code> - Your project URL</li>
-                <li>• <code>SUPABASE_SERVICE_ROLE_KEY</code> - Your service role key</li>
+                <li>• <code>DATABASE_URL</code> - Your database connection string</li>
+                <li>• <code>API_SECRET</code> - Your API secret key</li>
               </ul>
             </div>
             <div className="flex justify-end">
@@ -2734,11 +2708,11 @@ const FunctionTests: React.FC = () => {
                 <div className="text-sm space-y-2">
                   {emailTestResults?.fallbackUsed ? (
                     <>
-                      <p><strong>Issue:</strong> SMTP is not configured in Supabase</p>
+                      <p><strong>Issue:</strong> SMTP is not configured</p>
                       <div>
                         <strong>Fix:</strong>
                         <ol className="list-decimal list-inside mt-1 space-y-1 ml-4">
-                          <li>Go to Supabase Dashboard → Authentication → Settings</li>
+                          <li>Go to Dashboard → Authentication → Settings</li>
                           <li>Scroll to "SMTP Settings" section</li>
                           <li>Configure your email provider (Gmail, SendGrid, etc.)</li>
                           <li>Enable SMTP and test the connection</li>
@@ -2753,7 +2727,7 @@ const FunctionTests: React.FC = () => {
                       <ul className="list-disc list-inside ml-4">
                         <li>Check the recipient's inbox (including spam folder)</li>
                         <li>Verify email provider limits and quotas</li>
-                        <li>Check Supabase logs for any delivery errors</li>
+                        <li>Check server logs for any delivery errors</li>
                       </ul>
                     </>
                   ) : (
@@ -2761,7 +2735,7 @@ const FunctionTests: React.FC = () => {
                       <p><strong>Issue:</strong> Complete email delivery failure</p>
                       <p><strong>Check:</strong></p>
                       <ul className="list-disc list-inside ml-4">
-                        <li>Supabase function logs for detailed errors</li>
+                        <li>Server function logs for detailed errors</li>
                         <li>Network connectivity and permissions</li>
                         <li>Authentication token validity</li>
                       </ul>

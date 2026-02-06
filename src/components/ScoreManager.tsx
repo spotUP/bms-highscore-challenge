@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -72,7 +72,7 @@ const ScoreManager = () => {
   const loadData = async () => {
     try {
       // Load games
-      const { data: gamesData, error: gamesError } = await supabase
+      const { data: gamesData, error: gamesError } = await api
         .from('games')
         .select('id, name')
         .order('name');
@@ -81,7 +81,7 @@ const ScoreManager = () => {
       setGames(gamesData || []);
 
       // Load competitions
-      const { data: competitionsData, error: competitionsError } = await supabase
+      const { data: competitionsData, error: competitionsError } = await api
         .from('competition_history')
         .select('*')
         .order('end_date', { ascending: false });
@@ -90,7 +90,7 @@ const ScoreManager = () => {
       setCompetitions(competitionsData || []);
 
       // Load current scores with game names
-      const { data: scoresData, error: scoresError } = await supabase
+      const { data: scoresData, error: scoresError } = await api
         .from('scores')
         .select(`
           *,
@@ -122,7 +122,7 @@ const ScoreManager = () => {
   // Load scores for a specific competition
   const loadCompetitionScores = async (competitionId: string) => {
     try {
-      const { data: competitionScoresData, error: competitionScoresError } = await supabase
+      const { data: competitionScoresData, error: competitionScoresError } = await api
         .from('competition_scores')
         .select('*')
         .eq('competition_id', competitionId)
@@ -210,7 +210,7 @@ const ScoreManager = () => {
     try {
       // Check rate limiting for new scores (not edits)
       if (!editingScore) {
-        const { data: rateLimitCheck, error: rateLimitError } = await supabase
+        const { data: rateLimitCheck, error: rateLimitError } = await api
           .rpc('check_score_submission_rate_limit');
         
         if (rateLimitError) {
@@ -227,7 +227,7 @@ const ScoreManager = () => {
 
       if (editingScore) {
         // Update existing score - always allow admin to update
-        const { error } = await supabase
+        const { error } = await api
           .from('scores')
           .update({
             player_name: formData.player_name.toUpperCase(),
@@ -244,7 +244,7 @@ const ScoreManager = () => {
         });
       } else {
         // Create new score - check for existing score and handle appropriately
-        const { data: existingScore, error: fetchError } = await supabase
+        const { data: existingScore, error: fetchError } = await api
           .from('scores')
           .select('*')
           .eq('player_name', formData.player_name.toUpperCase())
@@ -255,7 +255,7 @@ const ScoreManager = () => {
 
         if (existingScore) {
           // Update existing score instead of creating new one
-          const { error } = await supabase
+          const { error } = await api
             .from('scores')
             .update({
               score: scoreValue,
@@ -271,7 +271,7 @@ const ScoreManager = () => {
           });
         } else {
           // Create new score
-          const { error } = await supabase
+          const { error } = await api
             .from('scores')
             .insert({
               player_name: formData.player_name.toUpperCase(),

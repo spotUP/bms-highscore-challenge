@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Trophy } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import { useToast } from "@/hooks/use-toast";
 import { useAchievements } from "@/hooks/useAchievements";
 import { getGameLogoUrl } from "@/lib/utils";
@@ -57,7 +57,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
     }
 
     // Get current user for user_id field
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await api.auth.getUser();
 
     // Check if score submissions are locked for this tournament
     if (currentTournament.scores_locked) {
@@ -107,7 +107,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
 
     try {
       // First check if player already has a score for this game
-      const { data: existingScore, error: fetchError } = await supabase
+      const { data: existingScore, error: fetchError } = await api
         .from('scores')
         .select('*')
         .eq('player_name', truncatedName.toUpperCase())
@@ -136,7 +136,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           user_id: user?.id || null
         };
         
-        const { data: updatedData, error } = await supabase
+        const { data: updatedData, error } = await api
           .from('scores')
           .update(updateData)
           .eq('id', existingScore.id)
@@ -146,7 +146,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
 
         // Post to webhook via edge function for score improvement
         try {
-          const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
+          const webhookResponse = await api.functions.invoke('send-score-webhook', {
             body: {
               player_name: truncatedName.toUpperCase(),
               score: scoreValue,
@@ -179,7 +179,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           previous_high_score: existingScore.score
         });
         
-        const { error: submissionError } = await supabase
+        const { error: submissionError } = await api
           .from('score_submissions')
           .insert({
             player_name: truncatedName.toUpperCase(),
@@ -207,7 +207,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           user_id: user?.id || null
         };
         
-        const { data: insertedData, error } = await supabase
+        const { data: insertedData, error } = await api
           .from('scores')
           .insert(scoreData)
           .select();
@@ -216,7 +216,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         
         // Post to webhook via edge function for new score
         try {
-          const webhookResponse = await supabase.functions.invoke('send-score-webhook', {
+          const webhookResponse = await api.functions.invoke('send-score-webhook', {
             body: {
               player_name: truncatedName.toUpperCase(),
               score: scoreValue,
@@ -248,7 +248,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           previous_high_score: null
         });
         
-        const { error: submissionError } = await supabase
+        const { error: submissionError } = await api
           .from('score_submissions')
           .insert({
             player_name: truncatedName.toUpperCase(),

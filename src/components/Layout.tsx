@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { usePageTransitions } from '@/hooks/usePageTransitions';
 import { useAuth } from '@/hooks/useAuth';
 import { useTournament } from '@/contexts/TournamentContext';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import TopNav from '@/components/TopNav';
 import SpinTheWheel from '@/components/SpinTheWheel';
 
@@ -70,7 +70,7 @@ const Layout: React.FC<LayoutProps> = ({
 
       try {
         // Get all scores from user's tournaments
-        const { data: scores, error } = await supabase
+        const { data: scores, error } = await api
           .from('scores')
           .select('player_name, game_id')
           .in('tournament_id', userTournamentIds);

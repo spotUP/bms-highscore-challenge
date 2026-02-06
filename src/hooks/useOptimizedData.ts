@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 
 interface UseOptimizedDataOptions {
   enabled?: boolean;
@@ -82,7 +82,7 @@ export const useOptimizedData = (options: UseOptimizedDataOptions = {}) => {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('games')
         .select('id, name, logo_url, include_in_challenge, is_active, tournament_id')
         .eq('is_active', true)
@@ -109,7 +109,7 @@ export const useOptimizedData = (options: UseOptimizedDataOptions = {}) => {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('scores')
         .select('id, game_id, player_name, score, created_at, tournament_id')
         .order('created_at', { ascending: false })
@@ -136,7 +136,7 @@ export const useOptimizedData = (options: UseOptimizedDataOptions = {}) => {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('achievements')
         .select('id, name, description, badge_icon, badge_color, points, type, tournament_id')
         .order('points', { ascending: false });
@@ -162,7 +162,7 @@ export const useOptimizedData = (options: UseOptimizedDataOptions = {}) => {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('player_achievements')
         .select('player_name, achievement_id, unlocked_at, created_at, tournament_id')
         .order('unlocked_at', { ascending: false })

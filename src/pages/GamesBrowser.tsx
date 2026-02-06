@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import { Search, Filter, Star, Users, Calendar, Gamepad2, Shuffle, Plus, Info, Heart, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { GameDetailsModal } from "@/components/GameDetailsModal";
@@ -128,7 +128,7 @@ const GamesBrowser: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedGames, setSelectedGames] = useState<Set<string>>(new Set());
-  // Use Supabase for favorites instead of localStorage
+  // Use API for favorites instead of localStorage
   const { favoriteGameIds, favoriteGamesDetails, toggleFavorite: toggleFavoriteInDB, isFavorited } = useGameDatabaseFavorites();
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
   const [totalGames, setTotalGames] = useState(0);
@@ -181,7 +181,7 @@ const GamesBrowser: React.FC = () => {
         const approvedPlatformNames = platforms.map(p => p.name);
 
         // Load unique genres only from approved platform games
-        const { data: genresData } = await supabase
+        const { data: genresData } = await api
           .from('games_database')
           .select('genres')
           .not('genres', 'is', null)
@@ -202,7 +202,7 @@ const GamesBrowser: React.FC = () => {
         }
 
         // Load unique ESRB ratings only from approved platform games
-        const { data: ratingsData } = await supabase
+        const { data: ratingsData } = await api
           .from('games_database')
           .select('esrb_rating')
           .not('esrb_rating', 'is', null)
@@ -293,7 +293,7 @@ const GamesBrowser: React.FC = () => {
 
     setSuggestionLoading(true);
     try {
-      const { data: suggestions, error } = await supabase
+      const { data: suggestions, error } = await api
         .from('games_database')
         .select('name')
         .ilike('name', `%${query}%`)
@@ -357,7 +357,7 @@ const GamesBrowser: React.FC = () => {
       // Get approved platform names for filtering
       const approvedPlatformNames = platforms.map(p => p.name);
 
-      let query = supabase
+      let query = api
         .from('games_database')
         .select(`
           id,
@@ -666,7 +666,7 @@ const GamesBrowser: React.FC = () => {
 
       // Apply genre filter
       if (filters.genre !== 'all') {
-        // Use Supabase's contains operator to check if genres array contains the selected genre
+        // Use contains operator to check if genres array contains the selected genre
         query = query.contains('genres', [filters.genre]);
       }
 
@@ -865,7 +865,7 @@ const GamesBrowser: React.FC = () => {
 
   const loadPlatforms = async () => {
     try {
-      const { data: platformsData, error: platformsError } = await supabase
+      const { data: platformsData, error: platformsError } = await api
         .from('platforms')
         .select('*')
         .order('name');
@@ -899,7 +899,7 @@ const GamesBrowser: React.FC = () => {
       const approvedPlatformNames = platforms.map(p => p.name);
 
       // Build query with same filters as main loadGames function
-      let query = supabase
+      let query = api
         .from('games_database')
         .select(`
           id,
@@ -943,7 +943,7 @@ const GamesBrowser: React.FC = () => {
 
       // Apply genre filter (if selected)
       if (filters.genre !== 'all') {
-        // Use Supabase's contains operator to check if genres array contains the selected genre
+        // Use contains operator to check if genres array contains the selected genre
         query = query.contains('genres', [filters.genre]);
       }
 

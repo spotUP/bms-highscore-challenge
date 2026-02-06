@@ -12,13 +12,8 @@ import PerformanceModeToggle from '@/components/PerformanceModeToggle';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import AdvancedConfetti from '@/components/AdvancedConfetti';
 import { createPortal } from 'react-dom';
-import { createClient } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+import { api } from '@/lib/api-client';
 
 // Helper function to check if tournament is complete - SAME LOGIC AS BracketAdmin
 const checkTournamentComplete = (matches: TournamentMatch[], bracketType: 'single' | 'double'): boolean => {
@@ -239,7 +234,7 @@ const Competition: React.FC = () => {
 
     let matchesSubscription;
     try {
-      matchesSubscription = supabase
+      matchesSubscription = api
         .channel(channelName)
         .on(
           'postgres_changes',
@@ -299,7 +294,7 @@ const Competition: React.FC = () => {
     }
 
     // Subscribe to bracket players changes
-    const playersSubscription = supabase
+    const playersSubscription = api
       .channel(`bracket_players_${selected.id}`)
       .on(
         'postgres_changes',
@@ -322,7 +317,7 @@ const Competition: React.FC = () => {
       .subscribe();
 
     // Subscribe to tournament status changes
-    const tournamentSubscription = supabase
+    const tournamentSubscription = api
       .channel(`bracket_tournaments_${selected.id}`)
       .on(
         'postgres_changes',

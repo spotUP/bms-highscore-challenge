@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { usePerformanceMode } from '@/hooks/usePerformanceMode';
 import { useTournament } from '@/contexts/TournamentContext';
 
@@ -78,7 +78,7 @@ const updateState = (updates: Partial<GameDataState>) => {
 // Data loading functions
 const loadGames = async () => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('games')
       .select('id, name, logo_url, is_active, include_in_challenge')
       .eq('is_active', true)
@@ -95,7 +95,7 @@ const loadGames = async () => {
 
 const loadScores = async () => {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await api
       .from('scores')
       .select('id, player_name, score, game_id, created_at')
       .order('score', { ascending: false })
@@ -111,7 +111,7 @@ const loadScores = async () => {
 
 const loadOverallLeaders = async () => {
   try {
-    const { data: scores, error } = await supabase
+    const { data: scores, error } = await api
       .from('scores')
       .select(`
         player_name,
@@ -188,7 +188,7 @@ const loadOverallLeaders = async () => {
 
 const loadAchievementHunters = async () => {
   try {
-    const { data: achievementData, error } = await supabase
+    const { data: achievementData, error } = await api
       .from('player_achievements')
       .select(`
         player_name,
@@ -229,14 +229,14 @@ const loadAchievementHunters = async () => {
 const loadDemolitionManScores = async () => {
   try {
     // First ensure Demolition Man game exists
-    const { data: gameId, error: ensureError } = await supabase
+    const { data: gameId, error: ensureError } = await api
       .rpc('ensure_demolition_man_game');
 
     if (ensureError) {
       console.error('Error ensuring Demolition Man game:', ensureError);
     }
 
-    const { data: scoreData, error } = await supabase
+    const { data: scoreData, error } = await api
       .from('scores')
       .select(`
         player_name,
@@ -267,7 +267,7 @@ const setupSubscriptions = () => {
   if (isSubscribed) return;
 
   // Single scores subscription
-  const scoresChannel = supabase
+  const scoresChannel = api
     .channel('global-scores')
     .on('postgres_changes', 
       { 
@@ -285,7 +285,7 @@ const setupSubscriptions = () => {
     .subscribe();
 
   // Single games subscription
-  const gamesChannel = supabase
+  const gamesChannel = api
     .channel('global-games')
     .on('postgres_changes', 
       { 
@@ -301,7 +301,7 @@ const setupSubscriptions = () => {
     .subscribe();
 
   // Single achievements subscription
-  const achievementsChannel = supabase
+  const achievementsChannel = api
     .channel('global-achievements')
     .on('postgres_changes', 
       { 
@@ -321,7 +321,7 @@ const setupSubscriptions = () => {
 
 const cleanupSubscriptions = () => {
   subscriptionChannels.forEach(channel => {
-    supabase.removeChannel(channel);
+    api.removeChannel(channel);
   });
   subscriptionChannels = [];
   isSubscribed = false;

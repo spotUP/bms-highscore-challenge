@@ -1,19 +1,16 @@
-import { createClient } from '@supabase/supabase-js';
+import { Pool } from 'pg';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-if (!supabaseUrl || !supabaseServiceKey) {
-  console.error('Missing required environment variables');
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('Missing DATABASE_URL');
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const pool = new Pool({ connectionString: DATABASE_URL });
 
 async function applyMigration() {
-  console.log('🔄 Applying image schema migration...');
+  console.log('Applying image schema migration...');
 
-  // Apply the changes one by one
   const migrations = [
     'ALTER TABLE games_database ADD COLUMN IF NOT EXISTS screenshot_url TEXT',
     'ALTER TABLE games_database ADD COLUMN IF NOT EXISTS cover_url TEXT',
@@ -22,19 +19,24 @@ async function applyMigration() {
     'CREATE INDEX IF NOT EXISTS idx_games_database_cover ON games_database(cover_url) WHERE cover_url IS NOT NULL'
   ];
 
-  for (const sql of migrations) {
-    console.log(`Running: ${sql}`);
-    const { error } = await supabase.rpc('exec_sql', { sql_query: sql });
-
-    if (error) {
-      console.error('❌ Error:', error);
-    } else {
-      console.log('✅ Success');
+  const client = await pool.connect();
+  try {
+    for (const sql of migrations) {
+      console.log(`Running: ${sql}`);
+      try {
+        await client.query(sql);
+        console.log('Success');
+      } catch (error: any) {
+        console.error('Error:', error.message);
+      }
     }
+  } finally {
+    client.release();
   }
 
-  console.log('🎉 Migration complete!');
+  console.log('Migration complete!');
 }
 
-// Run the migration
-applyMigration();
+applyMigration()
+  .catch(console.error)
+  .finally(() => pool.end());

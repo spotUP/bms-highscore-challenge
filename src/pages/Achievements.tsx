@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ArrowLeft, Trophy, Target, TrendingUp, Gamepad2, Search, User } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import PlayerAchievements from '@/components/PlayerAchievements';
 import PlayerScoreHistoryChart from '@/components/charts/PlayerScoreHistoryChart';
 import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from '@/utils/designSystem';
@@ -172,7 +172,7 @@ const Achievements = () => {
       }
 
       // Get all players with achievements from user's tournaments only
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('player_achievements')
         .select(`
           player_name,
@@ -249,7 +249,7 @@ const Achievements = () => {
       // Try to load player stats (this might fail if table doesn't exist)
       let statsData = null;
       try {
-        const { data, error: statsError } = await supabase
+        const { data, error: statsError } = await api
           .from('player_stats')
           .select('*')
           .eq('player_name', playerName.toUpperCase())
@@ -270,7 +270,7 @@ const Achievements = () => {
       // Try to load achievements (this might fail if table doesn't exist)
       let achievementsData = [];
       try {
-        const { data, error: achievementsError } = await supabase
+        const { data, error: achievementsError } = await api
           .from('player_achievements')
           .select(`
             *,
@@ -294,11 +294,11 @@ const Achievements = () => {
 
       // Load games and scores from user's tournaments only
       const [gamesResult, scoresResult] = await Promise.all([
-        supabase
+        api
           .from('games')
           .select('id, name')
           .eq('is_active', true),
-        supabase
+        api
           .from('scores')
           .select('game_id, player_name, score, created_at')
           .eq('player_name', playerName.toUpperCase())

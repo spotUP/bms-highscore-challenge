@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -8,11 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer } from '@/utils/designSystem';
 
 export default function Auth() {
-  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -28,122 +27,7 @@ export default function Auth() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Check if this is a password reset flow
-  useEffect(() => {
-    // Check both URL search params and hash fragment
-    const type = searchParams.get('type');
-    const accessToken = searchParams.get('access_token');
-    const refreshToken = searchParams.get('refresh_token');
-    
-    // Also check hash fragment for error information
-    const hash = window.location.hash.substring(1);
-    const hashParams = new URLSearchParams(hash);
-    const hashType = hashParams.get('type');
-    const hashAccessToken = hashParams.get('access_token');
-    const hashRefreshToken = hashParams.get('refresh_token');
-    const error = hashParams.get('error');
-    const errorCode = hashParams.get('error_code');
-    const errorDescription = hashParams.get('error_description');
-    
-    // Debug logging
-    console.log('URL params:', { type, accessToken: !!accessToken, refreshToken: !!refreshToken });
-    console.log('Hash params:', { type: hashType, accessToken: !!hashAccessToken, refreshToken: !!hashRefreshToken, error, errorCode });
-    console.log('Full URL:', window.location.href);
-
-    // Handle error cases from hash
-    if (error) {
-      if (errorCode === 'otp_expired') {
-        // Prefer type from hash (Supabase uses hash fragment), fallback to search param
-        const expiredType = (hashType || type) === 'recovery' ? 'recovery' : 'invite';
-        toast({
-          variant: "destructive",
-          title: "Link expired",
-          description: "Your link expired or was auto-clicked by a scanner. You can verify using the 6-digit code."
-        });
-        // Send the user to the code verification page with a preselected flow and email if we have it
-        let forwardUrl = `/auth/verify?type=${expiredType}`;
-        if (expiredType === 'recovery') {
-          try {
-            const last = localStorage.getItem('last_reset_email');
-            if (last) forwardUrl += `&email=${encodeURIComponent(last)}`;
-          } catch {}
-        }
-        navigate(forwardUrl);
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Reset link error",
-          description: errorDescription || "There was an error with the password reset link."
-        });
-        const errType = (hashType || type) === 'recovery' ? 'recovery' : 'invite';
-        let expiredUrl = `/auth/expired?type=${errType}&error=${encodeURIComponent(error)}&description=${encodeURIComponent(errorDescription || '')}`;
-        if (errType === 'recovery') {
-          try {
-            const last = localStorage.getItem('last_reset_email');
-            if (last) expiredUrl += `&email=${encodeURIComponent(last)}`;
-          } catch {}
-        }
-        navigate(expiredUrl);
-      }
-      // Clean up the URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      return;
-    }
-
-    // Check for valid tokens (from either search params or hash)
-    const finalType = type || hashType;
-    const finalAccessToken = accessToken || hashAccessToken;
-    const finalRefreshToken = refreshToken || hashRefreshToken;
-
-    if (finalType === 'recovery' && finalAccessToken && finalRefreshToken) {
-      console.log('Setting password reset mode');
-      setIsPasswordReset(true);
-      // Set the session with the tokens from the URL
-      supabase.auth.setSession({
-        access_token: finalAccessToken,
-        refresh_token: finalRefreshToken
-      }).then(({ data, error }) => {
-        if (error) {
-          console.error('Error setting session:', error);
-          toast({
-            variant: "destructive",
-            title: "Invalid reset link",
-            description: "This password reset link is invalid or has expired."
-          });
-          setIsPasswordReset(false);
-        } else {
-          console.log('Session set successfully for password reset');
-          // Clean up the URL
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
-      });
-    } else if ((finalType === 'signup' || finalType === 'magiclink') && finalAccessToken && finalRefreshToken) {
-      console.log('Handling signup/magiclink redirect; setting session');
-      supabase.auth.setSession({
-        access_token: finalAccessToken,
-        refresh_token: finalRefreshToken
-      }).then(({ data, error }) => {
-        if (error) {
-          console.error('Error setting session after signup:', error);
-          toast({
-            variant: "destructive",
-            title: "Sign in link error",
-            description: "There was a problem completing sign in. Please try again."
-          });
-        } else {
-          toast({
-            title: "Welcome!",
-            description: "Your account has been confirmed and you are signed in."
-          });
-          // Clean up URL and navigate home
-          window.history.replaceState({}, document.title, window.location.pathname);
-          navigate('/');
-        }
-      });
-    } else {
-      console.log('Not a password reset flow or missing parameters');
-    }
-  }, [searchParams, toast]);
+  // Password reset now uses email + code flow (no URL tokens).
 
   // If already signed in, show a quick Continue shortcut and auto-redirect away
   useEffect(() => {
@@ -246,6 +130,7 @@ export default function Auth() {
           title: "Password reset sent!",
           description: "Check your email for password reset instructions."
         });
+        navigate(`/auth/verify?type=recovery&email=${encodeURIComponent(resetEmail)}`);
         setShowForgotPassword(false);
         setResetEmail('');
       }
@@ -284,7 +169,7 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      const { error } = await api.auth.updateUser({
         password: newPassword
       });
 

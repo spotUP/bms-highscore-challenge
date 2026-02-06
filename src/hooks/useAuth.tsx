@@ -1,11 +1,10 @@
 import { useState, useEffect, createContext, useContext } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase, setRememberMe } from '@/integrations/supabase/client';
+import { api, setRememberMe, AuthUser, AuthSession } from '@/lib/api-client';
 import { useNetworkStatus } from './useNetworkStatus';
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: AuthUser | null;
+  session: AuthSession | null;
   loading: boolean;
   signUp: (email: string, password: string, username?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string, remember?: boolean) => Promise<{ error: any }>;
@@ -17,8 +16,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     try {
@@ -34,7 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
 
     // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = api.auth.onAuthStateChange(
       (event, session) => {
         if (!mounted) return;
 
@@ -64,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Check for existing session with better error handling
     const initializeSession = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session }, error } = await api.auth.getSession();
 
         if (!mounted) return;
 
@@ -72,7 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('Error getting session:', error);
           // Try to recover by refreshing session if we have refresh token
           try {
-            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+            const { data: refreshData, error: refreshError } = await api.auth.refreshSession();
             if (!refreshError && refreshData?.session && mounted) {
               setSession(refreshData.session);
               setUser(refreshData.session.user);
@@ -116,7 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (retryCount < 3) { // Limit retries
         console.log(`Attempting session recovery (attempt ${retryCount + 1})`);
         try {
-          const { data: { session }, error } = await supabase.auth.getSession();
+          const { data: { session }, error } = await api.auth.getSession();
           if (!error && session && !user) {
             console.log('Session recovered after network reconnection');
             setSession(session);
@@ -147,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const checkAdminRole = async (userId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('user_roles')
         .select('role')
         .eq('user_id', userId)
@@ -168,7 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Use /auth so our Auth page can capture tokens on redirect (signup/magiclink)
     const redirectUrl = `${window.location.origin}/auth`;
     
-    const { error } = await supabase.auth.signUp({
+    const { error } = await api.auth.signUp({
       email,
       password,
       options: {
@@ -183,7 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signIn = async (email: string, password: string, remember: boolean = true) => {
-    // Persist preference before sign-in so Supabase stores tokens in the desired storage
+    // Persist preference before sign-in so tokens are stored in the desired storage
     setRememberMe(remember);
 
     // If offline, return a helpful error
@@ -195,7 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error } = await api.auth.signInWithPassword({
       email,
       password,
     });
@@ -205,14 +204,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetPassword = async (email: string) => {
     const redirectUrl = `${window.location.origin}/auth`;
     
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    const { error } = await api.auth.resetPasswordForEmail(email, {
       redirectTo: redirectUrl,
     });
     return { error };
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut({ scope: 'global' });
+    await api.auth.signOut();
     setIsAdmin(false);
     try { localStorage.removeItem('rr_isAdmin'); } catch {}
   };

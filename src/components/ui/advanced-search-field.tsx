@@ -3,7 +3,7 @@ import { Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AutocompleteDropdown } from '@/components/ui/autocomplete-dropdown';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 
 interface AdvancedSearchFieldProps {
   // Core props
@@ -62,7 +62,7 @@ export const AdvancedSearchField: React.FC<AdvancedSearchFieldProps> = ({
     if (query.length < 2) return [];
 
     try {
-      const { data: suggestions, error } = await supabase
+      const { data: suggestions, error } = await api
         .from('games_database')
         .select('name')
         .ilike('name', `%${query}%`)

@@ -9,8 +9,8 @@ console.log('🚀 Running deployment tests...');
 
 // Check if required environment variables are set
 const requiredEnvVars = [
-  'VITE_SUPABASE_URL',
-  'VITE_SUPABASE_ANON_KEY'
+  'VITE_API_URL',
+  'VITE_WS_URL'
 ];
 
 // Optional but recommended environment variables for enhanced features

@@ -96,20 +96,20 @@ export function formatScore(score: number): string {
   return score.toLocaleString('de-DE'); // German locale uses periods for thousands separators
 }
 
-// Convert local game logo paths to Supabase Storage URLs
+// Convert local game logo paths to public media URLs
 export function getGameLogoUrl(logoUrl: string | null): string | null {
   if (!logoUrl) return null;
   
-  // If it's already a Supabase Storage URL, return as-is
-  if (logoUrl.includes('supabase.co/storage/')) {
+  // If it's already a full URL, return as-is
+  if (logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
     return logoUrl;
   }
   
-  // If it's a local path, convert to Supabase Storage URL using env domain
+  // If it's a local path, convert to public media URL using env domain
   if (logoUrl.startsWith('/game-logos/')) {
     const fileName = logoUrl.substring('/game-logos/'.length);
-    const base = (import.meta as any)?.env?.VITE_SUPABASE_URL || 'https://tnsgrwntmnzpaifmutqh.supabase.co';
-    return `${base}/storage/v1/object/public/game-logos/${fileName}`;
+    const base = (import.meta as any)?.env?.VITE_MEDIA_BASE_URL || (import.meta as any)?.env?.VITE_API_URL || '';
+    return `${base}/media/game-logos/${fileName}`;
   }
   
   // If it's a placeholder URL, return null to trigger fallback

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePerformanceMode } from '@/hooks/usePerformanceMode';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 
 interface RealtimeConfig {
   fallbackPolling: boolean;
@@ -39,7 +39,7 @@ export const useRealtimeOptimizations = () => {
     let isSubscribed = false;
 
     const setupSubscription = () => {
-      channel = supabase
+      channel = api
         .channel(channelName)
         .on('postgres_changes', {
           event: '*',

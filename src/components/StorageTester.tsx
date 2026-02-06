@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,7 +29,7 @@ const StorageTester: React.FC = () => {
     if (!myFolder) return;
     setLoadingList(true);
     try {
-      const { data, error } = await supabase.storage.from(BUCKET).list(myFolder, {
+      const { data, error } = await api.storage.from(BUCKET).list(myFolder, {
         limit: 100,
         offset: 0,
         sortBy: { column: 'name', order: 'asc' },
@@ -41,7 +41,7 @@ const StorageTester: React.FC = () => {
         files.map(async (f) => {
           try {
             const path = `${myFolder}/${f.name}`;
-            const { data: signed, error: sErr } = await supabase.storage.from(BUCKET).createSignedUrl(path, 300);
+            const { data: signed, error: sErr } = await api.storage.from(BUCKET).createSignedUrl(path, 300);
             return { ...f, _path: path, _signedUrl: signed?.signedUrl, _signedError: sErr?.message };
           } catch (e) {
             return { ...f, _path: `${myFolder}/${f.name}`, _signedUrl: null, _signedError: String(e) };
@@ -72,14 +72,14 @@ const StorageTester: React.FC = () => {
       const file = files[0];
       const ext = file.name.split('.').pop();
       const path = `${myFolder}/${Date.now()}-${Math.random().toString(36).slice(2)}${ext ? '.' + ext : ''}`;
-      const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+      const { error } = await api.storage.from(BUCKET).upload(path, file, {
         upsert: false,
         contentType: file.type || undefined,
       });
       if (error) throw error;
       // Provide a short-lived signed URL for quick testing
       try {
-        const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(path, 300);
+        const { data: signed } = await api.storage.from(BUCKET).createSignedUrl(path, 300);
         if (signed?.signedUrl) {
           try { await navigator.clipboard.writeText(signed.signedUrl); } catch {}
           toast({ title: 'Uploaded', description: `Saved as ${path}. Signed URL (5 min) copied to clipboard.` });
@@ -91,7 +91,7 @@ const StorageTester: React.FC = () => {
       }
       // Verify by downloading immediately (proves the object exists and is readable via SDK)
       try {
-        const { data: blob, error: dlErr } = await supabase.storage.from(BUCKET).download(path);
+        const { data: blob, error: dlErr } = await api.storage.from(BUCKET).download(path);
         if (dlErr) throw dlErr;
         const size = (blob as Blob)?.size;
         toast({ title: 'Verified', description: `Downloaded ${size ?? 0} bytes via SDK.` });
@@ -116,7 +116,7 @@ const StorageTester: React.FC = () => {
       return;
     }
     try {
-      const { data, error } = await supabase.storage.from(BUCKET).list(folder, { limit: 10 });
+      const { data, error } = await api.storage.from(BUCKET).list(folder, { limit: 10 });
       if (error) throw error;
       setOtherList(data || []);
       if ((data || []).length === 0) {
@@ -193,7 +193,7 @@ const StorageTester: React.FC = () => {
                           size="sm"
                           onClick={async () => {
                             try {
-                              const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(f._path || `${myFolder}/${f.name}`, 300);
+                              const { data, error } = await api.storage.from(BUCKET).createSignedUrl(f._path || `${myFolder}/${f.name}`, 300);
                               if (error) throw error;
                               if (data?.signedUrl) {
                                 try { await navigator.clipboard.writeText(data.signedUrl); } catch {}
@@ -215,7 +215,7 @@ const StorageTester: React.FC = () => {
                           onClick={async () => {
                             try {
                               const path = f._path || `${myFolder}/${f.name}`;
-                              const { data, error } = await supabase.storage.from(BUCKET).download(path);
+                              const { data, error } = await api.storage.from(BUCKET).download(path);
                               if (error) throw error;
                               const blob = data as Blob;
                               const url = URL.createObjectURL(blob);
@@ -237,7 +237,7 @@ const StorageTester: React.FC = () => {
                           onClick={async () => {
                             try {
                               const path = f._path || `${myFolder}/${f.name}`;
-                              const { error } = await supabase.storage.from(BUCKET).remove([path]);
+                              const { error } = await api.storage.from(BUCKET).remove([path]);
                               if (error) throw error;
                               toast({ title: 'Deleted', description: f.name });
                               await loadMyFiles();

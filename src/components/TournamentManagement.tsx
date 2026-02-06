@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useTournament, Tournament } from '@/contexts/TournamentContext';
 import { useToast } from '@/hooks/use-toast';
 import { Globe, Lock, Users, Trophy, Search, Plus, Settings, Crown, Shield, User } from 'lucide-react';
@@ -57,7 +57,7 @@ const TournamentManagement = () => {
   // Load public tournaments (only show tournaments marked as public)
   const loadPublicTournaments = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('tournaments')
         .select('*')
         .eq('is_public', true)

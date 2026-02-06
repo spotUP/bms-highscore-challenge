@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+const API_URL = (import.meta as any)?.env?.VITE_API_URL || '';
 
 /**
  * Create a short-lived signed URL for a private storage object.
@@ -7,8 +7,15 @@ import { supabase } from '@/integrations/supabase/client';
  * @param expiresIn Seconds until expiry (default 300s = 5 minutes)
  */
 export async function getSignedUrl(bucket: string, path: string, expiresIn = 300) {
-  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, expiresIn);
-  if (error) throw error;
+  const response = await fetch(`${API_URL}/api/storage/signed-url`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bucket, path, expiresIn })
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to create signed URL (${response.status})`);
+  }
+  const data = await response.json();
   return data?.signedUrl || null;
 }
 
@@ -16,16 +23,21 @@ export async function getSignedUrl(bucket: string, path: string, expiresIn = 300
  * Download a private storage object as a Blob using authenticated session.
  */
 export async function downloadObject(bucket: string, path: string) {
-  const { data, error } = await supabase.storage.from(bucket).download(path);
-  if (error) throw error;
-  return data as Blob;
+  const response = await fetch(`${API_URL}/api/storage/download`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bucket, path })
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to download object (${response.status})`);
+  }
+  return await response.blob();
 }
 
 /**
- * Parse a Supabase Storage object URL into { bucket, path }.
+ * Parse a storage object URL into { bucket, path }.
  * Supports forms like:
- *  - https://<proj>.supabase.co/storage/v1/object/<bucket>/<path>
- *  - https://<proj>.supabase.co/storage/v1/object/public/<bucket>/<path> (returns bucket, path)
+ *  - https://<api>/media/<bucket>/<path>
  *  - '<bucket>/<path>' (already bucket/path)
  */
 export function parseStorageObjectUrl(url: string): { bucket: string; path: string } | null {
@@ -38,13 +50,10 @@ export function parseStorageObjectUrl(url: string): { bucket: string; path: stri
     }
     const u = new URL(url);
     const parts = u.pathname.split('/').filter(Boolean);
-    // expect ... /storage/v1/object/(public)?/<bucket>/<path...>
-    const objectIdx = parts.indexOf('object');
-    if (objectIdx === -1) return null;
-    let idx = objectIdx + 1;
-    if (parts[idx] === 'public') idx += 1; // skip optional 'public'
-    const bucket = parts[idx];
-    const path = parts.slice(idx + 1).join('/');
+    const mediaIdx = parts.indexOf('media');
+    if (mediaIdx === -1) return null;
+    const bucket = parts[mediaIdx + 1];
+    const path = parts.slice(mediaIdx + 2).join('/');
     if (!bucket || !path) return null;
     return { bucket, path };
   } catch {

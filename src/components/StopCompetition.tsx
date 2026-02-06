@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useCompetitionWebhooks } from '@/hooks/useCompetitionWebhooks';
@@ -23,7 +23,7 @@ const StopCompetition: React.FC<StopCompetitionProps> = ({ onCompetitionStopped,
   useEffect(() => {
     const checkForGames = async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await api
           .from('games')
           .select('id')
           .limit(1);
@@ -56,13 +56,13 @@ const StopCompetition: React.FC<StopCompetitionProps> = ({ onCompetitionStopped,
     try {
       // First, gather competition data before archiving
       const [gamesResult, scoresResult, winnerResult] = await Promise.all([
-        supabase
+        api
           .from('games')
           .select('id, name, logo_url'),
-        supabase
+        api
           .from('scores')
           .select('player_name, score'),
-        supabase
+        api
           .from('scores')
           .select('player_name, score')
           .order('score', { ascending: false })
@@ -75,7 +75,7 @@ const StopCompetition: React.FC<StopCompetitionProps> = ({ onCompetitionStopped,
       const winner = winnerResult.data;
 
       // Call the archive function
-      const { data, error } = await supabase.rpc('archive_current_competition');
+      const { data, error } = await api.rpc('archive_current_competition');
 
       if (error) {
         console.error('Error archiving competition:', error);

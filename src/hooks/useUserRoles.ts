@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useAuth } from './useAuth';
 
 export interface UserRole {
@@ -31,7 +31,7 @@ export const useUserRoles = () => {
     if (!user) return;
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)

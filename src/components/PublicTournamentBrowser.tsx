@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { Globe, Search, Trophy, Users } from 'lucide-react';
 
 interface PublicTournament {
@@ -26,7 +26,7 @@ const PublicTournamentBrowser = () => {
   // Load public tournaments (only show tournaments marked as public)
   const loadPublicTournaments = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('tournaments')
         .select('*')
         .eq('is_public', true)

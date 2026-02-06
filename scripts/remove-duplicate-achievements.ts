@@ -1,32 +1,30 @@
-import { createClient } from '@supabase/supabase-js';
+import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
-// Load environment variables
 dotenv.config();
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY; // Using service role key for admin operations
-
-if (!supabaseUrl || !supabaseKey) {
-  console.error('Missing required environment variables');
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('Missing DATABASE_URL');
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const pool = new Pool({ connectionString: DATABASE_URL });
 
 async function removeDuplicateAchievements() {
   console.log('Starting to remove duplicate achievements...');
 
+  const client = await pool.connect();
   try {
     // Step 1: Find all duplicate achievements (same name and tournament_id)
-    const { data: duplicates, error: findError } = await supabase
-      .rpc('find_duplicate_achievements');
+    const { rows: duplicates } = await client.query(`
+      SELECT name, tournament_id, COUNT(*) as cnt
+      FROM achievements
+      GROUP BY name, tournament_id
+      HAVING COUNT(*) > 1
+    `);
 
-    if (findError) {
-      throw findError;
-    }
-
-    if (!duplicates || duplicates.length === 0) {
+    if (duplicates.length === 0) {
       console.log('No duplicate achievements found!');
       return;
     }
@@ -38,61 +36,52 @@ async function removeDuplicateAchievements() {
 
     for (const dup of duplicates) {
       console.log(`\nProcessing duplicates for: ${dup.name} (Tournament: ${dup.tournament_id})`);
-      
-      // Get all duplicates for this name and tournament
-      const { data: achievements, error: fetchError } = await supabase
-        .from('achievements')
-        .select('*')
-        .eq('name', dup.name)
-        .eq('tournament_id', dup.tournament_id)
-        .order('created_at', { ascending: true });
 
-      if (fetchError) {
-        console.error(`Error fetching duplicates for ${dup.name}:`, fetchError);
-        continue;
-      }
+      const { rows: achievements } = await client.query(
+        `SELECT * FROM achievements WHERE name = $1 AND tournament_id = $2 ORDER BY created_at ASC`,
+        [dup.name, dup.tournament_id]
+      );
 
-      if (!achievements || achievements.length <= 1) {
+      if (achievements.length <= 1) {
         console.log('  No duplicates found (might have been processed already)');
         continue;
       }
 
-      // The first one is the oldest (due to ordering above)
       const [oldest, ...rest] = achievements;
       console.log(`  Keeping oldest (ID: ${oldest.id}, Created: ${oldest.created_at})`);
-      
-      // Delete the rest
-      const idsToDelete = rest.map(a => a.id);
-      const { error: deleteError } = await supabase
-        .from('achievements')
-        .delete()
-        .in('id', idsToDelete);
 
-      if (deleteError) {
-        console.error(`  Error deleting duplicates:`, deleteError);
-      } else {
-        console.log(`  Deleted ${idsToDelete.length} duplicates`);
-        deletedCount += idsToDelete.length;
-      }
+      const idsToDelete = rest.map((a: any) => a.id);
+      await client.query(
+        `DELETE FROM achievements WHERE id = ANY($1)`,
+        [idsToDelete]
+      );
+
+      console.log(`  Deleted ${idsToDelete.length} duplicates`);
+      deletedCount += idsToDelete.length;
     }
 
     console.log(`\nDone! Removed ${deletedCount} duplicate achievements`);
 
     // Step 3: Add unique constraint if it doesn't exist
     console.log('\nEnsuring unique constraint exists...');
-    const { error: constraintError } = await supabase.rpc('add_achievement_name_constraint');
-    
-    if (constraintError) {
-      console.error('Error adding constraint (it might already exist):', constraintError);
-    } else {
+    try {
+      await client.query(`
+        ALTER TABLE achievements
+        ADD CONSTRAINT achievements_name_tournament_unique UNIQUE (name, tournament_id)
+      `);
       console.log('Unique constraint added successfully');
+    } catch (e: any) {
+      if (e.code === '42710') {
+        console.log('Unique constraint already exists');
+      } else {
+        console.error('Error adding constraint:', e.message);
+      }
     }
-
-  } catch (error) {
-    console.error('Error removing duplicate achievements:', error);
-    process.exit(1);
+  } finally {
+    client.release();
   }
 }
 
-// Run the function
-removeDuplicateAchievements().catch(console.error);
+removeDuplicateAchievements()
+  .catch(console.error)
+  .finally(() => pool.end());

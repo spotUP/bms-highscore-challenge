@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -157,7 +157,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
   // Load games from the database
   const loadGames = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('games')
         .select('id, name, logo_url')
         .order('name', { ascending: true });
@@ -178,7 +178,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
   useEffect(() => {
     const getUser = async () => {
       try {
-        const { data } = await supabase.auth.getUser();
+        const { data } = await api.auth.getUser();
         setCurrentUserId(data.user?.id ?? null);
       } catch (e) {
         console.error('Failed to get current user', e);
@@ -379,7 +379,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
     const createdAchievements = [];
     for (const achievement of baseAchievements) {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await api
           .from('achievements')
           .insert({
             tournament_id: currentTournament.id,
@@ -429,7 +429,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         // Check if user has any achievements in this tournament
         let rows: any[] | null = null;
         try {
-          const { data, error } = await supabase
+          const { data, error } = await api
             .from('achievements')
             .select('id')
             .eq('tournament_id', currentTournament.id)
@@ -450,7 +450,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
 
         // Load user's achievements
         try {
-          const { data, error } = await supabase
+          const { data, error } = await api
             .from('achievements')
             .select(
               'id,name,description,type,badge_icon,badge_color,criteria,points,is_active,created_at,updated_at,tournament_id,created_by'
@@ -462,7 +462,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
           rows = (data as unknown as any[]) || [];
         } catch (e: any) {
           // Column may not exist in older schemas – fall back without created_by filter
-          const { data, error } = await supabase
+          const { data, error } = await api
             .from('achievements')
             .select(
               'id,name,description,type,badge_icon,badge_color,criteria,points,is_active,created_at,updated_at,tournament_id'
@@ -477,7 +477,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         setAchievements((rows as unknown as Achievement[]) || []);
       } else {
         // Fallback to RPC (may include additional computed fields)
-        const { data, error } = await supabase.rpc('get_tournament_achievements' as any, {
+        const { data, error } = await api.rpc('get_tournament_achievements' as any, {
           p_tournament_id: currentTournament.id
         });
         if (error) throw error;
@@ -502,7 +502,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
 
     try {
       setLoadingPlayerAchievements(true);
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('player_achievements')
         .select(`
           id,
@@ -577,7 +577,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
   const confirmDeleteAchievement = async () => {
     if (!deleteDialog.id) return;
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('achievements')
         .delete()
         .eq('id', deleteDialog.id);
@@ -609,7 +609,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
     try {
 
       // Count records before
-      const { data: beforeCount, error: beforeError } = await supabase
+      const { data: beforeCount, error: beforeError } = await api
         .from('player_achievements')
         .select('id')
         .eq('tournament_id', currentTournament.id);
@@ -620,8 +620,8 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
       }
 
 
-      // Use the regular authenticated supabase client (user has admin privileges)
-      const { error, count } = await supabase
+      // Use the regular authenticated api client (user has admin privileges)
+      const { error, count } = await api
         .from('player_achievements')
         .delete({ count: 'exact' })
         .eq('tournament_id', currentTournament.id);
@@ -633,7 +633,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
 
 
       // Count records after to verify
-      const { data: afterCount, error: afterError } = await supabase
+      const { data: afterCount, error: afterError } = await api
         .from('player_achievements')
         .select('id')
         .eq('tournament_id', currentTournament.id);
@@ -665,7 +665,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
 
     try {
       // Use regular authenticated client - RLS should allow tournament creators to delete their achievements
-      const { error } = await supabase
+      const { error } = await api
         .from('achievements')
         .delete()
         .eq('tournament_id', currentTournament.id);
@@ -703,7 +703,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
       return;
     }
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('achievements')
         .update({ is_active: !achievement.is_active })
         .eq('id', achievement.id);
@@ -736,7 +736,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
 
     try {
       // Use Edge Function for secure deletion
-      const { data, error } = await supabase.functions.invoke('manage-player-achievements', {
+      const { data, error } = await api.functions.invoke('manage-player-achievements', {
         body: {
           action: 'delete',
           player_achievement_id: playerAchievementId

@@ -1,10 +1,9 @@
 import { useEffect, useCallback } from 'react';
-import { useSupabaseClient } from '@supabase/auth-helpers-react';
 import { toast } from 'sonner';
 import { useAchievement } from '@/contexts/AchievementContext';
 import { useGameLogo } from '@/hooks/useGameLogo';
 import { useTournament } from '@/contexts/TournamentContext';
-import { Database } from '@/types/supabase';
+import { api } from '@/lib/api-client';
 
 interface ScoreSubmission {
   player_name: string;
@@ -30,7 +29,6 @@ interface AchievementUnlock {
 }
 
 export const useScoreSubmissions = () => {
-  const supabase = useSupabaseClient<Database>();
   const { showAchievementNotification } = useAchievement();
   const { currentTournament } = useTournament();
   const getGameLogo = useGameLogo();
@@ -42,7 +40,7 @@ export const useScoreSubmissions = () => {
     }
 
     // Get game info
-    const { data: game } = await supabase
+    const { data: game } = await api
       .from('games')
       .select('name, logo_url')
       .eq('id', payload.game_id)
@@ -83,12 +81,12 @@ export const useScoreSubmissions = () => {
         },
       }
     );
-  }, [currentTournament, getGameLogo, supabase, showAchievementNotification]);
+  }, [currentTournament, getGameLogo, api, showAchievementNotification]);
 
   // Set up real-time subscriptions
   useEffect(() => {
     // Subscribe to score submissions
-    const scoreChannel = supabase
+    const scoreChannel = api
       .channel('score_submissions')
       .on(
         'postgres_changes',
@@ -104,7 +102,7 @@ export const useScoreSubmissions = () => {
       .subscribe();
 
     // Subscribe to achievement unlocks
-    const achievementChannel = supabase
+    const achievementChannel = api
       .channel('achievement_unlocks')
       .on(
         'postgres_changes',
@@ -117,7 +115,7 @@ export const useScoreSubmissions = () => {
           const achievementUnlock = payload.new as AchievementUnlock;
           
           // Get achievement details
-          const { data: achievement } = await supabase
+          const { data: achievement } = await api
             .from('achievements')
             .select('*')
             .eq('id', achievementUnlock.achievement_id)
@@ -138,54 +136,12 @@ export const useScoreSubmissions = () => {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(scoreChannel);
-      supabase.removeChannel(achievementChannel);
+      api.removeChannel(scoreChannel);
+      api.removeChannel(achievementChannel);
     };
-  }, [showAchievementNotification, showScoreNotification, supabase]);
+  }, [showAchievementNotification, showScoreNotification, api]);
 
   return {
     showScoreNotification,
   };
 };
-
-// Add this to your types/supabase.ts file if it doesn't exist
-declare module '@/types/supabase' {
-  interface Database {
-    public: {
-      Tables: {
-        score_submissions: {
-          Row: {
-            id: string;
-            player_name: string;
-            score: number;
-            game_id: string;
-            tournament_id: string | null;
-            created_at: string;
-            is_high_score: boolean;
-            previous_high_score: number | null;
-          };
-          Insert: {
-            id?: string;
-            player_name: string;
-            score: number;
-            game_id: string;
-            tournament_id?: string | null;
-            created_at?: string;
-            is_high_score?: boolean;
-            previous_high_score?: number | null;
-          };
-          Update: {
-            id?: string;
-            player_name?: string;
-            score?: number;
-            game_id?: string;
-            tournament_id?: string | null;
-            created_at?: string;
-            is_high_score?: boolean;
-            previous_high_score?: number | null;
-          };
-        };
-      };
-    };
-  }
-}

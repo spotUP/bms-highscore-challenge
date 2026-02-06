@@ -1,7 +1,7 @@
 import { useState, forwardRef, useImperativeHandle, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { clearLogoService } from "@/services/clearLogoService";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 
 interface GameLogoSuggestionsProps {
   gameName: string;
@@ -40,7 +40,7 @@ const GameLogoSuggestions = forwardRef<GameLogoSuggestionsRef, GameLogoSuggestio
       console.log(`🔍 Searching database for: "${gameName}"`);
 
       // Use the same database search as AdvancedSearchField - simple and effective!
-      const { data: dbMatches, error } = await supabase
+      const { data: dbMatches, error } = await api
         .from('games_database')
         .select('name')
         .ilike('name', `%${gameName}%`)

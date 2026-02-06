@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 
 interface GameDatabaseFavorite {
@@ -33,7 +33,7 @@ export const useGameDatabaseFavorites = () => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('user_favorites')
         .select('*')
         .eq('user_id', user.id)
@@ -50,7 +50,7 @@ export const useGameDatabaseFavorites = () => {
       // Also load full game details for favorites
       if (data && data.length > 0) {
         const gameIds = data.map(f => f.game_id);
-        const { data: gamesData, error: gamesError } = await supabase
+        const { data: gamesData, error: gamesError } = await api
           .from('games_database')
           .select(`
             id,
@@ -104,7 +104,7 @@ export const useGameDatabaseFavorites = () => {
         game_name: game.name,
       };
 
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('user_favorites')
         .insert(favoriteData)
         .select()
@@ -119,7 +119,7 @@ export const useGameDatabaseFavorites = () => {
       setFavoriteGameIds(prev => new Set([...prev, game.id.toString()]));
 
       // Also load the full game details for this new favorite
-      const { data: gameData, error: gameError } = await supabase
+      const { data: gameData, error: gameError } = await api
         .from('games_database')
         .select(`
           id,
@@ -160,7 +160,7 @@ export const useGameDatabaseFavorites = () => {
     if (!user) return false;
 
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('user_favorites')
         .delete()
         .eq('user_id', user.id)
@@ -214,7 +214,7 @@ export const useGameDatabaseFavorites = () => {
           console.log('Migrating', favoritesArray.length, 'favorites from localStorage to database');
 
           // We'll need the game names from the database
-          const { data: gamesData } = await supabase
+          const { data: gamesData } = await api
             .from('games_database')
             .select('id, name')
             .in('id', favoritesArray);
@@ -226,7 +226,7 @@ export const useGameDatabaseFavorites = () => {
               game_name: game.name,
             }));
 
-            const { error } = await supabase
+            const { error } = await api
               .from('user_favorites')
               .insert(migratedFavorites);
 

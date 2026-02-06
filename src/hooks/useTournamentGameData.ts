@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { usePerformanceMode } from '@/hooks/usePerformanceMode';
 import { useTournament } from '@/contexts/TournamentContext';
 import { usePi5Polling } from '@/hooks/usePi5Polling';
@@ -68,7 +68,7 @@ export const useTournamentGameData = () => {
     try {
       dlog('useTournamentGameData: Loading games for tournament:', currentTournament.id);
       // Load games with tournament_id filter
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('games')
         .select('id, name, logo_url, tournament_id')
         .eq('tournament_id', currentTournament.id)
@@ -97,7 +97,7 @@ export const useTournamentGameData = () => {
     try {
       dlog('useTournamentGameData: Loading scores for tournament:', currentTournament.id);
       // Load scores with tournament_id filter
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('scores')
         .select('id, player_name, score, game_id, tournament_id, created_at')
         .eq('tournament_id', currentTournament.id)
@@ -122,7 +122,7 @@ export const useTournamentGameData = () => {
 
     try {
       // Load scores with tournament_id filter
-      const { data: scores, error } = await supabase
+      const { data: scores, error } = await api
         .from('scores')
         .select(`
           player_name,
@@ -198,7 +198,7 @@ export const useTournamentGameData = () => {
 
     try {
       // Load achievements with tournament_id filter
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('player_achievements')
         .select(`
           player_name,
@@ -297,7 +297,7 @@ export const useTournamentGameData = () => {
   useEffect(() => {
     if (!currentTournament) return;
 
-    const scoresChannel = supabase
+    const scoresChannel = api
       .channel(`scores-${currentTournament.id}`)
       .on(
         'postgres_changes',
@@ -313,7 +313,7 @@ export const useTournamentGameData = () => {
       )
       .subscribe();
 
-    const gamesChannel = supabase
+    const gamesChannel = api
       .channel(`games-${currentTournament.id}`)
       .on(
         'postgres_changes',
@@ -329,7 +329,7 @@ export const useTournamentGameData = () => {
       )
       .subscribe();
 
-    const achievementsChannel = supabase
+    const achievementsChannel = api
       .channel(`achievements-${currentTournament.id}`)
       .on(
         'postgres_changes',

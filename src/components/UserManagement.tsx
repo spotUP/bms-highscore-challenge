@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { Users, Shield, UserPlus, Edit, Trash2, Mail, Calendar } from 'lucide-react';
 import { getCardStyle, getTypographyStyle, LoadingSpinner } from '@/utils/designSystem';
 
@@ -51,7 +51,7 @@ const UserManagement: React.FC = () => {
   const resendInvite = async (user: User) => {
     try {
       const role = getUserRole(user.id) || 'user';
-      const { data, error } = await supabase.functions.invoke('invite-user', {
+      const { data, error } = await api.functions.invoke('invite-user', {
         body: {
           email: user.email,
           role: role
@@ -87,7 +87,7 @@ const UserManagement: React.FC = () => {
   const loadUsers = async () => {
     try {
       // Use Edge Function to get users (has proper admin access)
-      const { data, error } = await supabase.functions.invoke('manage-users', {
+      const { data, error } = await api.functions.invoke('manage-users', {
         body: { action: 'list' }
       });
 
@@ -117,7 +117,7 @@ const UserManagement: React.FC = () => {
 
   const loadUserRoles = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('user_roles')
         .select('*');
 
@@ -144,7 +144,7 @@ const UserManagement: React.FC = () => {
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke('invite-user', {
+      const { data, error } = await api.functions.invoke('invite-user', {
         body: {
           email: newUserEmail.trim(),
           role: newUserRole
@@ -178,7 +178,7 @@ const UserManagement: React.FC = () => {
 
   const createTestUser = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke('manage-users', {
+      const { data, error } = await api.functions.invoke('manage-users', {
         body: {
           action: 'create-test'
         }
@@ -236,7 +236,7 @@ const UserManagement: React.FC = () => {
 
   const deleteUser = async (userId: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke('manage-users', {
+      const { data, error } = await api.functions.invoke('manage-users', {
         body: {
           action: 'delete',
           user_id: userId
@@ -265,7 +265,7 @@ const UserManagement: React.FC = () => {
 
   const updateUserRole = async (userId: string, newRole: string) => {
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('user_roles')
         .upsert({
           user_id: userId,

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useQueryClient } from '@tanstack/react-query';
@@ -95,7 +95,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       try {
         let defaultTournament: any | null = null;
         let error: any = null;
-        const { data: bySlug, error: errSlug } = await supabase
+        const { data: bySlug, error: errSlug } = await api
           .from('tournaments')
           .select('*')
           .eq('slug', 'default-arcade')
@@ -106,7 +106,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         if (bySlug) {
           defaultTournament = bySlug;
         } else {
-          const { data: byName, error: errName } = await supabase
+          const { data: byName, error: errName } = await api
             .from('tournaments')
             .select('*')
             .eq('name', 'Default Arcade Tournament')
@@ -130,7 +130,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         } else {
           dlog('No default tournament found, checking all tournaments...');
           // Debug: Check what tournaments exist
-          const { data: allTournaments } = await supabase
+          const { data: allTournaments } = await api
             .from('tournaments')
             .select('id, name, slug, is_public')
             .eq('is_public', true)
@@ -160,7 +160,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       // Load tournaments from the new tournament system
       // Try a simpler query first to test basic access
       dlog('Testing basic tournament_members access...');
-      const { data: basicTest, error: basicError } = await supabase
+      const { data: basicTest, error: basicError } = await api
         .from('tournament_members')
         .select('id, user_id, tournament_id, role, is_active')
         .eq('user_id', user.id)
@@ -170,7 +170,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       dlog('Basic test result:', { basicTest, basicError });
 
       // Now try the full query
-      const { data: memberships, error } = await supabase
+      const { data: memberships, error } = await api
         .from('tournament_members')
         .select('tournament_id, role')
         .eq('user_id', user.id)
@@ -192,7 +192,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       const tournamentIds = (memberships || []).map((m: any) => m.tournament_id);
       let tournaments: any[] = [];
       if (tournamentIds.length > 0) {
-        const { data: tList, error: tErr } = await supabase
+        const { data: tList, error: tErr } = await api
           .from('tournaments')
           .select('*')
           .in('id', tournamentIds)
@@ -213,7 +213,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
       // First try to load from user's profile
       try {
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile, error: profileError } = await api
           .from('profiles')
           .select('selected_tournament_id')
           .eq('id', user.id)
@@ -267,7 +267,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         try {
           let defaultTournament: any | null = null;
           let error: any = null;
-          const { data: bySlug, error: errSlug } = await supabase
+          const { data: bySlug, error: errSlug } = await api
             .from('tournaments')
             .select('*')
             .eq('slug', 'default-arcade')
@@ -277,7 +277,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           if (bySlug) {
             defaultTournament = bySlug;
           } else {
-            const { data: byName, error: errName } = await supabase
+            const { data: byName, error: errName } = await api
               .from('tournaments')
               .select('*')
               .eq('name', 'Default Arcade Tournament')
@@ -296,7 +296,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
             // Save default tournament to user's profile
             try {
-              await supabase
+              await api
                 .from('profiles')
                 .upsert({
                   id: user.id,
@@ -357,7 +357,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         setCurrentTournament(tournament);
         setCurrentUserRole(null);
         localStorage.setItem('currentTournamentId', tournament.id);
-        // Anonymous users don't save to Supabase, only localStorage
+        // Anonymous users don't save to server, only localStorage
         return;
       }
 
@@ -373,7 +373,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       // Get user's role in this tournament
-      const { data: membership, error } = await supabase
+      const { data: membership, error } = await api
         .from('tournament_members')
         .select('role')
         .eq('tournament_id', tournament.id)
@@ -402,7 +402,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         // Save selected tournament to user's profile if authenticated
         if (user) {
           try {
-            await supabase
+            await api
               .from('profiles')
               .upsert({
                 id: user.id,
@@ -437,7 +437,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
       // Save selected tournament to user's profile
       try {
-        await supabase
+        await api
           .from('profiles')
           .upsert({
             id: user.id,
@@ -490,7 +490,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     try {
       
       // Try initial insert
-      let { data: tournament, error } = await supabase
+      let { data: tournament, error } = await api
         .from('tournaments')
         .insert({
           ...data,
@@ -511,7 +511,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           is_public: data.is_public ?? false,
         };
         console.warn('Slug duplicate detected. Retrying with slug:', retrySlug);
-        const retry = await supabase
+        const retry = await api
           .from('tournaments')
           .insert(retryPayload)
           .select()
@@ -523,7 +523,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
 
       // Add the creator as the owner
-      await supabase
+      await api
         .from('tournament_members')
         .insert({
           tournament_id: tournament.id,
@@ -574,13 +574,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     try {
       console.log('TournamentContext: updateTournament called with:', { id, data });
       
-      const { error } = await supabase
+      const { error } = await api
         .from('tournaments')
         .update(data)
         .eq('id', id);
 
       if (error) {
-        console.error('Supabase update error:', error);
+        console.error('Update error:', error);
         throw error;
       }
 
@@ -630,7 +630,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         created_by: user.id,
       });
 
-      const { data: result, error } = await supabase.functions.invoke('clone-tournament', {
+      const { data: result, error } = await api.functions.invoke('clone-tournament', {
         body: {
           sourceTournamentId,
           name: data.name,
@@ -643,7 +643,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       console.log('Clone function response:', { result, error });
       
       if (error) {
-        console.error('Supabase function error:', error);
+        console.error('Function error:', error);
         throw new Error(error.message || 'Failed to clone tournament');
       }
 
@@ -670,7 +670,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       console.log(`Deleting tournament ${id} and all related data...`);
 
       // 1. Delete tournament members
-      const { error: membersError } = await supabase
+      const { error: membersError } = await api
         .from('tournament_members')
         .delete()
         .eq('tournament_id', id);
@@ -681,7 +681,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       // 2. Delete scores
-      const { error: scoresError } = await supabase
+      const { error: scoresError } = await api
         .from('scores')
         .delete()
         .eq('tournament_id', id);
@@ -692,7 +692,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       // 3. Delete tournament games
-      const { error: gamesError } = await supabase
+      const { error: gamesError } = await api
         .from('tournament_games')
         .delete()
         .eq('tournament_id', id);
@@ -703,7 +703,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       // 4. Delete achievements and player achievements
-      const { error: playerAchievementsError } = await supabase
+      const { error: playerAchievementsError } = await api
         .from('player_achievements')
         .delete()
         .eq('tournament_id', id);
@@ -713,7 +713,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         // Continue anyway
       }
 
-      const { error: achievementsError } = await supabase
+      const { error: achievementsError } = await api
         .from('achievements')
         .delete()
         .eq('tournament_id', id);
@@ -724,7 +724,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       // 5. Finally delete the tournament itself
-      const { error: tournamentError } = await supabase
+      const { error: tournamentError } = await api
         .from('tournaments')
         .delete()
         .eq('id', id);
@@ -783,7 +783,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
     try {
       // First, find the tournament
-      const { data: tournament, error: tournamentError } = await supabase
+      const { data: tournament, error: tournamentError } = await api
         .from('tournaments')
         .select('id, name, slug, description, is_public, created_by, created_at, updated_at')
         .eq('slug', slug)
@@ -794,7 +794,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       if (tournamentError) throw tournamentError;
 
       // Check if user is already a member
-      const { data: existingMember } = await supabase
+      const { data: existingMember } = await api
         .from('tournament_members')
         .select('id')
         .eq('tournament_id', tournament.id)
@@ -810,7 +810,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       }
 
       // Add user as a member
-      const { error } = await supabase
+      const { error } = await api
         .from('tournament_members')
         .insert({
           tournament_id: tournament.id,
@@ -855,7 +855,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     if (!user) return false;
 
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('tournament_members')
         .update({ is_active: false })
         .eq('tournament_id', tournamentId)
@@ -895,7 +895,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   // Invite user to tournament
   const inviteUser = async (tournamentId: string, email: string, role: 'member' | 'admin' = 'member'): Promise<boolean> => {
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('tournament_invitations')
         .insert({
           tournament_id: tournamentId,
@@ -928,7 +928,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   // Remove member from tournament
   const removeMember = async (tournamentId: string, userId: string): Promise<boolean> => {
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('tournament_members')
         .update({ is_active: false })
         .eq('tournament_id', tournamentId)
@@ -956,7 +956,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   // Update member role
   const updateMemberRole = async (tournamentId: string, userId: string, role: 'member' | 'admin'): Promise<boolean> => {
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('tournament_members')
         .update({ role })
         .eq('tournament_id', tournamentId)

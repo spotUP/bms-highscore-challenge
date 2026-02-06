@@ -10,7 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePerformanceMode } from '@/hooks/usePerformanceMode';
 import { useToast } from '@/components/ui/use-toast';
 import { ToastAction } from '@/components/ui/toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import BracketView, { BracketViewRef } from '@/components/BracketView';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -228,7 +228,7 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
     if (!selected) return;
 
 
-    const channel = supabase
+    const channel = api
       .channel(`bracket_matches_admin_${selected.id}`)
       .on('postgres_changes', {
         event: '*',
@@ -260,7 +260,7 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
       });
 
     return () => {
-      supabase.removeChannel(channel);
+      api.removeChannel(channel);
     };
   }, [selected, getTournamentData]);
 
@@ -284,7 +284,7 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
         // First remove all existing players
         await Promise.all(
           players.map(player =>
-            supabase.from('bracket_players').delete().eq('id', player.id)
+            api.from('bracket_players').delete().eq('id', player.id)
           )
         );
 
@@ -294,7 +294,7 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
           name
         }));
 
-        const { error } = await supabase
+        const { error } = await api
           .from('bracket_players')
           .insert(playerRows);
 
@@ -522,8 +522,8 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
     setRestartLoading(true);
     try {
       // Delete only matches, keep players for restart
-      await supabase.from('bracket_matches').delete().eq('tournament_id', selected.id);
-      await supabase.from('bracket_tournaments').update({ status: 'draft' }).eq('id', selected.id);
+      await api.from('bracket_matches').delete().eq('tournament_id', selected.id);
+      await api.from('bracket_tournaments').update({ status: 'draft' }).eq('id', selected.id);
 
       const data = await getTournamentData(selected.id);
       setPlayers(data.players);

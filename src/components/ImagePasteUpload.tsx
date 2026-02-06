@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -46,15 +46,15 @@ const ImagePasteUpload = ({ value, onChange, label, placeholder }: ImagePasteUpl
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
       
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
+      // Upload to storage
+      const { data, error } = await api.storage
         .from('game-logos')
         .upload(fileName, file);
 
       if (error) throw error;
 
       // Get public URL
-      const { data: { publicUrl } } = supabase.storage
+      const { data: { publicUrl } } = api.storage
         .from('game-logos')
         .getPublicUrl(fileName);
 

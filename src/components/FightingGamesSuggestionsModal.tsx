@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Gamepad2, Star, Users, Calendar, Loader2, ExternalLink } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 
 interface FightingGame {
@@ -38,7 +38,7 @@ export const FightingGamesSuggestionsModal: React.FC<FightingGamesSuggestionsMod
     setLoading(true);
     try {
       // Get a larger pool of quality fighting games (50 games with rating >= 3.0)
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('games_database')
         .select('*')
         .eq('platform_name', 'Arcade')

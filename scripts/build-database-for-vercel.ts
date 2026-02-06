@@ -1,18 +1,15 @@
-import { createClient } from '@supabase/supabase-js';
 import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import { Pool } from 'pg';
 
 dotenv.config();
 
 async function buildDatabaseForVercel() {
   console.log('🏗️ Building SQLite database for Vercel deployment...');
 
-  const supabase = createClient(
-    process.env.VITE_SUPABASE_URL!,
-    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
   // Create public directory if it doesn't exist
   const publicDir = path.join(process.cwd(), 'public');
@@ -24,7 +21,7 @@ async function buildDatabaseForVercel() {
   const db = new Database(dbPath);
 
   try {
-    // Create tables matching actual Supabase schema
+    // Create tables matching production schema
     db.exec(`
       CREATE TABLE IF NOT EXISTS games (
         id INTEGER PRIMARY KEY,
@@ -40,24 +37,25 @@ async function buildDatabaseForVercel() {
       CREATE INDEX IF NOT EXISTS idx_games_launchbox_id ON games(launchbox_id);
     `);
 
-    // Fetch games from Supabase in batches
+    // Fetch games from database in batches
     let offset = 0;
     const batchSize = 1000;
     let totalInserted = 0;
 
     while (true) {
-      const { data: games, error } = await supabase
-        .from('games_database')
-        .select('id, name, platform_name, launchbox_id, created_at, updated_at')
-        .range(offset, offset + batchSize - 1)
-        .order('id');
+      const result = await pool.query(
+        `
+          SELECT id, name, platform_name, launchbox_id, created_at, updated_at
+          FROM games_database
+          ORDER BY id
+          OFFSET $1
+          LIMIT $2
+        `,
+        [offset, batchSize]
+      );
 
-      if (error) {
-        console.error('Error fetching games:', error);
-        break;
-      }
-
-      if (!games || games.length === 0) {
+      const games = result.rows;
+      if (games.length === 0) {
         break;
       }
 
@@ -104,6 +102,7 @@ async function buildDatabaseForVercel() {
     process.exit(1);
   } finally {
     db.close();
+    await pool.end();
   }
 }
 

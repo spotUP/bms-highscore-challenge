@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import * as React from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useAchievement } from '@/contexts/AchievementContext';
 import { useTournament } from '@/contexts/TournamentContext';
 
@@ -64,7 +64,7 @@ export const useAchievements = () => {
 
   const checkForDuplicateAchievements = useCallback(async (playerName: string, tournamentId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('player_achievements')
         .select('player_name, achievement_id, tournament_id, created_at')
         .eq('player_name', playerName.toUpperCase())
@@ -106,7 +106,7 @@ export const useAchievements = () => {
       console.error('Error in checkForDuplicateAchievements:', e);
       return { hasDuplicates: false, error: e };
     }
-  }, [supabase]);
+  }, [api]);
 
   const cleanupDuplicateAchievements = useCallback(async (playerName: string, tournamentId: string) => {
     try {
@@ -135,7 +135,7 @@ export const useAchievements = () => {
       
       if (achievementsToDelete.length > 0) {
         // Delete duplicates (you might want to back these up first)
-        const { error } = await supabase
+        const { error } = await api
           .from('player_achievements')
           .delete()
           .in('id', achievementsToDelete.map(a => a.id));
@@ -169,10 +169,10 @@ export const useAchievements = () => {
       }
 
       // Try to get current user (ignore errors)
-      const { data: userData } = await supabase.auth.getUser();
+      const { data: userData } = await api.auth.getUser();
       const userId = userData?.user?.id ?? null;
 
-      const chan = supabase
+      const chan = api
         .channel(`player_achievements_${currentTournament.id}_${playerName}`)
         .on('postgres_changes', {
           event: 'INSERT',
@@ -194,7 +194,7 @@ export const useAchievements = () => {
           (globalThis as any).__ach_rtBackfillDone = true;
 
           // Fetch achievement details
-          const { data: a, error } = await supabase
+          const { data: a, error } = await api
             .from('achievements')
             .select('id, name, description, badge_icon, badge_color, points, created_by')
             .eq('id', row.achievement_id)
@@ -254,7 +254,7 @@ export const useAchievements = () => {
       await new Promise((resolve) => setTimeout(resolve, 800));
 
       // Require authenticated user for user-scoped achievements
-      const { data: userData, error: userError } = await supabase.auth.getUser();
+      const { data: userData, error: userError } = await api.auth.getUser();
 
       const userId = userData?.user?.id;
       // Ensure realtime subscription (once per session)
@@ -272,7 +272,7 @@ export const useAchievements = () => {
           let newAchievements: any[] | null = null;
           let lastError: any = null;
           while (attempts < 5 && (!Array.isArray(newAchievements) || newAchievements.length === 0)) {
-            const { data, error } = await (supabase as any).rpc('get_recent_achievements_by_tournament', {
+            const { data, error } = await (api as any).rpc('get_recent_achievements_by_tournament', {
               p_tournament_id: currentTournament.id,
               p_player_name: playerName.toUpperCase(),
               p_since_minutes: 10
@@ -328,7 +328,7 @@ export const useAchievements = () => {
         let newAchievements: any[] | null = null;
         let lastError: any = null;
         while (attempts < 5 && (!Array.isArray(newAchievements) || newAchievements.length === 0)) {
-          const { data, error } = await (supabase as any).rpc('get_recent_achievements_for_user', {
+          const { data, error } = await (api as any).rpc('get_recent_achievements_for_user', {
             p_user_id: userId,
             p_tournament_id: currentTournament.id,
             p_since_minutes: 10
@@ -384,7 +384,7 @@ export const useAchievements = () => {
     try {
 
       // Get the most recent score for this player to provide context
-      const { data: recentScore } = await supabase
+      const { data: recentScore } = await api
         .from('scores')
         .select(`
           score,
@@ -397,7 +397,7 @@ export const useAchievements = () => {
         .limit(1)
         .maybeSingle();
 
-      const webhookResponse = await supabase.functions.invoke('achievement-webhook-simple', {
+      const webhookResponse = await api.functions.invoke('achievement-webhook-simple', {
         body: {
           player_name: playerName,
           achievements: achievements.map(achievement => ({
@@ -417,7 +417,7 @@ export const useAchievements = () => {
     } catch (error) {
       console.error('❌ Achievement webhook call failed:', error);
     }
-  }, [supabase, currentTournament]);
+  }, [api, currentTournament]);
 
   const sendAchievementWebhook = useCallback(async (
     playerName: string, 
@@ -427,7 +427,7 @@ export const useAchievements = () => {
     try {
 
       // Get the most recent score for this player to provide context
-      const { data: recentScore } = await supabase
+      const { data: recentScore } = await api
         .from('scores')
         .select(`
           score,
@@ -440,7 +440,7 @@ export const useAchievements = () => {
         .limit(1)
         .maybeSingle();
 
-      const webhookResponse = await supabase.functions.invoke('achievement-webhook-simple', {
+      const webhookResponse = await api.functions.invoke('achievement-webhook-simple', {
         body: {
           player_name: playerName,
           achievements: [{
@@ -460,7 +460,7 @@ export const useAchievements = () => {
     } catch (error) {
       console.error('❌ Achievement webhook call failed:', error);
     }
-  }, [supabase, currentTournament]);
+  }, [api, currentTournament]);
 
 
   // Clean up realtime subscription when component unmounts

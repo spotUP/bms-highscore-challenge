@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Gamepad2, Star, Users, Calendar, Loader2, ExternalLink } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 
 interface ArcadeGame {
@@ -38,7 +38,7 @@ export const ArcadeGamesSuggestionsModal: React.FC<ArcadeGamesSuggestionsModalPr
     setLoading(true);
     try {
       // Get competitive games using name-based matching and genre filtering
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('games_database')
         .select('*')
         .eq('platform_name', 'Arcade')

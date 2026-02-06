@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 import misterGames from '@/data/mister-games.json';
 
@@ -22,7 +22,7 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
     
     try {
       // Check if user is authenticated and has admin role
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user } } = await api.auth.getUser();
       if (!user) {
         toast({
           title: "Authentication Required",
@@ -33,7 +33,7 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
       }
       
       // Check if user has admin role
-      const { data: userRoles, error: roleError } = await supabase
+      const { data: userRoles, error: roleError } = await api
         .from('user_roles')
         .select('role')
         .eq('user_id', user.id)
@@ -53,7 +53,7 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
       // Only exclude used games if the switch is enabled
       if (excludeUsedGames) {
         // Get list of previously used games from competition history
-        const { data: previousGames, error: previousGamesError } = await supabase
+        const { data: previousGames, error: previousGamesError } = await api
           .from('competition_games')
           .select('game_name');
 
@@ -101,7 +101,7 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
       console.log('Selected games:', selectedGames);
       
       // First, get all existing scores to delete them individually
-      const { data: existingScores, error: fetchError } = await supabase
+      const { data: existingScores, error: fetchError } = await api
         .from('scores')
         .select('id');
       
@@ -120,7 +120,7 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
       // Delete scores one by one if there are any
       if (existingScores && existingScores.length > 0) {
         const deletePromises = existingScores.map(score => 
-          supabase.from('scores').delete().eq('id', score.id)
+          api.from('scores').delete().eq('id', score.id)
         );
         
         const deleteResults = await Promise.all(deletePromises);
@@ -140,7 +140,7 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
       }
       
       // Get current games to update them
-      const { data: currentGames, error: gamesError } = await supabase
+      const { data: currentGames, error: gamesError } = await api
         .from('games')
         .select('id')
         .order('created_at', { ascending: true });
@@ -165,7 +165,7 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
         // No legacy logo handling - let the clear logo service handle this
         const logoUrl = null;
         
-        return supabase
+        return api
           .from('games')
           .update({
             name: selectedGame.name,

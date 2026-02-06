@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Trophy, Target, TrendingUp, Gamepad2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import PlayerAchievements from '@/components/PlayerAchievements';
 import PlayerScoreHistoryChart from '@/components/charts/PlayerScoreHistoryChart';
 import { getPageLayout, getCardStyle, getButtonStyle, getTypographyStyle, PageHeader, PageContainer, LoadingSpinner } from '@/utils/designSystem';
@@ -62,7 +62,7 @@ const PlayerDashboard = () => {
       // Try to load player stats (this might fail if table doesn't exist)
       let statsData = null;
       try {
-        const { data, error: statsError } = await supabase
+        const { data, error: statsError } = await api
           .from('player_stats')
           .select('*')
           .eq('player_name', playerName?.toUpperCase())
@@ -79,7 +79,7 @@ const PlayerDashboard = () => {
       // Try to load achievements (this might fail if table doesn't exist)
       let achievementsData = [];
       try {
-        const { data, error: achievementsError } = await supabase
+        const { data, error: achievementsError } = await api
           .from('player_achievements')
           .select(`
             *,
@@ -99,11 +99,11 @@ const PlayerDashboard = () => {
 
       // Load games and scores (these should exist)
       const [gamesResult, scoresResult] = await Promise.all([
-        supabase
+        api
           .from('games')
           .select('id, name')
           .eq('is_active', true),
-        supabase
+        api
           .from('scores')
           .select('game_id, player_name, score, created_at')
           .eq('player_name', playerName?.toUpperCase())

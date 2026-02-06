@@ -14,7 +14,7 @@ import ScoreSubmissionDialog from "@/components/ScoreSubmissionDialog";
 import TournamentDropdown from "@/components/TournamentDropdown";
 import { useTournament } from "@/contexts/TournamentContext";
 import { dlog } from "@/lib/debug";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 // import pacmanLogo from "@/assets/pacman-logo.png";
 // import spaceInvadersLogo from "@/assets/space-invaders-logo.png";
 // import tetrisLogo from "@/assets/tetris-logo.png";
@@ -144,7 +144,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
     }
 
     try {
-      channel = supabase
+      channel = api
         .channel('index-score-subscriptions')
         .on(
           'postgres_changes',
@@ -193,7 +193,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
     return () => {
       if (channel) {
         try {
-          supabase.removeChannel(channel);
+          api.removeChannel(channel);
         } catch (error) {
           console.error('Error removing channel:', error);
         }
@@ -263,7 +263,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
                   {filteredGames.map((game) => {
                     // Get logo URL from tournament game logo_url only
                     const logoUrl = getGameLogoUrl(game.logo_url);
-                    const storageRef = logoUrl && logoUrl.includes('supabase.co/storage/') ? parseStorageObjectUrl(logoUrl) : null;
+                    const storageRef = logoUrl && logoUrl.includes('api.co/storage/') ? parseStorageObjectUrl(logoUrl) : null;
                     const isPublicObject = !!(logoUrl && logoUrl.includes('/storage/v1/object/public/'));
 
                     const filtered = gameScores[game.id] || [];

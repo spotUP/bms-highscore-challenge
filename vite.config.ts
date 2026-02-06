@@ -71,9 +71,6 @@ export default defineConfig(({ mode }) => ({
           // if (id.includes('recharts')) {
           //   return 'charts';
           // }
-          if (id.includes('@supabase')) {
-            return 'supabase';
-          }
           if (id.includes('@tanstack/react-query')) {
             return 'react-query';
           }
@@ -100,7 +97,6 @@ export default defineConfig(({ mode }) => ({
     include: [
       'react',
       'react-dom',
-      '@supabase/supabase-js',
       '@tanstack/react-query',
       'recharts', // Pre-bundle recharts to prevent initialization issues
       'sql.js', // Include SQL.js for Clear Logo functionality

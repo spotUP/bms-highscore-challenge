@@ -12,7 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { GameRatingDisplay } from "./GameRatingDisplay";
 import { GameMediaGallery } from "./GameMediaGallery";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import {
   Star,
   Calendar,
@@ -87,10 +87,10 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
     setEnrichedGame(null);
     setIsLoading(true);
 
-    // Fetch additional metadata from Supabase
+    // Fetch additional metadata from database
     const fetchEnrichedData = async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await api
           .from('games_database')
           .select('*')
           .eq('id', game.id)
@@ -101,7 +101,7 @@ export const GameDetailsModal: React.FC<GameDetailsModalProps> = ({
           setEnrichedGame({
             ...game,
             ...data,
-            // Keep existing fields that might not be in Supabase
+            // Keep existing fields that might not be in database
             name: data.name || game.name,
             platform_name: data.platform_name || game.platform_name
           });

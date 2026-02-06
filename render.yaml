@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: retroranks-api
+    env: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm run start
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: PUBLIC_BASE_URL
+        value: https://retroranks-api.onrender.com
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+
+  - type: web
+    name: retroranks-web
+    env: static
+    plan: starter
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://retroranks-api.onrender.com
+      - key: VITE_WS_URL
+        value: wss://retroranks-api.onrender.com
+      - key: VITE_MEDIA_BASE_URL
+        value: https://retroranks-api.onrender.com

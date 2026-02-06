@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 import { RAWGGame } from '@/utils/rawgApi';
@@ -33,7 +33,7 @@ export const useFavorites = () => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('user_favorites')
         .select('*')
         .eq('user_id', user.id)
@@ -92,7 +92,7 @@ export const useFavorites = () => {
         game_platforms: game.platforms || null,
       };
 
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('user_favorites')
         .insert(favoriteData)
         .select()
@@ -133,7 +133,7 @@ export const useFavorites = () => {
     if (!user) return false;
 
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('user_favorites')
         .delete()
         .eq('user_id', user.id)

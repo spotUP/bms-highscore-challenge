@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { useTournament } from '@/contexts/TournamentContext';
 import PlayerInsult from '@/components/PlayerInsult';
 import { useAchievement } from '@/contexts/AchievementContext';
@@ -60,7 +60,7 @@ export const ScoreNotificationsListener: React.FC = () => {
     // Set up global score submissions listener (works regardless of tournament context)
     const channelName = `global_score_submissions_${Date.now()}`;
 
-    scoreChannelRef.current = supabase
+    scoreChannelRef.current = api
       .channel(channelName)
       .on(
         'postgres_changes',
@@ -80,7 +80,7 @@ export const ScoreNotificationsListener: React.FC = () => {
           };
 
           // Get game info
-          const { data: game, error: gameError } = await supabase
+          const { data: game, error: gameError } = await api
             .from('games')
             .select('name, logo_url')
             .eq('id', submission.game_id)
@@ -131,7 +131,7 @@ export const ScoreNotificationsListener: React.FC = () => {
 
     // Subscribe to achievement unlocks (global) with unique channel name
     const achievementChannelName = `player_achievements_${Date.now()}`;
-    achievementChannelRef.current = supabase
+    achievementChannelRef.current = api
       .channel(achievementChannelName)
       .on(
         'postgres_changes',
@@ -143,7 +143,7 @@ export const ScoreNotificationsListener: React.FC = () => {
         async (payload) => {
           const pa = payload.new as { achievement_id: string; player_name: string };
 
-          const { data: achievement, error } = await supabase
+          const { data: achievement, error } = await api
             .from('achievements')
             .select('id, name, description, badge_icon, badge_color, points')
             .eq('id', pa.achievement_id)
@@ -188,8 +188,8 @@ export const ScoreNotificationsListener: React.FC = () => {
       .subscribe();
 
     return () => {
-      if (scoreChannelRef.current) supabase.removeChannel(scoreChannelRef.current);
-      if (achievementChannelRef.current) supabase.removeChannel(achievementChannelRef.current);
+      if (scoreChannelRef.current) api.removeChannel(scoreChannelRef.current);
+      if (achievementChannelRef.current) api.removeChannel(achievementChannelRef.current);
     };
   }, [showAchievementNotification]); // Global notifications work regardless of tournament context
 

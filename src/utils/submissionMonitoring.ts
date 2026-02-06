@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 
 interface SubmissionFailure {
   timestamp: string;
@@ -76,7 +76,7 @@ export async function reportSubmissionFailure(failure: Omit<SubmissionFailure, '
 
 async function sendFailureAlert(failures: SubmissionFailure[]) {
   try {
-    const { data, error } = await supabase.functions.invoke('send-test-failure-report', {
+    const { data, error } = await api.functions.invoke('send-test-failure-report', {
       body: {
         to: 'spotup@gmail.com',
         subject: '🚨 Score Submission Failures Detected - BMS High Score Challenge',

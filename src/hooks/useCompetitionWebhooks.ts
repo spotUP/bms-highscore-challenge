@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 
 interface Game {
   id: string;
@@ -28,7 +28,7 @@ export const useCompetitionWebhooks = () => {
         games_count: webhookData.games.length
       });
 
-      const webhookResponse = await supabase.functions.invoke('send-competition-webhook', {
+      const webhookResponse = await api.functions.invoke('send-competition-webhook', {
         body: webhookData
       });
 

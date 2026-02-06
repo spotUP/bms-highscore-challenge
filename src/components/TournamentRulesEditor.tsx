@@ -8,7 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 import { Plus, Trash2, Edit, Save, X } from 'lucide-react';
 
 interface TournamentRulesEditorProps {
@@ -258,7 +258,7 @@ const TournamentRulesEditor: React.FC<TournamentRulesEditorProps> = ({
   const loadTournamentRules = async () => {
     setIsLoading(true);
     try {
-      const { data: tournament, error } = await supabase
+      const { data: tournament, error } = await api
         .from('tournaments')
         .select('rules_data')
         .eq('id', tournamentId)
@@ -304,7 +304,7 @@ const TournamentRulesEditor: React.FC<TournamentRulesEditorProps> = ({
         customRules
       };
 
-      const { error } = await supabase
+      const { error } = await api
         .from('tournaments')
         .update({ rules_data: rulesPayload })
         .eq('id', tournamentId);

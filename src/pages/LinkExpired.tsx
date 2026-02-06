@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import { toast } from "sonner";
 
 export default function LinkExpired() {
@@ -30,7 +30,7 @@ export default function LinkExpired() {
       return;
     }
     const redirectTo = `${window.location.origin}/auth`;
-    const { error } = await supabase.auth.resetPasswordForEmail(target, { redirectTo });
+    const { error } = await api.auth.resetPasswordForEmail(target, { redirectTo });
     if (error) {
       toast.error(error.message);
     } else {

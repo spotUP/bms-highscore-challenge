@@ -364,17 +364,17 @@ export const SuggestAchievementDialog: React.FC<SuggestAchievementDialogProps> =
       let existingAchievements = [];
       let games = [];
 
-      // Fallback to direct Supabase queries if API routes don't exist
+      // Fallback to direct queries if API routes don't exist
       try {
-        const { supabase } = await import("@/integrations/supabase/client");
+        const { api } = await import("@/lib/api-client");
 
         const [achResult, gamesResult] = await Promise.all([
-          supabase
+          api
             .from('achievements')
             .select('*')
             .eq('tournament_id', currentTournament.id)
             .eq('is_active', true),
-          supabase
+          api
             .from('games')
             .select('id, name')
             .eq('tournament_id', currentTournament.id)
@@ -408,9 +408,9 @@ export const SuggestAchievementDialog: React.FC<SuggestAchievementDialogProps> =
     setIsAdding(true);
 
     try {
-      const { supabase } = await import("@/integrations/supabase/client");
+      const { api } = await import("@/lib/api-client");
 
-      const { error } = await supabase
+      const { error } = await api
         .from('achievements')
         .insert({
           tournament_id: currentTournament.id,
@@ -582,11 +582,11 @@ export const SuggestAchievementDialog: React.FC<SuggestAchievementDialogProps> =
     let successCount = 0;
 
     try {
-      const { supabase } = await import("@/integrations/supabase/client");
+      const { api } = await import("@/lib/api-client");
 
       for (const achievement of bulkAchievements) {
         try {
-          const { error } = await supabase
+          const { error } = await api
             .from('achievements')
             .insert({
               tournament_id: currentTournament.id,

@@ -4,7 +4,7 @@ import { Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import { useAchievements } from "@/hooks/useAchievements";
 import { getGameLogoUrl } from "@/lib/utils";
 import PlayerInsult from "@/components/PlayerInsult";
@@ -56,7 +56,7 @@ const MobileEntry = () => {
       }
 
       try {
-        const { data, error } = await supabase
+        const { data, error } = await api
           .from('games')
           .select('*')
           .eq('id', gameId)
@@ -104,7 +104,7 @@ const MobileEntry = () => {
     );
   }
 
-  // Get logo URL - convert local paths to Supabase Storage URLs
+  // Get logo URL - convert local paths to storage URLs
   const logoUrl = getGameLogoUrl(game.logo_url);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -142,13 +142,13 @@ const MobileEntry = () => {
     setIsSubmitting(true);
 
     // Get current user for user_id field
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await api.auth.getUser();
 
     try {
       console.log('MobileEntry: Starting score submission for', name, 'score:', scoreValue);
 
       // First check if player already has a score for this game in the current tournament
-      const { data: existingScore, error: fetchError } = await supabase
+      const { data: existingScore, error: fetchError } = await api
         .from('scores')
         .select('*')
         .eq('player_name', name.toUpperCase())
@@ -175,7 +175,7 @@ const MobileEntry = () => {
         }
         
         // Update existing score with higher score
-        const { error } = await supabase
+        const { error } = await api
           .from('scores')
           .update({
             score: scoreValue,
@@ -191,7 +191,7 @@ const MobileEntry = () => {
 
         // Post to webhook via edge function for score improvement
         try {
-          await supabase.functions.invoke('send-score-webhook', {
+          await api.functions.invoke('send-score-webhook', {
             body: {
               player_name: name.toUpperCase(),
               score: scoreValue,
@@ -209,7 +209,7 @@ const MobileEntry = () => {
         toast.success(`Score improved! New best: ${scoreValue.toLocaleString()} (previous: ${existingScore.score.toLocaleString()})`);
       } else {
         // Insert new score for this player/game combination
-        const { error } = await supabase
+        const { error } = await api
           .from('scores')
           .insert({
             player_name: name.toUpperCase(),
@@ -225,7 +225,7 @@ const MobileEntry = () => {
         
         // Post to webhook via edge function for new score
         try {
-          await supabase.functions.invoke('send-score-webhook', {
+          await api.functions.invoke('send-score-webhook', {
             body: {
               player_name: name.toUpperCase(),
               score: scoreValue,
@@ -252,7 +252,7 @@ const MobileEntry = () => {
         previous_high_score: previousHighScore
       });
       
-      const { error: submissionError } = await supabase
+      const { error: submissionError } = await api
         .from('score_submissions')
         .insert({
           player_name: name.toUpperCase(),

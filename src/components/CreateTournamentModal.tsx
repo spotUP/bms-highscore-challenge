@@ -2,7 +2,7 @@ import React, { useState, useRef } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { ChevronLeft, ChevronRight, Calendar, Plus, Trash2, Lock, Globe, Play, Pause, Shield, CheckSquare, Square, Search } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -115,7 +115,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('tournaments')
         .select('id')
         .eq('slug', slug.trim().toLowerCase())
@@ -324,7 +324,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
           }
 
           // Insert into tournament games table
-          const { error } = await supabase
+          const { error } = await api
             .from('games')
             .insert({
               name: game.name,
@@ -344,7 +344,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
             // If we have a logo URL, also save it to the games_database table for future use
             if (logoUrl && game.id) {
               try {
-                const { error: logoError } = await supabase
+                const { error: logoError } = await api
                   .from('games_database')
                   .update({ logo_url: logoUrl })
                   .eq('database_id', game.id);

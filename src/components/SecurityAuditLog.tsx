@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from "@/integrations/supabase/client";
+import { api } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -29,7 +29,7 @@ const SecurityAuditLog = () => {
 
     const loadAuditLogs = async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await api
           .from('role_audit_log')
           .select('*')
           .order('created_at', { ascending: false })

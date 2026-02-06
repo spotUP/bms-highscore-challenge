@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api-client';
 
 interface ScoreInfo {
   player_name: string;
@@ -8,7 +8,7 @@ interface ScoreInfo {
 export async function deleteScoreWithAchievementCleanup(scoreId: string) {
   try {
     // First, get the score information before deleting
-    const { data: scoreData, error: fetchError } = await supabase
+    const { data: scoreData, error: fetchError } = await api
       .from('scores')
       .select('player_name, tournament_id')
       .eq('id', scoreId)
@@ -25,7 +25,7 @@ export async function deleteScoreWithAchievementCleanup(scoreId: string) {
     const scoreInfo: ScoreInfo = scoreData;
 
     // Delete the score
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await api
       .from('scores')
       .delete()
       .eq('id', scoreId);
@@ -59,7 +59,7 @@ async function cleanupPlayerAchievements(playerName: string, tournamentId: strin
   try {
     // Delete all existing achievements for this player in this tournament
     // The achievement system will need to recalculate them based on remaining scores
-    const { error: deleteAchievementsError } = await supabase
+    const { error: deleteAchievementsError } = await api
       .from('player_achievements')
       .delete()
       .eq('player_name', playerName)
@@ -84,7 +84,7 @@ export async function recalculatePlayerAchievements(playerName: string, tourname
     await cleanupPlayerAchievements(playerName, tournamentId);
 
     // Get all scores for this player in this tournament
-    const { data: scores, error: scoresError } = await supabase
+    const { data: scores, error: scoresError } = await api
       .from('scores')
       .select('id, player_name, game_id, score, tournament_id, user_id')
       .eq('player_name', playerName)
@@ -101,7 +101,7 @@ export async function recalculatePlayerAchievements(playerName: string, tourname
     }
 
     // Recalculate achievements by calling the function with all scores
-    const { data, error } = await supabase.rpc('check_and_award_achievements_v2', {
+    const { data, error } = await api.rpc('check_and_award_achievements_v2', {
       p_player_name: playerName,
       p_tournament_id: tournamentId,
       p_scores: scores || []
