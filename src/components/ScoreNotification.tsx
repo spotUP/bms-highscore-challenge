@@ -71,6 +71,7 @@ export const ScoreNotificationsListener: React.FC = () => {
           // Remove tournament filter to make it global
         },
         async (payload) => {
+          console.log('[ScoreNotificationsListener] Received score_submissions INSERT:', payload);
           const submission = payload.new as {
             player_name: string;
             score: number;
@@ -79,12 +80,16 @@ export const ScoreNotificationsListener: React.FC = () => {
             previous_high_score: number | null;
           };
 
+          console.log('[ScoreNotificationsListener] Processing submission:', submission);
+
           // Get game info
           const { data: game, error: gameError } = await api
             .from('games')
             .select('name, logo_url')
             .eq('id', submission.game_id)
             .single();
+
+          console.log('[ScoreNotificationsListener] Game data:', { game, gameError });
 
           if (gameError) {
             console.error('ScoreNotificationsListener: Error fetching game:', gameError);
@@ -118,9 +123,11 @@ export const ScoreNotificationsListener: React.FC = () => {
 
           // Trigger global celebration modal + confetti for high scores
           if (submission.is_high_score) {
+            console.log('[ScoreNotificationsListener] Triggering modal for high score:', submission.player_name);
             try {
               setInsultPlayerName(submission.player_name);
               setShowPlayerInsult(true);
+              console.log('[ScoreNotificationsListener] Modal state set successfully');
             } catch (modalError) {
               console.error('ScoreNotificationsListener: Modal error:', modalError);
             }
