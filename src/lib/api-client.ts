@@ -159,7 +159,11 @@ class QueryBuilder {
   }
 
   select(columns = '*') {
-    this.action = 'select';
+    // Only set action to 'select' if no action has been set yet
+    // This allows .insert().select() and .update().select() to work correctly
+    if (!this.action) {
+      this.action = 'select';
+    }
     this.selectColumns = columns;
     return this;
   }
