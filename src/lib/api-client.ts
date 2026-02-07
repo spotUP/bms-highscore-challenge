@@ -352,9 +352,19 @@ class RealtimeClient {
   private subscriptions: Array<{ channel: string; filter: any; handlers: Array<(payload: any) => void> }> = [];
 
   constructor() {
-    if (!WS_URL) return;
+    console.log('[RealtimeClient] Initializing with WS_URL:', WS_URL);
+    if (!WS_URL) {
+      console.error('[RealtimeClient] WS_URL is not defined, WebSocket will not be created');
+      return;
+    }
+    console.log('[RealtimeClient] Creating WebSocket connection');
     this.socket = new WebSocket(WS_URL);
+    this.socket.onopen = () => console.log('[RealtimeClient] WebSocket connected');
+    this.socket.onerror = (err) => console.error('[RealtimeClient] WebSocket error:', err);
+    this.socket.onclose = () => console.log('[RealtimeClient] WebSocket closed');
     this.socket.onmessage = event => {
+      console.log('[RealtimeClient] Received message:', event.data);
+      try {
       try {
         const message = JSON.parse(event.data);
         if (message.type !== 'postgres_changes') return;
@@ -371,12 +381,16 @@ class RealtimeClient {
   }
 
   subscribe(channel: string, filter: any, handlers: Array<(payload: any) => void>) {
+    console.log('[RealtimeClient] Subscribe called:', { channel, filter, socketState: this.socket?.readyState });
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      console.log('[RealtimeClient] Socket not ready, retrying in 200ms');
       setTimeout(() => this.subscribe(channel, filter, handlers), 200);
       return;
     }
     this.subscriptions.push({ channel, filter, handlers });
-    this.socket.send(JSON.stringify({ type: 'subscribe', channel, filter }));
+    const subscribeMessage = JSON.stringify({ type: 'subscribe', channel, filter });
+    console.log('[RealtimeClient] Sending subscribe message:', subscribeMessage);
+    this.socket.send(subscribeMessage);
   }
 
   remove(channel: RealtimeChannel) {

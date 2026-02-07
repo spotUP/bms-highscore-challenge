@@ -59,6 +59,7 @@ export const ScoreNotificationsListener: React.FC = () => {
   useEffect(() => {
     // Set up global score submissions listener (works regardless of tournament context)
     const channelName = `global_score_submissions_${Date.now()}`;
+    console.log('[ScoreNotificationsListener] Setting up subscription to score_submissions, channel:', channelName);
 
     scoreChannelRef.current = api
       .channel(channelName)
@@ -135,6 +136,8 @@ export const ScoreNotificationsListener: React.FC = () => {
         }
       )
       .subscribe();
+
+    console.log('[ScoreNotificationsListener] Subscribed to score_submissions');
 
     // Subscribe to achievement unlocks (global) with unique channel name
     const achievementChannelName = `player_achievements_${Date.now()}`;
