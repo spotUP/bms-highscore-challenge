@@ -365,7 +365,6 @@ class RealtimeClient {
     this.socket.onmessage = event => {
       console.log('[RealtimeClient] Received message:', event.data);
       try {
-      try {
         const message = JSON.parse(event.data);
         if (message.type !== 'postgres_changes') return;
         const payload = message.payload || message;
