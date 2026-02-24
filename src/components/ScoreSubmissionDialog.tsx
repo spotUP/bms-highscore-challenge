@@ -287,7 +287,9 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
         checkForNewAchievements(truncatedName);
       }, 1000);
 
-      // Close the dialog immediately since congratulations modal is handled globally
+      // Show congratulations modal with confetti, then close dialog
+      setInsultPlayerName(truncatedName.toUpperCase());
+      setShowPlayerInsult(true);
       onClose();
       
     } catch (error: any) {

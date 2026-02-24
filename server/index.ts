@@ -492,7 +492,9 @@ app.post('/api/db', async (req, res) => {
 
   const user = readAuthUser(req);
   const isSelect = action === 'select';
-  if (!user && !isSelect) {
+  // Allow anonymous score submissions; all other writes require auth
+  const anonWriteTables = ['scores', 'score_submissions'];
+  if (!user && !isSelect && !anonWriteTables.includes(table)) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
   }
