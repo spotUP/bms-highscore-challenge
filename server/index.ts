@@ -720,6 +720,269 @@ app.post('/api/rpc/:fn', async (req, res) => {
   }
 });
 
+// ── Webhook helpers ──
+async function sendToWebhook(webhookUrl: string, message: unknown, label: string) {
+  const resp = await fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(message),
+    signal: AbortSignal.timeout(10000)
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`${label} webhook ${resp.status}: ${text}`);
+  }
+  return resp;
+}
+
+async function getEnabledWebhooks(platform: string) {
+  const { rows } = await pool.query(
+    `SELECT webhook_url FROM webhook_config
+     WHERE platform = $1 AND enabled = true
+       AND webhook_url IS NOT NULL AND webhook_url != ''`,
+    [platform]
+  );
+  return rows as { webhook_url: string }[];
+}
+
+async function fanOutWebhook(platform: string, message: unknown) {
+  const configs = await getEnabledWebhooks(platform);
+  if (configs.length === 0) return;
+  console.log(`Sending to ${configs.length} ${platform} webhook(s)`);
+  const results = await Promise.allSettled(
+    configs.map((c, i) => sendToWebhook(c.webhook_url, message, `${platform}-${i + 1}`))
+  );
+  const ok = results.filter(r => r.status === 'fulfilled').length;
+  const fail = results.length - ok;
+  console.log(`${platform} webhooks: ${ok} ok, ${fail} failed`);
+}
+
+async function handleScoreWebhook(body: Record<string, any>) {
+  // Get rank position
+  let position = 1;
+  try {
+    const { rows } = await pool.query(
+      `SELECT score FROM scores WHERE game_id = $1 ORDER BY score DESC`,
+      [body.game_id]
+    );
+    position = (rows.filter((r: any) => r.score > body.score).length) + 1;
+  } catch (e) { console.error('Rank query failed:', e); }
+
+  // Get clear logo URL
+  let clearLogoUrl: string | null = null;
+  try {
+    const { rows } = await pool.query(`SELECT name FROM games WHERE id = $1`, [body.game_id]);
+    if (rows[0]?.name) {
+      const safe = rows[0].name.replace(/[^a-zA-Z0-9\-_\s]/g, '').replace(/\s+/g, '-').toLowerCase();
+      clearLogoUrl = `${PUBLIC_BASE_URL}/api/clear-logos/${safe}.webp`;
+    }
+  } catch (e) { /* ignore */ }
+
+  const teamsMessage = {
+    attachments: [{
+      contentType: 'application/vnd.microsoft.card.adaptive',
+      content: {
+        type: 'AdaptiveCard', version: '1.5',
+        body: [
+          ...(clearLogoUrl ? [{
+            type: 'Image', url: clearLogoUrl, size: 'Medium',
+            horizontalAlignment: 'Center', spacing: 'Small'
+          }] : []),
+          { type: 'TextBlock', text: 'NEW HIGHSCORE ALERT!', wrap: true, style: 'heading',
+            size: 'ExtraLarge', horizontalAlignment: 'Center', color: 'Accent' },
+          { type: 'Container', horizontalAlignment: 'Center', items: [
+            { type: 'TextBlock', text: `🏆 #${position} ${body.player_name}`, wrap: true,
+              size: 'Large', weight: 'Bolder', color: 'Accent', horizontalAlignment: 'Center' },
+            { type: 'TextBlock', text: `Score: ${Number(body.score).toLocaleString()}`, wrap: true,
+              size: 'Medium', weight: 'Bolder', color: 'Good', horizontalAlignment: 'Center' },
+            { type: 'TextBlock', text: `Game: ${body.game_name}`, wrap: true,
+              size: 'Medium', color: 'Default', horizontalAlignment: 'Center' }
+          ]}
+        ]
+      }
+    }]
+  };
+
+  const discordMessage = {
+    embeds: [{
+      title: 'NEW HIGHSCORE ALERT!',
+      description: `🏆 **#${position} ${body.player_name}**\nScore: ${Number(body.score).toLocaleString()}\nGame: ${body.game_name}`,
+      color: 0x7c3aed
+    }]
+  };
+
+  const slackMessage = {
+    blocks: [
+      { type: 'header', text: { type: 'plain_text', text: '🎮 NEW HIGHSCORE ALERT!' } },
+      { type: 'section', text: { type: 'mrkdwn',
+        text: `🏆 *#${position} ${body.player_name}*\nScore: ${Number(body.score).toLocaleString()}\nGame: ${body.game_name}` } }
+    ]
+  };
+
+  await Promise.allSettled([
+    fanOutWebhook('teams', teamsMessage),
+    fanOutWebhook('discord', discordMessage),
+    fanOutWebhook('slack', slackMessage)
+  ]);
+}
+
+async function handleCompetitionWebhook(body: Record<string, any>) {
+  const { event_type, competition_name, games = [], timestamp, total_scores, winner } = body;
+  const isStarted = event_type === 'competition_started';
+  const siteUrl = PUBLIC_BASE_URL;
+
+  const cardBody: any[] = [
+    { type: 'TextBlock', text: isStarted ? '🎮 Competition Started!' : '🏁 Competition Ended!',
+      weight: 'Bolder', size: 'Large', color: isStarted ? 'Good' : 'Warning' },
+    { type: 'TextBlock', text: competition_name || 'Arcade High Score Challenge',
+      weight: 'Bolder', size: 'Medium' },
+    { type: 'TextBlock', wrap: true, text: isStarted
+        ? `🎯 ${games.length} games selected for this competition!`
+        : `📊 Competition completed with ${total_scores || 0} total scores submitted` },
+    { type: 'TextBlock', text: `🕐 ${new Date(timestamp).toLocaleString()}`, size: 'Small', color: 'Light' }
+  ];
+  if (!isStarted && winner) {
+    cardBody.push({ type: 'TextBlock', weight: 'Bolder', color: 'Accent',
+      text: `🏆 Winner: ${winner.player_name} with ${Number(winner.total_score).toLocaleString()} points!` });
+  }
+  if (games.length > 0) {
+    cardBody.push({ type: 'TextBlock', wrap: true, size: 'Small',
+      text: `🎮 Games: ${games.map((g: any) => g.name).join(', ')}` });
+  }
+
+  const teamsMessage = {
+    type: 'message',
+    attachments: [{
+      contentType: 'application/vnd.microsoft.card.adaptive',
+      content: {
+        type: 'AdaptiveCard', version: '1.3', body: cardBody,
+        actions: [{ type: 'Action.OpenUrl', title: 'View Leaderboard', url: siteUrl }]
+      }
+    }]
+  };
+
+  const discordFields: any[] = [
+    { name: isStarted ? 'Games Selected' : 'Final Stats', inline: true,
+      value: isStarted ? `${games.length} games ready!` : `📊 ${total_scores || 0} total scores` },
+    { name: 'Timestamp', value: new Date(timestamp).toLocaleString(), inline: true }
+  ];
+  if (!isStarted && winner) {
+    discordFields.push({ name: '🏆 Winner', inline: false,
+      value: `${winner.player_name} - ${Number(winner.total_score).toLocaleString()} points` });
+  }
+  if (games.length > 0) {
+    discordFields.push({ name: '🎮 Games', inline: false,
+      value: games.map((g: any) => g.name).join(', ') });
+  }
+  const discordMessage = {
+    embeds: [{
+      title: isStarted ? '🎮 Competition Started!' : '🏁 Competition Ended!',
+      description: competition_name || 'Arcade High Score Challenge',
+      color: isStarted ? 0x00ff00 : 0xffaa00,
+      fields: discordFields,
+      footer: { text: 'RetroRanks' }
+    }]
+  };
+
+  const slackBlocks: any[] = [
+    { type: 'header', text: { type: 'plain_text',
+      text: isStarted ? '🎮 Competition Started!' : '🏁 Competition Ended!' } },
+    { type: 'section', text: { type: 'mrkdwn',
+      text: `*${competition_name || 'Arcade High Score Challenge'}*\n${isStarted
+        ? `🎯 ${games.length} games selected!` : `📊 ${total_scores || 0} total scores`}` } },
+    { type: 'context', elements: [{ type: 'mrkdwn',
+      text: `🕐 ${new Date(timestamp).toLocaleString()}` }] }
+  ];
+  if (!isStarted && winner) {
+    slackBlocks.push({ type: 'section', text: { type: 'mrkdwn',
+      text: `🏆 *Winner:* ${winner.player_name} with ${Number(winner.total_score).toLocaleString()} points!` } });
+  }
+  if (games.length > 0) {
+    slackBlocks.push({ type: 'section', text: { type: 'mrkdwn',
+      text: `🎮 *Games:* ${games.map((g: any) => g.name).join(', ')}` } });
+  }
+  slackBlocks.push({ type: 'actions', elements: [{ type: 'button',
+    text: { type: 'plain_text', text: 'View Leaderboard' }, url: siteUrl }] });
+  const slackMessage = { blocks: slackBlocks };
+
+  await Promise.allSettled([
+    fanOutWebhook('teams', teamsMessage),
+    fanOutWebhook('discord', discordMessage),
+    fanOutWebhook('slack', slackMessage)
+  ]);
+}
+
+async function handleAchievementWebhook(body: Record<string, any>) {
+  const { player_name, achievements = [], game_name, score } = body;
+  const totalPoints = achievements.reduce((sum: number, a: any) => sum + (a.points || 0), 0);
+  const headerText = achievements.length === 1
+    ? '🏆 ACHIEVEMENT UNLOCKED!' : `🏆 ${achievements.length} ACHIEVEMENTS UNLOCKED!`;
+
+  const cardBody: any[] = [
+    { type: 'TextBlock', text: headerText, wrap: true, style: 'heading',
+      size: 'ExtraLarge', horizontalAlignment: 'Center', color: 'Good' },
+    { type: 'TextBlock', text: `🎯 ${player_name}`, wrap: true,
+      size: 'Large', weight: 'Bolder', color: 'Accent', horizontalAlignment: 'Center' }
+  ];
+  achievements.forEach((a: any, i: number) => {
+    cardBody.push({
+      type: 'Container', horizontalAlignment: 'Center', separator: i > 0, items: [
+        { type: 'TextBlock', text: `🏅 ${a.name}`, wrap: true, size: 'Medium',
+          weight: 'Bolder', color: 'Good', horizontalAlignment: 'Center' },
+        { type: 'TextBlock', text: `📝 ${a.description}`, wrap: true, size: 'Small',
+          color: 'Default', horizontalAlignment: 'Center' },
+        { type: 'TextBlock', text: `⭐ +${a.points} Points`, wrap: true, size: 'Small',
+          weight: 'Bolder', color: 'Accent', horizontalAlignment: 'Center' }
+      ]
+    });
+  });
+  if (achievements.length > 1) {
+    cardBody.push({ type: 'TextBlock', text: `🎊 Total: +${totalPoints} Points`, wrap: true,
+      size: 'Large', weight: 'Bolder', color: 'Accent', horizontalAlignment: 'Center', separator: true });
+  }
+  if (game_name && score) {
+    cardBody.push({
+      type: 'Container', horizontalAlignment: 'Center', separator: true, items: [
+        { type: 'TextBlock', text: `🎮 Earned in: ${game_name}`, wrap: true, size: 'Small',
+          color: 'Default', horizontalAlignment: 'Center' },
+        { type: 'TextBlock', text: `🎯 Score: ${Number(score).toLocaleString()}`, wrap: true,
+          size: 'Small', color: 'Default', horizontalAlignment: 'Center' }
+      ]
+    });
+  }
+
+  const teamsMessage = {
+    attachments: [{
+      contentType: 'application/vnd.microsoft.card.adaptive',
+      content: { type: 'AdaptiveCard', version: '1.5', body: cardBody }
+    }]
+  };
+
+  const discordMessage = {
+    embeds: [{
+      title: headerText,
+      description: `🎯 **${player_name}**\n${achievements.map((a: any) =>
+        `🏅 ${a.name} — ${a.description} (+${a.points})`).join('\n')}`,
+      color: 0x00ff00
+    }]
+  };
+
+  const slackMessage = {
+    blocks: [
+      { type: 'header', text: { type: 'plain_text', text: headerText } },
+      { type: 'section', text: { type: 'mrkdwn',
+        text: `🎯 *${player_name}*\n${achievements.map((a: any) =>
+          `🏅 *${a.name}* — ${a.description} (+${a.points})`).join('\n')}` } }
+    ]
+  };
+
+  await Promise.allSettled([
+    fanOutWebhook('teams', teamsMessage),
+    fanOutWebhook('discord', discordMessage),
+    fanOutWebhook('slack', slackMessage)
+  ]);
+}
+
 // ── Clear-logos proxy (ported from Vercel serverless function) ──
 const CLEAR_LOGO_R2_DOMAIN = process.env.CLOUDFLARE_R2_DOMAIN ||
   process.env.VITE_CLOUDFLARE_R2_DOMAIN ||
@@ -911,6 +1174,17 @@ app.post('/api/functions/:name', async (req, res) => {
     name === 'send-test-failure-report' ||
     name === 'webhook-trigger'
   ) {
+    // Dispatch to the appropriate handler in the background
+    const handler =
+      name === 'send-score-webhook' ? handleScoreWebhook :
+      name === 'send-competition-webhook' ? handleCompetitionWebhook :
+      name === 'achievement-webhook-simple' ? handleAchievementWebhook :
+      null;
+
+    if (handler) {
+      handler(body).catch(err => console.error(`${name} failed:`, err));
+    }
+
     res.json({ success: true });
     return;
   }
