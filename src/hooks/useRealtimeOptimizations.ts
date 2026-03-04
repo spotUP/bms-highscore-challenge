@@ -98,10 +98,9 @@ export const useRealtimeOptimizations = () => {
   // Monitor connection health
   useEffect(() => {
     const config = getConfig();
-    let healthCheckInterval: NodeJS.Timeout;
+    let healthCheckInterval: NodeJS.Timeout | undefined;
 
     if (config.fallbackPolling) {
-      // Periodic connection health check for Pi/low-end devices
       healthCheckInterval = setInterval(() => {
         if (!connectionHealthRef.current.isHealthy) {
           console.log('Connection unhealthy, may need fallback polling');
@@ -111,9 +110,12 @@ export const useRealtimeOptimizations = () => {
 
     return () => {
       if (healthCheckInterval) clearInterval(healthCheckInterval);
-      if (fallbackIntervalRef.current) clearInterval(fallbackIntervalRef.current);
+      if (fallbackIntervalRef.current) {
+        clearInterval(fallbackIntervalRef.current);
+        fallbackIntervalRef.current = undefined;
+      }
     };
-  }, [getConfig]);
+  }, [isPerformanceMode, isRaspberryPi, isLowEnd]);
 
   return {
     createRobustSubscription,

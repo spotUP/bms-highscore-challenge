@@ -341,14 +341,20 @@ export const useGameData = () => {
     if (globalState.loading) {
       const loadAllData = async () => {
         updateState({ loading: true, error: null });
-        await Promise.all([
-          loadGames(),
-          loadScores(),
-          loadOverallLeaders(),
-          loadAchievementHunters(),
-          loadDemolitionManScores()
-        ]);
-        updateState({ loading: false });
+        try {
+          await Promise.all([
+            loadGames(),
+            loadScores(),
+            loadOverallLeaders(),
+            loadAchievementHunters(),
+            loadDemolitionManScores()
+          ]);
+        } catch (err) {
+          console.error('Error during initial data load:', err);
+          updateState({ error: 'Failed to load data' });
+        } finally {
+          updateState({ loading: false });
+        }
       };
       loadAllData();
     }
@@ -403,6 +409,9 @@ export const useGameData = () => {
       loadDemolitionManScores()
     ]).then(() => {
       updateState({ loading: false });
+    }).catch((err) => {
+      console.error('Error during refetch:', err);
+      updateState({ loading: false, error: 'Failed to refresh data' });
     });
   }, []);
 

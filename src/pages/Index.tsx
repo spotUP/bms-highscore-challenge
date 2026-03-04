@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTournamentGameData } from "@/hooks/useTournamentGameData";
@@ -50,6 +50,10 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { activeGames: games, gameScores, loading: gamesLoading, refetch } = useTournamentGameData();
+
+  // Keep a stable ref to refetch so subscription callbacks always use the latest version
+  const refetchRef = useRef(refetch);
+  useEffect(() => { refetchRef.current = refetch; }, [refetch]);
 
 
 
@@ -132,7 +136,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
         return;
       }
       lastUpdateTime = Date.now();
-      refetch();
+      refetchRef.current();
     };
 
 

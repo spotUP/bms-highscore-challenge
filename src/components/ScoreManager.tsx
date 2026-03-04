@@ -12,6 +12,7 @@ import { Pencil, Trash2, Plus } from "lucide-react";
 import { formatScore } from '@/lib/utils';
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { deleteScoreWithAchievementCleanup } from "@/utils/achievementUtils";
+import { useTournament } from "@/contexts/TournamentContext";
 
 interface Score {
   id: string;
@@ -67,6 +68,7 @@ const ScoreManager = () => {
     game_id: ""
   });
   const { toast } = useToast();
+  const { currentTournament } = useTournament();
 
   // Load scores and games
   const loadData = async () => {
@@ -89,8 +91,8 @@ const ScoreManager = () => {
       if (competitionsError) throw competitionsError;
       setCompetitions(competitionsData || []);
 
-      // Load current scores with game names
-      const { data: scoresData, error: scoresError } = await api
+      // Load current scores with game names (filtered by active tournament)
+      let scoresQuery = api
         .from('scores')
         .select(`
           *,
@@ -99,6 +101,12 @@ const ScoreManager = () => {
           )
         `)
         .order('score', { ascending: false });
+
+      if (currentTournament?.id) {
+        scoresQuery = scoresQuery.eq('tournament_id', currentTournament.id);
+      }
+
+      const { data: scoresData, error: scoresError } = await scoresQuery;
 
       if (scoresError) throw scoresError;
       setScores(scoresData || []);
@@ -142,7 +150,7 @@ const ScoreManager = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [currentTournament?.id]);
 
   // Update local scores when scores change
   useEffect(() => {
@@ -329,21 +337,34 @@ const ScoreManager = () => {
     // Start the fade-out animation
     setDeletingIds(prev => new Set([...prev, score.id]));
 
-    // Wait for animation, then remove from state (this will trigger the slide-up)
-    setTimeout(() => {
-      setLocalScores(prev => prev.filter(s => s.id !== score.id));
-      // Call the actual delete function
-      confirmDeleteScore(score.id);
-
-      // Clean up animation state after a brief delay to let the slide-up complete
-      setTimeout(() => {
-        setDeletingIds(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(score.id);
-          return newSet;
+    // Wait for animation, then attempt delete
+    setTimeout(async () => {
+      try {
+        await deleteScoreWithAchievementCleanup(score.id);
+        // Only remove from UI after successful deletion
+        setLocalScores(prev => prev.filter(s => s.id !== score.id));
+        toast({
+          title: "Success",
+          description: "Score deleted successfully (including achievement cleanup)"
         });
-      }, 50);
-    }, 280); // Slightly before animation completes
+      } catch (error) {
+        console.error('Error deleting score:', error);
+        toast({
+          title: "Error",
+          description: "Failed to delete score",
+          variant: "destructive"
+        });
+      } finally {
+        // Clean up animation state
+        setTimeout(() => {
+          setDeletingIds(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(score.id);
+            return newSet;
+          });
+        }, 50);
+      }
+    }, 280);
   };
 
   // Delete score via confirmation dialog

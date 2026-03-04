@@ -1,4 +1,4 @@
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, useMemo } from 'react';
 import { usePerformanceMode } from '@/hooks/usePerformanceMode';
 
 // Lazy load both versions
@@ -12,10 +12,10 @@ const LoadingFallback = () => (
 const DynamicOverallLeaderboard: React.FC = () => {
   const { isPerformanceMode, isRaspberryPi, isLowEnd } = usePerformanceMode();
 
-  // Use optimized version for performance mode, Pi, or low-end devices
-  const shouldUseOptimized = isPerformanceMode || isRaspberryPi || isLowEnd;
-
-  const Component = shouldUseOptimized ? OverallLeaderboardOptimized : OverallLeaderboard;
+  const Component = useMemo(() => {
+    const shouldUseOptimized = isPerformanceMode || isRaspberryPi || isLowEnd;
+    return shouldUseOptimized ? OverallLeaderboardOptimized : OverallLeaderboard;
+  }, [isPerformanceMode, isRaspberryPi, isLowEnd]);
 
   return (
     <Suspense fallback={<LoadingFallback />}>

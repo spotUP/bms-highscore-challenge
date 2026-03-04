@@ -92,7 +92,8 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
                   WebkitFontFeatureSettings: '"tnum" 1, "lnum" 1',
                   fontFeatureSettings: '"tnum" 1, "lnum" 1',
                 }}
-                aria-label="Clock"
+                aria-label="Current time"
+                aria-live="polite"
               >
                 {currentTime.toLocaleTimeString('en-GB', {
                   hour12: false,
@@ -170,7 +171,8 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
                   WebkitFontFeatureSettings: '"tnum" 1, "lnum" 1',
                   fontFeatureSettings: '"tnum" 1, "lnum" 1',
                 }}
-                aria-label="Clock"
+                aria-label="Current time"
+                aria-live="polite"
               >
                 {currentTime.toLocaleTimeString('en-GB', {
                   hour12: false,

@@ -37,6 +37,12 @@ services:
       PORT: "3002"
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://retroranks.com}
       CLOUDFLARE_R2_DOMAIN: ${VITE_CLOUDFLARE_R2_DOMAIN}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3002/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     volumes:
       - media:/app/media
 

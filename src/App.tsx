@@ -8,6 +8,7 @@ import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { usePageTransitions } from "@/hooks/usePageTransitions";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AchievementProvider } from "@/contexts/AchievementContext";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { TournamentProvider } from "@/contexts/TournamentContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { FullscreenProvider } from "@/contexts/FullscreenContext";
@@ -186,6 +187,7 @@ const App = () => (
                         {/* Persist and restore last visited route so reload returns to Admin if that was the last page */}
                         <RoutePersistence />
                       <Suspense fallback={<LoadingSpinner />}>
+                        <ErrorBoundary>
                         <Routes>
                           <Route path="/" element={<IndexWithRules />} />
                           <Route path="/admin/brackets" element={<Layout topNavProps={{ hideBracketsLink: true, rightActions: <BracketAdminActions /> }}><BracketAdmin /></Layout>} />
@@ -216,6 +218,7 @@ const App = () => (
                           {/* 404 Catch-all route */}
                           <Route path="*" element={<IndexWithRules />} />
                         </Routes>
+                        </ErrorBoundary>
                       </Suspense>
                     </BrowserRouter>
                     </HelpGuideProvider>

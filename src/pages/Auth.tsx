@@ -157,11 +157,11 @@ export default function Auth() {
       return;
     }
 
-    if (newPassword.length < 6) {
+    if (newPassword.length < 8) {
       toast({
         variant: "destructive",
         title: "Password too short",
-        description: "Password must be at least 6 characters long."
+        description: "Password must be at least 8 characters long."
       });
       return;
     }

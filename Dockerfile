@@ -45,6 +45,6 @@ COPY scripts/apply-db-migrations.ts ./scripts/apply-db-migrations.ts
 COPY scripts/docker-entrypoint.sh ./scripts/docker-entrypoint.sh
 RUN chmod +x ./scripts/docker-entrypoint.sh
 
-EXPOSE 3001
+EXPOSE 3001 3002
 
 ENTRYPOINT ["./scripts/docker-entrypoint.sh"]

@@ -19,13 +19,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [session, setSession] = useState<AuthSession | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('rr_isAdmin') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const isOnline = useNetworkStatus();
   const [retryCount, setRetryCount] = useState(0);
 
@@ -46,7 +40,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Handle session events
         if (event === 'SIGNED_OUT') {
           setIsAdmin(false);
-          try { localStorage.removeItem('rr_isAdmin'); } catch {}
         } else if (event === 'TOKEN_REFRESHED') {
           console.log('Token refreshed successfully');
         } else if (event === 'SIGNED_IN' || (event === 'TOKEN_REFRESHED' && session?.user)) {
@@ -154,9 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
       
       if (!error) {
-        const val = !!data;
-        setIsAdmin(val);
-        try { localStorage.setItem('rr_isAdmin', val ? 'true' : 'false'); } catch {}
+        setIsAdmin(!!data);
       }
     } catch (error) {
       console.error('Error checking admin role:', error);
@@ -213,7 +204,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     await api.auth.signOut();
     setIsAdmin(false);
-    try { localStorage.removeItem('rr_isAdmin'); } catch {}
   };
 
   return (

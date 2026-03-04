@@ -82,17 +82,6 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
       });
     }
 
-    // Note: Frontend now limits input to 16 characters, so this check is redundant
-    // but kept as a safety measure
-    if (trimmedName.length > 16) {
-      toast({
-        title: "Error",
-        description: "Player name must be 16 characters or less",
-        variant: "destructive"
-      });
-      return;
-    }
-
     const scoreValue = parseInt(score);
     if (isNaN(scoreValue) || scoreValue <= 0 || scoreValue > 999999999) {
       toast({

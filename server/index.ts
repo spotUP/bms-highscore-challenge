@@ -13,13 +13,46 @@ import path from 'path';
 import fs from 'fs';
 
 const app = express();
-app.use(cors({ origin: true }));
+
+// CORS: restrict to known origins (falls back to permissive in dev)
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : null;
+app.use(cors({
+  origin: ALLOWED_ORIGINS
+    ? (origin, cb) => {
+        if (!origin || ALLOWED_ORIGINS.includes(origin)) cb(null, true);
+        else cb(new Error('Not allowed by CORS'));
+      }
+    : true,
+  credentials: true,
+}));
 app.use(express.json({ limit: '5mb' }));
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret';
 const PORT = Number(process.env.PORT || 3001);
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
+
+// Simple in-memory rate limiter
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+function rateLimit(key: string, maxAttempts: number, windowMs: number): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+    return false;
+  }
+  entry.count++;
+  return entry.count > maxAttempts;
+}
+// Periodically clean up expired entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitMap) {
+    if (now > entry.resetAt) rateLimitMap.delete(key);
+  }
+}, 60_000);
 
 const mediaRoot = path.join(process.cwd(), 'media');
 const upload = multer({ storage: multer.memoryStorage() });
@@ -325,6 +358,18 @@ app.post('/api/auth/signup', async (req, res) => {
     return;
   }
 
+  // Rate limit: 5 signups per IP per 15 min
+  const ip = req.ip || 'unknown';
+  if (rateLimit(`signup:${ip}`, 5, 15 * 60_000)) {
+    res.status(429).json({ error: 'Too many signup attempts. Please try again later.' });
+    return;
+  }
+
+  if (password.length < 8) {
+    res.status(400).json({ error: 'Password must be at least 8 characters' });
+    return;
+  }
+
   const passwordHash = await bcrypt.hash(password, 10);
   const userId = uuidv4();
   try {
@@ -353,6 +398,12 @@ app.post('/api/auth/login', async (req, res) => {
   const password = String(req.body.password || '').trim();
   if (!email || !password) {
     res.status(400).json({ error: 'Email and password are required' });
+    return;
+  }
+
+  // Rate limit: 10 login attempts per email per 15 min
+  if (rateLimit(`login:${email}`, 10, 15 * 60_000)) {
+    res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
     return;
   }
   const { rows } = await pool.query(
@@ -386,6 +437,12 @@ app.post('/api/auth/reset', async (req, res) => {
     res.status(400).json({ error: 'Email is required' });
     return;
   }
+
+  // Rate limit: 3 reset requests per email per 15 min
+  if (rateLimit(`reset:${email}`, 3, 15 * 60_000)) {
+    res.status(429).json({ error: 'Too many reset attempts. Please try again later.' });
+    return;
+  }
   const { rows } = await pool.query('SELECT id FROM auth.users WHERE email = $1 LIMIT 1', [email]);
   if (!rows.length) {
     res.json({ success: true });
@@ -412,6 +469,12 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     res.status(400).json({ error: 'Email and code are required' });
     return;
   }
+
+  // Rate limit: 5 OTP attempts per email per 15 min
+  if (rateLimit(`otp:${email}`, 5, 15 * 60_000)) {
+    res.status(429).json({ error: 'Too many verification attempts. Please try again later.' });
+    return;
+  }
   const { rows } = await pool.query(
     `SELECT pr.id, pr.user_id, pr.expires_at, pr.used_at
      FROM password_resets pr
@@ -427,7 +490,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     return;
   }
   await pool.query('UPDATE password_resets SET used_at = NOW() WHERE id = $1', [record.id]);
-  const resetToken = jwt.sign({ id: record.user_id, purpose: 'password-reset' }, JWT_SECRET, {
+  const resetToken = jwt.sign({ id: record.user_id, email, purpose: 'password-reset' }, JWT_SECRET, {
     expiresIn: '30m'
   });
   res.json({ success: true, resetToken });
@@ -497,6 +560,21 @@ app.post('/api/db', async (req, res) => {
   if (!user && !isSelect && !anonWriteTables.includes(table)) {
     res.status(401).json({ error: 'Unauthorized' });
     return;
+  }
+
+  // Table-level write authorization: restrict which tables authenticated users can modify
+  const publicWriteTables = ['scores', 'score_submissions', 'player_achievements', 'profiles'];
+  const adminOnlyTables = ['user_roles', 'role_audit_log', 'competitions'];
+  if (!isSelect && user && adminOnlyTables.includes(table)) {
+    // Check if user has admin role
+    const { rows: roleRows } = await pool.query(
+      "SELECT role FROM user_roles WHERE user_id = $1 AND role = 'admin' LIMIT 1",
+      [user.id]
+    );
+    if (!roleRows.length) {
+      res.status(403).json({ error: 'Insufficient permissions' });
+      return;
+    }
   }
 
   const params: any[] = [];

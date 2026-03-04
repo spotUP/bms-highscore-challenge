@@ -33,28 +33,16 @@ export const WelcomeModal: React.FC = () => {
 
   const handleStartTour = () => {
     try {
-      console.log('🎯 WelcomeModal: Starting tour...');
-      console.log('Step 1: About to check tours.length');
-      console.log('Available tours count:', tours.length);
-
-      console.log('Step 2: About to find welcome tour');
       const welcomeTour = tours.find(tour => tour.id === 'welcome');
 
-      console.log('Step 3: Found tour:', !!welcomeTour);
-      console.log('Found welcome tour:', !!welcomeTour);
-
       if (welcomeTour) {
-        console.log('Step 4: About to call startTour');
-        console.log('🚀 Starting welcome tour with', welcomeTour.steps.length, 'steps');
         startTour(welcomeTour);
-        console.log('✅ Called startTour, closing modal');
         handleClose();
       } else {
-        console.error('❌ Welcome tour not found!');
-        console.log('Available tour names:', tours.map(t => `${t.name} (${t.id})`).join(', '));
+        console.error('Welcome tour not found');
       }
     } catch (error) {
-      console.error('❌ Error in handleStartTour:', error);
+      console.error('Error in handleStartTour:', error);
     }
   };
 

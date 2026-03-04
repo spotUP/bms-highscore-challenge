@@ -28,8 +28,8 @@ export default defineConfig(({ mode }) => ({
     }),
   ],
   esbuild: {
-    // Keep console logs in production for debugging, only remove debugger statements
-    drop: mode === 'production' ? ['debugger'] : [],
+    // Drop console.log and debugger statements in production
+    drop: mode === 'production' ? ['console', 'debugger'] : [],
   },
   resolve: {
     alias: {
@@ -67,10 +67,17 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('@radix-ui') || id.includes('@headlessui')) {
             return 'ui-libs';
           }
-          // Skip recharts chunking - let it bundle with main code to avoid initialization issues
-          // if (id.includes('recharts')) {
-          //   return 'charts';
-          // }
+          // Heavy 3D/graphics libraries — lazy loaded only when needed
+          if (id.includes('three') || id.includes('@react-three')) {
+            return 'three';
+          }
+          if (id.includes('pixi.js')) {
+            return 'pixi';
+          }
+          // Audio/synthesis
+          if (id.includes('tone')) {
+            return 'audio';
+          }
           if (id.includes('@tanstack/react-query')) {
             return 'react-query';
           }
@@ -81,6 +88,10 @@ export default defineConfig(({ mode }) => ({
           // Utilities
           if (id.includes('lodash') || id.includes('date-fns')) {
             return 'utils';
+          }
+          // Charts
+          if (id.includes('recharts')) {
+            return 'charts';
           }
         },
         // Optimize chunk names

@@ -213,6 +213,15 @@ const CompetitionManager: React.FC = () => {
       return;
     }
 
+    if (new Date(newCompetition.start_time) >= new Date(newCompetition.end_time)) {
+      toast({
+        title: "Invalid Dates",
+        description: "End time must be after start time",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const competition: Competition = {
       name: newCompetition.name,
       description: newCompetition.description,

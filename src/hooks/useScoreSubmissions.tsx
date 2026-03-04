@@ -81,7 +81,7 @@ export const useScoreSubmissions = () => {
         },
       }
     );
-  }, [currentTournament, getGameLogo, api, showAchievementNotification]);
+  }, [currentTournament, getGameLogo, showAchievementNotification]);
 
   // Set up real-time subscriptions
   useEffect(() => {
@@ -139,7 +139,7 @@ export const useScoreSubmissions = () => {
       api.removeChannel(scoreChannel);
       api.removeChannel(achievementChannel);
     };
-  }, [showAchievementNotification, showScoreNotification, api]);
+  }, [showAchievementNotification, showScoreNotification]);
 
   return {
     showScoreNotification,
