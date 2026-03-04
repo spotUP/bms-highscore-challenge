@@ -106,7 +106,6 @@ export default defineConfig(({ mode }) => ({
       'react-dom',
       '@tanstack/react-query',
       'recharts', // Pre-bundle recharts to prevent initialization issues
-      'sql.js', // Include SQL.js for Clear Logo functionality
     ],
     exclude: [
       '@huggingface/transformers', // Exclude heavy ML library from pre-bundling
@@ -114,6 +113,5 @@ export default defineConfig(({ mode }) => ({
     ],
   },
 
-  // Handle SQL.js WASM files
   assetsInclude: ['**/*.wasm'],
 }));

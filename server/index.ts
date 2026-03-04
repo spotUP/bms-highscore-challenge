@@ -1087,7 +1087,7 @@ app.get('/api/clear-logos/:filename', async (req, res) => {
     const response = await fetch(logoUrl);
     if (!response.ok) {
       res.setHeader('Content-Type', 'image/svg+xml');
-      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('Cache-Control', 'public, max-age=604800, s-maxage=604800');
       res.send(PLACEHOLDER_SVG);
       return;
     }
