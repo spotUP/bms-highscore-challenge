@@ -197,28 +197,40 @@ export const useTournamentGameData = () => {
     if (!currentTournament) return;
 
     try {
-      // Load achievements with tournament_id filter
+      // Load achievement counts with a single aggregated query
       const { data, error } = await api
         .from('player_achievements')
-        .select(`
-          player_name,
-          achievements!inner(points)
-        `)
+        .select('player_name, achievement_id')
         .eq('tournament_id', currentTournament.id);
 
       if (error) throw error;
 
-      const achievementStats = data?.reduce((acc: Record<string, { count: number; total_points: number }>, item) => {
-        if (!acc[item.player_name]) {
-          acc[item.player_name] = { count: 0, total_points: 0 };
+      // Get unique achievement IDs for a single batch lookup
+      const achievementIds = [...new Set(data?.map(d => d.achievement_id) || [])];
+      let pointsMap: Record<string, number> = {};
+
+      if (achievementIds.length > 0) {
+        const { data: achievements, error: achError } = await api
+          .from('achievements')
+          .select('id, points')
+          .in('id', achievementIds);
+
+        if (!achError && achievements) {
+          pointsMap = Object.fromEntries(achievements.map(a => [a.id, a.points]));
         }
-        acc[item.player_name].count += 1;
-        acc[item.player_name].total_points += item.achievements.points;
-        return acc;
-      }, {} as Record<string, { count: number; total_points: number }>) || {};
+      }
+
+      const achievementStats: Record<string, { count: number; total_points: number }> = {};
+      data?.forEach(item => {
+        if (!achievementStats[item.player_name]) {
+          achievementStats[item.player_name] = { count: 0, total_points: 0 };
+        }
+        achievementStats[item.player_name].count += 1;
+        achievementStats[item.player_name].total_points += pointsMap[item.achievement_id] || 0;
+      });
 
       const achievementHunters = Object.entries(achievementStats)
-        .map(([player_name, stats]: [string, { count: number; total_points: number }]) => ({
+        .map(([player_name, stats]) => ({
           player_name,
           achievement_count: stats.count,
           total_points: stats.total_points,

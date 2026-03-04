@@ -1011,7 +1011,23 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    loadUserTournaments();
+    let cancelled = false;
+    const timeout = setTimeout(() => {
+      if (!cancelled) {
+        console.warn('Tournament loading timed out after 15s');
+        setLoading(false);
+      }
+    }, 15_000);
+
+    loadUserTournaments().finally(() => {
+      cancelled = true;
+      clearTimeout(timeout);
+    });
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
   }, [loadUserTournaments]);
 
   if (error) {

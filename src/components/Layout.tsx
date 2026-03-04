@@ -101,6 +101,12 @@ const Layout: React.FC<LayoutProps> = ({
          style={{
            background: 'var(--page-bg)'
          }}>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:bg-white focus:text-black focus:rounded"
+      >
+        Skip to content
+      </a>
       {shouldShowTopNav && (
         <TopNav
           onSpinWheel={() => setIsSpinWheelOpen(true)}
@@ -109,7 +115,7 @@ const Layout: React.FC<LayoutProps> = ({
         />
       )}
 
-      <div className={`${shouldShowTopNav ? 'pt-2' : ''}`}>
+      <div id="main-content" className={`${shouldShowTopNav ? 'pt-2' : ''}`}>
         {React.isValidElement(children) ?
           React.cloneElement(children, { isExiting }) :
           children

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api-client';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,7 +71,7 @@ const ScoreManager = () => {
   const { currentTournament } = useTournament();
 
   // Load scores and games
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       // Load games
       const { data: gamesData, error: gamesError } = await api
@@ -125,7 +125,7 @@ const ScoreManager = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentTournament?.id]);
 
   // Load scores for a specific competition
   const loadCompetitionScores = async (competitionId: string) => {
@@ -150,7 +150,7 @@ const ScoreManager = () => {
 
   useEffect(() => {
     loadData();
-  }, [currentTournament?.id]);
+  }, [loadData]);
 
   // Update local scores when scores change
   useEffect(() => {

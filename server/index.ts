@@ -502,6 +502,10 @@ app.post('/api/auth/update-user', async (req, res) => {
     res.status(400).json({ error: 'Password is required' });
     return;
   }
+  if (password.length < 8) {
+    res.status(400).json({ error: 'Password must be at least 8 characters' });
+    return;
+  }
   const resetToken = String(req.body.resetToken || '');
   let userId = '';
   if (resetToken) {

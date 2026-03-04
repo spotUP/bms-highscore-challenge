@@ -411,7 +411,7 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
                 type="submit"
                 variant="outline"
                 className="flex-1"
-                disabled={!name || !score || isSubmitting}
+                disabled={!name || !score || isSubmitting || !currentTournament}
               >
                 {isSubmitting ? "Submitting..." : "Submit Score"}
               </Button>

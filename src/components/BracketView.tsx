@@ -773,6 +773,8 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
       )}
       <svg
         ref={svgRef}
+        role="img"
+        aria-label="Tournament bracket"
         className="w-full h-full bg-black/25 rounded-md border border-white/10 cursor-grab"
         style={{ userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none', touchAction: 'none', overflow: 'hidden' } as React.CSSProperties}
         onWheel={onWheel}
