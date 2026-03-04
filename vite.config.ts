@@ -74,10 +74,6 @@ export default defineConfig(({ mode }) => ({
           if (id.includes('pixi.js')) {
             return 'pixi';
           }
-          // Audio/synthesis
-          if (id.includes('tone')) {
-            return 'audio';
-          }
           if (id.includes('@tanstack/react-query')) {
             return 'react-query';
           }
