@@ -155,12 +155,12 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           });
           
           if (webhookResponse.error) {
-            console.error('❌ Webhook error:', webhookResponse.error);
+            console.error(' Webhook error:', webhookResponse.error);
           } else {
-            console.log('✅ Webhook sent successfully:', webhookResponse.data);
+            console.log(' Webhook sent successfully:', webhookResponse.data);
           }
         } catch (webhookError) {
-          console.error('❌ Webhook call failed:', webhookError);
+          console.error(' Webhook call failed:', webhookError);
         }
 
         // Toast notification now handled by realtime system
@@ -227,12 +227,12 @@ const ScoreSubmissionDialog = ({ game, isOpen, onClose, onScoreSubmitted }: Scor
           });
           
           if (webhookResponse.error) {
-            console.error('❌ Webhook error:', webhookResponse.error);
+            console.error(' Webhook error:', webhookResponse.error);
           } else {
-            console.log('✅ Webhook sent successfully:', webhookResponse.data);
+            console.log(' Webhook sent successfully:', webhookResponse.data);
           }
         } catch (webhookError) {
-          console.error('❌ Webhook call failed:', webhookError);
+          console.error(' Webhook call failed:', webhookError);
         }
         
         // Toast notification now handled by realtime system

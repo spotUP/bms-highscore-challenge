@@ -14,11 +14,11 @@ const LeaderboardEntry = React.memo(({ rank, name, score, isNewScore }: Leaderbo
   const getRankIcon = (rank: number) => {
     switch (rank) {
       case 1:
-        return <span className="w-8 h-8 flex items-center justify-center text-2xl animate-gold-shine">🏆</span>;
+        return <Trophy className="w-6 h-6 text-yellow-400 animate-gold-shine" />;
       case 2:
-        return <span className="w-8 h-8 flex items-center justify-center text-2xl animate-silver-shine">🥈</span>;
+        return <Medal className="w-6 h-6 text-gray-400 animate-silver-shine" />;
       case 3:
-        return <span className="w-8 h-8 flex items-center justify-center text-2xl animate-bronze-shine">🥉</span>;
+        return <Medal className="w-6 h-6 text-amber-600 animate-bronze-shine" />;
       default:
         return <span className="w-8 h-8 flex items-center justify-center text-sm font-bold text-white">#{rank}</span>;
     }

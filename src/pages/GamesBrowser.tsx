@@ -1332,7 +1332,7 @@ const GamesBrowser: React.FC = () => {
                   {/* General search tips */}
                   {!filters.search && filters.platform === 'all' && (
                     <div className="text-xs text-gray-500 mt-1">
-                      💡 Tip: Try "mario", "sonic", "zelda", or use abbreviations like "sf" for Street Fighter
+                       Tip: Try "mario", "sonic", "zelda", or use abbreviations like "sf" for Street Fighter
                     </div>
                   )}
                 </div>

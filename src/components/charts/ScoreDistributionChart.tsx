@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { BarChart3 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getCardStyle, getTypographyStyle } from '@/utils/designSystem';
@@ -58,7 +59,7 @@ const ScoreDistributionChart: React.FC<ScoreDistributionChartProps> = React.memo
     <Card className={getCardStyle('primary')}>
       <CardHeader>
         <CardTitle className={getTypographyStyle('h4') + " flex items-center gap-2"}>
-          📊 Score Distribution
+          <BarChart3 className="w-4 h-4 inline" /> Score Distribution
         </CardTitle>
         <p className="text-gray-400 text-sm">
           Distribution of all submitted scores across different ranges

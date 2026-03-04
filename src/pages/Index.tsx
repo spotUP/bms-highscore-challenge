@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { Trophy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useTournamentGameData } from "@/hooks/useTournamentGameData";
@@ -104,13 +105,13 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
   }, []);
 
   const handleScoreSubmitted = useCallback(() => {
-    console.log('🚀 Score submitted! Dispatching scoreSubmitted event');
+    console.log(' Score submitted! Dispatching scoreSubmitted event');
     refetch(); // Reload all data after submission
 
     // Check if we're in the help guide tour and advance to congratulations step
     const helpGuideEvent = new CustomEvent('scoreSubmitted');
     window.dispatchEvent(helpGuideEvent);
-    console.log('🚀 scoreSubmitted event dispatched');
+    console.log(' scoreSubmitted event dispatched');
   }, [refetch]);
 
 
@@ -166,7 +167,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
           // If subscription fails or we're on a problematic setup, use fallback polling
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || needsFallback) {
             const pollInterval = 15000; // Standard 15 second fallback (Pi5 polling handled elsewhere)
-            console.log(`🔧 Setting up fallback polling every ${pollInterval/1000}s for score updates`);
+            console.log(` Setting up fallback polling every ${pollInterval/1000}s for score updates`);
             if (fallbackInterval) clearInterval(fallbackInterval);
             fallbackInterval = setInterval(() => {
               const recentUpdateThreshold = 20000; // Allow 20s before fallback polling
@@ -180,7 +181,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
       console.error('Error setting up real-time subscription:', error);
       // Fallback to polling if subscription completely fails (Pi5 polling handled elsewhere)
       const fallbackPollInterval = 20000; // Conservative fallback
-      console.log(`🚨 Subscription failed, using emergency fallback polling every ${fallbackPollInterval/1000}s`);
+      console.log(` Subscription failed, using emergency fallback polling every ${fallbackPollInterval/1000}s`);
       fallbackInterval = setInterval(handleUpdate, fallbackPollInterval);
     }
 
@@ -189,7 +190,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
     const safetyThreshold = 60000; // 1 minute threshold
     const safetyInterval = setInterval(() => {
       if (Date.now() - lastUpdateTime > safetyThreshold) {
-        console.log('🛡️ Safety net polling triggered');
+        console.log(' Safety net polling triggered');
         handleUpdate();
       }
     }, safetyPollInterval);
@@ -227,7 +228,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
       <div className="min-h-screen flex items-center justify-center relative z-10"
            style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
         <div className="text-center text-white">
-          <div className="text-6xl mb-4">🏆</div>
+          <div className="text-6xl mb-4"><Trophy className="w-16 h-16 inline text-yellow-400" /></div>
           <h1 className="text-4xl font-bold mb-4">Welcome to Retro Ranks!</h1>
           <p className="text-xl text-gray-300 mb-8">
             Create your first tournament or join an existing one to get started.
@@ -274,7 +275,7 @@ const Index: React.FC<IndexProps> = ({ isExiting = false }) => {
 
                     // Debug logging for joust specifically
                     if (game.name.toLowerCase().includes('joust')) {
-                      dlog('🎮 Joust Debug Info:', {
+                      dlog(' Joust Debug Info:', {
                         gameName: game.name,
                         gameId: game.id,
                         scoresForThisGame: filtered,

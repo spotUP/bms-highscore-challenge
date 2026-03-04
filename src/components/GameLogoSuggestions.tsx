@@ -37,7 +37,7 @@ const GameLogoSuggestions = forwardRef<GameLogoSuggestionsRef, GameLogoSuggestio
 
     setLoading(true);
     try {
-      console.log(`🔍 Searching database for: "${gameName}"`);
+      console.log(` Searching database for: "${gameName}"`);
 
       // Use the same database search as AdvancedSearchField - simple and effective!
       const { data: dbMatches, error } = await api
@@ -52,7 +52,7 @@ const GameLogoSuggestions = forwardRef<GameLogoSuggestionsRef, GameLogoSuggestio
       }
 
       const gameNames = dbMatches?.map(game => game.name) || [];
-      console.log(`📊 Found ${gameNames.length} games in database:`, gameNames);
+      console.log(` Found ${gameNames.length} games in database:`, gameNames);
 
       // If no games found, return empty results
       if (gameNames.length === 0) {

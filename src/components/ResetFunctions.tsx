@@ -22,12 +22,12 @@ const ResetFunctions = () => {
     setIsResettingAchievements(true);
     
     try {
-      console.log('🗑️ Resetting all achievements...');
+      console.log(' Resetting all achievements...');
       
       const { data, error } = await api.functions.invoke('reset-achievements');
       
       if (error) {
-        console.error('❌ Reset achievements error:', error);
+        console.error(' Reset achievements error:', error);
         toast({
           title: "Error",
           description: `Failed to reset achievements: ${error.message}`,
@@ -36,7 +36,7 @@ const ResetFunctions = () => {
         return;
       }
 
-      console.log('✅ Achievements reset response:', data);
+      console.log(' Achievements reset response:', data);
       
       toast({
         title: "Success!",
@@ -44,7 +44,7 @@ const ResetFunctions = () => {
       });
       
     } catch (error: any) {
-      console.error('❌ Reset achievements failed:', error);
+      console.error(' Reset achievements failed:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to reset achievements",
@@ -59,12 +59,12 @@ const ResetFunctions = () => {
     setIsResettingCompetition(true);
     
     try {
-      console.log('🔄 Resetting competition scores...');
+      console.log(' Resetting competition scores...');
       
       const { data, error } = await api.functions.invoke('reset-competition-scores');
       
       if (error) {
-        console.error('❌ Reset competition error:', error);
+        console.error(' Reset competition error:', error);
         toast({
           title: "Error",
           description: `Failed to reset competition: ${error.message}`,
@@ -73,7 +73,7 @@ const ResetFunctions = () => {
         return;
       }
 
-      console.log('✅ Competition reset response:', data);
+      console.log(' Competition reset response:', data);
       
       if (data.games?.length === 0) {
         toast({
@@ -88,7 +88,7 @@ const ResetFunctions = () => {
       }
       
     } catch (error: any) {
-      console.error('❌ Reset competition failed:', error);
+      console.error(' Reset competition failed:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to reset competition",
@@ -129,7 +129,7 @@ const ResetFunctions = () => {
           <div className="space-y-3">
             <h4 className="font-semibold text-red-400">Reset Everything</h4>
             <p className="text-sm text-gray-300">
-              ⚠️ NUCLEAR OPTION: Reset ALL achievements and player statistics 
+               NUCLEAR OPTION: Reset ALL achievements and player statistics 
               for ALL players across ALL games. This cannot be undone!
             </p>
             <Button
@@ -173,7 +173,7 @@ const ResetFunctions = () => {
       open={resetCompetitionStep2}
       onOpenChange={setResetCompetitionStep2}
       title="Final Warning"
-      description="🚨 This will delete ALL scores, achievements, and player statistics for the current competition. This action cannot be undone."
+      description=" This will delete ALL scores, achievements, and player statistics for the current competition. This action cannot be undone."
       confirmText="Delete Everything"
       cancelText="Cancel"
       variant="outline"
@@ -197,7 +197,7 @@ const ResetFunctions = () => {
       open={resetAchievementsStep2}
       onOpenChange={setResetAchievementsStep2}
       title="Final Warning"
-      description="🚨 This will delete ALL player achievements and statistics permanently across ALL games. This action cannot be undone."
+      description=" This will delete ALL player achievements and statistics permanently across ALL games. This action cannot be undone."
       confirmText="Delete All"
       cancelText="Cancel"
       variant="outline"

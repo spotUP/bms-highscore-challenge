@@ -1,4 +1,5 @@
 import { useEffect, useCallback } from 'react';
+import { Trophy } from "lucide-react";
 import { toast } from 'sonner';
 import { useAchievement } from '@/contexts/AchievementContext';
 import { useGameLogo } from '@/hooks/useGameLogo';
@@ -64,7 +65,7 @@ export const useScoreSubmissions = () => {
           </p>
           {isHighScore && (
             <p className="text-sm">
-              🏆 New High Score! {scoreDiff ? `(+${scoreDiff.toLocaleString()} from previous)` : ''}
+               <Trophy className="w-4 h-4 inline" /> New High Score! {scoreDiff ? `(+${scoreDiff.toLocaleString()} from previous)` : ''}
             </p>
           )}
         </div>

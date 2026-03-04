@@ -188,7 +188,7 @@ const UserManagement: React.FC = () => {
 
       if (data && data.user) {
         toast({
-          title: "✅ Test User Created",
+          title: " Test User Created",
           description: (
             <div className="space-y-1">
               <div><strong>Email:</strong> {data.user.email}</div>

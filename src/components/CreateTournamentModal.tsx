@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { ChevronLeft, ChevronRight, Calendar, Plus, Trash2, Lock, Globe, Play, Pause, Shield, CheckSquare, Square, Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Plus, Trash2, Lock, Globe, Play, Pause, Shield, CheckSquare, Square, Search, Check } from "lucide-react";
 import { api } from '@/lib/api-client';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -647,7 +647,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
                     onSubmit={handleGameSearchSubmit}
                     placeholder="Enter game name (clear logos search automatically)"
                     enableSuggestions={true}
-                    searchHint="💡 Tip: Try 'Street Fighter', 'Pac-Man', 'Metal Slug', or use abbreviations like 'SF'"
+                    searchHint=" Tip: Try 'Street Fighter', 'Pac-Man', 'Metal Slug', or use abbreviations like 'SF'"
                     className="bg-black/50 border-gray-700 text-white"
                   />
 
@@ -659,7 +659,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
                         alt="Clear logo found"
                         className="w-8 h-8 object-contain bg-white/10 rounded"
                       />
-                      <span className="text-xs text-green-400">✓ Clear logo found automatically</span>
+                      <span className="text-xs text-green-400"><Check className="w-3 h-3 inline" /> Clear logo found automatically</span>
                     </div>
                   )}
                 </div>
@@ -677,7 +677,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
                       className="bg-black/50 border-gray-700 text-white"
                     />
                     <div className="text-xs text-gray-500 mt-1">
-                      💡 You can paste an image URL or upload an image file
+                       You can paste an image URL or upload an image file
                     </div>
                   </div>
                 )}
@@ -714,7 +714,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
                                 className="max-w-full max-h-full object-contain"
                                 onError={(e) => {
                                   e.currentTarget.style.display = 'none';
-                                  e.currentTarget.nextElementSibling!.textContent = '❌ Failed to load';
+                                  e.currentTarget.nextElementSibling!.textContent = 'Failed to load';
                                 }}
                               />
                               <span className="text-xs text-gray-400 hidden">Loading...</span>
@@ -724,7 +724,7 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
                             </p>
                             {newGame.logo_url === result.url && (
                               <div className="text-xs text-blue-400 text-center mt-1">
-                                ✓ Selected
+                                 Selected
                               </div>
                             )}
                           </div>

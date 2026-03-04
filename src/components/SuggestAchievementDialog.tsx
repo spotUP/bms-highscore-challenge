@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Sparkles, RefreshCw, Plus, Edit3, Eye, Save, BookOpen, Zap, Copy } from "lucide-react";
+import { renderIcon } from "@/utils/iconMap";
 import { useTournament } from "@/contexts/TournamentContext";
 
 interface SuggestedAchievement {
@@ -47,7 +48,7 @@ const achievementTypes = [
   'competition_winner', 'speed_demon'
 ];
 
-const icons = ['🏆', '🥇', '🎯', '⭐', '💎', '🔥', '⚡', '🎮', '👑', '🏅', '🌟', '💫', '🚀', '🎪', '🎭', '🎨'];
+const icons = ['trophy', 'medal', 'target', 'star', 'gem', 'flame', 'zap', 'gamepad2', 'crown', 'award', 'sparkles', 'rocket', 'sparkles', 'palette'];
 const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE'];
 
 const achievementTemplates = [
@@ -55,7 +56,7 @@ const achievementTemplates = [
     name: 'Score Rookie',
     description: 'Score 5,000 points or more in any game',
     type: 'score_milestone',
-    icon: '🎯',
+    icon: 'target',
     color: '#4ECDC4',
     points: 25,
     criteria: { min_score: 5000 },
@@ -65,7 +66,7 @@ const achievementTemplates = [
     name: 'Century Club',
     description: 'Score 100,000 points or more',
     type: 'score_milestone',
-    icon: '💯',
+    icon: 'award',
     color: '#FFD700',
     points: 75,
     criteria: { min_score: 100000 },
@@ -75,7 +76,7 @@ const achievementTemplates = [
     name: 'Speed Runner',
     description: 'Submit 15 scores within 3 hours',
     type: 'speed_demon',
-    icon: '⚡',
+    icon: 'zap',
     color: '#FF6B6B',
     points: 100,
     criteria: { scores_in_timeframe: 15, timeframe_hours: 3 },
@@ -85,7 +86,7 @@ const achievementTemplates = [
     name: 'Dedicated Player',
     description: 'Submit scores for 14 days straight',
     type: 'streak_master',
-    icon: '🔥',
+    icon: 'flame',
     color: '#FF6B6B',
     points: 125,
     criteria: { consecutive_days: 14 },
@@ -95,7 +96,7 @@ const achievementTemplates = [
     name: 'Game Explorer',
     description: 'Play 15 different games',
     type: 'game_master',
-    icon: '🗺️',
+    icon: 'search',
     color: '#45B7D1',
     points: 100,
     criteria: { game_count: 15 },
@@ -105,7 +106,7 @@ const achievementTemplates = [
     name: 'Champion',
     description: 'Take first place on any leaderboard',
     type: 'first_place',
-    icon: '🏆',
+    icon: 'trophy',
     color: '#FFD700',
     points: 200,
     criteria: { max_rank: 1 },
@@ -115,7 +116,7 @@ const achievementTemplates = [
     name: 'Perfectionist',
     description: 'Score exactly 500,000 points',
     type: 'perfectionist',
-    icon: '💎',
+    icon: 'gem',
     color: '#BB8FCE',
     points: 250,
     criteria: { exact_score: 500000 },
@@ -125,7 +126,7 @@ const achievementTemplates = [
     name: 'Score Veteran',
     description: 'Submit 50 scores total',
     type: 'consistent_player',
-    icon: '👥',
+    icon: 'users',
     color: '#96CEB4',
     points: 75,
     criteria: { min_scores: 50 },
@@ -992,7 +993,7 @@ export const SuggestAchievementDialog: React.FC<SuggestAchievementDialogProps> =
                         className="w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0 shadow-sm"
                         style={{ backgroundColor: template.color }}
                       >
-                        {template.icon}
+                        {renderIcon(template.icon, "w-6 h-6")}
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-sm truncate mb-1">{template.name}</h4>
@@ -1088,7 +1089,7 @@ export const SuggestAchievementDialog: React.FC<SuggestAchievementDialogProps> =
                           className="w-12 h-12 rounded-full flex items-center justify-center text-xl flex-shrink-0"
                           style={{ backgroundColor: achievement.badge_color }}
                         >
-                          {achievement.badge_icon}
+                          {renderIcon(achievement.badge_icon, "w-6 h-6")}
                         </div>
                         <div className="flex-1 space-y-3">
                           <div className="grid grid-cols-2 gap-4">
@@ -1241,7 +1242,7 @@ export const SuggestAchievementDialog: React.FC<SuggestAchievementDialogProps> =
                           <SelectContent>
                             {icons.map((icon) => (
                               <SelectItem key={icon} value={icon}>
-                                <span className="text-lg mr-2">{icon}</span>
+                                <span className="text-lg mr-2">{renderIcon(icon, "w-4 h-4 inline")}</span>
                                 {icon}
                               </SelectItem>
                             ))}
@@ -1450,7 +1451,7 @@ export const SuggestAchievementDialog: React.FC<SuggestAchievementDialogProps> =
                           className="inline-flex items-center justify-center w-16 h-16 rounded-full text-3xl mb-3 shadow-lg"
                           style={{ backgroundColor: achievement.badge_color }}
                         >
-                          {achievement.badge_icon}
+                          {renderIcon(achievement.badge_icon, "w-8 h-8")}
                         </div>
                         <h3 className="text-lg font-bold mb-1">{achievement.name}</h3>
                         <p className="text-sm text-muted-foreground mb-2">{achievement.description}</p>

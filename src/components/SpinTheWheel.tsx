@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Sparkles, Trophy } from "lucide-react";
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import WheelOfFortune from './WheelOfFortune';
@@ -83,7 +84,7 @@ const SpinTheWheel = ({ isOpen, onClose, leaderboardNames }: SpinTheWheelProps) 
               <WheelOfFortune names={leaderboardNames} onWinner={handleWinner} />
             ) : (
               <div className="text-center space-y-6 pt-8">
-                <div className="text-6xl animate-bounce">🎉</div>
+                <div className="text-6xl animate-bounce"><Sparkles className="w-12 h-12 inline" /></div>
                 <div className="space-y-4">
                   <h2 className="text-4xl font-bold animated-gradient animate-pulse">
                     Congratulations!
@@ -92,7 +93,7 @@ const SpinTheWheel = ({ isOpen, onClose, leaderboardNames }: SpinTheWheelProps) 
                     {winner}
                   </h3>
                   <p className="text-xl text-white/80">
-                    You are our lucky winner! 🏆
+                    You are our lucky winner! <Trophy className="w-5 h-5 inline" />
                   </p>
                 </div>
 

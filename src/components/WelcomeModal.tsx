@@ -78,7 +78,7 @@ export const WelcomeModal: React.FC = () => {
       <DialogContent className="max-w-2xl bg-gray-900 text-white border-white/20">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold text-center mb-4">
-            Welcome to BMS Highscore Challenge! 🎮
+            Welcome to BMS Highscore Challenge! 
           </DialogTitle>
         </DialogHeader>
 
@@ -122,7 +122,7 @@ export const WelcomeModal: React.FC = () => {
             <div className="flex gap-3 justify-center">
               <Button
                 onClick={() => {
-                  console.log('🔥 BUTTON CLICKED - Take the Tour');
+                  console.log(' BUTTON CLICKED - Take the Tour');
                   handleStartTour();
                 }}
                 className="bg-arcade-neonCyan hover:bg-arcade-neonCyan/80 text-black font-semibold px-6 py-2 flex items-center gap-2"

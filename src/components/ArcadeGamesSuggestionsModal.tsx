@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Gamepad2, Star, Users, Calendar, Loader2, ExternalLink } from 'lucide-react';
+import { Gamepad2, Star, Users, Calendar, Loader2, ExternalLink, Check } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -196,7 +196,7 @@ export const ArcadeGamesSuggestionsModal: React.FC<ArcadeGamesSuggestionsModalPr
                             </a>
                             {selectedGames.has(game.name) && (
                               <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                <span className="text-white text-xs">✓</span>
+                                <span className="text-white text-xs"><Check className="w-3 h-3" /></span>
                               </div>
                             )}
                           </div>
@@ -244,7 +244,7 @@ export const ArcadeGamesSuggestionsModal: React.FC<ArcadeGamesSuggestionsModalPr
 
           <div className="flex-shrink-0 flex flex-col justify-center gap-2 pt-4 border-t border-gray-700">
             <p className="text-sm text-gray-400 text-center mb-2">
-              💡 Tip: Select game names and copy them manually to your tournament setup
+               Tip: Select game names and copy them manually to your tournament setup
             </p>
             <Button
               onClick={onClose}

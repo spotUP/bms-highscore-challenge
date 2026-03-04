@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Trophy, Users, Target, Clock, TrendingUp, Award } from 'lucide-react';
+import { Trophy, Users, Target, Clock, TrendingUp, Award, Crown, XCircle } from 'lucide-react';
 import { Tournament, TournamentPlayer, TournamentMatch } from '@/contexts/BracketContext';
 
 interface BracketAnalyticsProps {
@@ -243,8 +243,8 @@ const BracketAnalytics: React.FC<BracketAnalyticsProps> = ({ tournament, players
                       <p className="text-white font-medium">{player.name}</p>
                       <p className="text-gray-400 text-xs">
                         {player.wins}W - {player.losses}L
-                        {player.isChampion && ' 👑'}
-                        {player.isEliminated && ' ❌'}
+                        {player.isChampion && <> <Crown className="w-4 h-4 inline" /></>}
+                        {player.isEliminated && <> <XCircle className="w-4 h-4 inline" /></>}
                       </p>
                     </div>
                   </div>
@@ -287,7 +287,7 @@ const BracketAnalytics: React.FC<BracketAnalyticsProps> = ({ tournament, players
                     <td className="text-center text-blue-400">Round {player.roundsReached}</td>
                     <td className="text-center">
                       {player.isChampion ? (
-                        <span className="text-yellow-400 font-bold">Champion 👑</span>
+                        <span className="text-yellow-400 font-bold">Champion <Crown className="w-4 h-4 inline" /></span>
                       ) : player.isEliminated ? (
                         <span className="text-red-400">Eliminated</span>
                       ) : (

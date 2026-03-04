@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRaspberryPiOptimizations } from '@/hooks/useRaspberryPiOptimizations';
+import { Gamepad2 } from "lucide-react";
 
 interface OptimizedGameLogoProps {
   src: string | null;
@@ -38,7 +39,7 @@ const OptimizedGameLogo: React.FC<OptimizedGameLogoProps> = ({
   if (!src || error) {
     return fallback || (
       <div className={`${className} bg-gray-800 flex items-center justify-center`}>
-        <span className="text-4xl opacity-50">🎮</span>
+        <Gamepad2 className="w-8 h-8 opacity-50" />
       </div>
     );
   }

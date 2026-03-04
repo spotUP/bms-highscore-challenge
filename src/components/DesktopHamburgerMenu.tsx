@@ -48,14 +48,14 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
   };
 
   const handleTakeTour = () => {
-    console.log('🎭 Admin hamburger menu: Take the Tour clicked');
+    console.log(' Admin hamburger menu: Take the Tour clicked');
     const welcomeTour = tours.find(tour => tour.id === 'welcome');
     if (welcomeTour) {
-      console.log('🎭 Found welcome tour, starting...');
+      console.log(' Found welcome tour, starting...');
       startTour(welcomeTour);
       setIsOpen(false); // Close the menu
     } else {
-      console.error('❌ Welcome tour not found in hamburger menu');
+      console.error(' Welcome tour not found in hamburger menu');
     }
   };
 
@@ -115,7 +115,7 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
     const mainPages = pages.filter(p => p.category === 'main');
     const adminPages = pages.filter(p => p.category === 'admin');
 
-    console.log('🎭 DesktopHamburgerMenu renderSmartMenu:', {
+    console.log(' DesktopHamburgerMenu renderSmartMenu:', {
       isAdmin,
       mainPagesCount: mainPages.length,
       adminPagesCount: adminPages.length,
@@ -194,7 +194,7 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
               </Button>
             ) : (
               <>
-                {console.log('🎭 Take the Tour button NOT rendered - isAdmin is false:', isAdmin)}
+                {console.log(' Take the Tour button NOT rendered - isAdmin is false:', isAdmin)}
                 {null}
               </>
             )}

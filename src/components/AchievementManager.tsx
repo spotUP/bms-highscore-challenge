@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, Plus, Shuffle, ChevronDown, ChevronUp } from "lucide-react";
+import { renderIcon } from "@/utils/iconMap";
 import { useTournament } from "@/contexts/TournamentContext";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { useQueryClient } from '@tanstack/react-query';
@@ -32,19 +33,19 @@ interface Achievement {
 }
 
 const ACHIEVEMENT_TYPES = [
-  { value: 'first_score', label: 'First Score', icon: '🎯' },
-  { value: 'first_place', label: 'First Place', icon: '👑' },
-  { value: 'score_milestone', label: 'Score Milestone', icon: '🏆' },
-  { value: 'game_master', label: 'Game Master', icon: '🕹️' },
-  { value: 'high_scorer', label: 'High Scorer', icon: '⭐' },
-  { value: 'consistent_player', label: 'Consistent Player', icon: '🔥' },
-  { value: 'perfectionist', label: 'Perfectionist', icon: '💎' },
-  { value: 'streak_master', label: 'Streak Master', icon: '⚡' },
-  { value: 'competition_winner', label: 'Competition Winner', icon: '🥇' },
-  { value: 'speed_demon', label: 'Speed Demon', icon: '💨' },
+  { value: 'first_score', label: 'First Score', icon: 'target' },
+  { value: 'first_place', label: 'First Place', icon: 'crown' },
+  { value: 'score_milestone', label: 'Score Milestone', icon: 'trophy' },
+  { value: 'game_master', label: 'Game Master', icon: 'gamepad2' },
+  { value: 'high_scorer', label: 'High Scorer', icon: 'star' },
+  { value: 'consistent_player', label: 'Consistent Player', icon: 'flame' },
+  { value: 'perfectionist', label: 'Perfectionist', icon: 'gem' },
+  { value: 'streak_master', label: 'Streak Master', icon: 'zap' },
+  { value: 'competition_winner', label: 'Competition Winner', icon: 'medal' },
+  { value: 'speed_demon', label: 'Speed Demon', icon: 'zap' },
 ];
 
-const DEFAULT_ICONS = ['🏆', '🥇', '🎯', '⭐', '💎', '🔥', '⚡', '🎮', '👑', '🏅', '🌟', '💫'];
+const DEFAULT_ICONS = ['trophy', 'medal', 'target', 'star', 'gem', 'flame', 'zap', 'gamepad2', 'crown', 'award', 'sparkles', 'rocket'];
 const DEFAULT_COLORS = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE'];
 
 interface Game {
@@ -65,7 +66,7 @@ const AchievementManager = () => {
     name: "",
     description: "",
     type: "first_score",
-    badge_icon: "🏆",
+    badge_icon: "trophy",
     badge_color: "#FFD700",
     criteria: "{}",
     points: 10,
@@ -144,7 +145,7 @@ const AchievementManager = () => {
       name: "",
       description: "",
       type: "first_score",
-      badge_icon: "🏆",
+      badge_icon: "trophy",
       badge_color: "#FFD700",
       criteria: "{}",
       points: 10,
@@ -180,7 +181,7 @@ const AchievementManager = () => {
         name: "First Steps",
         description: "Submit your first score",
         type: "score_based",
-        badge_icon: "👶",
+        badge_icon: "star",
         badge_color: "#4CAF50",
         criteria: '{"min_scores": 1}',
         points: 5
@@ -189,7 +190,7 @@ const AchievementManager = () => {
         name: "High Roller",
         description: "Achieve a score of 10,000 or more",
         type: "score_based",
-        badge_icon: "🎯",
+        badge_icon: "target",
         badge_color: "#FF9800",
         criteria: '{"min_score": 10000}',
         points: 25
@@ -198,7 +199,7 @@ const AchievementManager = () => {
         name: "Game Explorer",
         description: "Play 5 different games",
         type: "participation",
-        badge_icon: "🗺️",
+        badge_icon: "search",
         badge_color: "#2196F3",
         criteria: '{"game_count": 5}',
         points: 15
@@ -207,7 +208,7 @@ const AchievementManager = () => {
         name: "Perfectionist",
         description: "Achieve a score of 50,000 or more",
         type: "score_based",
-        badge_icon: "💎",
+        badge_icon: "gem",
         badge_color: "#9C27B0",
         criteria: '{"min_score": 50000}',
         points: 50
@@ -216,7 +217,7 @@ const AchievementManager = () => {
         name: "Dedicated Player",
         description: "Submit 25 scores",
         type: "participation",
-        badge_icon: "🔥",
+        badge_icon: "flame",
         badge_color: "#F44336",
         criteria: '{"min_scores": 25}',
         points: 30
@@ -225,7 +226,7 @@ const AchievementManager = () => {
         name: "Champion",
         description: "Reach the top of any leaderboard",
         type: "leaderboard",
-        badge_icon: "👑",
+        badge_icon: "crown",
         badge_color: "#FFD700",
         criteria: '{"first_place": true}',
         points: 100
@@ -234,7 +235,7 @@ const AchievementManager = () => {
         name: "Arcade Master",
         description: "Play 10 different games",
         type: "participation",
-        badge_icon: "🕹️",
+        badge_icon: "gamepad2",
         badge_color: "#607D8B",
         criteria: '{"game_count": 10}',
         points: 40
@@ -243,7 +244,7 @@ const AchievementManager = () => {
         name: "Score Hunter",
         description: "Submit 100 scores",
         type: "participation",
-        badge_icon: "🏹",
+        badge_icon: "target",
         badge_color: "#795548",
         criteria: '{"min_scores": 100}',
         points: 75
@@ -377,7 +378,7 @@ const AchievementManager = () => {
 
   const getTypeIcon = (type: string) => {
     const typeConfig = ACHIEVEMENT_TYPES.find(t => t.value === type);
-    return typeConfig?.icon || '🏆';
+    return typeConfig?.icon || 'trophy';
   };
 
   const getCriteriaDisplay = (criteria: any, type: string) => {
@@ -497,7 +498,7 @@ const AchievementManager = () => {
                       <SelectContent>
                         {DEFAULT_ICONS.map(icon => (
                           <SelectItem key={icon} value={icon}>
-                            {icon} {icon}
+                            {renderIcon(icon, "w-4 h-4 inline mr-1")} {icon}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -599,7 +600,7 @@ const AchievementManager = () => {
                         className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
                         style={{ backgroundColor: achievement.badge_color }}
                       >
-                        {achievement.badge_icon}
+                        {renderIcon(achievement.badge_icon, "w-5 h-5")}
                       </div>
                       <div>
                         <div className="font-medium">{achievement.name}</div>
@@ -609,7 +610,7 @@ const AchievementManager = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm">{typeIcon}</span>
+                      <span className="text-sm">{renderIcon(typeIcon, "w-4 h-4 inline")}</span>
                       {ACHIEVEMENT_TYPES.find(t => t.value === achievement.type)?.label || achievement.type}
                     </div>
                   </TableCell>

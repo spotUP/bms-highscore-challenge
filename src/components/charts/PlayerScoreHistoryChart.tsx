@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { TrendingUp } from 'lucide-react';
 
 interface PlayerScoreHistoryChartProps {
   scores: Array<{
@@ -81,7 +82,7 @@ const PlayerScoreHistoryChart: React.FC<PlayerScoreHistoryChartProps> = React.me
       <Card className="bg-gray-900 border-white/20">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
-            📈 Score History
+            <TrendingUp className="w-4 h-4 inline" /> Score History
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -97,7 +98,7 @@ const PlayerScoreHistoryChart: React.FC<PlayerScoreHistoryChartProps> = React.me
     <Card className="bg-gray-900 border-white/20">
       <CardHeader>
         <CardTitle className="text-white flex items-center gap-2">
-          📈 Score History
+          <TrendingUp className="w-4 h-4 inline" /> Score History
         </CardTitle>
         <p className="text-gray-400 text-sm">
           Daily score progression for {playerName}

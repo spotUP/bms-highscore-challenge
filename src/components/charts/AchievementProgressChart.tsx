@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Trophy } from 'lucide-react';
 import { getCardStyle, getTypographyStyle } from '@/utils/designSystem';
 
 interface AchievementProgressChartProps {
@@ -79,7 +80,7 @@ const AchievementProgressChart: React.FC<AchievementProgressChartProps> = React.
       <Card className={getCardStyle('primary')}>
         <CardHeader>
           <CardTitle className={`${getTypographyStyle('h3')} flex items-center gap-2`}>
-            🏆 Achievement Progress
+            <Trophy className="w-4 h-4 inline" /> Achievement Progress
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -95,7 +96,7 @@ const AchievementProgressChart: React.FC<AchievementProgressChartProps> = React.
     <Card className={getCardStyle('primary')}>
       <CardHeader>
         <CardTitle className={`${getTypographyStyle('h3')} flex items-center gap-2`}>
-          🏆 Achievement Progress
+          <Trophy className="w-4 h-4 inline" /> Achievement Progress
         </CardTitle>
         <p className="text-gray-400 text-sm">
           How many players have unlocked each achievement

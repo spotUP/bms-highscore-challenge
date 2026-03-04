@@ -135,7 +135,7 @@ const PerformanceToggle: React.FC = () => {
       {/* Current Status */}
       <div className="text-sm">
         <div className={`flex items-center gap-2 ${isPerformanceMode ? 'text-green-400' : 'text-yellow-400'}`}>
-          {isPerformanceMode ? '✓' : '⚠'} 
+          {isPerformanceMode ? '' : ''} 
           {isPerformanceMode ? (
             <span>Performance mode is active - optimized for {isRaspberryPi ? 'Raspberry Pi' : 'low-end devices'}</span>
           ) : (

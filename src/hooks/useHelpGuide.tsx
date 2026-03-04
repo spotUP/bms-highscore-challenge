@@ -37,17 +37,17 @@ export const HelpGuideProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     const stepIndex = currentTour.steps.findIndex(step => step.id === stepId);
     if (stepIndex !== -1) {
-      console.log('🎯 Advancing to step:', stepId, 'at index:', stepIndex);
+      console.log(' Advancing to step:', stepId, 'at index:', stepIndex);
       setCurrentStepIndex(stepIndex);
     }
   }, [currentTour]);
 
   // Function to hide modal temporarily for user interaction
   const hideModalForInteraction = useCallback(() => {
-    console.log('🎯 Hiding modal for user interaction');
+    console.log(' Hiding modal for user interaction');
     setIsOpen(false);
     setWaitingForScoreSubmission(true);
-    console.log('🎯 Now waiting for score submission...');
+    console.log(' Now waiting for score submission...');
   }, []);
 
   useEffect(() => {
@@ -57,20 +57,20 @@ export const HelpGuideProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
     // Listen for score submission events to advance the tour
     const handleScoreSubmitted = () => {
-      console.log('🎯 Score submitted event received in help guide');
-      console.log('🎯 Current tour:', currentTour?.id);
-      console.log('🎯 Current step index:', currentStepIndex);
-      console.log('🎯 Current step data:', currentTour?.steps[currentStepIndex]);
+      console.log(' Score submitted event received in help guide');
+      console.log(' Current tour:', currentTour?.id);
+      console.log(' Current step index:', currentStepIndex);
+      console.log(' Current step data:', currentTour?.steps[currentStepIndex]);
 
       if (currentTour && currentTour.id === 'welcome') {
         const currentStepData = currentTour.steps[currentStepIndex];
-        console.log('🎯 Step ID check:', currentStepData?.id, '=== game-cards?', currentStepData?.id === 'game-cards');
-        console.log('🎯 Step index check:', currentStepIndex, '=== 1 (game-cards)?', currentStepIndex === 1);
-        console.log('🎯 Waiting for score submission?', waitingForScoreSubmission);
+        console.log(' Step ID check:', currentStepData?.id, '=== game-cards?', currentStepData?.id === 'game-cards');
+        console.log(' Step index check:', currentStepIndex, '=== 1 (game-cards)?', currentStepIndex === 1);
+        console.log(' Waiting for score submission?', waitingForScoreSubmission);
 
         // Check if we're waiting for score submission or if we're on the game-cards step
         if (waitingForScoreSubmission || currentStepData?.id === 'game-cards' || currentStepIndex === 1) {
-          console.log('🎯 Score submitted while waiting! Showing congratulations modal');
+          console.log(' Score submitted while waiting! Showing congratulations modal');
           // Show the modal again and advance to congratulations
           setIsOpen(true);
           setWaitingForScoreSubmission(false); // Reset the flag
@@ -78,15 +78,15 @@ export const HelpGuideProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
           // Auto-advance to next step after 3 seconds
           setTimeout(() => {
-            console.log('🎯 Auto-advancing from congratulations to next step');
+            console.log(' Auto-advancing from congratulations to next step');
             // Use advanceToStep instead of directly setting index to ensure proper state management
             advanceToStep('leaderboard');
           }, 3000);
         } else {
-          console.log('🎯 Not on game-cards step and not waiting for score submission, ignoring event');
+          console.log(' Not on game-cards step and not waiting for score submission, ignoring event');
         }
       } else {
-        console.log('🎯 Not in welcome tour, ignoring score submission event');
+        console.log(' Not in welcome tour, ignoring score submission event');
       }
     };
 
@@ -96,7 +96,7 @@ export const HelpGuideProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Debug effect to track state changes
   useEffect(() => {
-    console.log('🎯 useHelpGuide state changed:', {
+    console.log(' useHelpGuide state changed:', {
       isOpen,
       currentTourId: currentTour?.id,
       stepsCount: currentTour?.steps?.length,
@@ -111,9 +111,9 @@ export const HelpGuideProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const startTour = (tour: HelpTour) => {
-    console.log('🎯 useHelpGuide: startTour called with tour ID:', tour.id);
+    console.log(' useHelpGuide: startTour called with tour ID:', tour.id);
     console.log('Tour steps count:', tour.steps.length);
-    console.log('🎯 Before state update:', { isOpen, currentTour: currentTour?.id });
+    console.log(' Before state update:', { isOpen, currentTour: currentTour?.id });
 
     // Use flushSync to force immediate, synchronous state updates
     flushSync(() => {
@@ -122,7 +122,7 @@ export const HelpGuideProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setIsOpen(true);
     });
 
-    console.log('✅ useHelpGuide: Tour state updated, isOpen should be true');
+    console.log(' useHelpGuide: Tour state updated, isOpen should be true');
   };
 
   const closeTour = () => {
@@ -138,7 +138,7 @@ export const HelpGuideProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       steps: [
         {
           id: 'welcome',
-          title: 'Welcome to Retro Ranks! 🎮',
+          title: 'Welcome to Retro Ranks! ',
           content: 'Ready to dominate the leaderboards? This quick tour will show you everything you need to know to start competing in retro arcade tournaments!',
           position: 'center',
           icon: <Trophy className="w-5 h-5" />
@@ -154,7 +154,7 @@ export const HelpGuideProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         },
         {
           id: 'score-submitted',
-          title: 'Excellent! 🎉',
+          title: 'Excellent! ',
           content: 'Great job submitting your score! You\'re now part of the competition. Your score will appear on the leaderboard and contribute to your overall tournament ranking.',
           position: 'center',
           icon: <Trophy className="w-5 h-5" />
@@ -192,7 +192,7 @@ export const HelpGuideProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       steps: [
         {
           id: 'score-intro',
-          title: 'Submitting High Scores 🏆',
+          title: 'Submitting High Scores ',
           content: 'Submitting scores is easy! Let me show you the process and what you need to know.',
           position: 'center',
           icon: <Target className="w-5 h-5" />
@@ -229,7 +229,7 @@ export const HelpGuideProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       steps: [
         {
           id: 'features-intro',
-          title: 'Discover All Features 🌟',
+          title: 'Discover All Features ',
           content: 'Retro Ranks is packed with features to enhance your competitive gaming experience. Let\'s explore what\'s available!',
           position: 'center',
           icon: <Lightbulb className="w-5 h-5" />

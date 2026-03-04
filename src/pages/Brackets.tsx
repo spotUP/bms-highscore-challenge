@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Trophy } from "lucide-react";
 import { useBrackets } from '@/contexts/BracketContext';
 import BracketView from '@/components/BracketView';
 import { Button } from '@/components/ui/button';
@@ -127,7 +128,7 @@ const Brackets: React.FC = () => {
         <DialogContent className="bg-gray-800 border-gray-700 text-white">
           <DialogHeader>
             <DialogTitle className="text-2xl text-center">
-              🏆 Tournament Complete! 🏆
+               <Trophy className="w-6 h-6 inline text-yellow-400" /> Tournament Complete! <Trophy className="w-6 h-6 inline text-yellow-400" />
             </DialogTitle>
           </DialogHeader>
           <div className="text-center py-4">

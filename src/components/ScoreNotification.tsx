@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Trophy } from "lucide-react";
 import { api } from '@/lib/api-client';
 import { useTournament } from '@/contexts/TournamentContext';
 import PlayerInsult from '@/components/PlayerInsult';
@@ -36,7 +37,7 @@ export const ScoreNotification: React.FC<ScoreNotificationProps> = ({
         </p>
         {isHighScore && (
           <p className="text-sm flex items-center gap-1">
-            <span className="text-yellow-400">🏆 New High Score!</span>
+            <span className="text-yellow-400"><Trophy className="w-4 h-4 inline" /> New High Score!</span>
             {scoreDiff !== null && `(+${scoreDiff.toLocaleString()} from previous)`}
           </p>
         )}
@@ -181,7 +182,7 @@ export const ScoreNotificationsListener: React.FC = () => {
               <div className="flex items-center gap-3">
                 <div className="text-2xl">{achievement.badge_icon}</div>
                 <div>
-                  <p className="font-bold text-yellow-400">🏆 Achievement Unlocked!</p>
+                  <p className="font-bold text-yellow-400"><Trophy className="w-4 h-4 inline" /> Achievement Unlocked!</p>
                   <p className="font-semibold">{achievement.name}</p>
                   <p className="text-sm text-gray-300">{achievement.description}</p>
                   <p className="text-sm text-blue-400">+{achievement.points} points</p>

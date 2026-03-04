@@ -26,7 +26,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import AdvancedConfetti from '@/components/AdvancedConfetti';
 import { createPortal } from 'react-dom';
-import { Check, Plus, BarChart3, Gamepad2 } from 'lucide-react';
+import { Check, Plus, BarChart3, Gamepad2, Trophy, Link } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import BracketAnalytics from '@/components/BracketAnalytics';
 import BracketDebugger from '@/components/BracketDebugger';
@@ -253,7 +253,7 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
           setPlayers(data.players);
           setMatches(data.matches);
         } catch (error) {
-          console.error('🔄 BracketAdmin: Error refreshing data:', error);
+          console.error(' BracketAdmin: Error refreshing data:', error);
         }
       })
       .subscribe((status) => {
@@ -816,7 +816,7 @@ const BracketAdmin: React.FC<BracketAdminProps> = ({ isExiting = false }) => {
               {isTournamentComplete ? (
                 <div className="p-4 bg-green-500/20 border border-green-500/30 rounded-md">
                   <p className="text-sm text-green-200 flex items-center gap-2">
-                    <span className="text-lg">🏆</span>
+                    <Trophy className="w-5 h-5 text-green-300" />
                     This tournament has finished. Use "Restart Tournament" to reset and create a new bracket.
                   </p>
                 </div>
@@ -925,7 +925,7 @@ Player D
                            onClick={() => setCurrentView('debug')}
                            className="flex items-center gap-2"
                          >
-                           🔍 Debug
+                            Debug
                          </Button>
                        </div>
                      )}
@@ -947,7 +947,7 @@ Player D
                 {isTournamentComplete && (
                   <div className="shrink-0 px-4 py-2 bg-green-500/20 border-b border-green-500/30">
                     <p className="text-sm text-green-200 flex items-center gap-2">
-                      <span className="text-lg">🏆</span>
+                      <Trophy className="w-5 h-5 text-green-300" />
                       Tournament Complete - Results are now read-only
                     </p>
                   </div>
@@ -1019,7 +1019,7 @@ Player D
             <DialogTitle className="text-arcade-neonYellow text-2xl text-center">Champion Crowned!</DialogTitle>
           </DialogHeader>
           <div className="text-center space-y-4 py-4">
-            <div className="text-6xl">🏆</div>
+            <div className="text-6xl"><Trophy className="w-16 h-16 inline text-yellow-400" /></div>
             <div className="text-xl text-gray-300">{selected?.name}</div>
             <div className="text-3xl font-bold text-arcade-neonPink">Champion: {winnerName}</div>
             <div className="pt-2 flex items-center justify-center gap-2">
@@ -1066,7 +1066,7 @@ Player D
                   }
                 }}
               >
-                📋 Copy Share Link
+                 Copy Share Link
               </Button>
             </div>
             <DialogFooter>
@@ -1140,7 +1140,7 @@ Player D
           </DialogHeader>
 
           <div className="py-4 space-y-4">
-            <div className="text-center text-6xl">🔗</div>
+            <div className="text-center text-6xl"><Link className="w-16 h-16 inline" /></div>
             <div className="bg-gray-800 p-3 rounded border border-gray-700">
               <p className="text-sm text-gray-400 break-all font-mono">{shareUrl}</p>
             </div>
@@ -1169,7 +1169,7 @@ Player D
                 }
               }}
             >
-              📋 Copy Link
+               Copy Link
             </Button>
             <Button
               variant="secondary"

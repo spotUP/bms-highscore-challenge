@@ -99,7 +99,7 @@ const ScoreEntry = ({ onSubmit }: ScoreEntryProps) => {
             } text-black font-bold mb-2 flex items-center justify-center gap-2`}
           >
             <QrCode className="w-4 h-4" />
-            {isVerified ? "Verified ✓" : "Scan QR Code"}
+            {isVerified ? "Verified " : "Scan QR Code"}
           </Button>
           <Button 
             type="submit"

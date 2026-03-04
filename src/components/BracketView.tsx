@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { Check, Play, Circle } from "lucide-react";
 import type { BracketMatch, BracketParticipant } from '@/contexts/BracketContext';
 
 interface BracketViewProps {
@@ -755,8 +756,8 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
           >
             {tournaments.map((tournament) => (
               <option key={tournament.id} value={tournament.id}>
-                {tournament.name} - {tournament.status === 'completed' ? '✓ Complete' : 
-                 tournament.status === 'active' ? '▶ Active' : '○ Draft'}
+                {tournament.name} - {tournament.status === 'completed' ? 'Complete' : 
+                 tournament.status === 'active' ? 'Active' : 'Draft'}
               </option>
             ))}
           </select>

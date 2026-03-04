@@ -21,13 +21,13 @@ interface RatingSourceProps {
 const RatingSourceBadge: React.FC<RatingSourceProps> = ({ source, size = 'md' }) => {
   const getSourceInfo = (sourceType: string) => {
     const info = {
-      'launchbox': { name: 'LaunchBox', color: 'bg-blue-600', icon: '🎮' },
-      'rawg': { name: 'RAWG', color: 'bg-purple-600', icon: '🎯' },
-      'igdb': { name: 'IGDB', color: 'bg-indigo-600', icon: '🎭' },
-      'metacritic': { name: 'Metacritic', color: 'bg-yellow-600', icon: '⭐' },
-      'steam': { name: 'Steam', color: 'bg-gray-600', icon: '🔵' }
+      'launchbox': { name: 'LaunchBox', color: 'bg-blue-600', icon: '' },
+      'rawg': { name: 'RAWG', color: 'bg-purple-600', icon: '' },
+      'igdb': { name: 'IGDB', color: 'bg-indigo-600', icon: '' },
+      'metacritic': { name: 'Metacritic', color: 'bg-yellow-600', icon: '' },
+      'steam': { name: 'Steam', color: 'bg-gray-600', icon: '' }
     };
-    return info[sourceType] || { name: sourceType, color: 'bg-gray-500', icon: '🎲' };
+    return info[sourceType] || { name: sourceType, color: 'bg-gray-500', icon: '' };
   };
 
   const sourceInfo = getSourceInfo(source.source);

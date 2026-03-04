@@ -73,7 +73,7 @@ const AdvancedConfetti: React.FC<AdvancedConfettiProps> = ({ isActive, onComplet
 
   // Log performance optimizations for debugging
   if (isRaspberryPi) {
-    console.log('🎊 Pi-optimized confetti:', {
+    console.log(' Pi-optimized confetti:', {
       maxParticles: perfSettings.maxParticles,
       targetFPS: perfSettings.targetFPS,
       particlesPerFrame: perfSettings.particlesPerFrame,

@@ -113,7 +113,7 @@ const FunctionTests: React.FC = () => {
       if (results.success) {
         if (results.fallbackUsed) {
           toast({
-            title: "Email Test - Fallback Used ⚠️",
+            title: "Email Test - Fallback Used ",
             description: `Invite link generated instead of email. SMTP may not be configured.`,
             variant: "destructive",
             action: (
@@ -124,13 +124,13 @@ const FunctionTests: React.FC = () => {
           });
         } else {
           toast({
-            title: "Email Test Success ✅",
+            title: "Email Test Success ",
             description: `Invitation email should be sent to ${email}`,
           });
         }
       } else {
         toast({
-          title: "Email Test Failed ❌",
+          title: "Email Test Failed ",
           description: results.error?.message || "Email delivery test failed",
           variant: "destructive",
           action: (
@@ -151,7 +151,7 @@ const FunctionTests: React.FC = () => {
       });
 
       toast({
-        title: "Email Test Error ❌",
+        title: "Email Test Error ",
         description: err?.message || 'Email test failed with exception',
         variant: "destructive",
         action: (
@@ -235,12 +235,12 @@ const FunctionTests: React.FC = () => {
 
       if (diagnostics.smtpConfigured) {
         toast({
-          title: "SMTP Working ✅",
+          title: "SMTP Working ",
           description: `SMTP appears to be configured correctly`,
         });
       } else {
         toast({
-          title: "SMTP Issue Detected ⚠️",
+          title: "SMTP Issue Detected ",
           description: `${diagnostics.possibleIssues.length} potential issues found`,
           variant: "destructive",
           action: (
@@ -260,7 +260,7 @@ const FunctionTests: React.FC = () => {
       });
 
       toast({
-        title: "Diagnostic Error ❌",
+        title: "Diagnostic Error ",
         description: err?.message || 'SMTP diagnostic failed',
         variant: "destructive",
       });
@@ -530,7 +530,7 @@ const FunctionTests: React.FC = () => {
       setScoreTestResults(results);
 
       toast({
-        title: results.success ? "Score Submission Test ✅" : "Score Submission Test ❌",
+        title: results.success ? "Score Submission Test " : "Score Submission Test ",
         description: results.success
           ? `Score submitted successfully for ${testPlayerName}`
           : "Score submission failed",
@@ -546,7 +546,7 @@ const FunctionTests: React.FC = () => {
       setScoreTestResults(results);
 
       toast({
-        title: "Score Submission Test ❌",
+        title: "Score Submission Test ",
         description: error.message || 'Score submission test failed',
         variant: "destructive"
       });
@@ -645,7 +645,7 @@ const FunctionTests: React.FC = () => {
           deletionTestPassed = true;
         } catch (error: any) {
           deletionError = error.message;
-          console.error('❌ Achievement deletion test failed:', error);
+          console.error(' Achievement deletion test failed:', error);
         }
       }
 
@@ -671,7 +671,7 @@ const FunctionTests: React.FC = () => {
       setAchievementTestResults(results);
 
       toast({
-        title: results.success ? "Achievement System Test ✅" : "Achievement System Test ❌",
+        title: results.success ? "Achievement System Test " : "Achievement System Test ",
         description: results.success
           ? `${results.achievementsAwarded} achievements awarded, deletion test ${results.deletionTest.passed ? 'passed' : 'failed'}`
           : `Test failed - ${results.deletionTest.error || "trigger may not be working"}`,
@@ -687,7 +687,7 @@ const FunctionTests: React.FC = () => {
       setAchievementTestResults(results);
 
       toast({
-        title: "Achievement Test ❌",
+        title: "Achievement Test ",
         description: error.message || 'Achievement test failed',
         variant: "destructive"
       });
@@ -763,7 +763,7 @@ const FunctionTests: React.FC = () => {
       setNameTestResults(results);
 
       toast({
-        title: results.success ? "Player Name Limits ✅" : "Player Name Limits ❌",
+        title: results.success ? "Player Name Limits " : "Player Name Limits ",
         description: results.success
           ? "16 chars allowed, 17+ chars properly rejected"
           : "Name length constraints not working correctly",
@@ -779,7 +779,7 @@ const FunctionTests: React.FC = () => {
       setNameTestResults(results);
 
       toast({
-        title: "Name Limits Test ❌",
+        title: "Name Limits Test ",
         description: error.message || 'Name limits test failed',
         variant: "destructive"
       });
@@ -837,7 +837,7 @@ const FunctionTests: React.FC = () => {
       setSchemaTestResults(results);
 
       toast({
-        title: results.success ? "Database Schema ✅" : "Database Schema ❌",
+        title: results.success ? "Database Schema " : "Database Schema ",
         description: results.success
           ? "All required tables accessible"
           : "Some tables are not accessible",
@@ -853,7 +853,7 @@ const FunctionTests: React.FC = () => {
       setSchemaTestResults(results);
 
       toast({
-        title: "Schema Test ❌",
+        title: "Schema Test ",
         description: error.message || 'Schema test failed',
         variant: "destructive"
       });
@@ -919,7 +919,7 @@ const FunctionTests: React.FC = () => {
       setMobileTestResults(results);
 
       toast({
-        title: results.success ? "Mobile Submission Test ✅" : "Mobile Submission Test ❌",
+        title: results.success ? "Mobile Submission Test " : "Mobile Submission Test ",
         description: results.success
           ? `Mobile/QR submission working for ${testPlayerName}`
           : "Mobile submission failed",
@@ -935,7 +935,7 @@ const FunctionTests: React.FC = () => {
       setMobileTestResults(results);
 
       toast({
-        title: "Mobile Submission Test ❌",
+        title: "Mobile Submission Test ",
         description: error.message || 'Mobile submission test failed',
         variant: "destructive"
       });
@@ -1049,7 +1049,7 @@ const FunctionTests: React.FC = () => {
       setLeaderboardTestResults(results);
 
       toast({
-        title: results.success ? "Leaderboard Data Test ✅" : "Leaderboard Data Test ❌",
+        title: results.success ? "Leaderboard Data Test " : "Leaderboard Data Test ",
         description: results.success
           ? `Leaders with scores: ${results.overallLeadersData.found} | Achievement data: ${results.achievementHuntersData.totalAchievements}`
           : "Leaderboard data test failed",
@@ -1065,7 +1065,7 @@ const FunctionTests: React.FC = () => {
       setLeaderboardTestResults(results);
 
       toast({
-        title: "Leaderboard Test ❌",
+        title: "Leaderboard Test ",
         description: error.message || 'Leaderboard data test failed',
         variant: "destructive"
       });
@@ -1212,7 +1212,7 @@ const FunctionTests: React.FC = () => {
       });
 
       toast({
-        title: allPassed ? "Brackets Test ✅" : "Brackets Test ❌",
+        title: allPassed ? "Brackets Test " : "Brackets Test ",
         description: allPassed
           ? "Database schema, tournament creation, player management, bracket generation, match reporting, and RLS policies all working"
           : "Some brackets system components failed - check test results",
@@ -1228,7 +1228,7 @@ const FunctionTests: React.FC = () => {
       });
 
       toast({
-        title: "Brackets Test ❌",
+        title: "Brackets Test ",
         description: error.message || 'Brackets system test failed',
         variant: "destructive"
       });
@@ -1426,7 +1426,7 @@ const FunctionTests: React.FC = () => {
       });
 
       toast({
-        title: allPassed ? "Security Test ✅" : "Security Test ❌",
+        title: allPassed ? "Security Test " : "Security Test ",
         description: allPassed
           ? "RLS policies, admin privileges, tournament access, score validation, name constraints, and session management all secure"
           : "Some security vulnerabilities detected - check test results",
@@ -1442,7 +1442,7 @@ const FunctionTests: React.FC = () => {
       });
 
       toast({
-        title: "Security Test ❌",
+        title: "Security Test ",
         description: error.message || 'Security system test failed',
         variant: "destructive"
       });
@@ -1557,7 +1557,7 @@ const FunctionTests: React.FC = () => {
       });
 
       toast({
-        title: allPassed ? "Tournament Test ✅" : "Tournament Test ❌",
+        title: allPassed ? "Tournament Test " : "Tournament Test ",
         description: allPassed
           ? "Tournament creation, states, members, locks, and data isolation all working"
           : "Some tournament management issues detected - check test results",
@@ -1573,7 +1573,7 @@ const FunctionTests: React.FC = () => {
       });
 
       toast({
-        title: "Tournament Test ❌",
+        title: "Tournament Test ",
         description: error.message || 'Tournament management test failed',
         variant: "destructive"
       });
@@ -1694,7 +1694,7 @@ const FunctionTests: React.FC = () => {
       });
 
       toast({
-        title: allPassed ? "Real-time Test ✅" : "Real-time Test ❌",
+        title: allPassed ? "Real-time Test " : "Real-time Test ",
         description: allPassed
           ? "Real-time connections, notifications, WebSocket health, and cleanup all working"
           : "Some real-time system issues detected - check test results",
@@ -1710,7 +1710,7 @@ const FunctionTests: React.FC = () => {
       });
 
       toast({
-        title: "Real-time Test ❌",
+        title: "Real-time Test ",
         description: error.message || 'Real-time system test failed',
         variant: "destructive"
       });
@@ -1864,7 +1864,7 @@ const FunctionTests: React.FC = () => {
       await api.functions.invoke('send-test-failure-report', {
         body: {
           to: 'spotup@gmail.com',
-          subject: `🚨 Score System Test Failures - ${failedTests.length} tests failed`,
+          subject: ` Score System Test Failures - ${failedTests.length} tests failed`,
           report
         }
       });
@@ -2168,16 +2168,16 @@ const FunctionTests: React.FC = () => {
                 {schemaTestResults && (
                   <div className="text-xs space-y-1">
                     <div className={`flex items-center gap-2 ${schemaTestResults.scoresTable ? 'text-green-400' : 'text-red-400'}`}>
-                      {schemaTestResults.scoresTable ? '✓' : '✗'} scores table
+                      {schemaTestResults.scoresTable ? 'Pass' : 'Fail'} scores table
                     </div>
                     <div className={`flex items-center gap-2 ${schemaTestResults.achievementsTable ? 'text-green-400' : 'text-red-400'}`}>
-                      {schemaTestResults.achievementsTable ? '✓' : '✗'} achievements table
+                      {schemaTestResults.achievementsTable ? 'Pass' : 'Fail'} achievements table
                     </div>
                     <div className={`flex items-center gap-2 ${schemaTestResults.playerAchievementsTable ? 'text-green-400' : 'text-red-400'}`}>
-                      {schemaTestResults.playerAchievementsTable ? '✓' : '✗'} player_achievements table
+                      {schemaTestResults.playerAchievementsTable ? 'Pass' : 'Fail'} player_achievements table
                     </div>
                     <div className={`flex items-center gap-2 ${schemaTestResults.gamesTable ? 'text-green-400' : 'text-red-400'}`}>
-                      {schemaTestResults.gamesTable ? '✓' : '✗'} games table
+                      {schemaTestResults.gamesTable ? 'Pass' : 'Fail'} games table
                     </div>
                   </div>
                 )}
@@ -2198,10 +2198,10 @@ const FunctionTests: React.FC = () => {
                 {nameTestResults && (
                   <div className="text-xs space-y-1">
                     <div className={`flex items-center gap-2 ${nameTestResults.name16Works ? 'text-green-400' : 'text-red-400'}`}>
-                      {nameTestResults.name16Works ? '✓' : '✗'} 16 chars accepted
+                      {nameTestResults.name16Works ? 'Pass' : 'Fail'} 16 chars accepted
                     </div>
                     <div className={`flex items-center gap-2 ${nameTestResults.name17Rejected ? 'text-green-400' : 'text-red-400'}`}>
-                      {nameTestResults.name17Rejected ? '✓' : '✗'} 17+ chars rejected
+                      {nameTestResults.name17Rejected ? 'Pass' : 'Fail'} 17+ chars rejected
                     </div>
                   </div>
                 )}
@@ -2222,10 +2222,10 @@ const FunctionTests: React.FC = () => {
                 {scoreTestResults && (
                   <div className="text-xs space-y-1">
                     <div className={`flex items-center gap-2 ${scoreTestResults.scoreInserted ? 'text-green-400' : 'text-red-400'}`}>
-                      {scoreTestResults.scoreInserted ? '✓' : '✗'} Score inserted
+                      {scoreTestResults.scoreInserted ? 'Pass' : 'Fail'} Score inserted
                     </div>
                     <div className={`flex items-center gap-2 ${scoreTestResults.userIdIncluded ? 'text-green-400' : 'text-red-400'}`}>
-                      {scoreTestResults.userIdIncluded ? '✓' : '✗'} user_id field included
+                      {scoreTestResults.userIdIncluded ? 'Pass' : 'Fail'} user_id field included
                     </div>
                     {scoreTestResults.success && (
                       <div className="text-gray-400">Player: {scoreTestResults.playerName}</div>
@@ -2249,7 +2249,7 @@ const FunctionTests: React.FC = () => {
                 {achievementTestResults && (
                   <div className="text-xs space-y-1">
                     <div className={`flex items-center gap-2 ${achievementTestResults.triggerWorking ? 'text-green-400' : 'text-red-400'}`}>
-                      {achievementTestResults.triggerWorking ? '✓' : '✗'} Trigger working
+                      {achievementTestResults.triggerWorking ? 'Pass' : 'Fail'} Trigger working
                     </div>
                     <div className="text-gray-400">
                       {achievementTestResults.achievementsAwarded} achievements awarded
@@ -2278,13 +2278,13 @@ const FunctionTests: React.FC = () => {
                 {mobileTestResults && (
                   <div className="text-xs space-y-1">
                     <div className={`flex items-center gap-2 ${mobileTestResults.scoreInserted ? 'text-green-400' : 'text-red-400'}`}>
-                      {mobileTestResults.scoreInserted ? '✓' : '✗'} Score inserted
+                      {mobileTestResults.scoreInserted ? 'Pass' : 'Fail'} Score inserted
                     </div>
                     <div className={`flex items-center gap-2 ${mobileTestResults.userIdIncluded ? 'text-green-400' : 'text-red-400'}`}>
-                      {mobileTestResults.userIdIncluded ? '✓' : '✗'} user_id included
+                      {mobileTestResults.userIdIncluded ? 'Pass' : 'Fail'} user_id included
                     </div>
                     <div className={`flex items-center gap-2 text-green-400`}>
-                      ✓ Real-time compatible (skipped during tests)
+                       Real-time compatible (skipped during tests)
                     </div>
                   </div>
                 )}
@@ -2308,10 +2308,10 @@ const FunctionTests: React.FC = () => {
                       Scores inserted: {leaderboardTestResults.scoresInserted}
                     </div>
                     <div className={`flex items-center gap-2 ${leaderboardTestResults.achievementHuntersData.totalAchievements > 0 ? 'text-green-400' : 'text-yellow-400'}`}>
-                      {leaderboardTestResults.achievementHuntersData.totalAchievements > 0 ? '✓' : '⚠'} Achievements: {leaderboardTestResults.achievementHuntersData.totalAchievements}
+                      {leaderboardTestResults.achievementHuntersData.totalAchievements > 0 ? 'Pass' : 'Warn'} Achievements: {leaderboardTestResults.achievementHuntersData.totalAchievements}
                     </div>
                     <div className={`flex items-center gap-2 ${leaderboardTestResults.overallLeadersData.hasData ? 'text-green-400' : 'text-red-400'}`}>
-                      {leaderboardTestResults.overallLeadersData.hasData ? '✓' : '✗'} Leaders with scores: {leaderboardTestResults.overallLeadersData.found}
+                      {leaderboardTestResults.overallLeadersData.hasData ? 'Pass' : 'Fail'} Leaders with scores: {leaderboardTestResults.overallLeadersData.found}
                     </div>
                   </div>
                 )}
@@ -2339,22 +2339,22 @@ const FunctionTests: React.FC = () => {
                     {bracketsTestResults.details && (
                       <>
                         <div className={`flex items-center gap-2 ${bracketsTestResults.details.databaseSchema ? 'text-green-400' : 'text-red-400'}`}>
-                          {bracketsTestResults.details.databaseSchema ? '✓' : '✗'} Database Schema
+                          {bracketsTestResults.details.databaseSchema ? 'Pass' : 'Fail'} Database Schema
                         </div>
                         <div className={`flex items-center gap-2 ${bracketsTestResults.details.tournamentCreation ? 'text-green-400' : 'text-red-400'}`}>
-                          {bracketsTestResults.details.tournamentCreation ? '✓' : '✗'} Tournament Creation
+                          {bracketsTestResults.details.tournamentCreation ? 'Pass' : 'Fail'} Tournament Creation
                         </div>
                         <div className={`flex items-center gap-2 ${bracketsTestResults.details.playerManagement ? 'text-green-400' : 'text-red-400'}`}>
-                          {bracketsTestResults.details.playerManagement ? '✓' : '✗'} Player Management
+                          {bracketsTestResults.details.playerManagement ? 'Pass' : 'Fail'} Player Management
                         </div>
                         <div className={`flex items-center gap-2 ${bracketsTestResults.details.bracketGeneration ? 'text-green-400' : 'text-red-400'}`}>
-                          {bracketsTestResults.details.bracketGeneration ? '✓' : '✗'} Bracket Generation
+                          {bracketsTestResults.details.bracketGeneration ? 'Pass' : 'Fail'} Bracket Generation
                         </div>
                         <div className={`flex items-center gap-2 ${bracketsTestResults.details.matchReporting ? 'text-green-400' : 'text-red-400'}`}>
-                          {bracketsTestResults.details.matchReporting ? '✓' : '✗'} Match Reporting
+                          {bracketsTestResults.details.matchReporting ? 'Pass' : 'Fail'} Match Reporting
                         </div>
                         <div className={`flex items-center gap-2 ${bracketsTestResults.details.rlsPolicies ? 'text-green-400' : 'text-red-400'}`}>
-                          {bracketsTestResults.details.rlsPolicies ? '✓' : '✗'} RLS Policies
+                          {bracketsTestResults.details.rlsPolicies ? 'Pass' : 'Fail'} RLS Policies
                         </div>
                       </>
                     )}
@@ -2384,22 +2384,22 @@ const FunctionTests: React.FC = () => {
                     {securityTestResults.details && (
                       <>
                         <div className={`flex items-center gap-2 ${securityTestResults.details.rlsPolicies ? 'text-green-400' : 'text-red-400'}`}>
-                          {securityTestResults.details.rlsPolicies ? '✓' : '✗'} RLS Policies
+                          {securityTestResults.details.rlsPolicies ? 'Pass' : 'Fail'} RLS Policies
                         </div>
                         <div className={`flex items-center gap-2 ${securityTestResults.details.adminPrivileges ? 'text-green-400' : 'text-red-400'}`}>
-                          {securityTestResults.details.adminPrivileges ? '✓' : '✗'} Admin Privileges
+                          {securityTestResults.details.adminPrivileges ? 'Pass' : 'Fail'} Admin Privileges
                         </div>
                         <div className={`flex items-center gap-2 ${securityTestResults.details.tournamentAccess ? 'text-green-400' : 'text-red-400'}`}>
-                          {securityTestResults.details.tournamentAccess ? '✓' : '✗'} Tournament Access
+                          {securityTestResults.details.tournamentAccess ? 'Pass' : 'Fail'} Tournament Access
                         </div>
                         <div className={`flex items-center gap-2 ${securityTestResults.details.scoreValidation ? 'text-green-400' : 'text-red-400'}`}>
-                          {securityTestResults.details.scoreValidation ? '✓' : '✗'} Score Validation
+                          {securityTestResults.details.scoreValidation ? 'Pass' : 'Fail'} Score Validation
                         </div>
                         <div className={`flex items-center gap-2 ${securityTestResults.details.nameConstraints ? 'text-green-400' : 'text-red-400'}`}>
-                          {securityTestResults.details.nameConstraints ? '✓' : '✗'} Name Constraints
+                          {securityTestResults.details.nameConstraints ? 'Pass' : 'Fail'} Name Constraints
                         </div>
                         <div className={`flex items-center gap-2 ${securityTestResults.details.sessionManagement ? 'text-green-400' : 'text-red-400'}`}>
-                          {securityTestResults.details.sessionManagement ? '✓' : '✗'} Session Management
+                          {securityTestResults.details.sessionManagement ? 'Pass' : 'Fail'} Session Management
                         </div>
                       </>
                     )}
@@ -2429,19 +2429,19 @@ const FunctionTests: React.FC = () => {
                     {tournamentTestResults.details && (
                       <>
                         <div className={`flex items-center gap-2 ${tournamentTestResults.details.tournamentCreation ? 'text-green-400' : 'text-red-400'}`}>
-                          {tournamentTestResults.details.tournamentCreation ? '✓' : '✗'} Tournament Creation
+                          {tournamentTestResults.details.tournamentCreation ? 'Pass' : 'Fail'} Tournament Creation
                         </div>
                         <div className={`flex items-center gap-2 ${tournamentTestResults.details.stateTransitions ? 'text-green-400' : 'text-red-400'}`}>
-                          {tournamentTestResults.details.stateTransitions ? '✓' : '✗'} State Transitions
+                          {tournamentTestResults.details.stateTransitions ? 'Pass' : 'Fail'} State Transitions
                         </div>
                         <div className={`flex items-center gap-2 ${tournamentTestResults.details.memberManagement ? 'text-green-400' : 'text-red-400'}`}>
-                          {tournamentTestResults.details.memberManagement ? '✓' : '✗'} Member Management
+                          {tournamentTestResults.details.memberManagement ? 'Pass' : 'Fail'} Member Management
                         </div>
                         <div className={`flex items-center gap-2 ${tournamentTestResults.details.lockMechanism ? 'text-green-400' : 'text-red-400'}`}>
-                          {tournamentTestResults.details.lockMechanism ? '✓' : '✗'} Lock Mechanism
+                          {tournamentTestResults.details.lockMechanism ? 'Pass' : 'Fail'} Lock Mechanism
                         </div>
                         <div className={`flex items-center gap-2 ${tournamentTestResults.details.dataIsolation ? 'text-green-400' : 'text-red-400'}`}>
-                          {tournamentTestResults.details.dataIsolation ? '✓' : '✗'} Data Isolation
+                          {tournamentTestResults.details.dataIsolation ? 'Pass' : 'Fail'} Data Isolation
                         </div>
                       </>
                     )}
@@ -2471,16 +2471,16 @@ const FunctionTests: React.FC = () => {
                     {realtimeTestResults.details && (
                       <>
                         <div className={`flex items-center gap-2 ${realtimeTestResults.details.realtimeConnection ? 'text-green-400' : 'text-red-400'}`}>
-                          {realtimeTestResults.details.realtimeConnection ? '✓' : '✗'} Real-time Connection
+                          {realtimeTestResults.details.realtimeConnection ? 'Pass' : 'Fail'} Real-time Connection
                         </div>
                         <div className={`flex items-center gap-2 ${realtimeTestResults.details.realtimeNotifications ? 'text-green-400' : 'text-red-400'}`}>
-                          {realtimeTestResults.details.realtimeNotifications ? '✓' : '✗'} Notifications
+                          {realtimeTestResults.details.realtimeNotifications ? 'Pass' : 'Fail'} Notifications
                         </div>
                         <div className={`flex items-center gap-2 ${realtimeTestResults.details.websocketHealth ? 'text-green-400' : 'text-red-400'}`}>
-                          {realtimeTestResults.details.websocketHealth ? '✓' : '✗'} WebSocket Health
+                          {realtimeTestResults.details.websocketHealth ? 'Pass' : 'Fail'} WebSocket Health
                         </div>
                         <div className={`flex items-center gap-2 ${realtimeTestResults.details.subscriptionCleanup ? 'text-green-400' : 'text-red-400'}`}>
-                          {realtimeTestResults.details.subscriptionCleanup ? '✓' : '✗'} Subscription Cleanup
+                          {realtimeTestResults.details.subscriptionCleanup ? 'Pass' : 'Fail'} Subscription Cleanup
                         </div>
                       </>
                     )}
@@ -2662,13 +2662,13 @@ const FunctionTests: React.FC = () => {
                   <div className="font-semibold mb-2">Diagnosis</div>
                   <div className="text-sm space-y-1">
                     {emailTestResults?.fallbackUsed && (
-                      <div className="text-yellow-400">⚠️ Email provider not configured - using fallback link</div>
+                      <div className="text-yellow-400"> Email provider not configured - using fallback link</div>
                     )}
                     {emailTestResults?.success && !emailTestResults?.fallbackUsed && (
-                      <div className="text-green-400">✅ Email should be delivered successfully</div>
+                      <div className="text-green-400"> Email should be delivered successfully</div>
                     )}
                     {emailTestResults && !emailTestResults.success && (
-                      <div className="text-red-400">❌ Email delivery failed completely</div>
+                      <div className="text-red-400"> Email delivery failed completely</div>
                     )}
                     {smtpTestResults?.possibleIssues?.map((issue, idx) => (
                       <div key={idx} className="text-yellow-400">• {issue}</div>

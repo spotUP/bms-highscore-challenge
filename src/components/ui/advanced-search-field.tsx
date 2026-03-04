@@ -45,7 +45,7 @@ export const AdvancedSearchField: React.FC<AdvancedSearchFieldProps> = ({
   enableRealTimeSearch = false,
   debounceMs = 300,
   maxSuggestions = 6,
-  searchHint = "💡 Tip: Try \"mario\", \"sonic\", \"zelda\", or use abbreviations like \"sf\" for Street Fighter",
+  searchHint = " Tip: Try \"mario\", \"sonic\", \"zelda\", or use abbreviations like \"sf\" for Street Fighter",
   activeSearchText,
   platformHints,
   currentPlatform,

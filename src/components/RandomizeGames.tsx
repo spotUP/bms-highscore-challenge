@@ -257,7 +257,7 @@ const RandomizeGames: React.FC<RandomizeGamesProps> = ({ onGamesUpdated }) => {
 
           <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-3">
             <p className="text-yellow-200 text-sm font-semibold">
-              ⚠️ Warning: This will clear all existing scores!
+               Warning: This will clear all existing scores!
             </p>
             <p className="text-yellow-100 text-xs mt-1">
               All current high scores will be deleted when you randomize the games.

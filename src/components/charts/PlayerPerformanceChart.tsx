@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { TrendingUp } from 'lucide-react';
 import { getCardStyle, getTypographyStyle } from '@/utils/designSystem';
 
 interface PlayerPerformanceChartProps {
@@ -92,7 +93,7 @@ const PlayerPerformanceChart: React.FC<PlayerPerformanceChartProps> = React.memo
       <Card className={getCardStyle('primary')}>
         <CardHeader>
           <CardTitle className={`${getTypographyStyle('h3')} flex items-center gap-2`}>
-            📈 Player Performance Over Time
+            <TrendingUp className="w-4 h-4 inline" /> Player Performance Over Time
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -108,7 +109,7 @@ const PlayerPerformanceChart: React.FC<PlayerPerformanceChartProps> = React.memo
     <Card className={getCardStyle('primary')}>
       <CardHeader>
         <CardTitle className={`${getTypographyStyle('h3')} flex items-center gap-2`}>
-          📈 Player Performance Over Time
+          <TrendingUp className="w-4 h-4 inline" /> Player Performance Over Time
         </CardTitle>
         <p className="text-gray-400 text-sm">
           Cumulative scores for top players over time

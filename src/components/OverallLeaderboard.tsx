@@ -1,5 +1,5 @@
 import React, { useMemo, useCallback, useState, useEffect } from 'react';
-import { Trophy, Medal, Award, Star } from "lucide-react";
+import { Trophy, Medal, Award, Star, Sparkles } from "lucide-react";
 import { formatScore } from '@/lib/utils';
 import { useTournamentGameData } from '@/hooks/useTournamentGameData';
 import { useTournament } from '@/contexts/TournamentContext';
@@ -40,11 +40,11 @@ const OverallLeaderboard = React.memo(() => {
   const getRankIcon = useCallback((index: number) => {
     switch (index) {
       case 0:
-        return <span className="w-12 h-12 flex items-center justify-center text-4xl animate-gold-shine">🏆</span>;
+        return <Trophy className="w-8 h-8 text-yellow-400 animate-gold-shine" />;
       case 1:
-        return <span className="w-12 h-12 flex items-center justify-center text-4xl animate-silver-shine">🥈</span>;
+        return <Medal className="w-8 h-8 text-gray-400 animate-silver-shine" />;
       case 2:
-        return <span className="w-12 h-12 flex items-center justify-center text-4xl animate-bronze-shine">🥉</span>;
+        return <Medal className="w-8 h-8 text-amber-600 animate-bronze-shine" />;
       default:
         return <span className="w-12 h-12 flex items-center justify-center text-3xl font-bold text-white">#{index + 1}</span>;
     }
@@ -53,11 +53,11 @@ const OverallLeaderboard = React.memo(() => {
   const getAchievementRankIcon = useCallback((index: number) => {
     switch (index) {
       case 0:
-        return <span className="w-12 h-12 flex items-center justify-center text-4xl">🌟</span>;
+        return <Sparkles className="w-8 h-8 text-yellow-300" />;
       case 1:
-        return <span className="w-12 h-12 flex items-center justify-center text-4xl">⭐</span>;
+        return <Star className="w-8 h-8 text-yellow-400" />;
       case 2:
-        return <span className="w-12 h-12 flex items-center justify-center text-4xl">✨</span>;
+        return <Sparkles className="w-8 h-8 text-yellow-200" />;
       default:
         return <span className="w-12 h-12 flex items-center justify-center text-3xl font-bold text-white">#{index + 1}</span>;
     }
@@ -82,9 +82,9 @@ const OverallLeaderboard = React.memo(() => {
           {displayLeaders.map((player, index) => (
               <div key={player.player_name} className="flex items-center gap-2 py-1 text-center md:text-left">
                 <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
-                  {index === 0 ? <span className="text-2xl animate-gold-shine">🏆</span> :
-                   index === 1 ? <span className="text-2xl animate-silver-shine">🥈</span> :
-                   index === 2 ? <span className="text-2xl animate-bronze-shine">🥉</span> :
+                  {index === 0 ? <Trophy className="w-6 h-6 inline text-yellow-400 animate-gold-shine" /> :
+                   index === 1 ? <Medal className="w-6 h-6 inline text-gray-400 animate-silver-shine" /> :
+                   index === 2 ? <Medal className="w-6 h-6 inline text-amber-600 animate-bronze-shine" /> :
                    <span className="text-xs font-bold text-white">#{index + 1}</span>}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -94,7 +94,7 @@ const OverallLeaderboard = React.memo(() => {
                     {player.player_name}
                   </div>
                   <div className="text-xs text-gray-400">
-                    {player.game_count}g
+                    {player.game_count} {player.game_count === 1 ? 'game' : 'games'}
                 </div>
               </div>
               <div
@@ -119,9 +119,9 @@ const OverallLeaderboard = React.memo(() => {
             {displayAchievementHunters.map((hunter, index) => (
               <div key={hunter.player_name} className="flex items-center gap-2 py-1 text-center md:text-left">
                 <div className="w-8 h-8 flex items-center justify-center flex-shrink-0">
-                  {index === 0 ? <span className="text-2xl">🌟</span> :
-                   index === 1 ? <span className="text-2xl">⭐</span> :
-                   index === 2 ? <span className="text-2xl">✨</span> :
+                  {index === 0 ? <Sparkles className="w-6 h-6 inline text-yellow-300" /> :
+                   index === 1 ? <Star className="w-6 h-6 inline text-yellow-400" /> :
+                   index === 2 ? <Sparkles className="w-6 h-6 inline text-yellow-200" /> :
                    <span className="text-xs font-bold text-white">#{index + 1}</span>}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -131,7 +131,7 @@ const OverallLeaderboard = React.memo(() => {
                     {hunter.player_name}
                   </div>
                   <div className="text-xs text-gray-400">
-                    {hunter.achievement_count}a
+                    {hunter.achievement_count} {hunter.achievement_count === 1 ? 'achievement' : 'achievements'}
                   </div>
                 </div>
               </div>

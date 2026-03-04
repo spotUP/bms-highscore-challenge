@@ -3,20 +3,24 @@ import { formatScore } from '@/lib/utils';
 import { useTournamentGameData } from '@/hooks/useTournamentGameData';
 import { useTournament } from '@/contexts/TournamentContext';
 import { useRaspberryPiOptimizations } from '@/hooks/useRaspberryPiOptimizations';
+import { Trophy, Medal, Star, Sparkles } from "lucide-react";
 
 // Memoized rank icon component
 const RankIcon = React.memo(({ rank, type = 'standard' }: { rank: number; type?: string }) => {
   if (rank === 0) {
-    const emoji = type === 'achievement' ? '🌟' : '🏆';
-    return <span className="w-8 h-8 flex items-center justify-center text-2xl">{emoji}</span>;
+    return type === 'achievement'
+      ? <Sparkles className="w-6 h-6 text-yellow-300" />
+      : <Trophy className="w-6 h-6 text-yellow-400" />;
   }
   if (rank === 1) {
-    const emoji = type === 'achievement' ? '⭐' : '🥈';
-    return <span className="w-8 h-8 flex items-center justify-center text-2xl">{emoji}</span>;
+    return type === 'achievement'
+      ? <Star className="w-6 h-6 text-yellow-400" />
+      : <Medal className="w-6 h-6 text-gray-400" />;
   }
   if (rank === 2) {
-    const emoji = type === 'achievement' ? '✨' : '🥉';
-    return <span className="w-8 h-8 flex items-center justify-center text-2xl">{emoji}</span>;
+    return type === 'achievement'
+      ? <Sparkles className="w-6 h-6 text-yellow-200" />
+      : <Medal className="w-6 h-6 text-amber-600" />;
   }
 
   return <span className="w-8 h-8 flex items-center justify-center text-sm font-bold text-white">#{rank + 1}</span>;
@@ -51,11 +55,11 @@ const LeaderItem = React.memo(({
         </div>
         {type === 'standard' ? (
           <div className="text-xs text-gray-400">
-            {player.game_count}g
+            {player.game_count} {player.game_count === 1 ? 'game' : 'games'}
           </div>
         ) : (
           <div className="text-xs text-gray-400">
-            {player.achievement_count}a
+            {player.achievement_count} {player.achievement_count === 1 ? 'achievement' : 'achievements'}
           </div>
         )}
       </div>

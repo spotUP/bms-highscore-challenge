@@ -186,7 +186,7 @@ const MusicSelector: React.FC = () => {
             paddingBottom: '10px',
             flexShrink: 0
           }}>
-            <h3 style={{ margin: 0, color: '#00ff00' }}>🎵 Generative Music</h3>
+            <h3 style={{ margin: 0, color: '#00ff00' }}> Generative Music</h3>
             <button
               onClick={() => setIsOpen(false)}
               style={{
@@ -204,7 +204,7 @@ const MusicSelector: React.FC = () => {
 
           {/* Current Playing */}
           <div style={{ marginBottom: '15px', padding: '8px', backgroundColor: 'rgba(0, 255, 0, 0.1)', borderRadius: '5px', flexShrink: 0 }}>
-            <div>Status: {musicState.isPlaying ? '▶️ Playing' : '⏹️ Stopped'}</div>
+            <div>Status: {musicState.isPlaying ? ' Playing' : ' Stopped'}</div>
             {musicState.currentPieceId && (
               <div>Current: {availablePieces.find(p => p.id === musicState.currentPieceId)?.title || musicState.currentPieceId}</div>
             )}
@@ -242,7 +242,7 @@ const MusicSelector: React.FC = () => {
                 fontSize: '10px'
               }}
             >
-              🧘 Meditation
+               Meditation
             </button>
             <button
               onClick={() => {
@@ -262,7 +262,7 @@ const MusicSelector: React.FC = () => {
                 fontSize: '10px'
               }}
             >
-              🔍 Test
+               Test
             </button>
             <button
               onClick={() => startPiece('drones')}
@@ -276,7 +276,7 @@ const MusicSelector: React.FC = () => {
                 fontSize: '10px'
               }}
             >
-              🌌 Drones
+               Drones
             </button>
             <button
               onClick={getRandomPiece}
@@ -290,7 +290,7 @@ const MusicSelector: React.FC = () => {
                 fontSize: '10px'
               }}
             >
-              🎲 Random
+               Random
             </button>
             <button
               onClick={stopMusic}
@@ -304,7 +304,7 @@ const MusicSelector: React.FC = () => {
                 fontSize: '10px'
               }}
             >
-              ⏹️ Stop
+               Stop
             </button>
           </div>
 

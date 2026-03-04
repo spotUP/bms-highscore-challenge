@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { Trophy } from "lucide-react";
 import { useSearchParams } from 'react-router-dom';
 import { useBrackets, Tournament, TournamentPlayer, TournamentMatch } from '@/contexts/BracketContext';
 import BracketView, { BracketViewRef } from '@/components/BracketView';
@@ -220,7 +221,7 @@ const Competition: React.FC = () => {
             setParticipants(data.players);
           }
         } catch (error) {
-          console.error('🔴 Competition: Polling error:', error);
+          console.error(' Competition: Polling error:', error);
         }
       }, 3000); // Poll every 3 seconds
     };
@@ -290,7 +291,7 @@ const Competition: React.FC = () => {
         .subscribe((status) => {
         });
     } catch (error) {
-      console.error('🔴 Competition: Failed to create matches subscription:', error);
+      console.error(' Competition: Failed to create matches subscription:', error);
     }
 
     // Subscribe to bracket players changes
@@ -522,7 +523,7 @@ const Competition: React.FC = () => {
             <DialogTitle className="text-arcade-neonYellow text-2xl text-center">Champion Crowned!</DialogTitle>
           </DialogHeader>
           <div className="text-center space-y-4 py-4">
-            <div className="text-6xl">🏆</div>
+            <div className="text-6xl"><Trophy className="w-16 h-16 inline text-yellow-400" /></div>
             <div className="text-xl text-gray-300">{selected?.name}</div>
             <div className="text-3xl font-bold text-arcade-neonPink">Champion: {winnerName}</div>
             <div className="pt-2 flex items-center justify-center gap-2">

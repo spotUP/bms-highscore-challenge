@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
 import { useCompetitionWebhooks } from '@/hooks/useCompetitionWebhooks';
-import { Play, Square, Calendar, Clock, Trophy, Settings } from 'lucide-react';
+import { Play, Square, Calendar, Clock, Trophy, Settings, Hourglass } from 'lucide-react';
 
 interface Competition {
   id?: string;
@@ -116,7 +116,7 @@ const CompetitionManager: React.FC = () => {
       await sendCompetitionStartedWebhook(gamesForWebhook, competitionToStart.name);
 
       toast({
-        title: "Competition Started! 🚀",
+        title: "Competition Started! ",
         description: `${competitionToStart.name} is now active. Webhook notifications sent.`,
       });
 
@@ -187,7 +187,7 @@ const CompetitionManager: React.FC = () => {
       setCurrentCompetition(null);
 
       toast({
-        title: "Competition Ended! 🏁",
+        title: "Competition Ended! ",
         description: `${currentCompetition.name} has been completed. Results webhook sent.`,
       });
 
@@ -235,7 +235,7 @@ const CompetitionManager: React.FC = () => {
     setNewCompetition({ name: '', description: '', start_time: '', end_time: '' });
 
     toast({
-      title: "Competition Scheduled! 📅",
+      title: "Competition Scheduled! ",
       description: `${competition.name} has been scheduled for ${new Date(competition.start_time).toLocaleString()}`,
     });
   };
@@ -317,7 +317,7 @@ const CompetitionManager: React.FC = () => {
 
               {currentCompetition.status === 'scheduled' && !isStartTimeReached(currentCompetition.start_time) && (
                 <p className="text-sm text-yellow-400 flex items-center">
-                  ⏳ Competition will be available to start at scheduled time
+                  <Hourglass className="w-4 h-4 inline mr-1" /> Competition will be available to start at scheduled time
                 </p>
               )}
             </div>

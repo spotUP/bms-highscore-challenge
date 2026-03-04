@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, CheckCircle, Clock, Trophy, Target, Users, Play } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Clock, Trophy, Target, Users, Play, Sparkles } from 'lucide-react';
 import { Tournament, TournamentPlayer, TournamentMatch, useBrackets } from '@/contexts/BracketContext';
 
 interface BracketDebuggerProps {
@@ -411,7 +411,7 @@ const BracketDebugger: React.FC<BracketDebuggerProps> = ({ tournament, players, 
           </CardHeader>
           <CardContent>
             <p className="text-green-200">
-              🎉 The tournament has been completed. Check the analytics dashboard for final statistics.
+              <Sparkles className="w-4 h-4 inline" /> The tournament has been completed. Check the analytics dashboard for final statistics.
             </p>
           </CardContent>
         </Card>

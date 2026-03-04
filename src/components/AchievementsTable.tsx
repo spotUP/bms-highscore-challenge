@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Pencil, Trash2 } from "lucide-react";
+import { renderIcon } from "@/utils/iconMap";
 
 interface AchievementsTableProps {
   achievements: any[];
@@ -14,16 +15,16 @@ interface AchievementsTableProps {
 }
 
 const ACHIEVEMENT_TYPES = [
-  { value: 'first_score', label: 'First Score', icon: '🎯' },
-  { value: 'first_place', label: 'First Place', icon: '👑' },
-  { value: 'score_milestone', label: 'Score Milestone', icon: '🏆' },
-  { value: 'game_master', label: 'Game Master', icon: '🕹️' },
-  { value: 'high_scorer', label: 'High Scorer', icon: '⭐' },
-  { value: 'consistent_player', label: 'Consistent Player', icon: '🔥' },
-  { value: 'perfectionist', label: 'Perfectionist', icon: '💎' },
-  { value: 'streak_master', label: 'Streak Master', icon: '⚡' },
-  { value: 'competition_winner', label: 'Competition Winner', icon: '🥇' },
-  { value: 'speed_demon', label: 'Speed Demon', icon: '💨' },
+  { value: 'first_score', label: 'First Score', icon: 'target' },
+  { value: 'first_place', label: 'First Place', icon: 'crown' },
+  { value: 'score_milestone', label: 'Score Milestone', icon: 'trophy' },
+  { value: 'game_master', label: 'Game Master', icon: 'gamepad2' },
+  { value: 'high_scorer', label: 'High Scorer', icon: 'star' },
+  { value: 'consistent_player', label: 'Consistent Player', icon: 'flame' },
+  { value: 'perfectionist', label: 'Perfectionist', icon: 'gem' },
+  { value: 'streak_master', label: 'Streak Master', icon: 'zap' },
+  { value: 'competition_winner', label: 'Competition Winner', icon: 'medal' },
+  { value: 'speed_demon', label: 'Speed Demon', icon: 'zap' },
 ];
 
 export const AchievementsTable = ({
@@ -99,7 +100,7 @@ export const AchievementsTable = ({
               style={{ backgroundColor: achievement.badge_color }}
             >
               <span className="font-emoji">
-                {getTypeIcon(achievement.type)}
+                {renderIcon(getTypeIcon(achievement.type), "w-5 h-5")}
               </span>
             </div>
           </div>
@@ -110,7 +111,7 @@ export const AchievementsTable = ({
 
           <div>
             <div className="flex items-center space-x-2">
-              <span className="font-emoji text-base">{getTypeIcon(achievement.type)}</span>
+              <span className="font-emoji text-base">{renderIcon(getTypeIcon(achievement.type), "w-4 h-4 inline")}</span>
               <span className="text-xs text-gray-500">
                 {ACHIEVEMENT_TYPES.find(t => t.value === achievement.type)?.label || achievement.type}
               </span>

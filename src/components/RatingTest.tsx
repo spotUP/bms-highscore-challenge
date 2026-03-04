@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { GameRatingDisplay } from "./GameRatingDisplay";
@@ -19,7 +20,7 @@ export const RatingTest: React.FC = () => {
     <div className="space-y-4">
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            RAWG API Status: {rawgApiKey ? '✅ Connected' : '❌ Not configured'}
+            RAWG API Status: {rawgApiKey ? <><CheckCircle2 className="w-4 h-4 inline text-green-500" /> Connected</> : <><XCircle className="w-4 h-4 inline text-red-500" /> Not configured</>}
           </p>
 
           <div className="grid grid-cols-2 gap-2">

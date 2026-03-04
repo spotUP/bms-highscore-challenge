@@ -61,76 +61,76 @@ const ACHIEVEMENT_TYPES = [
   {
     value: 'first_score',
     label: 'First Score',
-    icon: '🎯',
+    icon: 'target',
     description: 'Awarded when a player submits their very first score',
     example: 'Welcome! - Submit your first score to any game'
   },
   {
     value: 'first_place',
     label: 'First Place',
-    icon: '👑',
+    icon: 'crown',
     description: 'Awarded for achieving the top score on any leaderboard',
     example: 'Champion - Reach #1 on any game leaderboard'
   },
   {
     value: 'score_milestone',
     label: 'Score Milestone',
-    icon: '🏆',
+    icon: 'trophy',
     description: 'Awarded for reaching a specific score threshold',
     example: '50,000 Club - Score 50,000 or more points in any game'
   },
   {
     value: 'game_master',
     label: 'Game Master',
-    icon: '🕹️',
+    icon: 'gamepad2',
     description: 'Awarded for playing a certain number of different games',
     example: '5-Game Expert - Submit scores to 5 different games'
   },
   {
     value: 'high_scorer',
     label: 'High Scorer',
-    icon: '⭐',
+    icon: 'star',
     description: 'Awarded for being in the top rankings across games',
     example: 'Top 3 Player - Finish in the top 3 of any leaderboard'
   },
   {
     value: 'consistent_player',
     label: 'Consistent Player',
-    icon: '🔥',
+    icon: 'flame',
     description: 'Awarded for submitting many scores over time',
     example: '25-Score Veteran - Submit 25 total scores'
   },
   {
     value: 'perfectionist',
     label: 'Perfectionist',
-    icon: '💎',
+    icon: 'gem',
     description: 'Awarded for hitting exact score targets',
     example: '100,000 Perfect - Score exactly 100,000 points'
   },
   {
     value: 'streak_master',
     label: 'Streak Master',
-    icon: '⚡',
+    icon: 'zap',
     description: 'Awarded for playing consistently over multiple days',
     example: '7-Day Streak - Submit scores on 7 consecutive days'
   },
   {
     value: 'competition_winner',
     label: 'Competition Winner',
-    icon: '🥇',
+    icon: 'medal',
     description: 'Awarded for winning competitions or tournaments',
     example: 'Tournament Victor - Win a tournament competition'
   },
   {
     value: 'speed_demon',
     label: 'Speed Demon',
-    icon: '💨',
+    icon: 'zap',
     description: 'Awarded for rapid gaming sessions',
     example: 'Lightning Fast - Submit 5 scores within 1 hour'
   },
 ];
 
-const DEFAULT_ICONS = ['🏆', '🥇', '🎯', '⭐', '💎', '🔥', '⚡', '🎮', '👑', '🏅', '🌟', '💫'];
+const DEFAULT_ICONS = ['trophy', 'medal', 'target', 'star', 'gem', 'flame', 'zap', 'gamepad2', 'crown', 'award', 'sparkles', 'rocket'];
 const DEFAULT_COLORS = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F', '#BB8FCE'];
 
 const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) => {
@@ -197,7 +197,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Welcome Aboard',
         description: 'Submit your first score to any game',
         type: 'first_score' as const,
-        badge_icon: '🎯',
+        badge_icon: 'target',
         badge_color: '#4ECDC4',
         criteria: { is_first_score: true },
         points: 10,
@@ -206,7 +206,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Getting Started',
         description: 'Score 5,000 points or more in any game',
         type: 'score_milestone' as const,
-        badge_icon: '🎯',
+        badge_icon: 'target',
         badge_color: '#4ECDC4',
         criteria: { min_score: 5000 },
         points: 25,
@@ -215,7 +215,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Score Rookie',
         description: 'Score 10,000 points or more in any game',
         type: 'score_milestone' as const,
-        badge_icon: '🏆',
+        badge_icon: 'trophy',
         badge_color: '#FFD700',
         criteria: { min_score: 10000 },
         points: 50,
@@ -224,7 +224,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Century Club',
         description: 'Score 100,000 points or more',
         type: 'score_milestone' as const,
-        badge_icon: '💯',
+        badge_icon: 'award',
         badge_color: '#FFD700',
         criteria: { min_score: 100000 },
         points: 100,
@@ -233,7 +233,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Speed Runner',
         description: 'Submit 10 scores within 2 hours',
         type: 'speed_demon' as const,
-        badge_icon: '⚡',
+        badge_icon: 'zap',
         badge_color: '#FF6B6B',
         criteria: { scores_in_timeframe: 10, timeframe_hours: 2 },
         points: 75,
@@ -242,7 +242,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Dedicated Player',
         description: 'Submit scores for 7 days straight',
         type: 'streak_master' as const,
-        badge_icon: '🔥',
+        badge_icon: 'flame',
         badge_color: '#FF6B6B',
         criteria: { consecutive_days: 7 },
         points: 125,
@@ -251,7 +251,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Game Explorer',
         description: 'Play 10 different games',
         type: 'game_master' as const,
-        badge_icon: '🗺️',
+        badge_icon: 'search',
         badge_color: '#45B7D1',
         criteria: { game_count: 10 },
         points: 100,
@@ -260,7 +260,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Champion',
         description: 'Achieve first place on any leaderboard',
         type: 'first_place' as const,
-        badge_icon: '🏆',
+        badge_icon: 'trophy',
         badge_color: '#FFD700',
         criteria: { max_rank: 1 },
         points: 200,
@@ -269,7 +269,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Perfectionist',
         description: 'Score exactly 250,000 points',
         type: 'perfectionist' as const,
-        badge_icon: '💎',
+        badge_icon: 'gem',
         badge_color: '#BB8FCE',
         criteria: { exact_score: 250000 },
         points: 150,
@@ -278,7 +278,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Score Veteran',
         description: 'Submit 25 scores total',
         type: 'consistent_player' as const,
-        badge_icon: '👥',
+        badge_icon: 'users',
         badge_color: '#96CEB4',
         criteria: { min_scores: 25 },
         points: 75,
@@ -287,7 +287,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Lightning Fast',
         description: 'Submit 5 scores within 1 hour',
         type: 'speed_demon' as const,
-        badge_icon: '💨',
+        badge_icon: 'zap',
         badge_color: '#FF6B6B',
         criteria: { scores_in_timeframe: 5, timeframe_hours: 1 },
         points: 100,
@@ -296,7 +296,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Marathon Player',
         description: 'Submit scores for 14 days straight',
         type: 'streak_master' as const,
-        badge_icon: '🏃',
+        badge_icon: 'timer',
         badge_color: '#4ECDC4',
         criteria: { consecutive_days: 14 },
         points: 200,
@@ -305,7 +305,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Game Master',
         description: 'Play 20 different games',
         type: 'game_master' as const,
-        badge_icon: '🎮',
+        badge_icon: 'gamepad2',
         badge_color: '#45B7D1',
         criteria: { game_count: 20 },
         points: 150,
@@ -314,7 +314,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Score Legend',
         description: 'Score 500,000 points or more',
         type: 'score_milestone' as const,
-        badge_icon: '⭐',
+        badge_icon: 'star',
         badge_color: '#FFD700',
         criteria: { min_score: 500000 },
         points: 250,
@@ -323,7 +323,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Consistent Champion',
         description: 'Submit 50 scores total',
         type: 'consistent_player' as const,
-        badge_icon: '🔥',
+        badge_icon: 'flame',
         badge_color: '#FF6B6B',
         criteria: { min_scores: 50 },
         points: 125,
@@ -332,7 +332,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Speed Demon',
         description: 'Submit 20 scores within 3 hours',
         type: 'speed_demon' as const,
-        badge_icon: '⚡',
+        badge_icon: 'zap',
         badge_color: '#FF6B6B',
         criteria: { scores_in_timeframe: 20, timeframe_hours: 3 },
         points: 150,
@@ -341,7 +341,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Ultimate Streak',
         description: 'Submit scores for 30 days straight',
         type: 'streak_master' as const,
-        badge_icon: '🔥',
+        badge_icon: 'flame',
         badge_color: '#FFD700',
         criteria: { consecutive_days: 30 },
         points: 500,
@@ -350,7 +350,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Perfect Score',
         description: 'Score exactly 1,000,000 points',
         type: 'perfectionist' as const,
-        badge_icon: '💎',
+        badge_icon: 'gem',
         badge_color: '#BB8FCE',
         criteria: { exact_score: 1000000 },
         points: 1000,
@@ -359,7 +359,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Tournament Veteran',
         description: 'Submit 100 scores total',
         type: 'consistent_player' as const,
-        badge_icon: '🏆',
+        badge_icon: 'trophy',
         badge_color: '#FFD700',
         criteria: { min_scores: 100 },
         points: 200,
@@ -368,7 +368,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         name: 'Ultimate Champion',
         description: 'Achieve first place 5 times',
         type: 'first_place' as const,
-        badge_icon: '👑',
+        badge_icon: 'crown',
         badge_color: '#FFD700',
         criteria: { max_rank: 1, count: 5 },
         points: 300,
@@ -627,7 +627,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
         .eq('tournament_id', currentTournament.id);
 
       if (error) {
-        console.error('❌ Delete failed:', error);
+        console.error('Delete failed:', error);
         throw error;
       }
 
@@ -746,7 +746,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
       if (error) throw error;
 
       if (data && data.success) {
-        console.log('✅ Successfully deleted player achievement');
+        console.log('Successfully deleted player achievement');
 
         toast({
           title: "Success",
@@ -765,7 +765,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
       }
 
     } catch (error: any) {
-      console.error('❌ Error deleting player achievement:', error);
+      console.error('Error deleting player achievement:', error);
       toast({
         title: "Error",
         description: `Failed to remove player achievement: ${error.message}`,
@@ -778,7 +778,7 @@ const AchievementManagerV2 = ({ refreshTrigger }: { refreshTrigger?: number }) =
   // Get icon for achievement type
   const getTypeIcon = (type: string) => {
     const typeInfo = ACHIEVEMENT_TYPES.find(t => t.value === type);
-    return typeInfo ? typeInfo.icon : '🎯';
+    return typeInfo ? typeInfo.icon : 'target';
   };
 
   // Format criteria for display

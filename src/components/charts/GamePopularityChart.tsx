@@ -1,6 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Gamepad2 } from 'lucide-react';
 import { getCardStyle, getTypographyStyle } from '@/utils/designSystem';
 
 interface GamePopularityChartProps {
@@ -85,7 +86,7 @@ const GamePopularityChart: React.FC<GamePopularityChartProps> = React.memo(({ sc
       <Card className="bg-gray-900 border-white/20">
         <CardHeader>
           <CardTitle className="text-white flex items-center gap-2">
-            🎮 Game Popularity
+            <Gamepad2 className="w-4 h-4 inline" /> Game Popularity
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -101,7 +102,7 @@ const GamePopularityChart: React.FC<GamePopularityChartProps> = React.memo(({ sc
     <Card className={getCardStyle('primary')}>
       <CardHeader>
         <CardTitle className={getTypographyStyle('h4') + " flex items-center gap-2"}>
-          🎮 Game Popularity
+          <Gamepad2 className="w-4 h-4 inline" /> Game Popularity
         </CardTitle>
         <p className="text-gray-400 text-sm">
           Distribution of score submissions across different games

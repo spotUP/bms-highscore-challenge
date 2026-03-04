@@ -653,7 +653,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       throw insertErr;
     }
 
-    console.log('✅ Double elimination bracket created successfully');
+    console.log(' Double elimination bracket created successfully');
 
     // Update tournament status to active
     await api
@@ -776,12 +776,12 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
         (!match.participant1_id && !!match.participant2_id)
       ));
 
-      console.log(`🔄 Found ${singleParticipantMatches?.length || 0} single-participant matches to auto-advance`);
+      console.log(` Found ${singleParticipantMatches?.length || 0} single-participant matches to auto-advance`);
 
       for (const match of singleParticipantMatches || []) {
         const winnerId = match.participant1_id || match.participant2_id;
         if (winnerId) {
-          console.log(`🤖 Auto-advancing ${winnerId} in ${match.round >= 100 ? `L${match.round - 99}` : `R${match.round}`}P${match.position}`);
+          console.log(` Auto-advancing ${winnerId} in ${match.round >= 100 ? `L${match.round - 99}` : `R${match.round}`}P${match.position}`);
 
           // Set the winner for this match
           await api
@@ -997,7 +997,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
         }
 
         // Check if this is losers bracket final (advances to grand final)
-        console.log(`🔍 LOSERS BRACKET: L${losersRound} → L${nextLosersRound}, looking for round ${nextRound} position ${nextPosition}`);
+        console.log(` LOSERS BRACKET: L${losersRound} → L${nextLosersRound}, looking for round ${nextRound} position ${nextPosition}`);
 
         const { data: nextLosersMatch, error: nextLosersErr } = await api
           .from('bracket_matches')
@@ -1009,7 +1009,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
 
         if (nextLosersErr) throw nextLosersErr;
 
-        console.log(`🔍 LOSERS BRACKET: Next match found:`, nextLosersMatch ? 'YES' : 'NO (advancing to Grand Final)');
+        console.log(` LOSERS BRACKET: Next match found:`, nextLosersMatch ? 'YES' : 'NO (advancing to Grand Final)');
 
         if (nextLosersMatch) {
           // Determine which slot to fill
@@ -1031,7 +1031,7 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
             .eq('id', nextLosersMatch.id);
         } else {
           // This was losers bracket final - advance to grand final
-          console.log(`🏆 LOSERS BRACKET FINAL: Advancing winner ${winnerId} to Grand Final`);
+          console.log(` LOSERS BRACKET FINAL: Advancing winner ${winnerId} to Grand Final`);
           const { data: grandFinalUpdate, error: grandFinalErr } = await api
             .from('bracket_matches')
             .update({ participant2_id: winnerId })
@@ -1042,11 +1042,11 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
             .single();
 
           if (grandFinalErr) {
-            console.error('🚨 GRAND FINAL UPDATE ERROR:', grandFinalErr);
+            console.error(' GRAND FINAL UPDATE ERROR:', grandFinalErr);
             throw grandFinalErr;
           }
 
-          console.log(`🏆 GRAND FINAL UPDATED:`, grandFinalUpdate);
+          console.log(` GRAND FINAL UPDATED:`, grandFinalUpdate);
         }
 
         return true;

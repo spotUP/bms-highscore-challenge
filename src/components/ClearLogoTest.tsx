@@ -128,10 +128,10 @@ const ClearLogoTest: React.FC = () => {
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h3 className="font-semibold text-blue-900 mb-2">Clear Logo Database Status</h3>
         <div className="text-sm text-blue-800">
-          <p>🎯 <strong>Solution Implemented:</strong> Clear Logo scraper now uses LaunchBox's official metadata instead of web scraping</p>
-          <p>📊 <strong>Success Rate:</strong> Near 100% (metadata approach vs 0% web scraping)</p>
-          <p>🖼️ <strong>Database:</strong> {stats?.total?.toLocaleString() || 'Loading...'} Clear Logos available locally</p>
-          <p>⚡ <strong>Performance:</strong> Fast SQLite lookups, no network requests needed</p>
+          <p> <strong>Solution Implemented:</strong> Clear Logo scraper now uses LaunchBox's official metadata instead of web scraping</p>
+          <p> <strong>Success Rate:</strong> Near 100% (metadata approach vs 0% web scraping)</p>
+          <p> <strong>Database:</strong> {stats?.total?.toLocaleString() || 'Loading...'} Clear Logos available locally</p>
+          <p> <strong>Performance:</strong> Fast SQLite lookups, no network requests needed</p>
         </div>
       </div>
     </div>

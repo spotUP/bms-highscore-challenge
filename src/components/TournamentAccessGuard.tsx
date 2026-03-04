@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Lock, ShieldOff } from "lucide-react";
 import { useParams, Navigate } from 'react-router-dom';
 import { api } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
@@ -138,7 +139,7 @@ const TournamentAccessGuard: React.FC<TournamentAccessGuardProps> = ({ children 
       <div className="min-h-screen flex items-center justify-center relative z-10"
            style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
         <div className="text-center text-white">
-          <div className="text-2xl mb-4">🔒</div>
+          <div className="text-2xl mb-4"><Lock className="w-8 h-8 inline" /></div>
           <div className="text-xl">Checking tournament access...</div>
         </div>
       </div>
@@ -150,7 +151,7 @@ const TournamentAccessGuard: React.FC<TournamentAccessGuardProps> = ({ children 
       <div className="min-h-screen flex items-center justify-center relative z-10"
            style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
         <div className="text-center text-white max-w-md mx-auto p-6">
-          <div className="text-6xl mb-4">🚫</div>
+          <div className="text-6xl mb-4"><ShieldOff className="w-16 h-16 inline" /></div>
           <h1 className="text-3xl font-bold mb-4">Access Denied</h1>
           {tournament ? (
             <div className="space-y-3">

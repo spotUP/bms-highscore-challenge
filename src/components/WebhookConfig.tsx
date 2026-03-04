@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api-client';
 import { useAuth } from '@/hooks/useAuth';
-import { Settings, TestTube, CheckCircle, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { Settings, TestTube, CheckCircle, XCircle, Clock, AlertCircle, Trophy, BarChart3, Rocket, Flag } from 'lucide-react';
 
 interface WebhookConfig {
   id: string;
@@ -237,7 +237,7 @@ const WebhookConfig: React.FC = () => {
               id: "test-achievement",
               name: "Test Achievement",
               description: "This is a test achievement to verify webhook functionality",
-              badge_icon: "🧪",
+              badge_icon: "",
               badge_color: "#00ff00",
               points: 10
             },
@@ -464,10 +464,10 @@ const WebhookConfig: React.FC = () => {
                     </Label>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                       {[
-                        { id: 'achievement_unlocked', label: 'Achievements', icon: '🏆', desc: 'Player achievement unlocks' },
-                        { id: 'score_submitted', label: 'Score Submissions', icon: '📊', desc: 'New high scores' },
-                        { id: 'competition_started', label: 'Competition Start', icon: '🚀', desc: 'Competition begins' },
-                        { id: 'competition_ended', label: 'Competition End', icon: '🏁', desc: 'Competition finishes' }
+                        { id: 'achievement_unlocked', label: 'Achievements', icon: <Trophy className="w-5 h-5" />, desc: 'Player achievement unlocks' },
+                        { id: 'score_submitted', label: 'Score Submissions', icon: <BarChart3 className="w-5 h-5" />, desc: 'New high scores' },
+                        { id: 'competition_started', label: 'Competition Start', icon: <Rocket className="w-5 h-5" />, desc: 'Competition begins' },
+                        { id: 'competition_ended', label: 'Competition End', icon: <Flag className="w-5 h-5" />, desc: 'Competition finishes' }
                       ].map((eventType) => (
                         <div
                           key={eventType.id}

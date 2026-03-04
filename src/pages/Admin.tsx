@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { deleteScoreWithAchievementCleanup, recalculatePlayerAchievements } from "@/utils/achievementUtils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Plus, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy, Zap, RotateCcw, Maximize, Palette, Search } from "lucide-react";
+import { Pencil, Trash2, Plus, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy, Zap, RotateCcw, Maximize, Palette, Search, Check } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { isPlaceholderLogo, formatScore } from "@/lib/utils";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
@@ -177,7 +177,7 @@ const AddGameModal = ({ isOpen, onClose, onGameAdded }: { isOpen: boolean; onClo
               className="[&_input]:bg-black/50 [&_input]:border-cyan-400/20 [&_input]:text-white"
               enableSuggestions={true}
               enableRealTimeSearch={false}
-              searchHint="💡 Tip: Try 'mario', 'sonic', 'zelda', or use abbreviations like 'sf' for Street Fighter"
+              searchHint=" Tip: Try 'mario', 'sonic', 'zelda', or use abbreviations like 'sf' for Street Fighter"
               activeSearchText={newGame.name ? `Searching for: "${newGame.name}"` : undefined}
             />
 
@@ -281,7 +281,7 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
   };
 
   const addGameToList = () => {
-    console.log('🎮 Adding game to list:', newGame);
+    console.log(' Adding game to list:', newGame);
     if (!newGame.name.trim()) {
       toast({
         title: "Error",
@@ -296,10 +296,10 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
       id: Date.now(), // temporary ID for UI
       name: newGame.name.trim(),
     };
-    console.log('🎯 Game being added:', gameToAdd);
+    console.log(' Game being added:', gameToAdd);
     setGames(prev => {
       const updated = [...prev, gameToAdd];
-      console.log('📋 Updated games list:', updated);
+      console.log(' Updated games list:', updated);
       return updated;
     });
 
@@ -457,7 +457,7 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
             />
             {slugAvailable === true && (
               <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-green-500">
-                ✓
+                
               </div>
             )}
             {slugAvailable === false && (
@@ -633,7 +633,7 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
                 className="[&_input]:bg-black/50 [&_input]:border-cyan-400/20 [&_input]:text-white"
                 enableSuggestions={true}
                 enableRealTimeSearch={false}
-                searchHint="💡 Tip: Try 'mario', 'sonic', 'zelda', or use abbreviations like 'sf' for Street Fighter"
+                searchHint=" Tip: Try 'mario', 'sonic', 'zelda', or use abbreviations like 'sf' for Street Fighter"
                 activeSearchText={newGame.name ? `Searching for: "${newGame.name}"` : undefined}
               />
 
@@ -1298,7 +1298,7 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
                           <div className="border-t border-cyan-400/10 pt-3">
                             <div className="text-sm font-medium text-white mb-2">
                               Clear Logo Available:
-                              <span className="ml-2 text-xs text-green-400">✓ Auto-selected from S3</span>
+                              <span className="ml-2 text-xs text-green-400"><Check className="w-3 h-3 inline" /> Auto-selected from S3</span>
                             </div>
                             <div className="flex items-center gap-3 p-2 bg-green-900/20 border border-green-400/20 rounded">
                               <img
@@ -1319,7 +1319,7 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
                             <div className="text-sm font-medium text-white mb-2">
                               Available Logos:
                               {selectedLogos[index] && (
-                                <span className="ml-2 text-xs text-arcade-neonCyan">✓ Selected</span>
+                                <span className="ml-2 text-xs text-arcade-neonCyan"><Check className="w-3 h-3 inline" /> Selected</span>
                               )}
                             </div>
                             <GameLogoSuggestions
@@ -2139,7 +2139,7 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       <div className="min-h-screen flex items-center justify-center relative z-10"
            style={{ background: 'radial-gradient(ellipse at center, rgba(26, 16, 37, 0.9) 0%, rgba(26, 16, 37, 0.7) 100%)' }}>
         <div className="text-center text-white">
-          <div className="text-6xl mb-4">🏆</div>
+          <div className="text-6xl mb-4"><Trophy className="w-16 h-16 inline text-yellow-400" /></div>
           <h1 className="text-4xl font-bold mb-4">Tournament Required</h1>
           <p className="text-xl text-gray-300 mb-8">
             Select a tournament to access the admin panel.
