@@ -57,35 +57,22 @@ export default defineConfig(({ mode }) => ({
         warn(warning);
       },
       output: {
-        // Improved chunk splitting for better caching
         manualChunks: (id) => {
-          // Core vendor chunks
           if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
             return 'react-core';
           }
-          // UI library chunks
           if (id.includes('@radix-ui') || id.includes('@headlessui')) {
             return 'ui-libs';
-          }
-          // Heavy 3D/graphics libraries — lazy loaded only when needed
-          if (id.includes('three') || id.includes('@react-three')) {
-            return 'three';
-          }
-          if (id.includes('pixi.js')) {
-            return 'pixi';
           }
           if (id.includes('@tanstack/react-query')) {
             return 'react-query';
           }
-          // Animation libraries
           if (id.includes('framer-motion') || id.includes('@react-spring')) {
             return 'animations';
           }
-          // Utilities
           if (id.includes('lodash') || id.includes('date-fns')) {
             return 'utils';
           }
-          // Charts
           if (id.includes('recharts')) {
             return 'charts';
           }
@@ -105,11 +92,7 @@ export default defineConfig(({ mode }) => ({
       'react',
       'react-dom',
       '@tanstack/react-query',
-      'recharts', // Pre-bundle recharts to prevent initialization issues
-    ],
-    exclude: [
-      '@huggingface/transformers', // Exclude heavy ML library from pre-bundling
-      'regenerator-runtime/runtime.js' // Exclude regenerator-runtime to prevent build issues
+      'recharts',
     ],
   },
 
