@@ -57,27 +57,6 @@ export default defineConfig(({ mode }) => ({
         warn(warning);
       },
       output: {
-        manualChunks: (id) => {
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
-            return 'react-core';
-          }
-          if (id.includes('@radix-ui') || id.includes('@headlessui')) {
-            return 'ui-libs';
-          }
-          if (id.includes('@tanstack/react-query')) {
-            return 'react-query';
-          }
-          if (id.includes('framer-motion') || id.includes('@react-spring')) {
-            return 'animations';
-          }
-          if (id.includes('lodash') || id.includes('date-fns')) {
-            return 'utils';
-          }
-          if (id.includes('recharts')) {
-            return 'charts';
-          }
-        },
-        // Optimize chunk names
         chunkFileNames: 'assets/[name]-[hash].js',
         entryFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
