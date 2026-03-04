@@ -33,7 +33,7 @@ const Layout: React.FC<LayoutProps> = ({
   const { isExiting, animatedNavigate } = usePageTransitions({ exitDuration: 550 });
   const [isSpinWheelOpen, setIsSpinWheelOpen] = useState(false);
   const { user } = useAuth();
-  const { userTournaments } = useTournament();
+  const { currentTournament } = useTournament();
   const [leaderboardNames, setLeaderboardNames] = useState<string[]>([]);
 
   // Pages that should not show TopNav
@@ -50,30 +50,20 @@ const Layout: React.FC<LayoutProps> = ({
     return shuffled;
   };
 
-  // Load player names from tournaments created by the current user
+  // Load player names from the currently selected competition
   useEffect(() => {
     const loadLeaderboardNames = async () => {
-      if (!user) {
-        setLeaderboardNames([]);
-        return;
-      }
-
-      // Get tournament IDs created by the current user
-      const userTournamentIds = userTournaments
-        .filter(tournament => tournament.created_by === user.id)
-        .map(tournament => tournament.id);
-
-      if (userTournamentIds.length === 0) {
+      if (!user || !currentTournament) {
         setLeaderboardNames([]);
         return;
       }
 
       try {
-        // Get all scores from user's tournaments
+        // Get scores from the currently selected competition
         const { data: scores, error } = await api
           .from('scores')
           .select('player_name, game_id')
-          .in('tournament_id', userTournamentIds);
+          .eq('tournament_id', currentTournament.id);
 
         if (error) throw error;
 
@@ -100,7 +90,7 @@ const Layout: React.FC<LayoutProps> = ({
     };
 
     loadLeaderboardNames();
-  }, [user, userTournaments]);
+  }, [user, currentTournament]);
 
   const getRandomizedLeaderboardNames = useMemo(() => {
     return shuffleArray(leaderboardNames);
