@@ -1,36 +1,36 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Search, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AutocompleteDropdown } from '@/components/ui/autocomplete-dropdown';
 import { api } from '@/lib/api-client';
 
 interface AdvancedSearchFieldProps {
-  // Core props
   value: string;
   onChange: (value: string) => void;
-  onSubmit?: (value: string) => void; // Called on Enter key or explicit search
-
-  // UI customization
+  onSubmit?: (value: string) => void;
   placeholder?: string;
   label?: string;
   disabled?: boolean;
   className?: string;
-
-  // Search behavior
   enableSuggestions?: boolean;
-  enableRealTimeSearch?: boolean; // If true, calls onSubmit on every change
+  enableRealTimeSearch?: boolean;
   debounceMs?: number;
   maxSuggestions?: number;
-
-  // Hints and help text
   searchHint?: string;
-  activeSearchText?: string; // Shows "Searching for: {value}" when provided
+  activeSearchText?: string;
   platformHints?: Record<string, string>;
   currentPlatform?: string;
-
-  // Custom suggestion source
   customSuggestionFn?: (query: string) => Promise<string[]>;
+}
+
+// Standard debounced value hook
+function useDebouncedValue(value: string, delayMs: number) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(id);
+  }, [value, delayMs]);
+  return debounced;
 }
 
 export const AdvancedSearchField: React.FC<AdvancedSearchFieldProps> = ({
@@ -43,7 +43,7 @@ export const AdvancedSearchField: React.FC<AdvancedSearchFieldProps> = ({
   className = "",
   enableSuggestions = true,
   enableRealTimeSearch = false,
-  debounceMs = 300,
+  debounceMs = 500,
   maxSuggestions = 6,
   searchHint = " Tip: Try \"mario\", \"sonic\", \"zelda\", or use abbreviations like \"sf\" for Street Fighter",
   activeSearchText,
@@ -52,138 +52,144 @@ export const AdvancedSearchField: React.FC<AdvancedSearchFieldProps> = ({
   customSuggestionFn
 }) => {
   const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [suggestionLoading, setSuggestionLoading] = useState(false);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
-  // Default suggestion function - searches games database
-  const defaultSuggestionFn = async (query: string): Promise<string[]> => {
+  // Debounce the query — suggestions only fetch after typing stops
+  const debouncedQuery = useDebouncedValue(value, debounceMs);
+
+  // Also debounce onSubmit for real-time search mode
+  const debouncedValue = useDebouncedValue(value, debounceMs);
+  useEffect(() => {
+    if (enableRealTimeSearch && onSubmit && debouncedValue) {
+      onSubmit(debouncedValue);
+    }
+  }, [debouncedValue, enableRealTimeSearch]);
+
+  // Default suggestion function
+  const defaultSuggestionFn = useCallback(async (query: string): Promise<string[]> => {
     if (query.length < 2) return [];
-
     try {
-      const { data: suggestions, error } = await api
+      const { data, error } = await api
         .from('games_database')
         .select('name')
         .ilike('name', `%${query}%`)
         .limit(maxSuggestions + 2)
         .order('name');
-
       if (error) throw error;
-
-      return suggestions
-        ?.map(game => game.name)
-        .filter((name, index, arr) => arr.indexOf(name) === index) // Remove duplicates
+      return data
+        ?.map((game: any) => game.name)
+        .filter((name: string, i: number, arr: string[]) => arr.indexOf(name) === i)
         .slice(0, maxSuggestions) || [];
-    } catch (error) {
-      console.error('Error fetching suggestions:', error);
+    } catch {
       return [];
     }
-  };
+  }, [maxSuggestions]);
 
-  // Fetch suggestions with debouncing
-  const fetchSuggestions = async (query: string) => {
-    if (!enableSuggestions || query.length < 2) {
+  // Fetch suggestions when debounced query changes
+  useEffect(() => {
+    if (!enableSuggestions || debouncedQuery.length < 2) {
       setSuggestions([]);
-      setShowSuggestions(false);
+      setIsOpen(false);
       return;
     }
 
-    setSuggestionLoading(true);
-    try {
-      const suggestionFn = customSuggestionFn || defaultSuggestionFn;
-      const results = await suggestionFn(query);
-      setSuggestions(results);
-      setShowSuggestions(results.length > 0);
-    } catch (error) {
-      console.error('Error fetching suggestions:', error);
-      setSuggestions([]);
-      setShowSuggestions(false);
-    } finally {
-      setSuggestionLoading(false);
-    }
-  };
+    let cancelled = false;
+    const fetchSuggestions = async () => {
+      setLoading(true);
+      try {
+        const fn = customSuggestionFn || defaultSuggestionFn;
+        const results = await fn(debouncedQuery);
+        if (!cancelled) {
+          setSuggestions(results);
+          setActiveIndex(-1);
+          // Only open if input is still focused
+          if (document.activeElement === inputRef.current && results.length > 0) {
+            setIsOpen(true);
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setSuggestions([]);
+          setIsOpen(false);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
 
-  // Handle input change
-  const handleInputChange = (newValue: string) => {
-    onChange(newValue);
+    fetchSuggestions();
+    return () => { cancelled = true; };
+  }, [debouncedQuery, enableSuggestions, customSuggestionFn, defaultSuggestionFn]);
 
-    if (enableRealTimeSearch && onSubmit) {
-      setSearchLoading(true);
-      // Debounce real-time search
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        onSubmit(newValue);
-        setSearchLoading(false);
-      }, debounceMs);
-    }
-
-    // Debounce suggestions
-    if (enableSuggestions) {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        fetchSuggestions(newValue);
-      }, debounceMs);
-    }
-  };
-
-  // Handle Enter key
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && onSubmit && !enableRealTimeSearch) {
-      setSearchLoading(true);
-      onSubmit(value);
-      setTimeout(() => setSearchLoading(false), 500);
-    }
-  };
-
-  // Handle suggestion selection
-  const handleSuggestionSelect = (suggestion: string) => {
+  const selectSuggestion = (suggestion: string) => {
     onChange(suggestion);
-    if (onSubmit) {
-      setSearchLoading(true);
-      onSubmit(suggestion);
-      setTimeout(() => setSearchLoading(false), 500);
-    }
-    setShowSuggestions(false);
+    setIsOpen(false);
+    setSuggestions([]);
+    onSubmit?.(suggestion);
+    // Return focus to input
+    inputRef.current?.focus();
   };
 
-  // Handle clear
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isOpen || suggestions.length === 0) {
+      if (e.key === 'Enter') {
+        onSubmit?.(value);
+      }
+      return;
+    }
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setActiveIndex(i => (i + 1) % suggestions.length);
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setActiveIndex(i => (i <= 0 ? suggestions.length - 1 : i - 1));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (activeIndex >= 0) {
+          selectSuggestion(suggestions[activeIndex]);
+        } else {
+          setIsOpen(false);
+          onSubmit?.(value);
+        }
+        break;
+      case 'Escape':
+        setIsOpen(false);
+        break;
+    }
+  };
+
+  // Scroll active item into view
+  useEffect(() => {
+    if (activeIndex >= 0 && listRef.current) {
+      const item = listRef.current.children[activeIndex] as HTMLElement;
+      item?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activeIndex]);
+
   const handleClear = () => {
     onChange('');
-    if (onSubmit) {
-      onSubmit('');
-    }
+    onSubmit?.('');
     setSuggestions([]);
-    setShowSuggestions(false);
+    setIsOpen(false);
+    inputRef.current?.focus();
   };
 
-  // Get appropriate hint text
   const getHintText = () => {
-    if (activeSearchText && value) {
-      return `Searching for: "${value}"`;
-    }
-
-    if (!value && currentPlatform && platformHints && platformHints[currentPlatform]) {
-      return platformHints[currentPlatform];
-    }
-
-    if (!value && searchHint) {
-      return searchHint;
-    }
-
+    if (activeSearchText && value) return `Searching for: "${value}"`;
+    if (!value && currentPlatform && platformHints?.[currentPlatform]) return platformHints[currentPlatform];
+    if (!value && searchHint) return searchHint;
     return null;
   };
 
-  // Cleanup debounce on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-      }
-    };
-  }, []);
-
-  const isLoading = searchLoading || suggestionLoading;
+  const hintText = getHintText();
 
   return (
     <div className={className}>
@@ -191,51 +197,69 @@ export const AdvancedSearchField: React.FC<AdvancedSearchFieldProps> = ({
       <div className="relative">
         <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
         <Input
+          ref={inputRef}
           value={value}
-          onChange={(e) => handleInputChange(e.target.value)}
-          onKeyPress={handleKeyPress}
-          onFocus={() => value.length >= 2 && suggestions.length > 0 && setShowSuggestions(true)}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onFocus={() => {
+            if (suggestions.length > 0 && value.length >= 2) setIsOpen(true);
+          }}
+          onBlur={() => {
+            // Delay so mousedown on suggestions can fire first
+            setTimeout(() => setIsOpen(false), 150);
+          }}
           placeholder={placeholder}
-          className={`pl-10 ${isLoading ? 'pr-16' : value ? 'pr-10' : 'pr-4'}`}
+          className={`pl-10 ${value ? 'pr-10' : 'pr-4'}`}
           disabled={disabled}
+          role="combobox"
+          aria-expanded={isOpen}
+          aria-autocomplete="list"
+          aria-activedescendant={activeIndex >= 0 ? `suggestion-${activeIndex}` : undefined}
         />
 
-        {/* Clear button */}
-        {value && !isLoading && (
+        {value && (
           <button
             onClick={handleClear}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 w-4 h-4 flex items-center justify-center"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
             title="Clear search"
+            tabIndex={-1}
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         )}
 
-        {/* Loading spinner */}
-        {isLoading && (
-          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-            <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
-          </div>
-        )}
-
         {/* Suggestions dropdown */}
-        {enableSuggestions && (
-          <AutocompleteDropdown
-            suggestions={suggestions}
-            isOpen={showSuggestions}
-            onSelect={handleSuggestionSelect}
-            loading={suggestionLoading}
-          />
+        {isOpen && suggestions.length > 0 && (
+          <div
+            ref={listRef}
+            role="listbox"
+            className="absolute z-50 w-full mt-1 bg-popover border border-border rounded-md shadow-md max-h-60 overflow-y-auto p-1"
+          >
+            {suggestions.map((suggestion, index) => (
+              <div
+                key={suggestion}
+                id={`suggestion-${index}`}
+                role="option"
+                aria-selected={index === activeIndex}
+                onMouseDown={(e) => {
+                  e.preventDefault(); // Prevent input blur
+                  selectSuggestion(suggestion);
+                }}
+                onMouseEnter={() => setActiveIndex(index)}
+                className={`relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none ${
+                  index === activeIndex ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50'
+                }`}
+              >
+                {suggestion}
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
-      {/* Hint text */}
-      {getHintText() && (
-        <div className={`text-xs mt-1 ${
-          activeSearchText && value ? 'text-blue-600' : 'text-gray-500'
-        }`}>
-          {getHintText()}
+      {hintText && (
+        <div className={`text-xs mt-1 ${activeSearchText && value ? 'text-blue-600' : 'text-gray-500'}`}>
+          {hintText}
         </div>
       )}
     </div>
