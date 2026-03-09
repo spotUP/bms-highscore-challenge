@@ -198,7 +198,7 @@ export const AdvancedSearchField: React.FC<AdvancedSearchFieldProps> = ({
           onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
           placeholder={placeholder}
           className={`pl-10 ${isLoading ? 'pr-16' : value ? 'pr-10' : 'pr-4'}`}
-          disabled={disabled || isLoading}
+          disabled={disabled}
         />
 
         {/* Clear button */}

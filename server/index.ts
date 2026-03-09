@@ -200,7 +200,8 @@ const readAuthUser = (req: express.Request): AuthUser | null => {
   try {
     const payload = jwt.verify(token, JWT_SECRET) as AuthUser & { sub: string };
     return { id: payload.id || payload.sub, email: payload.email, display_name: payload.display_name };
-  } catch {
+  } catch (err: any) {
+    console.warn('[auth] Token verification failed:', err.name, err.message);
     return null;
   }
 };
@@ -568,7 +569,7 @@ app.post('/api/db', async (req, res) => {
 
   // Table-level write authorization: restrict which tables authenticated users can modify
   const publicWriteTables = ['scores', 'score_submissions', 'player_achievements', 'profiles'];
-  const adminOnlyTables = ['user_roles', 'role_audit_log', 'competitions'];
+  const adminOnlyTables = ['user_roles', 'role_audit_log', 'competitions', 'games', 'tournament_games'];
   if (!isSelect && user && adminOnlyTables.includes(table)) {
     // Check if user has admin role
     const { rows: roleRows } = await pool.query(

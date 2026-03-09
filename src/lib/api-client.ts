@@ -74,6 +74,10 @@ const apiRequest = async (path: string, options: RequestInit = {}) => {
   const isJson = response.headers.get('content-type')?.includes('application/json');
   const data = isJson ? await response.json() : await response.text();
   if (!response.ok) {
+    if (response.status === 401 && session?.access_token) {
+      // Token expired or invalid — clear session so UI reflects signed-out state
+      saveSession(null);
+    }
     throw new Error(data?.error || data?.message || response.statusText);
   }
   return data;
