@@ -77,9 +77,9 @@ const SpinTheWheel = ({ isOpen, onClose, leaderboardNames }: SpinTheWheelProps) 
       <BoingModal
         isOpen={isOpen}
         onClose={handleClose}
-        className="theme-card border-white/20 max-w-3xl w-[75vw] max-h-[80vh] overflow-hidden"
+        className="theme-card border-white/20 max-w-3xl w-[75vw] max-h-[90vh] overflow-hidden"
       >
-        <div className="max-h-[70vh] overflow-y-auto">
+        <div className="max-h-[85vh] overflow-y-auto pb-4">
             {!winner ? (
               <WheelOfFortune names={leaderboardNames} onWinner={handleWinner} />
             ) : (

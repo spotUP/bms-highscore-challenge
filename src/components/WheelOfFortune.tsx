@@ -61,8 +61,8 @@ const WheelOfFortune = ({ names, onWinner }: WheelOfFortuneProps) => {
 
   // Initialize colors and use names directly (allowing duplicates)
   useEffect(() => {
-    setSegmentColors(getSegmentColors());
-    setWheelNames(names); // Use names directly without shuffling to allow duplicates
+    setSegmentColors(shuffleArray(getSegmentColors()));
+    setWheelNames(shuffleArray(names));
   }, [names]);
 
   const segmentAngle = 360 / wheelNames.length;
