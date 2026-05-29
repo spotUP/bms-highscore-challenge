@@ -46,13 +46,34 @@ const saveSession = (session: AuthSession | null) => {
   emitAuth(session ? 'SIGNED_IN' : 'SIGNED_OUT', session);
 };
 
+const isTokenExpired = (token: string): boolean => {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (!payload.exp) return false;
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+};
+
 const loadSession = (): AuthSession | null => {
-  if (cachedSession) return cachedSession;
+  if (cachedSession) {
+    if (isTokenExpired(cachedSession.access_token)) {
+      saveSession(null);
+      return null;
+    }
+    return cachedSession;
+  }
   try {
     const storage = getStorage();
     const token = storage.getItem(TOKEN_KEY);
     const userRaw = storage.getItem(USER_KEY);
     if (!token || !userRaw) return null;
+    if (isTokenExpired(token)) {
+      storage.removeItem(TOKEN_KEY);
+      storage.removeItem(USER_KEY);
+      return null;
+    }
     const user = JSON.parse(userRaw) as AuthUser;
     cachedSession = { access_token: token, user };
     return cachedSession;
