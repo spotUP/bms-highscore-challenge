@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { ChevronLeft, ChevronRight, Calendar, Plus, Trash2, Lock, Globe, Play, Pause, Shield, CheckSquare, Square, Search, Check } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Plus, Trash2, Lock, Globe, Play, Pause, Shield, CheckSquare, Square, Search, Check, X } from "lucide-react";
 import { api } from '@/lib/api-client';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { useTournament } from "@/contexts/TournamentContext";
 import { clearLogoService } from "@/services/clearLogoService";
 import { AdvancedSearchField } from "@/components/ui/advanced-search-field";
+import { findAvailableSlug, generateSlug, isSlugTaken } from "@/lib/tournamentSlug";
 
 interface CreateTournamentModalProps {
   isOpen: boolean;
@@ -26,15 +27,30 @@ interface CreateTournamentModalProps {
   }>;
 }
 
+interface CreateTournamentFormState {
+  name: string;
+  slug: string;
+  is_public: boolean;
+  start_time: Date | null;
+  end_time: Date | null;
+  status: 'draft' | 'active' | 'completed';
+  is_active: boolean;
+  is_locked: boolean;
+  scores_locked: boolean;
+}
+
+// Stable identity: a fresh [] default would re-run the games effect every render.
+const NO_INITIAL_GAMES: NonNullable<CreateTournamentModalProps['initialGames']> = [];
+
 export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
   isOpen,
   onClose,
-  initialGames = []
+  initialGames = NO_INITIAL_GAMES
 }) => {
   const { createTournament } = useTournament();
   const { toast } = useToast();
   const [isCreating, setIsCreating] = useState(false);
-  const [createForm, setCreateForm] = useState(() => {
+  const [createForm, setCreateForm] = useState<CreateTournamentFormState>(() => {
     const now = new Date();
     const oneMonthLater = new Date(now);
     oneMonthLater.setMonth(now.getMonth() + 1);
@@ -43,15 +59,18 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
       name: '',
       slug: '',
       is_public: false,
-      start_time: now.toISOString().slice(0, 16), // Format for datetime-local
-      end_time: oneMonthLater.toISOString().slice(0, 16), // Format for datetime-local
-      status: 'draft' as 'draft' | 'active' | 'completed',
+      start_time: now,
+      end_time: oneMonthLater,
+      status: 'draft',
       is_active: true,
       is_locked: false,
       scores_locked: false,
     };
   });
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
+  const [slugEdited, setSlugEdited] = useState(false);
+  // Address the name alone would have produced, when it was already taken.
+  const [resolvedFromName, setResolvedFromName] = useState<string | null>(null);
   const [games, setGames] = useState(initialGames);
   const [newGame, setNewGame] = useState({
     name: '',
@@ -99,41 +118,50 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
     }
   }, [initialGames]);
 
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim();
-  };
+  // Names may repeat between users; only the address has to be unique. An
+  // address derived from the name resolves itself, an edited one is only checked.
+  React.useEffect(() => {
+    const name = createForm.name.trim();
+    const slug = createForm.slug.trim();
 
-  const checkSlugAvailability = async (slug: string) => {
-    if (!slug.trim()) {
+    if (!slug) {
       setSlugAvailable(null);
+      setResolvedFromName(null);
       return;
     }
 
-    try {
-      const { data, error } = await api
-        .from('tournaments')
-        .select('id')
-        .eq('slug', slug.trim().toLowerCase())
-        .single();
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      try {
+        if (slugEdited || !name) {
+          const taken = await isSlugTaken(slug);
+          if (cancelled) return;
+          setResolvedFromName(null);
+          setSlugAvailable(!taken);
+          return;
+        }
 
-      if (error && error.code === 'PGRST116') {
-        // No rows returned - slug is available
+        const base = generateSlug(name);
+        const available = await findAvailableSlug(name);
+        if (cancelled || !available) return;
         setSlugAvailable(true);
-      } else if (data) {
-        // Slug exists
-        setSlugAvailable(false);
-      } else {
-        setSlugAvailable(null);
+        // The note must survive the re-run this state change triggers, so it is
+        // derived from the name's own address, not from the current field value.
+        setResolvedFromName(available === base ? null : base);
+        if (available !== slug) {
+          setCreateForm(prev => ({ ...prev, slug: available }));
+        }
+      } catch {
+        if (!cancelled) setSlugAvailable(null);
       }
-    } catch (error) {
-      setSlugAvailable(null);
-    }
-  };
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createForm.slug, createForm.name, slugEdited]);
 
   // Debounce reference for search
   const searchTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -283,22 +311,13 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
     }
 
     setIsCreating(true);
-    // Convert datetime-local values to ISO strings for the database
-    const formatDateTimeForDatabase = (dateTimeLocal: string) => {
-      if (!dateTimeLocal) return null;
-      try {
-        return new Date(dateTimeLocal).toISOString();
-      } catch {
-        return null;
-      }
-    };
 
     const tournament = await createTournament({
       name: createForm.name.trim(),
       slug: createForm.slug.trim().toLowerCase(),
       is_public: createForm.is_public,
-      start_time: formatDateTimeForDatabase(createForm.start_time),
-      end_time: formatDateTimeForDatabase(createForm.end_time),
+      start_time: createForm.start_time ? createForm.start_time.toISOString() : null,
+      end_time: createForm.end_time ? createForm.end_time.toISOString() : null,
       status: createForm.status,
       is_active: createForm.is_active,
       is_locked: createForm.is_locked,
@@ -373,15 +392,17 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
         name: '',
         slug: '',
         is_public: false,
-        start_time: now.toISOString().slice(0, 16),
-        end_time: oneMonthLater.toISOString().slice(0, 16),
-        status: 'draft' as const,
+        start_time: now,
+        end_time: oneMonthLater,
+        status: 'draft',
         is_active: true,
         is_locked: false,
         scores_locked: false,
       });
       setGames([]);
       setSlugAvailable(null);
+      setSlugEdited(false);
+      setResolvedFromName(null);
       toast({
         title: "Success",
         description: `Tournament created successfully! ${games.length > 0 ? `${games.length} games added.` : ''}`,
@@ -414,12 +435,51 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
                   setCreateForm(prev => ({
                     ...prev,
                     name,
-                    slug: generateSlug(name)
+                    slug: slugEdited ? prev.slug : generateSlug(name)
                   }));
                 }}
                 placeholder="My Awesome Tournament"
                 className="bg-black/50 border-gray-700 text-white"
               />
+            </div>
+
+            <div>
+              <Label htmlFor="slug" className="text-white">Tournament Address</Label>
+              <div className="relative">
+                <Input
+                  id="slug"
+                  value={createForm.slug}
+                  onChange={(e) => {
+                    setSlugEdited(true);
+                    setResolvedFromName(null);
+                    setCreateForm(prev => ({ ...prev, slug: generateSlug(e.target.value) }));
+                  }}
+                  placeholder="my-awesome-tournament"
+                  className={`bg-black/50 border-gray-700 text-white ${
+                    slugAvailable === false ? 'border-red-500' :
+                    slugAvailable === true ? 'border-green-500' : ''
+                  }`}
+                />
+                {slugAvailable === true && (
+                  <Check className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-green-500" />
+                )}
+                {slugAvailable === false && (
+                  <X className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-red-500" />
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                URL: /t/{createForm.slug || 'tournament-address'}
+              </p>
+              {slugAvailable === false && (
+                <p className="text-xs text-red-500 mt-1">
+                  This address is already taken. Choose a different one.
+                </p>
+              )}
+              {resolvedFromName && (
+                <p className="text-xs text-yellow-500 mt-1">
+                  The address "{resolvedFromName}" is taken, so this tournament will use "{createForm.slug}".
+                </p>
+              )}
             </div>
 
 
@@ -519,16 +579,14 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
                 <Label className="text-white">Start Date & Time</Label>
                 <div className="relative">
                   <DatePicker
-                    selected={createForm.start_time ? new Date(createForm.start_time) : null}
-                    onChange={(dates: Date[]) => {
-                      const date = dates[0] || null;
+                    selected={createForm.start_time}
+                    onChange={(date: Date | null) => {
                       setCreateForm(prev => ({
                         ...prev,
-                        start_time: date ? date.toISOString().slice(0, 16) : ''
+                        start_time: date
                       }));
                     }}
                     showTimeSelect
-                    selectsMultiple
                     dateFormat="yyyy-MM-dd h:mm aa"
                     className="w-full px-3 py-2 pr-10 bg-black/50 border border-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     wrapperClassName="w-full"
@@ -573,16 +631,14 @@ export const CreateTournamentModal: React.FC<CreateTournamentModalProps> = ({
                 <Label className="text-white">End Date & Time</Label>
                 <div className="relative">
                   <DatePicker
-                    selected={createForm.end_time ? new Date(createForm.end_time) : null}
-                    onChange={(dates: Date[]) => {
-                      const date = dates[0] || null;
+                    selected={createForm.end_time}
+                    onChange={(date: Date | null) => {
                       setCreateForm(prev => ({
                         ...prev,
-                        end_time: date ? date.toISOString().slice(0, 16) : ''
+                        end_time: date
                       }));
                     }}
                     showTimeSelect
-                    selectsMultiple
                     dateFormat="yyyy-MM-dd h:mm aa"
                     className="w-full px-3 py-2 pr-10 bg-black/50 border border-gray-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     wrapperClassName="w-full"

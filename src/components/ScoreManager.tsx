@@ -635,7 +635,7 @@ const ScoreManager = () => {
       description="Are you sure you want to delete this score? This action cannot be undone."
       confirmText="Delete Score"
       cancelText="Cancel"
-      variant="outline"
+      variant="destructive"
       onConfirm={confirmDeleteScore}
     />
   </>

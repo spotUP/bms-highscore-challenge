@@ -4,7 +4,9 @@ import { api } from '@/lib/api-client';
 export interface Tournament {
   id: string;
   name: string;
-  created_by: string;
+  created_by: string | null;
+  is_public: boolean;
+  is_locked?: boolean;
   status: 'draft' | 'active' | 'completed';
   bracket_type: 'single' | 'double';
   created_at: string;
@@ -26,6 +28,10 @@ export interface TournamentMatch {
   participant1_id: string | null;
   participant2_id: string | null;
   winner_participant_id: string | null;
+  winner_id?: string | null;
+  status: string;
+  reported_by?: string | null;
+  reported_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -191,7 +197,9 @@ export function BracketProvider({ children }: { children: React.ReactNode }) {
       let ordered: TournamentPlayer[] = playersClean.slice();
       const mode = options?.mode || 'seeded';
       if (options?.orderedPlayerIds && options.orderedPlayerIds.length > 0) {
-        const byId = new Map(playersClean.map(p => [p.id, p] as const));
+        const byId = new Map<string, TournamentPlayer>(
+          (playersClean as TournamentPlayer[]).map(p => [p.id, p])
+        );
         const picked: TournamentPlayer[] = [];
         options.orderedPlayerIds.forEach(id => { const p = byId.get(id); if (p) picked.push(p); });
         // Append any remaining players not in the provided order

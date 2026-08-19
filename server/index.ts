@@ -11,6 +11,7 @@ import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
 import fs from 'fs';
+import { mayWriteGames } from './permissions';
 
 const app = express();
 
@@ -577,8 +578,14 @@ app.post('/api/db', async (req, res) => {
       [user.id]
     );
     if (!roleRows.length) {
-      res.status(403).json({ error: 'Insufficient permissions' });
-      return;
+      const query = (sql: string, values?: any[]) => pool.query(sql, values);
+      const allowed = table === 'games'
+        && await mayWriteGames(query, user.id, action, data, filters as DbFilter[]);
+
+      if (!allowed) {
+        res.status(403).json({ error: 'Insufficient permissions' });
+        return;
+      }
     }
   }
 
@@ -676,7 +683,14 @@ app.post('/api/db', async (req, res) => {
       }
 
       if (single && rows.length !== 1) {
-        res.json({ data: null, error: { message: 'Expected a single row' } });
+        res.json({
+          data: null,
+          error: {
+            message: 'JSON object requested, multiple (or no) rows returned',
+            code: 'PGRST116',
+            details: `The result contains ${rows.length} rows`
+          }
+        });
         return;
       }
       if (single) rows = rows.slice(0, 1);
@@ -763,7 +777,13 @@ app.post('/api/db', async (req, res) => {
 
     res.status(400).json({ error: 'Unsupported action' });
   } catch (error: any) {
-    res.status(500).json({ error: error?.message || 'Database error' });
+    res.status(error?.code === '23505' ? 409 : 500).json({
+      error: error?.message || 'Database error',
+      code: error?.code,
+      detail: error?.detail,
+      constraint: error?.constraint,
+      hint: error?.hint
+    });
   }
 });
 

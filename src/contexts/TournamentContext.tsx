@@ -6,6 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { dlog } from '../utils/logger';
 import { ErrorLogger } from '../utils/errorLogging';
 import { ErrorMessage } from '../components/ErrorMessage';
+import { findAvailableSlug } from '@/lib/tournamentSlug';
 
 export interface Tournament {
   id: string;
@@ -70,6 +71,11 @@ interface CreateTournamentData {
   is_locked?: boolean;
   scores_locked?: boolean;
 }
+
+// Postgres reports a unique violation as 23505; the tournaments table carries
+// more than one unique index on slug, so match the column, not a constraint name.
+const isDuplicateSlug = (error: any) =>
+  error?.code === '23505' && /slug/.test(`${error?.constraint || ''} ${error?.message || ''}`);
 
 const TournamentContext = createContext<TournamentContextType | undefined>(undefined);
 
@@ -300,6 +306,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
                 .from('profiles')
                 .upsert({
                   id: user.id,
+                  user_id: user.id,
                   selected_tournament_id: defaultTournament.id
                 }, {
                   onConflict: 'id'
@@ -406,6 +413,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
               .from('profiles')
               .upsert({
                 id: user.id,
+                user_id: user.id,
                 selected_tournament_id: tournament.id
               }, {
                 onConflict: 'id'
@@ -441,6 +449,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           .from('profiles')
           .upsert({
             id: user.id,
+            user_id: user.id,
             selected_tournament_id: tournament.id
           }, {
             onConflict: 'id'
@@ -485,7 +494,14 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 
   // Create a new tournament
   const createTournament = async (data: CreateTournamentData): Promise<Tournament | null> => {
-    if (!user) return null;
+    if (!user) {
+      toast({
+        title: "Not signed in",
+        description: "Sign in to create a tournament. If you were signed in, your session has expired.",
+        variant: "destructive",
+      });
+      return null;
+    }
 
     try {
       
@@ -500,17 +516,17 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
         .select()
         .single();
 
-      // If slug is duplicate, retry once with a short random suffix
-      if (error && error.code === '23505' && (error.message || '').includes('tournaments_slug_key')) {
-        const suffix = Math.random().toString(36).slice(2, 6);
-        const retrySlug = `${data.slug}-${suffix}`.toLowerCase();
+      // Two people may want the same tournament name; only the address has to
+      // be unique, so take the next free one instead of failing.
+      if (error && isDuplicateSlug(error)) {
+        const retrySlug = await findAvailableSlug(data.slug);
         const retryPayload = {
           ...data,
           slug: retrySlug,
           created_by: user.id,
           is_public: data.is_public ?? false,
         };
-        console.warn('Slug duplicate detected. Retrying with slug:', retrySlug);
+        console.warn('Address already taken. Retrying with:', retrySlug);
         const retry = await api
           .from('tournaments')
           .insert(retryPayload)
@@ -518,6 +534,13 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
           .single();
         tournament = retry.data as any;
         error = retry.error as any;
+
+        if (!error) {
+          toast({
+            title: "Address adjusted",
+            description: `"${data.slug}" was taken, so this tournament uses "${retrySlug}".`,
+          });
+        }
       }
 
       if (error) throw error;
@@ -554,8 +577,8 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
       setError(errorDetails);
       
       let errorMessage = "Failed to create tournament";
-      if (error.code === '23505' && (error.message || '').includes('tournaments_slug_key')) {
-        errorMessage = "A tournament with this slug already exists. Please choose a different slug.";
+      if (isDuplicateSlug(error)) {
+        errorMessage = "That tournament address is already taken. Choose a different address.";
       } else if (error.code === '42501') {
         errorMessage = "Permission denied when creating tournament. Your account may lack insert rights or RLS blocked the action.";
       }

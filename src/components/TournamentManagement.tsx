@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from '@/lib/api-client';
+import { generateSlug } from '@/lib/tournamentSlug';
 import { useTournament, Tournament } from '@/contexts/TournamentContext';
 import { useToast } from '@/hooks/use-toast';
 import { Globe, Lock, Users, Trophy, Search, Plus, Settings, Crown, Shield, User } from 'lucide-react';
@@ -49,7 +50,6 @@ const TournamentManagement = () => {
     name: '',
     slug: '',
     is_public: false,
-    demolition_man_active: false, // Default to inactive
   });
   const [joinSlug, setJoinSlug] = useState('');
   const [isJoiningBySlug, setIsJoiningBySlug] = useState(false);
@@ -112,7 +112,6 @@ const TournamentManagement = () => {
       name: createForm.name.trim(),
       slug: createForm.slug.trim().toLowerCase(),
       is_public: createForm.is_public,
-      demolition_man_active: createForm.demolition_man_active,
     });
 
     if (success) {
@@ -120,7 +119,6 @@ const TournamentManagement = () => {
         name: '',
         slug: '',
         is_public: false,
-        demolition_man_active: false,
       });
       await loadPublicTournaments();
     }
@@ -147,7 +145,6 @@ const TournamentManagement = () => {
       description: dataToUpdate.description,
       slug: dataToUpdate.slug,
       is_public: dataToUpdate.is_public,
-      demolition_man_active: dataToUpdate.demolition_man_active,
     };
     
     console.log('Updating tournament with data:', updateData);
@@ -174,14 +171,6 @@ const TournamentManagement = () => {
     }
   };
 
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim();
-  };
 
   const getRoleIcon = (role: string) => {
     switch (role) {
@@ -270,17 +259,6 @@ const TournamentManagement = () => {
                     />
                     <Label htmlFor="tournament-public" className="text-white">
                       Make tournament public (visible to all users)
-                    </Label>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="tournament-demolition-man"
-                      checked={currentTournament.demolition_man_active || false}
-                      onCheckedChange={(checked) => updateTournament(currentTournament.id, { demolition_man_active: checked })}
-                    />
-                    <Label htmlFor="tournament-demolition-man" className="text-white">
-                      Enable Demolition Man Leaderboard
                     </Label>
                   </div>
 
@@ -559,17 +537,6 @@ const TournamentManagement = () => {
                     </SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="create-demolition-man"
-                  checked={createForm.demolition_man_active}
-                  onCheckedChange={(checked) => setCreateForm(prev => ({ ...prev, demolition_man_active: checked }))}
-                />
-                <Label htmlFor="create-demolition-man" className="text-white">
-                  Enable Demolition Man Leaderboard
-                </Label>
               </div>
 
               <Button 

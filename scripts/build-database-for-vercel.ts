@@ -70,6 +70,10 @@ async function buildDatabaseForVercel() {
         VALUES (?, ?, ?, ?, ?, ?)
       `);
 
+      // pg returns timestamptz columns as Date, which SQLite cannot bind.
+      const toSqliteValue = (value: any) =>
+        value instanceof Date ? value.toISOString() : value;
+
       const insertMany = db.transaction((gamesBatch: any[]) => {
         for (const game of gamesBatch) {
           insert.run(
@@ -77,8 +81,8 @@ async function buildDatabaseForVercel() {
             game.name,
             game.platform_name,
             game.launchbox_id,
-            game.created_at,
-            game.updated_at
+            toSqliteValue(game.created_at),
+            toSqliteValue(game.updated_at)
           );
         }
       });

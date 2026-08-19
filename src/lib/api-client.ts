@@ -1,5 +1,7 @@
-const API_URL = (import.meta as any)?.env?.VITE_API_URL || '';
-const WS_URL = (import.meta as any)?.env?.VITE_WS_URL || (API_URL ? API_URL.replace(/^http/, 'ws') : '');
+// Written as plain `import.meta.env.X`: optional chaining defeats Vite's
+// static replacement, which left both of these empty in every build.
+const API_URL = import.meta.env.VITE_API_URL || '';
+const WS_URL = import.meta.env.VITE_WS_URL || (API_URL ? API_URL.replace(/^http/, 'ws') : '');
 
 export type AuthUser = {
   id: string;
@@ -99,7 +101,14 @@ const apiRequest = async (path: string, options: RequestInit = {}) => {
       // Token expired or invalid — clear session so UI reflects signed-out state
       saveSession(null);
     }
-    throw new Error(data?.error || data?.message || response.statusText);
+    const requestError: any = new Error(data?.error || data?.message || response.statusText);
+    // Keep the database's own error fields; callers branch on them (e.g. 23505).
+    requestError.code = data?.code;
+    requestError.detail = data?.detail;
+    requestError.constraint = data?.constraint;
+    requestError.hint = data?.hint;
+    requestError.status = response.status;
+    throw requestError;
   }
   return data;
 };
@@ -165,6 +174,8 @@ const parseOrCondition = (raw: string): OrCondition | null => {
   return { column, op, value: valueRaw };
 };
 
+type DbResult<T = any> = { data: T; error: any; count: number | null };
+
 class QueryBuilder {
   private table: string;
   private action: string | null = null;
@@ -205,7 +216,7 @@ class QueryBuilder {
     return this;
   }
 
-  delete() {
+  delete(_options?: { count?: 'exact' }) {
     this.action = 'delete';
     return this;
   }
@@ -229,6 +240,13 @@ class QueryBuilder {
 
   gte(column: string, value: any) {
     this.filters.push({ column, op: 'gte', value });
+    return this;
+  }
+
+  match(criteria: Record<string, any>) {
+    Object.entries(criteria).forEach(([column, value]) => {
+      this.filters.push({ column, op: 'eq', value });
+    });
     return this;
   }
 
@@ -328,24 +346,43 @@ class QueryBuilder {
           maybeSingle: this.maybeSingleValue,
         })
       });
-      return { data: result.data ?? null, error: result.error ?? null };
+      const data = result.data ?? null;
+      return { data, error: result.error ?? null, count: Array.isArray(data) ? data.length : null };
     } catch (error: any) {
-      return { data: null, error: { message: error.message || 'Request failed' } };
+      return {
+        data: null,
+        error: {
+          message: error.message || 'Request failed',
+          code: error.code,
+          details: error.detail,
+          constraint: error.constraint,
+          hint: error.hint
+        },
+        count: null
+      };
     }
   }
 
-  then(resolve: any, reject: any) {
-    return this.execute().then(resolve, reject);
+  // PromiseLike shape, so `await builder` type-checks instead of tripping TS1320
+  then<TResult1 = DbResult, TResult2 = never>(
+    onfulfilled?: ((value: DbResult) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+  ): Promise<TResult1 | TResult2> {
+    return this.execute().then(onfulfilled, onrejected);
   }
 
-  catch(reject: any) {
-    return this.execute().catch(reject);
+  catch<TResult = never>(
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+  ): Promise<DbResult | TResult> {
+    return this.execute().catch(onrejected);
   }
 
-  finally(handler: any) {
+  finally(handler?: (() => void) | null): Promise<DbResult> {
     return this.execute().finally(handler);
   }
 }
+
+type RealtimeSubscribeStatus = 'SUBSCRIBED' | 'CHANNEL_ERROR' | 'TIMED_OUT' | 'CLOSED';
 
 class RealtimeChannel {
   private name: string;
@@ -362,13 +399,22 @@ class RealtimeChannel {
     return this;
   }
 
-  subscribe() {
-    realtimeClient?.subscribe(this.name, this.filter, this.handlers);
+  subscribe(onStatus?: (status: RealtimeSubscribeStatus) => void) {
+    const client = getRealtimeClient();
+    if (!client) {
+      onStatus?.('CHANNEL_ERROR');
+      return this;
+    }
+    client.subscribe(this.name, this.filter, this.handlers);
+    onStatus?.('SUBSCRIBED');
     return this;
   }
 
-  unsubscribe() {
-    realtimeClient?.remove(this);
+  unsubscribe(): 'ok' | 'error' {
+    const client = getRealtimeClient();
+    if (!client) return 'error';
+    client.remove(this);
+    return 'ok';
   }
 }
 
@@ -420,9 +466,20 @@ class RealtimeClient {
   remove(channel: RealtimeChannel) {
     this.subscriptions = this.subscriptions.filter(sub => sub.channel !== (channel as any).name);
   }
+
+  isConnected() {
+    return this.socket?.readyState === WebSocket.OPEN;
+  }
 }
 
-const realtimeClient = WS_URL ? new RealtimeClient() : null;
+// Connect lazily: importing the client (tests, pages without subscriptions)
+// must not open a socket.
+let realtimeClientInstance: RealtimeClient | null = null;
+const getRealtimeClient = () => {
+  if (!WS_URL) return null;
+  if (!realtimeClientInstance) realtimeClientInstance = new RealtimeClient();
+  return realtimeClientInstance;
+};
 
 export function setRememberMe(remember: boolean) {
   try {
@@ -480,22 +537,22 @@ export const api = {
       saveSession(null);
       return { error: null };
     },
-    async resetPasswordForEmail(email: string) {
+    async resetPasswordForEmail(email: string, options?: { redirectTo?: string }) {
       try {
         const result = await apiRequest('/api/auth/reset', {
           method: 'POST',
-          body: JSON.stringify({ email })
+          body: JSON.stringify({ email, redirect_to: options?.redirectTo })
         });
         return { data: result, error: null };
       } catch (error: any) {
         return { data: null, error: { message: error.message } };
       }
     },
-    async verifyOtp({ email, token }: { email: string; token: string }) {
+    async verifyOtp({ email, token, type }: { email: string; token: string; type?: string }) {
       try {
         const result = await apiRequest('/api/auth/verify-otp', {
           method: 'POST',
-          body: JSON.stringify({ email, token })
+          body: JSON.stringify({ email, token, type })
         });
         pendingResetToken = result?.resetToken || null;
         return { data: result, error: null };
@@ -533,9 +590,10 @@ export const api = {
       .catch((error: any) => ({ data: null, error: { message: error.message } }));
   },
   functions: {
-    invoke(name: string, options?: { body?: any }) {
+    invoke(name: string, options?: { body?: any; headers?: Record<string, string> }) {
       return apiRequest(`/api/functions/${name}`, {
         method: 'POST',
+        headers: options?.headers,
         body: JSON.stringify(options?.body || {})
       }).then((result: any) => ({ data: result, error: null }))
         .catch((error: any) => ({ data: null, error: { message: error.message } }));
@@ -589,10 +647,15 @@ export const api = {
       };
     }
   },
+  realtime: {
+    isConnected() {
+      return realtimeClientInstance?.isConnected() ?? false;
+    }
+  },
   channel(name: string) {
     return new RealtimeChannel(name);
   },
   removeChannel(channel: RealtimeChannel) {
-    realtimeClient?.remove(channel);
+    realtimeClientInstance?.remove(channel);
   }
 };

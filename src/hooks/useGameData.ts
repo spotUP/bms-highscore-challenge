@@ -32,18 +32,11 @@ interface AchievementHunter {
   total_points: number;
 }
 
-interface DemolitionManScore {
-  player_name: string;
-  score: number;
-  created_at: string;
-}
-
 interface GameDataState {
   games: Game[];
   scores: Score[];
   leaders: PlayerScore[];
   achievementHunters: AchievementHunter[];
-  demolitionManScores: DemolitionManScore[];
   loading: boolean;
   error: string | null;
 }
@@ -54,7 +47,6 @@ let globalState: GameDataState = {
   scores: [],
   leaders: [],
   achievementHunters: [],
-  demolitionManScores: [],
   loading: true,
   error: null,
 };
@@ -226,43 +218,6 @@ const loadAchievementHunters = async () => {
   }
 };
 
-const loadDemolitionManScores = async () => {
-  try {
-    // First ensure Demolition Man game exists
-    const { data: gameId, error: ensureError } = await api
-      .rpc('ensure_demolition_man_game');
-
-    if (ensureError) {
-      console.error('Error ensuring Demolition Man game:', ensureError);
-    }
-
-    const { data: scoreData, error } = await api
-      .from('scores')
-      .select(`
-        player_name,
-        score,
-        created_at,
-        games!inner(name)
-      `)
-      .eq('games.name', 'Standing Competition')
-      .order('score', { ascending: false })
-      .limit(5);
-
-    if (error) throw error;
-
-    const demolitionScores = scoreData?.map(item => ({
-      player_name: item.player_name,
-      score: item.score,
-      created_at: item.created_at
-    })) || [];
-
-    updateState({ demolitionManScores: demolitionScores });
-  } catch (error) {
-    console.error('Error loading Demolition Man scores:', error);
-    updateState({ demolitionManScores: [] });
-  }
-};
-
 const setupSubscriptions = () => {
   if (isSubscribed) return;
 
@@ -279,7 +234,6 @@ const setupSubscriptions = () => {
         // Reload all score-dependent data
         loadScores();
         loadOverallLeaders();
-        loadDemolitionManScores();
       }
     )
     .subscribe();
@@ -346,8 +300,7 @@ export const useGameData = () => {
             loadGames(),
             loadScores(),
             loadOverallLeaders(),
-            loadAchievementHunters(),
-            loadDemolitionManScores()
+            loadAchievementHunters()
           ]);
         } catch (err) {
           console.error('Error during initial data load:', err);
@@ -405,8 +358,7 @@ export const useGameData = () => {
       loadGames(),
       loadScores(),
       loadOverallLeaders(),
-      loadAchievementHunters(),
-      loadDemolitionManScores()
+      loadAchievementHunters()
     ]).then(() => {
       updateState({ loading: false });
     }).catch((err) => {

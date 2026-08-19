@@ -1972,7 +1972,7 @@ const FunctionTests: React.FC = () => {
             </CardTitle>
             <Button
               variant="default"
-              onClick={runAllScoreTests}
+              onClick={() => runAllScoreTests()}
               disabled={schemaTestRunning || nameTestRunning || scoreTestRunning || achievementTestRunning || mobileTestRunning || leaderboardTestRunning || bracketsTestRunning || securityTestRunning || tournamentTestRunning || realtimeTestRunning}
               className="bg-yellow-600 hover:bg-yellow-700 text-black"
             >

@@ -81,7 +81,7 @@ const Brackets: React.FC = () => {
       {/* Confetti */}
       {showConfetti && (
         <div className="fixed inset-0 z-50 pointer-events-none">
-          <AdvancedConfetti recycle={false} onComplete={() => setShowConfetti(false)} />
+          <AdvancedConfetti isActive onComplete={() => setShowConfetti(false)} />
         </div>
       )}
 
