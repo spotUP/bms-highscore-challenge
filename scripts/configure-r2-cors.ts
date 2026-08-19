@@ -31,14 +31,13 @@ async function configureR2Cors() {
           ID: 'AllowWebAppAccess',
           AllowedHeaders: ['*'],
           AllowedMethods: ['GET', 'HEAD'],
+          // Only hosts this project actually serves from. Wildcards over
+          // shared hosting (*.netlify.app, *.vercel.app) let anyone's
+          // deployment read this bucket from a visitor's browser.
           AllowedOrigins: [
-            'http://localhost:8080',
-            'http://localhost:3000',
-            'http://127.0.0.1:8080',
-            'http://127.0.0.1:3000',
-            'https://*.netlify.app',
-            'https://*.vercel.app',
-            'https://retroranks.uprough.net'
+            'https://retroranks.uprough.net',
+            'http://localhost:8081',
+            'http://127.0.0.1:8081'
           ],
           ExposeHeaders: [
             'ETag',
