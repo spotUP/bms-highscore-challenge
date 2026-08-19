@@ -37,9 +37,10 @@ const TopNav: React.FC<TopNavProps> = ({ onSpinWheel, animatedNavigate: propAnim
   // Helper function to check if we're on the current page
   const isCurrentPage = (path: string) => location.pathname === path;
 
-  // Handle logo click to go to retroranks.com
+  // The logo goes home. It used to open retroranks.com, a domain the project
+  // no longer owns and anyone could now register.
   const handleLogoClick = () => {
-    window.open('https://www.retroranks.com', '_blank');
+    finalAnimatedNavigate('/');
   };
   useEffect(() => {
     const timer = setInterval(() => {
