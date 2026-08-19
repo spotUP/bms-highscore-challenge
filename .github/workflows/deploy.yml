@@ -105,12 +105,10 @@ jobs:
             APP_IMAGE="$IMAGE_REF" docker compose up -d --no-build
             docker logout ghcr.io
 
-            echo "Running migrations..."
-            for f in db/migrations/*.sql; do
-              echo "Applying $f"
-              docker compose exec -T db psql -U retroranks -d retroranks -v ON_ERROR_STOP=1 -f /dev/stdin < "$f"
-            done
-            echo "Migrations complete"
+            # Migrations are not run here: the container's entrypoint runs
+            # scripts/apply-db-migrations.ts on every start, which tracks what
+            # has been applied in schema_migrations and runs each file once.
+            docker compose logs --tail 20 app | grep -i migration || true
 
             docker image prune -f
         env:
