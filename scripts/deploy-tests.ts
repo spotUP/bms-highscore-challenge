@@ -5,6 +5,8 @@
  * This script runs after the build process to verify deployment readiness
  */
 
+import 'dotenv/config';
+
 console.log('🚀 Running deployment tests...');
 
 // Check if required environment variables are set
