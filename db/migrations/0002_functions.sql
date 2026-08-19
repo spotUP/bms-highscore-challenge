@@ -90,6 +90,11 @@ BEGIN
 END;
 $$;
 
+-- The return type changed after this function first shipped, and CREATE OR
+-- REPLACE cannot change a function's OUT parameters. Without this drop the
+-- statement fails on every deploy and the function is never updated.
+DROP FUNCTION IF EXISTS public.get_tournament_achievements(uuid);
+
 CREATE OR REPLACE FUNCTION public.get_tournament_achievements(
   p_tournament_id uuid
 )
