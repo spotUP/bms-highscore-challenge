@@ -2,18 +2,18 @@ import { useState, useEffect } from 'react';
 import { getSubmissionHealthStatus } from '@/utils/submissionMonitoring';
 import { storeDeployTestResults } from '@/utils/deployTestCache';
 
-interface HealthStatus {
+export interface HealthStatus {
   overall: 'healthy' | 'warning' | 'error';
   message: string;
   lastChecked: string;
   tests: {
     deployment: { status: 'healthy' | 'warning' | 'error' | 'unknown'; timestamp?: string };
-    submissions: { status: 'healthy' | 'warning' | 'error'; message: string };
-    scheduled: { status: 'healthy' | 'warning' | 'error'; message: string };
-    brackets: { status: 'healthy' | 'warning' | 'error'; message: string };
-    security: { status: 'healthy' | 'warning' | 'error'; message: string };
-    tournament: { status: 'healthy' | 'warning' | 'error'; message: string };
-    realtime: { status: 'healthy' | 'warning' | 'error'; message: string };
+    submissions: { status: 'healthy' | 'warning' | 'error'; message: string; timestamp?: string };
+    scheduled: { status: 'healthy' | 'warning' | 'error'; message: string; timestamp?: string };
+    brackets: { status: 'healthy' | 'warning' | 'error'; message: string; timestamp?: string };
+    security: { status: 'healthy' | 'warning' | 'error'; message: string; timestamp?: string };
+    tournament: { status: 'healthy' | 'warning' | 'error'; message: string; timestamp?: string };
+    realtime: { status: 'healthy' | 'warning' | 'error'; message: string; timestamp?: string };
   };
 }
 

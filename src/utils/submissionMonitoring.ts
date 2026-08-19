@@ -118,7 +118,7 @@ async function sendFailureAlert(failures: SubmissionFailure[]) {
 }
 
 // Function to get current failure rate for status indicator
-export function getSubmissionHealthStatus() {
+export function getSubmissionHealthStatus(): { status: 'healthy' | 'warning' | 'error'; message: string } {
  const recentFailures = getRecentFailures();
  const recentFailureCount = recentFailures.length;
 

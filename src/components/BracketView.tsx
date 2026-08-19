@@ -28,6 +28,8 @@ interface BracketViewPropsExtra extends BracketViewProps {
   forceAutoFit?: boolean;
   // Winner animation props
   showWinnerZoom?: boolean;
+  // Match currently being reported, rendered as busy
+  processingMatchId?: string | null;
 }
 
 export interface BracketViewRef {
@@ -35,7 +37,7 @@ export interface BracketViewRef {
   centerOnFinal: () => void;
 }
 
-const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches, participants, adminMode = false, onReport, onPlayerClick, highlightTarget, tournaments, selectedTournament, onTournamentChange, bracketType, isPublic, isCompleted, matchCount, tournamentTitle, disableKeyboardNavigation = false, forceAutoFit = false, showWinnerZoom = false }, ref) => {
+const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches, participants, adminMode = false, onReport, onPlayerClick, highlightTarget, tournaments, selectedTournament, onTournamentChange, bracketType, isPublic, isCompleted, matchCount, tournamentTitle, disableKeyboardNavigation = false, forceAutoFit = false, showWinnerZoom = false, processingMatchId = null }, ref) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -832,7 +834,7 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
                   const isPlayer1Selected = isSelected && selectedPlayerIndex === 0;
                   const isPlayer2Selected = isSelected && selectedPlayerIndex === 1;
                   return (
-                    <g key={m.id} transform={`translate(${pos.x}, ${pos.y + 40})`}>
+                    <g key={m.id} transform={`translate(${pos.x}, ${pos.y + 40})`} opacity={m.id === processingMatchId ? 0.5 : 1}>
                       <g>
                         {/* Filled card */}
                         <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6} fill={isSelected ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.7)"} className={isHighlighted ? 'boing' : ''} />
@@ -898,7 +900,7 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
                           </g>
                         )}
                         {/* Admin click zones */}
-                        {adminMode && onPlayerClick && (
+                        {adminMode && onPlayerClick && m.id !== processingMatchId && (
                           <g>
                             {p1 && (
                               <rect x={padX - 6} y={padY - 8} width={200 - (padX - 6) * 2} height={lineHeight} 
@@ -954,7 +956,7 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
                   const isPlayer1Selected = isSelected && selectedPlayerIndex === 0;
                   const isPlayer2Selected = isSelected && selectedPlayerIndex === 1;
                   return (
-                    <g key={m.id} transform={`translate(${pos.x}, ${pos.y + 40})`}>
+                    <g key={m.id} transform={`translate(${pos.x}, ${pos.y + 40})`} opacity={m.id === processingMatchId ? 0.5 : 1}>
                       <g>
                         {/* Filled card */}
                         <rect x={0} y={0} width={200} height={matchHeight} rx={6} ry={6} fill={isSelected ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.7)"} className={isHighlighted ? 'boing' : ''} />
@@ -1019,7 +1021,7 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
                             <text x={174} y={padY + nameFontSize + 18} fill="#000000" fontSize={10} textAnchor="middle" style={{ pointerEvents: 'none' }}>WO</text>
                           </g>
                         )}
-                        {adminMode && onPlayerClick && (
+                        {adminMode && onPlayerClick && m.id !== processingMatchId && (
                           <g>
                             {p1 && (<rect x={padX - 6} y={padY - 8} width={200 - (padX - 6) * 2} height={lineHeight} fill="transparent" style={{ cursor: 'pointer' }} onClick={() => handleMatchClick(m, p1.id)} />)}
                             {p2 && (<rect x={padX - 6} y={padY - 8 + lineHeight} width={200 - (padX - 6) * 2} height={lineHeight} fill="transparent" style={{ cursor: 'pointer' }} onClick={() => handleMatchClick(m, p2.id)} />)}
@@ -1056,7 +1058,7 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
                 const hasParticipants = m.participant1_id && m.participant2_id;
                 const needsWinner = hasParticipants && !m.winner_participant_id && adminMode;
                 return (
-                  <g key={m.id} transform={`translate(${pos.x}, ${pos.y + 40})`}>
+                  <g key={m.id} transform={`translate(${pos.x}, ${pos.y + 40})`} opacity={m.id === processingMatchId ? 0.5 : 1}>
                     <g>
                       {/* Filled card */}
                       <rect x={0} y={0} width={220} height={matchHeight} rx={8} ry={8} fill="rgba(0,0,0,0.7)" />
@@ -1105,7 +1107,7 @@ const BracketView = forwardRef<BracketViewRef, BracketViewPropsExtra>(({ matches
                         </g>
                       )}
                       {/* Admin click zones */}
-                      {adminMode && onPlayerClick && m.status !== 'completed' && (
+                      {adminMode && onPlayerClick && m.status !== 'completed' && m.id !== processingMatchId && (
                         <g>
                           {p1 && (
                             <rect x={padX - 6} y={padY - 8} width={220 - (padX - 6) * 2} height={lineHeight} 

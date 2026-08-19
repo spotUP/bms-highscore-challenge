@@ -39,17 +39,7 @@ const TournamentAccessGuard: React.FC<TournamentAccessGuardProps> = ({ children 
           return;
         }
 
-        // Ensure the tournament data matches the Tournament interface
-        const tournament: Tournament = {
-          id: tournamentData.id,
-          name: tournamentData.name,
-          description: tournamentData.description,
-          slug: tournamentData.slug,
-          created_by: tournamentData.created_by,
-          is_public: tournamentData.is_public,
-          created_at: tournamentData.created_at,
-          updated_at: tournamentData.updated_at,
-        };
+        const tournament = tournamentData as Tournament;
 
         setTournament(tournament);
 

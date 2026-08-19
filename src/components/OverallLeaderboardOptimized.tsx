@@ -83,14 +83,10 @@ const OverallLeaderboardOptimized = React.memo(() => {
   const { currentTournament } = useTournament();
   const { shouldOptimize, throttle } = useRaspberryPiOptimizations();
 
-  // TODO: Add demolition man scores when implemented
-  const demolitionManScores = useMemo(() => [], []);
-
   // Local state with throttled updates for Pi
   const [displayData, setDisplayData] = useState({
     leaders: leaders,
-    achievementHunters: achievementHunters,
-    demolitionManScores: demolitionManScores
+    achievementHunters: achievementHunters
   });
   const [hasInitialLoad, setHasInitialLoad] = useState(false);
 
@@ -110,21 +106,18 @@ const OverallLeaderboardOptimized = React.memo(() => {
       const hasChanges =
         leaders.length !== displayData.leaders.length ||
         achievementHunters.length !== displayData.achievementHunters.length ||
-        demolitionManScores.length !== displayData.demolitionManScores.length ||
         leaders.some((leader, i) => leader.player_name !== displayData.leaders[i]?.player_name) ||
-        achievementHunters.some((hunter, i) => hunter.player_name !== displayData.achievementHunters[i]?.player_name) ||
-        demolitionManScores.some((score, i) => score.player_name !== displayData.demolitionManScores[i]?.player_name);
+        achievementHunters.some((hunter, i) => hunter.player_name !== displayData.achievementHunters[i]?.player_name);
 
       if (hasChanges || !hasInitialLoad) {
         updateDisplayData({
           leaders,
-          achievementHunters,
-          demolitionManScores
+          achievementHunters
         });
         setHasInitialLoad(true);
       }
     }
-  }, [leaders, achievementHunters, demolitionManScores, loading, hasInitialLoad, displayData, updateDisplayData]);
+  }, [leaders, achievementHunters, loading, hasInitialLoad, displayData, updateDisplayData]);
 
   // Memoized sections
   const leadersSection = useMemo(() => (
@@ -167,30 +160,6 @@ const OverallLeaderboardOptimized = React.memo(() => {
     </div>
   ), [displayData.achievementHunters, hasInitialLoad, shouldOptimize]);
 
-  const demolitionSection = useMemo(() => {
-    if (!currentTournament?.demolition_man_active) return null;
-
-    return (
-      <div className="flex-shrink-0">
-        <span className="text-xl font-bold text-white mb-3 block">Demolition Man</span>
-        <div className="space-y-1 max-h-80 overflow-y-auto">
-          {displayData.demolitionManScores.map((score, index) => (
-            <LeaderItem
-              key={`${score.player_name}-${score.created_at}`}
-              player={score}
-              index={index}
-              type="demolition"
-              shouldOptimize={shouldOptimize}
-            />
-          ))}
-          {displayData.demolitionManScores.length === 0 && hasInitialLoad && (
-            <div className="text-center text-gray-400 py-4">No Demolition Man scores yet.</div>
-          )}
-        </div>
-      </div>
-    );
-  }, [displayData.demolitionManScores, currentTournament?.demolition_man_active, hasInitialLoad, shouldOptimize]);
-
   // Show minimal loading state
   if (loading && !hasInitialLoad) {
     return (
@@ -211,11 +180,6 @@ const OverallLeaderboardOptimized = React.memo(() => {
       <div className={`${animationClass}`}>
         {achievementSection}
       </div>
-      {demolitionSection && (
-        <div className={`${animationClass}`}>
-          {demolitionSection}
-        </div>
-      )}
     </div>
   );
 });

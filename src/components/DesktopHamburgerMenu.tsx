@@ -64,8 +64,6 @@ const DesktopHamburgerMenu: React.FC<DesktopHamburgerMenuProps> = ({
     setIsOpen(false);
   }, [location.pathname]);
 
-  console.log('DesktopHamburgerMenu render, isOpen:', isOpen, 'user:', !!user, 'isAdmin:', isAdmin, 'adminPages:', adminPages.length);
-
   const renderMenuItem = (path: string, label: string, index: number = 0) => {
     if (isCurrentPage(path)) return null;
 

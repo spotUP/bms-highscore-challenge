@@ -464,14 +464,8 @@ const Competition: React.FC = () => {
     }, [] as typeof matches);
     
     return uniqueMatches.map(m => ({
-      id: m.id,
-      tournament_id: m.tournament_id,
-      round: m.round,
-      position: m.position,
-      participant1_id: m.participant1_id,
-      participant2_id: m.participant2_id,
-      winner_participant_id: m.winner_participant_id,
-      status: m.winner_participant_id ? 'completed' : 'pending'
+      ...m,
+      status: m.status || (m.winner_participant_id ? 'completed' : 'pending')
     }));
   }, [matches]);
 

@@ -668,7 +668,7 @@ const AchievementManager = () => {
       description="Are you sure you want to delete this achievement? This will deactivate it but preserve existing unlocks."
       confirmText="Delete Achievement"
       cancelText="Cancel"
-      variant="outline"
+      variant="destructive"
       onConfirm={confirmDeleteAchievement}
     />
     </>

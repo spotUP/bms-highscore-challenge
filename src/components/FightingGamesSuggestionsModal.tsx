@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 interface FightingGame {
   id: string;
   name: string;
+  launchbox_id?: number | null;
   release_year?: number;
   community_rating?: number;
   developer?: string;

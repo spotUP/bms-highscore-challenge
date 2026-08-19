@@ -1,22 +1,8 @@
 import React from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import type { HealthStatus } from '@/hooks/useSystemHealth';
 import { AlertTriangle, CheckCircle, Shield, Clock, Database, User, Settings, BarChart3, Trophy, Smartphone, Mail, Calendar } from 'lucide-react';
-
-interface HealthStatus {
-  overall: 'healthy' | 'warning' | 'error';
-  message: string;
-  lastChecked: string;
-  tests: {
-    deployment: { status: 'healthy' | 'warning' | 'error' | 'unknown'; timestamp?: string };
-    submissions: { status: 'healthy' | 'warning' | 'error'; message: string };
-    scheduled: { status: 'healthy' | 'warning' | 'error'; message: string };
-    brackets: { status: 'healthy' | 'warning' | 'error'; message: string };
-    security: { status: 'healthy' | 'warning' | 'error'; message: string };
-    tournament: { status: 'healthy' | 'warning' | 'error'; message: string };
-    realtime: { status: 'healthy' | 'warning' | 'error'; message: string };
-  };
-}
 
 interface SystemProblemsModalProps {
   isOpen: boolean;
