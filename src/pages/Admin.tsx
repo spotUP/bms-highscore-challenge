@@ -21,7 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { deleteScoreWithAchievementCleanup, recalculatePlayerAchievements } from "@/utils/achievementUtils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Pencil, Trash2, Plus, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy, Zap, RotateCcw, Maximize, Palette, Search, Check } from "lucide-react";
+import { Pencil, Trash2, Plus, ArrowLeft, Gamepad2, BarChart3, Settings, Users, TestTube, Webhook, Lock, Globe, Trophy, Copy, Zap, RotateCcw, Maximize, Palette, Search, Check, X } from "lucide-react";
 import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
 import { isPlaceholderLogo, formatScore } from "@/lib/utils";
 import ImagePasteUpload from "@/components/ImagePasteUpload";
@@ -46,6 +46,8 @@ import { usePerformanceMode } from "@/hooks/usePerformanceMode";
 import { useFullscreenContext } from "@/contexts/FullscreenContext";
 import { TournamentStatsModal } from "@/components/TournamentStatsModal";
 import TournamentRulesEditor from "@/components/TournamentRulesEditor";
+import { CreateTournamentModal } from "@/components/CreateTournamentModal";
+import { findAvailableSlug, generateSlug, isSlugTaken } from "@/lib/tournamentSlug";
 
 interface AdminProps {
   isExiting?: boolean;
@@ -218,11 +220,14 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
       description: '',
       slug: '',
       is_public: false,
-      start_time: now.toISOString().slice(0, 16), // Format for datetime-local
-      end_time: oneMonthLater.toISOString().slice(0, 16), // Format for datetime-local
+      start_time: now as Date | null,
+      end_time: oneMonthLater as Date | null,
     };
   });
   const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
+  const [slugEdited, setSlugEdited] = useState(false);
+  // Address the name alone would have produced, when it was already taken.
+  const [resolvedFromName, setResolvedFromName] = useState<string | null>(null);
   const [games, setGames] = useState(initialGames);
   const [newGame, setNewGame] = useState({
     name: '',
@@ -244,41 +249,50 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
   const [gameSearchLoading, setGameSearchLoading] = useState(false);
 
 
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim();
-  };
+  // Names may repeat between users; only the address has to be unique. An
+  // address derived from the name resolves itself, an edited one is only checked.
+  useEffect(() => {
+    const name = createForm.name.trim();
+    const slug = createForm.slug.trim();
 
-  const checkSlugAvailability = async (slug: string) => {
-    if (!slug.trim()) {
+    if (!slug) {
       setSlugAvailable(null);
+      setResolvedFromName(null);
       return;
     }
 
-    try {
-      const { data, error } = await api
-        .from('tournaments')
-        .select('id')
-        .eq('slug', slug.trim().toLowerCase())
-        .single();
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      try {
+        if (slugEdited || !name) {
+          const taken = await isSlugTaken(slug);
+          if (cancelled) return;
+          setResolvedFromName(null);
+          setSlugAvailable(!taken);
+          return;
+        }
 
-      if (error && error.code === 'PGRST116') {
-        // No rows returned - slug is available
+        const base = generateSlug(name);
+        const available = await findAvailableSlug(name);
+        if (cancelled || !available) return;
         setSlugAvailable(true);
-      } else if (data) {
-        // Slug exists
-        setSlugAvailable(false);
-      } else {
-        setSlugAvailable(null);
+        // The note must survive the re-run this state change triggers, so it is
+        // derived from the name's own address, not from the current field value.
+        setResolvedFromName(available === base ? null : base);
+        if (available !== slug) {
+          setCreateForm(prev => ({ ...prev, slug: available }));
+        }
+      } catch {
+        if (!cancelled) setSlugAvailable(null);
       }
-    } catch (error) {
-      setSlugAvailable(null);
-    }
-  };
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [createForm.slug, createForm.name, slugEdited]);
 
   const addGameToList = () => {
     console.log(' Adding game to list:', newGame);
@@ -326,22 +340,13 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
 
     setIsCreating(true);
     // Convert datetime-local values to ISO strings for the database
-    const formatDateTimeForDatabase = (dateTimeLocal: string) => {
-      if (!dateTimeLocal) return null;
-      try {
-        return new Date(dateTimeLocal).toISOString();
-      } catch {
-        return null;
-      }
-    };
-
     const tournament = await createTournament({
       name: createForm.name.trim(),
       description: createForm.description.trim() || undefined,
       slug: createForm.slug.trim().toLowerCase(),
       is_public: createForm.is_public,
-      start_time: formatDateTimeForDatabase(createForm.start_time),
-      end_time: formatDateTimeForDatabase(createForm.end_time),
+      start_time: createForm.start_time ? createForm.start_time.toISOString() : null,
+      end_time: createForm.end_time ? createForm.end_time.toISOString() : null,
     });
 
     if (tournament) {
@@ -391,11 +396,13 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
         description: '',
         slug: '',
         is_public: false,
-        start_time: now.toISOString().slice(0, 16),
-        end_time: oneMonthLater.toISOString().slice(0, 16),
+        start_time: now,
+        end_time: oneMonthLater,
       });
       setGames([]);
       setSlugAvailable(null);
+      setSlugEdited(false);
+      setResolvedFromName(null);
       toast({
         title: "Success",
         description: `Tournament created successfully! ${games.length > 0 ? `${games.length} games added.` : ''}`,
@@ -428,7 +435,7 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
               setCreateForm(prev => ({
                 ...prev,
                 name,
-                slug: generateSlug(name)
+                slug: slugEdited ? prev.slug : generateSlug(name)
               }));
             }}
             placeholder="My Awesome Highscore Tournament"
@@ -444,10 +451,9 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
               id="slug"
               value={createForm.slug}
               onChange={(e) => {
-                const newSlug = generateSlug(e.target.value);
-                setCreateForm(prev => ({ ...prev, slug: newSlug }));
-                // Debounce slug availability check
-                setTimeout(() => checkSlugAvailability(newSlug), 500);
+                setSlugEdited(true);
+                setResolvedFromName(null);
+                setCreateForm(prev => ({ ...prev, slug: generateSlug(e.target.value) }));
               }}
               placeholder="my-awesome-tournament"
               className={`bg-black/50 border-gray-700 text-white ${
@@ -456,14 +462,10 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
               }`}
             />
             {slugAvailable === true && (
-              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-green-500">
-                
-              </div>
+              <Check className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-green-500" />
             )}
             {slugAvailable === false && (
-              <div className="absolute right-2 top-1/2 transform -translate-y-1/2 text-red-500">
-                ✗
-              </div>
+              <X className="absolute right-2 top-1/2 transform -translate-y-1/2 w-4 h-4 text-red-500" />
             )}
           </div>
           <p className="text-xs text-gray-500 mt-1">
@@ -472,6 +474,11 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
           {slugAvailable === false && (
             <p className="text-xs text-red-500 mt-1">
               This slug is already taken. Please choose a different one.
+            </p>
+          )}
+          {resolvedFromName && (
+            <p className="text-xs text-yellow-500 mt-1">
+              The slug "{resolvedFromName}" is taken, so this tournament will use "{createForm.slug}".
             </p>
           )}
           {slugAvailable === true && (
@@ -512,10 +519,10 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
             <Label className="text-white">Start Date & Time</Label>
             <div className="relative">
               <DatePicker
-                selected={createForm.start_time ? new Date(createForm.start_time) : null}
-                onChange={(date: any) => setCreateForm(prev => ({
+                selected={createForm.start_time}
+                onChange={(date: Date | null) => setCreateForm(prev => ({
                   ...prev,
-                  start_time: Array.isArray(date) ? (date[0]?.toISOString().slice(0, 16) || '') : (date?.toISOString().slice(0, 16) || '')
+                  start_time: date
                 }))}
                 showTimeSelect
                 dateFormat="yyyy-MM-dd h:mm aa"
@@ -562,10 +569,10 @@ const CreateTournamentForm = ({ isOpen, onClose, initialGames = [] }: CreateTour
             <Label className="text-white">End Date & Time</Label>
             <div className="relative">
               <DatePicker
-                selected={createForm.end_time ? new Date(createForm.end_time) : null}
-                onChange={(date: any) => setCreateForm(prev => ({
+                selected={createForm.end_time}
+                onChange={(date: Date | null) => setCreateForm(prev => ({
                   ...prev,
-                  end_time: Array.isArray(date) ? (date[0]?.toISOString().slice(0, 16) || '') : (date?.toISOString().slice(0, 16) || '')
+                  end_time: date
                 }))}
                 showTimeSelect
                 dateFormat="yyyy-MM-dd h:mm aa"
@@ -724,6 +731,7 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
   const [selectedLogos, setSelectedLogos] = useState<Record<number, string>>({});
   const [clearLogos, setClearLogos] = useState<Record<string, string>>({});
   const [addingGames, setAddingGames] = useState(false);
+  const [isCreateFromSuggestionsOpen, setIsCreateFromSuggestionsOpen] = useState(false);
   const [filters, setFilters] = useState({
     region: 'any',
     platform: 'any',
@@ -738,6 +746,12 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
   });
   const [misterCompatibleOnly, setMisterCompatibleOnly] = useState(true);
   const { toast } = useToast();
+
+  // Suggested games in the shape the tournament creation modal expects.
+  const suggestedGamesForTournament = games.map((game, index) => ({
+    name: game.name,
+    logo_url: selectedLogos[index] || clearLogos[game.name] || undefined,
+  }));
 
   const addGamesToTournament = async () => {
     if (!currentTournament) {
@@ -1049,6 +1063,7 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
   }, [games]);
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -1244,7 +1259,7 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
             </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={() => setFilters({
               region: 'any', platform: 'any', series: 'any', homebrew: 'any', year: 'any',
               manufacturer: 'any', category: 'any', rotation: 'any', move_inputs: 'any', num_buttons: 'any'
@@ -1261,6 +1276,15 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
                 className="bg-arcade-neonCyan text-black hover:bg-arcade-neonCyan/80"
               >
                 {addingGames ? 'Adding...' : `Add to ${currentTournament.name}`}
+              </Button>
+            )}
+            {games.length > 0 && (
+              <Button
+                onClick={() => setIsCreateFromSuggestionsOpen(true)}
+                variant="outline"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Create Highscore Tournament with These Games
               </Button>
             )}
           </div>
@@ -1346,6 +1370,16 @@ const SuggestGames = ({ isOpen, onClose, loadGames }: { isOpen: boolean; onClose
         </div>
       </DialogContent>
     </Dialog>
+
+    <CreateTournamentModal
+      isOpen={isCreateFromSuggestionsOpen}
+      onClose={async () => {
+        setIsCreateFromSuggestionsOpen(false);
+        await loadGames();
+      }}
+      initialGames={suggestedGamesForTournament}
+    />
+    </>
   );
 };
 
@@ -1453,8 +1487,8 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     slug: "",
     description: "",
     is_public: false,
-    start_time: "",
-    end_time: "",
+    start_time: null as Date | null,
+    end_time: null as Date | null,
     is_active: true,
     scores_locked: false
   });
@@ -2061,14 +2095,10 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     setEditingTournament(tournament);
 
     // Format dates for datetime-local input (YYYY-MM-DDTHH:MM format)
-    const formatDateTimeForInput = (dateString: string | null) => {
-      if (!dateString) return "";
-      try {
-        const date = new Date(dateString);
-        return date.toISOString().slice(0, 16); // Keep YYYY-MM-DDTHH:MM
-      } catch {
-        return "";
-      }
+    const parseDateTime = (dateString: string | null) => {
+      if (!dateString) return null;
+      const date = new Date(dateString);
+      return Number.isNaN(date.getTime()) ? null : date;
     };
 
     const formData = {
@@ -2076,8 +2106,8 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
       slug: tournament.slug || "",
       description: tournament.description || "",
       is_public: tournament.is_public || false,
-      start_time: formatDateTimeForInput(tournament.start_time),
-      end_time: formatDateTimeForInput(tournament.end_time),
+      start_time: parseDateTime(tournament.start_time),
+      end_time: parseDateTime(tournament.end_time),
       is_active: tournament.is_active ?? true,
       scores_locked: tournament.scores_locked || false
     };
@@ -2090,22 +2120,12 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
     if (!editingTournament) return;
 
     try {
-      // Convert datetime-local values to ISO strings
-      const formatDateTimeForDatabase = (dateTimeLocal: string) => {
-        if (!dateTimeLocal) return null;
-        try {
-          return new Date(dateTimeLocal).toISOString();
-        } catch {
-          return null;
-        }
-      };
-
       const success = await updateTournament(editingTournament.id, {
         name: tournamentFormData.name,
         slug: tournamentFormData.slug,
         is_public: tournamentFormData.is_public,
-        start_time: formatDateTimeForDatabase(tournamentFormData.start_time),
-        end_time: formatDateTimeForDatabase(tournamentFormData.end_time),
+        start_time: tournamentFormData.start_time ? tournamentFormData.start_time.toISOString() : null,
+        end_time: tournamentFormData.end_time ? tournamentFormData.end_time.toISOString() : null,
         is_active: tournamentFormData.is_active,
         scores_locked: tournamentFormData.scores_locked,
       });
@@ -2636,10 +2656,10 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                 <div className="max-w-sm">
                   <Label className="text-white">Start Date & Time</Label>
                   <DatePicker
-                    selected={tournamentFormData.start_time ? new Date(tournamentFormData.start_time) : null}
+                    selected={tournamentFormData.start_time}
                     onChange={(date: Date | null) => setTournamentFormData(prev => ({
                       ...prev,
-                      start_time: date ? date.toISOString().slice(0, 16) : ''
+                      start_time: date
                     }))}
                     showTimeSelect
                     dateFormat="yyyy-MM-dd h:mm aa"
@@ -2683,10 +2703,10 @@ const Admin: React.FC<AdminProps> = ({ isExiting = false }) => {
                 <div className="max-w-sm">
                   <Label className="text-white">End Date & Time</Label>
                   <DatePicker
-                    selected={tournamentFormData.end_time ? new Date(tournamentFormData.end_time) : null}
+                    selected={tournamentFormData.end_time}
                     onChange={(date: Date | null) => setTournamentFormData(prev => ({
                       ...prev,
-                      end_time: date ? date.toISOString().slice(0, 16) : ''
+                      end_time: date
                     }))}
                     showTimeSelect
                     dateFormat="yyyy-MM-dd h:mm aa"
