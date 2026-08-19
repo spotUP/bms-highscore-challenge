@@ -72,12 +72,12 @@ describe('api auth', () => {
 
   it('forwards the redirect target of a password reset', async () => {
     await api.auth.resetPasswordForEmail('player@example.com', {
-      redirectTo: 'https://retroranks.com/auth',
+      redirectTo: 'https://example.test/auth',
     });
 
     expect(lastRequestBody()).toEqual({
       email: 'player@example.com',
-      redirect_to: 'https://retroranks.com/auth',
+      redirect_to: 'https://example.test/auth',
     });
   });
 

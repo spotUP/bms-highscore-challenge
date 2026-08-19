@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "description": "Retroranks - highscore and competition management platform",
-  "homepage": "https://retroranks.com",
+  "homepage": "https://retroranks.uprough.net",
   "repository": {
     "type": "git",
     "url": "https://github.com/spotUP/retroranks"

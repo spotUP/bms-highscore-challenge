@@ -38,8 +38,7 @@ async function configureR2Cors() {
             'http://127.0.0.1:3000',
             'https://*.netlify.app',
             'https://*.vercel.app',
-            'https://retroranks.com',
-            'https://www.retroranks.com'
+            'https://retroranks.uprough.net'
           ],
           ExposeHeaders: [
             'ETag',
